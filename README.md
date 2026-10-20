@@ -28,7 +28,7 @@ Hệ thống quản lý mã nguồn tập trung vào 2 nhánh chính trên GitHu
 │   ├── src/
 │   ├── build.gradle
 │   └── gradlew.bat
-├── client/             # Frontend ReactJS + Vite (React Router, Axios, CSS)
+├── frontend/           # Frontend ReactJS + Vite (React Router, Axios, CSS)
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.js
@@ -55,7 +55,7 @@ cd backend
 ### 2. Frontend (ReactJS + Vite)
 Yêu cầu: Node.js 18+.
 ```bash
-cd client
+cd frontend
 npm install
 npm run dev
 ```
