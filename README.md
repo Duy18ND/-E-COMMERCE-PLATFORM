@@ -4,20 +4,23 @@
 
 ---
 
-## 👥 Phân chia nhóm & Nhánh Git (Branching Model)
+## 🌿 Mô hình phân nhánh Git (Branching Workflow)
 
-Mô hình phân nhánh nhóm:
-- `main`: **Nhánh chính** (Release, Production, mã nguồn ổn định nhất).
-- `master`: **Nhánh phụ / Nhánh phát triển chung** (Tích hợp các tính năng trước khi đưa vào `main`).
-- Các nhánh chức năng thành viên (Feature Branches):
-  - `feature/tv1-product-inventory`: **Thành viên 1** – Backend Product, Category & Inventory API.
-  - `feature/tv2-user-order`: **Thành viên 2** – Backend User, Auth (JWT), Cart, Order & Payment Mock API.
-  - `feature/tv3-frontend`: **Thành viên 3** – Frontend ReactJS UI, Routing & Tích hợp API.
-  - `feature/tv4-devops-qa`: **Thành viên 4** – DevOps, Docker Compose, CI/CD, Nginx & QA Testing.
+Hệ thống quản lý mã nguồn tập trung vào 2 nhánh chính trên GitHub:
+
+- **`master` (Nhánh phát triển chính / Development):**
+  - Là nhánh làm việc chính của toàn nhóm.
+  - Tất cả các thành viên lấy mã nguồn mới nhất từ `master`.
+  - Khi thành viên hoàn thành công việc, gửi **Pull Request (PR) vào `master`**.
+  - **Trưởng nhóm (Team Lead)** sẽ review code và thực hiện merge vào `master`.
+
+- **`main` (Nhánh Release / Production):**
+  - Là nhánh sản phẩm chính thức, ổn định tuyệt đối.
+  - **Chỉ Trưởng nhóm mới có quyền merge từ `master` sang `main`** sau khi đã kiểm thử toàn diện, đảm bảo hệ thống chạy mượt mà và không phát sinh lỗi.
 
 ---
 
-## 🛠️ Cấu trúc thư mục
+## 🛠️ Cấu trúc thư mục dự án
 
 ```
 -E-COMMERCE-PLATFORM/
@@ -29,8 +32,8 @@ Mô hình phân nhánh nhóm:
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.js
-├── .gitignore          # Cấu hình bỏ qua các file build, node_modules, cache
-└── README.md           # Hướng dẫn dự án & phối hợp nhóm
+├── .gitignore          # Cấu hình bỏ qua file build, node_modules, cache
+└── README.md           # Hướng dẫn dự án & quy trình làm việc nhóm
 ```
 
 ---
@@ -41,9 +44,10 @@ Mô hình phân nhánh nhóm:
 Yêu cầu: JDK 21+ và MySQL đang chạy.
 ```bash
 cd backend
-./gradlew bootRun
-# Hoặc trên Windows:
+# Trên Windows:
 .\gradlew.bat bootRun
+# Hoặc trên Linux/macOS:
+./gradlew bootRun
 ```
 - API Base URL: `http://localhost:8080/api`
 - Swagger UI Documentation: `http://localhost:8080/swagger-ui.html`
@@ -59,42 +63,64 @@ npm run dev
 
 ---
 
-## 🤝 Quy trình làm việc nhóm với Git
+## 👥 Hướng dẫn quy trình làm việc cho Thành viên nhóm
 
-1. **Clone dự án về máy cá nhân:**
-   ```bash
-   git clone https://github.com/Duy18ND/-E-COMMERCE-PLATFORM.git
-   cd -E-COMMERCE-PLATFORM
-   ```
+### Bước 1: Clone dự án về máy
+```bash
+git clone https://github.com/Duy18ND/-E-COMMERCE-PLATFORM.git
+cd -E-COMMERCE-PLATFORM
+```
 
-2. **Chuyển sang nhánh của mình:**
-   ```bash
-   # Ví dụ Thành viên 1:
-   git checkout feature/tv1-product-inventory
+### Bước 2: Chuyển sang nhánh `master` và cập nhật code mới nhất
+```bash
+git checkout master
+git pull origin master
+```
 
-   # Ví dụ Thành viên 2:
-   git checkout feature/tv2-user-order
+### Bước 3: Tạo nhánh tính năng riêng của mình để làm việc
+```bash
+# Đặt tên nhánh theo cú pháp: feat/<tên-thành-viên>-<tính-năng>
+git checkout -b feat/tv1-product
+# hoặc:
+# git checkout -b feat/tv2-auth
+# git checkout -b feat/tv3-ui-cart
+# git checkout -b feat/tv4-docker
+```
 
-   # Ví dụ Thành viên 3:
-   git checkout feature/tv3-frontend
+### Bước 4: Commit và đẩy lên GitHub
+```bash
+git add .
+git commit -m "feat: hoàn thành module sản phẩm"
+git push -u origin feat/tv1-product
+```
 
-   # Ví dụ Thành viên 4:
-   git checkout feature/tv4-devops-qa
-   ```
+### Bước 5: Tạo Pull Request (PR) vào `master`
+1. Lên trang GitHub dự án: [https://github.com/Duy18ND/-E-COMMERCE-PLATFORM/pulls](https://github.com/Duy18ND/-E-COMMERCE-PLATFORM/pulls)
+2. Bấm **New pull request**.
+3. Chọn:
+   - **base (nhánh đích):** `master`
+   - **compare (nhánh của bạn):** `feat/tv1-product`
+4. Bấm **Create pull request** và thông báo cho Trưởng nhóm review.
 
-3. **Cập nhật mã nguồn mới nhất từ nhánh `master` trước khi code:**
-   ```bash
-   git pull origin master
-   ```
+---
 
-4. **Commit và đẩy lên GitHub:**
-   ```bash
-   git add .
-   git commit -m "feat: mô tả công việc vừa làm"
-   git push origin <tên-nhánh-của-bạn>
-   ```
+## 👑 Hướng dẫn quy trình cho Trưởng nhóm (Leader)
 
-5. **Tạo Pull Request (PR):**
-   - Lên GitHub tạo Pull Request từ nhánh của bạn vào nhánh `master`.
-   - Nhóm review code và merge vào `master`.
-   - Khi hoàn thiện các mốc lớn (Milestones) sẽ merge từ `master` vào `main`.
+### 1. Merge code thành viên vào `master`:
+- Mở Pull Request trên GitHub, kiểm tra code (Files changed).
+- Nếu không có xung đột (No conflicts), bấm **Merge pull request** $\rightarrow$ **Confirm merge**.
+
+### 2. Đẩy code từ `master` sang `main` khi đã chạy ổn định:
+Sau khi test kỹ trên local/môi trường dev, không còn lỗi:
+```bash
+# Chuyển sang main và cập nhật mới nhất
+git checkout main
+git pull origin main
+
+# Merge code ổn định từ master vào main
+git merge master
+
+# Đẩy lên GitHub
+git push origin main
+```
+Hoặc tạo **Pull Request** trên GitHub: `base: main` $\leftarrow$ `compare: master` rồi bấm Merge.
