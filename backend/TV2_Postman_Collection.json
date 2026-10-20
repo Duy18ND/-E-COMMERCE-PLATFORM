@@ -1,0 +1,775 @@
+{
+	"info": {
+		"_postman_id": "7a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d",
+		"name": "TV2 E-Commerce API Collection (Auth, User, Cart, Order, Payment)",
+		"description": "Bộ sưu tập API cho Thành viên 2 phục vụ kiến trúc Modular Monolith E-Commerce.\nBao gồm đầy đủ các module: Auth, User Profile, Giỏ hàng (Cart), Đơn hàng (Order), Thanh toán mô phỏng (Payment) và Quản trị đơn hàng (Admin Order).\n\nCó sẵn Test Script để tự động trích xuất `accessToken` vào biến `token` và `orderId` sau khi login/checkout.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "adminToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "orderId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "itemId",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "01. Authentication",
+			"item": [
+				{
+					"name": "1.1 Đăng ký tài khoản (Register)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user_new@gmail.com\",\n    \"password\": \"123456\",\n    \"fullName\": \"Nguyen Van Moi\",\n    \"phone\": \"0988776655\",\n    \"address\": \"123 Duong Lang, Dong Da, Ha Noi\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"register"
+							]
+						},
+						"description": "Đăng ký người dùng mới với vai trò mặc định là ROLE_USER."
+					},
+					"response": []
+				},
+				{
+					"name": "1.2 Đăng nhập User (user@gmail.com)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.accessToken) {",
+									"        pm.collectionVariables.set(\"token\", jsonData.data.accessToken);",
+									"        console.log(\"User Token saved successfully: \" + jsonData.data.accessToken);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@gmail.com\",\n    \"password\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Đăng nhập với tài khoản khách hàng mặc định (đã được DataSeeder khởi tạo).\nTự động lưu accessToken vào biến `token` của Collection."
+					},
+					"response": []
+				},
+				{
+					"name": "1.3 Đăng nhập Admin (admin@gmail.com)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.accessToken) {",
+									"        pm.collectionVariables.set(\"token\", jsonData.data.accessToken);",
+									"        pm.collectionVariables.set(\"adminToken\", jsonData.data.accessToken);",
+									"        console.log(\"Admin Token saved successfully: \" + jsonData.data.accessToken);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@gmail.com\",\n    \"password\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Đăng nhập với tài khoản Admin mặc định (đã được DataSeeder khởi tạo).\nTự động lưu accessToken vào cả hai biến `token` và `adminToken` của Collection."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "02. User Profile",
+			"item": [
+				{
+					"name": "2.1 Lấy thông tin cá nhân (Profile)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"me"
+							]
+						},
+						"description": "Lấy thông tin tài khoản hiện tại từ JWT access token."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "03. Giỏ hàng (Cart)",
+			"item": [
+				{
+					"name": "3.1 Xem giỏ hàng",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/cart",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart"
+							]
+						},
+						"description": "Lấy thông tin giỏ hàng của user đang đăng nhập (tự động tạo giỏ rỗng nếu chưa tồn tại)."
+					},
+					"response": []
+				},
+				{
+					"name": "3.2 Thêm sản phẩm vào giỏ",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"productId\": 1,\n    \"quantity\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/items",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"items"
+							]
+						},
+						"description": "Thêm sản phẩm vào giỏ hàng. Nếu sản phẩm đã có trong giỏ, số lượng sẽ được cộng dồn."
+					},
+					"response": []
+				},
+				{
+					"name": "3.3 Cập nhật số lượng sản phẩm",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quantity\": 3\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/items/{{itemId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"items",
+								"{{itemId}}"
+							]
+						},
+						"description": "Cập nhật số lượng của một CartItem theo itemId. Nếu quantity <= 0 thì mục đó sẽ bị xóa."
+					},
+					"response": []
+				},
+				{
+					"name": "3.4 Xóa mục khỏi giỏ",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/items/{{itemId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"items",
+								"{{itemId}}"
+							]
+						},
+						"description": "Xóa 1 item cụ thể khỏi giỏ hàng theo itemId."
+					},
+					"response": []
+				},
+				{
+					"name": "3.5 Xóa toàn bộ giỏ hàng (Clear)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/clear",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"clear"
+							]
+						},
+						"description": "Làm trống toàn bộ các món đồ trong giỏ hàng."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "04. Đơn hàng (Order)",
+			"item": [
+				{
+					"name": "4.1 Đặt hàng từ giỏ (Checkout)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set(\"orderId\", jsonData.data.id);",
+									"        console.log(\"Saved created orderId: \" + jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"receiverName\": \"Nguyen Van User\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"123 Duong Cau Giay, Ha Noi\",\n    \"note\": \"Giao gio hanh chinh\",\n    \"paymentMethod\": \"MOCK_ONLINE\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/checkout",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"checkout"
+							]
+						},
+						"description": "Thực hiện Checkout đơn hàng từ giỏ hiện tại:\n- Trừ tồn kho sản phẩm trong DB\n- Làm trống giỏ hàng\n- Khởi tạo bản ghi Payment\n- Trả về thông tin đơn hàng ở trạng thái PENDING\n- Tự động lưu orderId vào biến Collection."
+					},
+					"response": []
+				},
+				{
+					"name": "4.2 Xem lịch sử đơn hàng của tôi",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/my-orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"my-orders"
+							]
+						},
+						"description": "Lấy danh sách các đơn hàng đã đặt của người dùng đang đăng nhập."
+					},
+					"response": []
+				},
+				{
+					"name": "4.3 Xem chi tiết 1 đơn hàng",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/{{orderId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"{{orderId}}"
+							]
+						},
+						"description": "Xem chi tiết một đơn hàng theo orderId (kiểm tra quyền sở hữu của user)."
+					},
+					"response": []
+				},
+				{
+					"name": "4.4 Khách hủy đơn hàng (khi PENDING)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/{{orderId}}/cancel",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"{{orderId}}",
+								"cancel"
+							]
+						},
+						"description": "Khách hàng tự hủy đơn hàng khi đơn còn ở trạng thái PENDING. Hệ thống tự động hoàn kho sản phẩm."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "05. Thanh toán (Payment)",
+			"item": [
+				{
+					"name": "5.1 Thanh toán mô phỏng (Mock Pay - Thành công)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"success\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/payments/mock-pay/{{orderId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"payments",
+								"mock-pay",
+								"{{orderId}}"
+							]
+						},
+						"description": "Mô phỏng kết quả thanh toán trực tuyến:\n- Nếu success = true: Cập nhật Payment thành SUCCESS, sinh mã transactionCode, cập nhật trạng thái đơn hàng sang PAID.\n- Nếu success = false: Cập nhật Payment thành FAILED."
+					},
+					"response": []
+				},
+				{
+					"name": "5.2 Xem thông tin thanh toán theo mã đơn",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/payments/order/{{orderId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"payments",
+								"order",
+								"{{orderId}}"
+							]
+						},
+						"description": "Lấy thông tin bản ghi Payment gắn liền với đơn hàng orderId."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "06. Quản trị đơn hàng (Admin Order)",
+			"item": [
+				{
+					"name": "6.1 Xem toàn bộ danh sách đơn hàng",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders"
+							]
+						},
+						"description": "Dành cho Admin: Xem toàn bộ đơn hàng trong hệ thống kèm thông tin khách hàng và chi tiết sản phẩm."
+					},
+					"response": []
+				},
+				{
+					"name": "6.2 Lọc đơn hàng theo trạng thái (status=PENDING)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders?status=PENDING",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "PENDING"
+								}
+							]
+						},
+						"description": "Lọc đơn hàng theo trạng thái (PENDING, PAID, SHIPPING, COMPLETED, CANCELLED)."
+					},
+					"response": []
+				},
+				{
+					"name": "6.3 Xem chi tiết đơn hàng bất kỳ",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/{{orderId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders",
+								"{{orderId}}"
+							]
+						},
+						"description": "Dành cho Admin: Xem chi tiết bất kỳ đơn hàng nào mà không bị ràng buộc người sở hữu."
+					},
+					"response": []
+				},
+				{
+					"name": "6.4 Cập nhật trạng thái đơn hàng (Admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"SHIPPING\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/{{orderId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders",
+								"{{orderId}}",
+								"status"
+							]
+						},
+						"description": "Dành cho Admin: Chuyển đổi trạng thái đơn hàng (PAID, SHIPPING, COMPLETED, CANCELLED). Nếu chuyển sang CANCELLED thì kho hàng sẽ tự động được hoàn trả."
+					},
+					"response": []
+				},
+				{
+					"name": "6.5 Thống kê Dashboard (Stats & Doanh thu)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/stats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders",
+								"stats"
+							]
+						},
+						"description": "Thống kê tổng quan cho trang Dashboard Admin:\n- Tổng số đơn hàng\n- Tổng doanh thu (chỉ tính các đơn PAID, SHIPPING, COMPLETED)\n- Số lượng đơn theo từng trạng thái\n- Tổng số người dùng đăng ký."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
