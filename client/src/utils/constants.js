@@ -1,0 +1,17 @@
+export const ROLES = {
+  CUSTOMER: 'ROLE_USER',
+  ADMIN: 'ROLE_ADMIN'
+};
+
+export const STORAGE_KEYS = {
+  TOKEN: 'token',
+  USER: 'user'
+};
+
+export const ORDER_STATUS = {
+  PENDING: 'PENDING',
+  PROCESSING: 'PROCESSING',
+  SHIPPED: 'SHIPPED',
+  DELIVERED: 'DELIVERED',
+  CANCELLED: 'CANCELLED'
+};
