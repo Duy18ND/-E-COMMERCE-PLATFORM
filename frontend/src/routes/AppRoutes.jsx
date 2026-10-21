@@ -48,17 +48,18 @@ const AppRoutes = () => {
       <Route path="/" element={<Home />} />
       <Route path="/products" element={<Products />} />
       <Route path="/products/:id" element={<ProductDetail />} />
-      <Route path="/cart" element={<Cart />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* Protected Customer Routes */}
+      {/* Protected Customer Routes (Yêu cầu đăng nhập) */}
       <Route element={<ProtectedRoute />}>
+        <Route path="/cart" element={<Cart />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/order-success" element={<OrderSuccess />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:id" element={<OrderDetail />} />
       </Route>
+
 
       {/* Admin Routes */}
       <Route element={<AdminRoute />}>
