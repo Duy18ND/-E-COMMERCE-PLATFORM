@@ -2,28 +2,29 @@ import api from './api';
 
 export const cartService = {
   getCart: async () => {
-    const response = await api.get('/cart');
-    return response.data;
+    return await api.get('/cart');
   },
 
   addItem: async (productId, quantity = 1) => {
-    const response = await api.post('/cart/items', { productId, quantity });
-    return response.data;
+    return await api.post('/cart/items', {
+      productId: Number(productId),
+      quantity: Number(quantity)
+    });
   },
 
   updateItem: async (itemId, quantity) => {
-    const response = await api.put(`/cart/items/${itemId}`, { quantity });
-    return response.data;
+    return await api.put(`/cart/items/${itemId}`, {
+      quantity: Number(quantity)
+    });
   },
 
   removeItem: async (itemId) => {
-    const response = await api.delete(`/cart/items/${itemId}`);
-    return response.data;
+    return await api.delete(`/cart/items/${itemId}`);
   },
 
   clearCart: async () => {
-    const response = await api.delete('/cart');
-    return response.data;
+    // Backend triển khai ở DELETE /api/cart/clear
+    return await api.delete('/cart/clear');
   }
 };
 

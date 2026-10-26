@@ -454,32 +454,35 @@ const Header = () => {
                     backgroundColor: '#ffffff',
                     flexShrink: 0
                   }}
-                  title="Giỏ hàng"
+                  title={isAuthenticated ? 'Giỏ hàng của bạn' : 'Đăng nhập để xem giỏ hàng'}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
                     <line x1="3" y1="6" x2="21" y2="6" />
                     <path d="M16 10a4 4 0 0 1-8 0" />
                   </svg>
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '-6px',
-                      right: '-6px',
-                      backgroundColor: '#0f172a',
-                      color: '#ffffff',
-                      fontSize: '0.7rem',
-                      fontWeight: '700',
-                      borderRadius: '9999px',
-                      padding: '1px 6px',
-                      minWidth: '18px',
-                      textAlign: 'center',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                    }}
-                  >
-                    {totalItems || 3}
-                  </span>
+                  {isAuthenticated && totalItems > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '-6px',
+                        right: '-6px',
+                        backgroundColor: '#2563eb',
+                        color: '#ffffff',
+                        fontSize: '0.7rem',
+                        fontWeight: '700',
+                        borderRadius: '9999px',
+                        padding: '1px 6px',
+                        minWidth: '18px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(37, 99, 235, 0.3)'
+                      }}
+                    >
+                      {totalItems}
+                    </span>
+                  )}
                 </Link>
+
               </>
             )}
 

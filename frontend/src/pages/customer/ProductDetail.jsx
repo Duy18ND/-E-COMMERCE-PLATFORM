@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
+import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
 import Button from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
@@ -8,9 +9,20 @@ import Loading from '../../components/common/Loading';
 const ProductDetail = () => {
   const { id } = useParams();
   const { addToCart } = useCart();
+  const { isAdmin } = useAuth();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [isAdded, setIsAdded] = useState(false);
+
+  const handleAddToCart = () => {
+    const success = addToCart(product, quantity);
+    if (success) {
+      setIsAdded(true);
+      setTimeout(() => setIsAdded(false), 1500);
+    }
+  };
+
 
   useEffect(() => {
     // Sẵn sàng kết nối productService.getById(id)
@@ -106,14 +118,46 @@ const ProductDetail = () => {
             </div>
           </div>
 
+          {isAdmin && (
+            <div
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: '10px',
+                color: '#92400e',
+                fontSize: '0.85rem',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.65rem'
+              }}
+            >
+              <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+              <span>
+                <strong>Tài khoản Quản trị viên (Admin):</strong> Bạn không được phép mua hàng hay thêm sản phẩm vào giỏ.
+              </span>
+            </div>
+          )}
+
           <Button
-            variant="primary"
+            variant={isAdmin ? 'secondary' : isAdded ? 'success' : 'primary'}
             size="lg"
-            onClick={() => addToCart(product, quantity)}
-            style={{ width: '100%' }}
+            onClick={handleAddToCart}
+            disabled={isAdmin}
+            style={{
+              width: '100%',
+              backgroundColor: isAdmin ? '#94a3b8' : isAdded ? '#16a34a' : undefined,
+              borderColor: isAdmin ? '#94a3b8' : isAdded ? '#16a34a' : undefined,
+              color: '#ffffff',
+              cursor: isAdmin ? 'not-allowed' : 'pointer',
+              transition: 'all 0.25s ease'
+            }}
           >
-            Thêm vào giỏ hàng
+            {isAdmin ? 'Admin (Không thể thêm giỏ hàng)' : isAdded ? '✓ Đã thêm vào giỏ hàng' : 'Thêm vào giỏ hàng'}
           </Button>
+
+
         </div>
       </div>
     </div>

@@ -1,9 +1,22 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
+import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
 
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
+  const { isAdmin } = useAuth();
+  const [isAdded, setIsAdded] = useState(false);
+
+  const handleAddToCart = () => {
+    const success = addToCart(product, 1);
+    if (success) {
+      setIsAdded(true);
+      setTimeout(() => setIsAdded(false), 1200);
+    }
+  };
+
 
   if (!product) return null;
 
@@ -134,30 +147,51 @@ const ProductCard = ({ product }) => {
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         <button
-          onClick={() => addToCart(product, 1)}
+          onClick={handleAddToCart}
+          disabled={isAdmin}
+          title={isAdmin ? 'Tài khoản Admin không được phép thêm sản phẩm vào giỏ' : ''}
           style={{
             flex: 1,
-            backgroundColor: '#eff6ff',
-            border: '1px solid #dbeafe',
-            color: '#2563eb',
+            backgroundColor: isAdmin ? '#f1f5f9' : isAdded ? '#dcfce7' : '#eff6ff',
+            border: isAdmin ? '1px solid #e2e8f0' : isAdded ? '1px solid #86efac' : '1px solid #dbeafe',
+            color: isAdmin ? '#94a3b8' : isAdded ? '#16a34a' : '#2563eb',
             borderRadius: '9999px',
             padding: '0.55rem 0.75rem',
             fontSize: '0.85rem',
             fontWeight: 700,
-            cursor: 'pointer',
-            transition: 'all 0.2s'
+            cursor: isAdmin ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#2563eb';
-            e.currentTarget.style.color = '#ffffff';
+            if (!isAdded && !isAdmin) {
+              e.currentTarget.style.backgroundColor = '#2563eb';
+              e.currentTarget.style.color = '#ffffff';
+            }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#eff6ff';
-            e.currentTarget.style.color = '#2563eb';
+            if (!isAdded && !isAdmin) {
+              e.currentTarget.style.backgroundColor = '#eff6ff';
+              e.currentTarget.style.color = '#2563eb';
+            }
           }}
         >
-          + Thêm vào giỏ
+          {isAdmin ? (
+            'Admin (Khóa giỏ)'
+          ) : isAdded ? (
+            <>
+              <span>✓</span>
+              <span>Đã thêm</span>
+            </>
+          ) : (
+            '+ Thêm vào giỏ'
+          )}
         </button>
+
+
 
         <Link
           to={`/products/${product.id}`}
