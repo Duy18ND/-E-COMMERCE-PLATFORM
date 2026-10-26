@@ -1,29 +1,62 @@
 import api from './api';
+import { INITIAL_CATEGORIES } from './mockData';
+
+let localCategories = [...INITIAL_CATEGORIES];
 
 export const categoryService = {
   getAll: async () => {
-    const response = await api.get('/categories');
-    return response.data;
+    try {
+      return await api.get('/categories');
+    } catch (err) {
+      // Backend Blocker: Backend chưa triển khai CategoryController
+      return [...localCategories];
+    }
   },
 
   getById: async (id) => {
-    const response = await api.get(`/categories/${id}`);
-    return response.data;
+    try {
+      return await api.get(`/categories/${id}`);
+    } catch (err) {
+      const found = localCategories.find((c) => String(c.id) === String(id));
+      if (!found) {
+        throw new Error('Không tìm thấy danh mục!');
+      }
+      return found;
+    }
   },
 
   create: async (categoryData) => {
-    const response = await api.post('/categories', categoryData);
-    return response.data;
+    try {
+      return await api.post('/categories', categoryData);
+    } catch (err) {
+      const newCat = {
+        id: `cat-${Date.now()}`,
+        count: 0,
+        ...categoryData
+      };
+      localCategories.unshift(newCat);
+      return newCat;
+    }
   },
 
   update: async (id, categoryData) => {
-    const response = await api.put(`/categories/${id}`, categoryData);
-    return response.data;
+    try {
+      return await api.put(`/categories/${id}`, categoryData);
+    } catch (err) {
+      localCategories = localCategories.map((c) =>
+        String(c.id) === String(id) ? { ...c, ...categoryData } : c
+      );
+      return { id, ...categoryData };
+    }
   },
 
   delete: async (id) => {
-    const response = await api.delete(`/categories/${id}`);
-    return response.data;
+    try {
+      return await api.delete(`/categories/${id}`);
+    } catch (err) {
+      localCategories = localCategories.filter((c) => String(c.id) !== String(id));
+      return { success: true, id };
+    }
   }
 };
 

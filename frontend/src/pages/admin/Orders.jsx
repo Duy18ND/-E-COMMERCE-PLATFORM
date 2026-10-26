@@ -1,84 +1,70 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import orderService from '../../services/orderService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import OrderStatus from '../../components/order/OrderStatus';
 import { ORDER_STATUS } from '../../utils/constants';
-import Button from '../../components/common/Button';
+import Loading from '../../components/common/Loading';
+import ErrorMessage from '../../components/common/ErrorMessage';
 
-// Định nghĩa quy trình chuyển trạng thái đơn hàng chuẩn E-Commerce
+// Quy trình chuyển đổi trạng thái đơn hàng chuẩn đồng bộ với Backend
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [
-    { target: ORDER_STATUS.PROCESSING, label: '✓ Duyệt đơn (Chuyển sang Đang xử lý)', variant: 'primary' },
+    { target: ORDER_STATUS.PAID, label: '✓ Xác nhận & Đã thanh toán', variant: 'primary' },
     { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
   ],
-  [ORDER_STATUS.PROCESSING]: [
-    { target: ORDER_STATUS.SHIPPED, label: '🚚 Bàn giao (Chuyển sang Đang giao)', variant: 'primary' },
+  [ORDER_STATUS.PAID]: [
+    { target: ORDER_STATUS.SHIPPING, label: '🚚 Bàn giao vận chuyển', variant: 'primary' },
     { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
   ],
-  [ORDER_STATUS.SHIPPED]: [
-    { target: ORDER_STATUS.DELIVERED, label: '✓ Xác nhận đã giao thành công', variant: 'success' },
+  [ORDER_STATUS.SHIPPING]: [
+    { target: ORDER_STATUS.COMPLETED, label: '✓ Xác nhận giao thành công', variant: 'success' },
     { target: ORDER_STATUS.CANCELLED, label: '✕ Giao thất bại / Hủy đơn', variant: 'danger' }
   ],
-  [ORDER_STATUS.DELIVERED]: [], // Trạng thái cuối: Hoàn thành (không được đổi)
-  [ORDER_STATUS.CANCELLED]: []  // Trạng thái cuối: Đã hủy (không được đổi)
+  [ORDER_STATUS.COMPLETED]: [],
+  [ORDER_STATUS.CANCELLED]: []
 };
 
 const AdminOrders = () => {
-  const [orders, setOrders] = useState([
-    {
-      id: '1001',
-      customerName: 'Nguyễn Văn A',
-      phone: '0912345678',
-      totalAmount: 28990000,
-      status: ORDER_STATUS.PROCESSING,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: '1002',
-      customerName: 'Trần Thị B',
-      phone: '0987654321',
-      totalAmount: 1850000,
-      status: ORDER_STATUS.PENDING,
-      createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
-    },
-    {
-      id: '1003',
-      customerName: 'Lê Văn C',
-      phone: '0901122334',
-      totalAmount: 3490000,
-      status: ORDER_STATUS.DELIVERED,
-      createdAt: new Date(Date.now() - 86400000 * 2).toISOString()
-    },
-    {
-      id: '1004',
-      customerName: 'Phạm Thị D',
-      phone: '0933445566',
-      totalAmount: 49990000,
-      status: ORDER_STATUS.SHIPPED,
-      createdAt: new Date(Date.now() - 86400000 * 1).toISOString()
-    },
-    {
-      id: '1005',
-      customerName: 'Vũ Văn E',
-      phone: '0977889900',
-      totalAmount: 560000,
-      status: ORDER_STATUS.CANCELLED,
-      createdAt: new Date(Date.now() - 86400000 * 4).toISOString()
-    }
-  ]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('');
 
+  // Tải danh sách đơn hàng từ Backend GET /api/admin/orders
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = {};
+      if (statusFilter) {
+        params.status = statusFilter;
+      }
+      const data = await orderService.getAllOrders(params);
+      setOrders(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || 'Không thể tải danh sách đơn hàng từ máy chủ!');
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
   // Metrics calculation
   const metrics = useMemo(() => {
     const total = orders.length;
     const pending = orders.filter((o) => o.status === ORDER_STATUS.PENDING).length;
-    const processing = orders.filter((o) => o.status === ORDER_STATUS.PROCESSING).length;
-    const shipped = orders.filter((o) => o.status === ORDER_STATUS.SHIPPED).length;
-    const delivered = orders.filter((o) => o.status === ORDER_STATUS.DELIVERED).length;
-    return { total, pending, processing, shipped, delivered };
+    const paid = orders.filter((o) => o.status === ORDER_STATUS.PAID).length;
+    const shipping = orders.filter((o) => o.status === ORDER_STATUS.SHIPPING).length;
+    const completed = orders.filter((o) => o.status === ORDER_STATUS.COMPLETED).length;
+    return { total, pending, paid, shipping, completed };
   }, [orders]);
 
   // Filtered & Sorted orders
@@ -86,10 +72,14 @@ const AdminOrders = () => {
     return orders
       .filter((order) => {
         const term = searchTerm.toLowerCase().trim();
+        const customerName = (order.receiverName || order.userEmail || '').toLowerCase();
+        const phone = order.receiverPhone || '';
+        const orderId = String(order.id || '');
+
         const matchSearch =
-          order.id.toLowerCase().includes(term) ||
-          order.customerName.toLowerCase().includes(term) ||
-          order.phone.includes(term);
+          orderId.includes(term) ||
+          customerName.includes(term) ||
+          phone.includes(term);
 
         const matchStatus = statusFilter ? order.status === statusFilter : true;
         return matchSearch && matchStatus;
@@ -97,8 +87,8 @@ const AdminOrders = () => {
       .sort((a, b) => {
         if (sortBy === 'date_desc') return new Date(b.createdAt) - new Date(a.createdAt);
         if (sortBy === 'date_asc') return new Date(a.createdAt) - new Date(b.createdAt);
-        if (sortBy === 'amount_desc') return b.totalAmount - a.totalAmount;
-        if (sortBy === 'amount_asc') return a.totalAmount - b.totalAmount;
+        if (sortBy === 'amount_desc') return (b.totalAmount || 0) - (a.totalAmount || 0);
+        if (sortBy === 'amount_asc') return (a.totalAmount || 0) - (b.totalAmount || 0);
         return 0;
       });
   }, [orders, searchTerm, statusFilter, sortBy]);
@@ -109,25 +99,55 @@ const AdminOrders = () => {
     setSortBy('');
   };
 
-  // Cập nhật trạng thái theo quy trình có xác nhận
-  const handleTransitionStatus = (orderId, targetStatus, actionLabel) => {
-    if (window.confirm(`Xác nhận chuyển trạng thái đơn hàng #${orderId} sang: "${actionLabel}"?`)) {
-      setOrders(
-        orders.map((o) => (o.id === orderId ? { ...o, status: targetStatus } : o))
+  // Cập nhật trạng thái gọi API Backend PUT /api/admin/orders/{orderId}/status
+  const handleTransitionStatus = async (orderId, targetStatus, actionLabel) => {
+    if (!window.confirm(`Xác nhận chuyển trạng thái đơn hàng #${orderId} sang: "${actionLabel}"?`)) {
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const updatedOrder = await orderService.updateOrderStatus(orderId, targetStatus);
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, ...updatedOrder, status: targetStatus } : o))
       );
+    } catch (err) {
+      alert(`Lỗi khi cập nhật trạng thái: ${err.message}`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
   return (
     <div>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Quản lý đơn hàng</h1>
-        <p className="page-subtitle" style={{ margin: '0.25rem 0 0' }}>
-          Xử lý đơn hàng theo đúng quy trình nghiệp vụ chuẩn
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <div>
+          <h1 className="page-title" style={{ margin: 0 }}>Quản lý đơn hàng (Admin)</h1>
+          <p className="page-subtitle" style={{ margin: '0.25rem 0 0' }}>
+            Xử lý và phê duyệt đơn hàng theo quy trình chuẩn
+          </p>
+        </div>
+        <button
+          onClick={fetchOrders}
+          disabled={loading || actionLoading}
+          style={{
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '8px',
+            padding: '0.5rem 1rem',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            color: '#2563eb'
+          }}
+        >
+          🔄 Làm mới dữ liệu
+        </button>
       </div>
 
-      {/* SƠ ĐỒ TIẾN TRÌNH QUY TRÌNH CHUẨN */}
+      {error && <ErrorMessage message={error} onClose={() => setError('')} />}
+
+      {/* SƠ ĐỒ TIẾN TRÌNH QUY TRÌNH CHUẨN BACKEND */}
       <div
         className="card"
         style={{
@@ -138,7 +158,7 @@ const AdminOrders = () => {
         }}
       >
         <div style={{ fontWeight: 700, color: '#1d4ed8', marginBottom: '0.6rem', fontSize: '0.9rem' }}>
-          🔄 Quy trình xử lý đơn hàng chuẩn:
+          🔄 Quy trình xử lý đơn hàng hệ thống:
         </div>
         <div
           style={{
@@ -150,22 +170,22 @@ const AdminOrders = () => {
           }}
         >
           <span style={{ padding: '4px 10px', backgroundColor: '#fef3c7', color: '#92400e', borderRadius: '6px', fontWeight: 600 }}>
-            1. Chờ xác nhận
+            1. PENDING (Chờ xử lý)
           </span>
           <span style={{ color: '#94a3b8' }}>➔</span>
           <span style={{ padding: '4px 10px', backgroundColor: '#dbeafe', color: '#1e40af', borderRadius: '6px', fontWeight: 600 }}>
-            2. Đang xử lý
+            2. PAID (Đã thanh toán)
           </span>
           <span style={{ color: '#94a3b8' }}>➔</span>
           <span style={{ padding: '4px 10px', backgroundColor: '#f3e8ff', color: '#6b21a8', borderRadius: '6px', fontWeight: 600 }}>
-            3. Đang giao hàng
+            3. SHIPPING (Đang giao hàng)
           </span>
           <span style={{ color: '#94a3b8' }}>➔</span>
           <span style={{ padding: '4px 10px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '6px', fontWeight: 600 }}>
-            4. Đã giao thành công (Kết thúc)
+            4. COMPLETED (Hoàn thành)
           </span>
           <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: '#dc2626', fontWeight: 600 }}>
-            * Ở các bước 1, 2, 3 có thể chọn "Hủy đơn" (Kết thúc)
+            * Ở các bước 1, 2, 3 có thể chọn "Hủy đơn" (CANCELLED)
           </div>
         </div>
       </div>
@@ -179,21 +199,21 @@ const AdminOrders = () => {
           </div>
         </div>
         <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #f59e0b' }}>
-          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>1. Chờ xác nhận</span>
+          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>1. Chờ xử lý</span>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#d97706', marginTop: '0.2rem' }}>
             {metrics.pending}
           </div>
         </div>
         <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #2563eb' }}>
-          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>2. Đang xử lý</span>
+          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>2. Đã thanh toán / Đang giao</span>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#2563eb', marginTop: '0.2rem' }}>
-            {metrics.processing}
+            {metrics.paid + metrics.shipping}
           </div>
         </div>
         <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #16a34a' }}>
-          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>4. Đã giao thành công</span>
+          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>4. Đã hoàn thành</span>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#16a34a', marginTop: '0.2rem' }}>
-            {metrics.delivered}
+            {metrics.completed}
           </div>
         </div>
       </div>
@@ -228,7 +248,7 @@ const AdminOrders = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Tìm theo mã đơn (#1001), tên khách hoặc số điện thoại..."
+              placeholder="Tìm theo mã đơn (#1), tên người nhận hoặc số điện thoại..."
               style={{
                 width: '100%',
                 padding: '0.6rem 0.85rem 0.6rem 2.2rem',
@@ -255,11 +275,11 @@ const AdminOrders = () => {
             }}
           >
             <option value="">Tất cả trạng thái</option>
-            <option value={ORDER_STATUS.PENDING}>1. Chờ xác nhận</option>
-            <option value={ORDER_STATUS.PROCESSING}>2. Đang xử lý</option>
-            <option value={ORDER_STATUS.SHIPPED}>3. Đang giao hàng</option>
-            <option value={ORDER_STATUS.DELIVERED}>4. Đã giao thành công</option>
-            <option value={ORDER_STATUS.CANCELLED}>Đã hủy đơn</option>
+            <option value={ORDER_STATUS.PENDING}>1. PENDING (Chờ xử lý)</option>
+            <option value={ORDER_STATUS.PAID}>2. PAID (Đã thanh toán)</option>
+            <option value={ORDER_STATUS.SHIPPING}>3. SHIPPING (Đang giao hàng)</option>
+            <option value={ORDER_STATUS.COMPLETED}>4. COMPLETED (Hoàn thành)</option>
+            <option value={ORDER_STATUS.CANCELLED}>Đã hủy (CANCELLED)</option>
           </select>
 
           {/* Sort By */}
@@ -308,7 +328,11 @@ const AdminOrders = () => {
 
       {/* ORDERS TABLE */}
       <div className="card" style={{ padding: 0 }}>
-        {filteredOrders.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: '3rem' }}>
+            <Loading message="Đang tải danh sách đơn hàng quản trị..." />
+          </div>
+        ) : filteredOrders.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📑</div>
             <p style={{ fontWeight: 600 }}>Không tìm thấy đơn hàng nào phù hợp</p>
@@ -320,7 +344,7 @@ const AdminOrders = () => {
               <thead>
                 <tr>
                   <th>Mã đơn</th>
-                  <th>Khách hàng</th>
+                  <th>Người nhận</th>
                   <th>Số điện thoại</th>
                   <th>Ngày đặt</th>
                   <th>Tổng tiền</th>
@@ -331,17 +355,19 @@ const AdminOrders = () => {
               <tbody>
                 {filteredOrders.map((order) => {
                   const allowedTransitions = ORDER_TRANSITIONS[order.status] || [];
-                  const isCompleted = order.status === ORDER_STATUS.DELIVERED;
+                  const isCompleted = order.status === ORDER_STATUS.COMPLETED;
                   const isCancelled = order.status === ORDER_STATUS.CANCELLED;
 
                   return (
                     <tr key={order.id}>
                       <td style={{ fontWeight: 700 }}>#{order.id}</td>
-                      <td style={{ fontWeight: 600, color: '#0f172a' }}>{order.customerName}</td>
-                      <td>{order.phone}</td>
-                      <td>{new Date(order.createdAt).toLocaleDateString('vi-VN')}</td>
+                      <td style={{ fontWeight: 600, color: '#0f172a' }}>
+                        {order.receiverName || order.userEmail}
+                      </td>
+                      <td>{order.receiverPhone || '---'}</td>
+                      <td>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '---'}</td>
                       <td style={{ fontWeight: 700, color: '#2563eb' }}>
-                        {formatCurrency(order.totalAmount)}
+                        {formatCurrency(order.totalAmount || 0)}
                       </td>
                       <td>
                         <OrderStatus status={order.status} />
@@ -349,7 +375,7 @@ const AdminOrders = () => {
                       <td>
                         {/* QUY TRÌNH CHUYỂN TRẠNG THÁI */}
                         {isCompleted ? (
-                          <span style={{ color: '#16a34a', fontSize: '0.825rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span style={{ color: '#166534', fontSize: '0.825rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                             <span>✓</span> Đơn hàng hoàn tất (Khóa)
                           </span>
                         ) : isCancelled ? (
@@ -361,23 +387,18 @@ const AdminOrders = () => {
                             {allowedTransitions.map((trans) => (
                               <button
                                 key={trans.target}
+                                disabled={actionLoading}
                                 onClick={() => handleTransitionStatus(order.id, trans.target, trans.label)}
                                 style={{
                                   fontSize: '0.775rem',
                                   fontWeight: 600,
                                   padding: '0.35rem 0.65rem',
                                   borderRadius: '6px',
-                                  cursor: 'pointer',
+                                  cursor: actionLoading ? 'not-allowed' : 'pointer',
                                   border: trans.variant === 'danger' ? '1px solid #fecaca' : '1px solid #bfdbfe',
                                   backgroundColor: trans.variant === 'danger' ? '#fef2f2' : trans.variant === 'success' ? '#dcfce7' : '#eff6ff',
                                   color: trans.variant === 'danger' ? '#dc2626' : trans.variant === 'success' ? '#166534' : '#1d4ed8',
                                   transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.opacity = '0.85';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.opacity = '1';
                                 }}
                               >
                                 {trans.label}

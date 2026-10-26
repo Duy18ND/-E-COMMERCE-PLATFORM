@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import authService from '../../services/authService';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
@@ -10,11 +11,13 @@ const Register = () => {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
-    username: '',
+    phone: '',
+    address: '',
     password: '',
     confirmPassword: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -25,19 +28,35 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (formData.password !== formData.confirmPassword) {
       setError('Mật khẩu xác nhận không khớp!');
       return;
     }
 
+    if (formData.password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự!');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Sẵn sàng kết nối với authService.register(formData)
-      console.log('Đăng ký tài khoản:', formData);
-      navigate('/login');
+      // Gửi đúng DTO Backend RegisterRequest: { email, password, fullName, phone, address }
+      await authService.register({
+        email: formData.email.trim(),
+        password: formData.password,
+        fullName: formData.fullName.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim()
+      });
+
+      setSuccess('Đăng ký tài khoản thành công! Đang chuyển hướng sang trang đăng nhập...');
+      setTimeout(() => {
+        navigate('/login');
+      }, 1500);
     } catch (err) {
-      setError(err.message || 'Đăng ký không thành công. Vui lòng thử lại!');
+      setError(err.message || 'Đăng ký không thành công. Vui lòng kiểm tra lại thông tin!');
     } finally {
       setLoading(false);
     }
@@ -52,6 +71,23 @@ const Register = () => {
         </p>
 
         {error && <ErrorMessage message={error} onClose={() => setError('')} />}
+
+        {success && (
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              backgroundColor: '#dcfce7',
+              color: '#166534',
+              borderRadius: '8px',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              marginBottom: '1rem',
+              border: '1px solid #bbf7d0'
+            }}
+          >
+            ✓ {success}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <Input
@@ -74,12 +110,20 @@ const Register = () => {
           />
 
           <Input
-            label="Tên đăng nhập"
-            name="username"
-            required
-            value={formData.username}
+            label="Số điện thoại"
+            name="phone"
+            type="tel"
+            value={formData.phone}
             onChange={handleChange}
-            placeholder="username123"
+            placeholder="0912345678"
+          />
+
+          <Input
+            label="Địa chỉ nhận hàng mặc định"
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố"
           />
 
           <Input
@@ -89,7 +133,7 @@ const Register = () => {
             required
             value={formData.password}
             onChange={handleChange}
-            placeholder="••••••••"
+            placeholder="Tối thiểu 6 ký tự"
           />
 
           <Input

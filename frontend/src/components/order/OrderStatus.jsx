@@ -1,11 +1,16 @@
 import { ORDER_STATUS } from '../../utils/constants';
 
 const statusConfig = {
-  [ORDER_STATUS.PENDING]: { label: 'Chờ xác nhận', color: '#92400e', bg: '#fef3c7' },
-  [ORDER_STATUS.PROCESSING]: { label: 'Đang xử lý', color: '#1e40af', bg: '#dbeafe' },
-  [ORDER_STATUS.SHIPPED]: { label: 'Đang giao hàng', color: '#6b21a8', bg: '#f3e8ff' },
-  [ORDER_STATUS.DELIVERED]: { label: 'Đã giao thành công', color: '#166534', bg: '#dcfce7' },
-  [ORDER_STATUS.CANCELLED]: { label: 'Đã hủy', color: '#991b1b', bg: '#fee2e2' }
+  [ORDER_STATUS.PENDING]: { label: 'Chờ xử lý', color: '#92400e', bg: '#fef3c7' },
+  [ORDER_STATUS.PAID]: { label: 'Đã thanh toán', color: '#1e40af', bg: '#dbeafe' },
+  [ORDER_STATUS.SHIPPING]: { label: 'Đang giao hàng', color: '#6b21a8', bg: '#f3e8ff' },
+  [ORDER_STATUS.COMPLETED]: { label: 'Hoàn thành', color: '#166534', bg: '#dcfce7' },
+  [ORDER_STATUS.CANCELLED]: { label: 'Đã hủy', color: '#991b1b', bg: '#fee2e2' },
+
+  // Giữ fallback cho các tên cũ nếu có dữ liệu lịch sử
+  PROCESSING: { label: 'Đang xử lý', color: '#1e40af', bg: '#dbeafe' },
+  SHIPPED: { label: 'Đang giao hàng', color: '#6b21a8', bg: '#f3e8ff' },
+  DELIVERED: { label: 'Hoàn thành', color: '#166534', bg: '#dcfce7' }
 };
 
 const OrderStatus = ({ status }) => {
