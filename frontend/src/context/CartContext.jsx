@@ -1,62 +1,78 @@
-import { createContext, useState, useEffect, useRef } from 'react';
+import { createContext, useState, useEffect, useCallback } from 'react';
 import useAuth from '../hooks/useAuth';
 import useToast from '../hooks/useToast';
+import cartService from '../services/cartService';
 
 export const CartContext = createContext(null);
 
 export const CartProvider = ({ children }) => {
-  const { user, isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const { showToast } = useToast();
 
-  const getStorageKey = (u) => {
-    if (!u) return null;
-    const identifier = u.id || u.username || u.email;
-    return identifier ? `cart_user_${identifier}` : null;
-  };
-
-  const currentStorageKey = getStorageKey(user);
-  const activeKeyRef = useRef(null);
-
   const [cartItems, setCartItems] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  // Load user cart when authenticated user changes
-  useEffect(() => {
-    if (!isAuthenticated || !currentStorageKey || isAdmin) {
-      activeKeyRef.current = null;
+  // Chuẩn hóa dữ liệu từ CartResponse của Backend để tương thích giao diện
+  const applyCartResponse = useCallback((cartData) => {
+    if (!cartData) {
       setCartItems([]);
+      setTotalItems(0);
+      setTotalPrice(0);
       return;
     }
 
+    const rawItems = cartData.items || [];
+    const normalized = rawItems.map((item) => ({
+      ...item,
+      id: item.itemId, // Định danh cho hành động update/delete
+      itemId: item.itemId,
+      productId: item.productId,
+      name: item.productName || item.name || 'Sản phẩm',
+      productName: item.productName || item.name || 'Sản phẩm',
+      price: Number(item.unitPrice ?? item.price ?? 0),
+      unitPrice: Number(item.unitPrice ?? item.price ?? 0),
+      imageUrl: item.imageUrl || '',
+      quantity: Number(item.quantity || 0),
+      subTotal: Number(item.subTotal ?? (item.quantity * (item.unitPrice || 0)))
+    }));
+
+    setCartItems(normalized);
+    setTotalItems(normalized.reduce((sum, item) => sum + item.quantity, 0));
+    setTotalPrice(
+      Number(
+        cartData.totalPrice ??
+        normalized.reduce((sum, item) => sum + item.subTotal, 0)
+      )
+    );
+  }, []);
+
+  // Lấy giỏ hàng từ Backend khi người dùng đăng nhập thành công
+  const fetchCart = useCallback(async () => {
+    if (!isAuthenticated || isAdmin) {
+      applyCartResponse(null);
+      return;
+    }
+
+    setLoading(true);
     try {
-      const saved = localStorage.getItem(currentStorageKey);
-      const parsed = saved ? JSON.parse(saved) : [];
-      activeKeyRef.current = currentStorageKey;
-      setCartItems(parsed);
-    } catch (e) {
-      console.error('Lỗi khi đọc giỏ hàng từ localStorage:', e);
-      activeKeyRef.current = currentStorageKey;
-      setCartItems([]);
+      const cartData = await cartService.getCart();
+      applyCartResponse(cartData);
+    } catch (error) {
+      console.warn('Không thể tải giỏ hàng từ máy chủ:', error.message);
+      applyCartResponse(null);
+    } finally {
+      setLoading(false);
     }
-  }, [isAuthenticated, currentStorageKey, isAdmin]);
+  }, [isAuthenticated, isAdmin, applyCartResponse]);
 
-  // Persist cart items only for current active user
   useEffect(() => {
-    if (
-      isAuthenticated &&
-      currentStorageKey &&
-      !isAdmin &&
-      activeKeyRef.current === currentStorageKey
-    ) {
-      try {
-        localStorage.setItem(currentStorageKey, JSON.stringify(cartItems));
-      } catch (e) {
-        console.error('Lỗi khi lưu giỏ hàng vào localStorage:', e);
-      }
-    }
-  }, [cartItems, isAuthenticated, currentStorageKey, isAdmin]);
+    fetchCart();
+  }, [fetchCart]);
 
-  const addToCart = (product, quantity = 1) => {
-    // 1. Admin is NOT allowed to add products to cart
+  // 1. Thêm sản phẩm vào giỏ hàng
+  const addToCart = useCallback(async (product, quantity = 1) => {
     if (isAdmin) {
       if (showToast) {
         showToast({
@@ -68,7 +84,6 @@ export const CartProvider = ({ children }) => {
       return false;
     }
 
-    // 2. Unauthenticated user must log in
     if (!isAuthenticated) {
       if (showToast) {
         showToast({
@@ -82,64 +97,94 @@ export const CartProvider = ({ children }) => {
     }
 
     const qty = Math.max(1, Number(quantity) || 1);
+    const productId = product?.id || product?.productId;
 
-    setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === product.id);
-      if (existingItem) {
-        return prevItems.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + qty }
-            : item
-        );
+    try {
+      const updatedCart = await cartService.addItem(productId, qty);
+      applyCartResponse(updatedCart);
+
+      if (showToast) {
+        showToast({
+          type: 'cart',
+          title: 'Thêm vào giỏ hàng thành công!',
+          product,
+          quantity: qty
+        });
       }
-      return [...prevItems, { ...product, quantity: qty }];
-    });
-
-    if (showToast) {
-      showToast({
-        type: 'cart',
-        title: 'Thêm vào giỏ hàng thành công!',
-        product,
-        quantity: qty
-      });
+      return true;
+    } catch (err) {
+      if (showToast) {
+        showToast({
+          type: 'error',
+          title: 'Thêm vào giỏ thất bại',
+          message: err.message || 'Không thể thêm sản phẩm vào giỏ hàng lúc này.'
+        });
+      }
+      return false;
     }
+  }, [isAdmin, isAuthenticated, showToast, applyCartResponse]);
 
-    return true;
-  };
-
-
-
-  const removeFromCart = (productId) => {
-    setCartItems((prevItems) => prevItems.filter((item) => item.id !== productId));
-  };
-
-  const updateQuantity = (productId, quantity) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
+  // 2. Cập nhật số lượng
+  const updateQuantity = useCallback(async (itemId, quantity) => {
+    const qty = Number(quantity);
+    try {
+      if (qty <= 0) {
+        const updatedCart = await cartService.removeItem(itemId);
+        applyCartResponse(updatedCart);
+      } else {
+        const updatedCart = await cartService.updateItem(itemId, qty);
+        applyCartResponse(updatedCart);
+      }
+    } catch (err) {
+      console.error('Lỗi khi cập nhật giỏ hàng:', err);
+      if (showToast) {
+        showToast({
+          type: 'error',
+          title: 'Lỗi cập nhật',
+          message: err.message || 'Không thể cập nhật số lượng sản phẩm.'
+        });
+      }
     }
-    setCartItems((prevItems) =>
-      prevItems.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
-      )
-    );
-  };
+  }, [showToast, applyCartResponse]);
 
-  const clearCart = () => {
-    setCartItems([]);
-  };
+  // 3. Xóa sản phẩm khỏi giỏ
+  const removeFromCart = useCallback(async (itemId) => {
+    try {
+      const updatedCart = await cartService.removeItem(itemId);
+      applyCartResponse(updatedCart);
+    } catch (err) {
+      console.error('Lỗi khi xóa sản phẩm khỏi giỏ:', err);
+      if (showToast) {
+        showToast({
+          type: 'error',
+          title: 'Lỗi xóa sản phẩm',
+          message: err.message || 'Không thể xóa sản phẩm khỏi giỏ.'
+        });
+      }
+    }
+  }, [showToast, applyCartResponse]);
 
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  // 4. Xóa toàn bộ giỏ hàng
+  const clearCart = useCallback(async () => {
+    try {
+      const updatedCart = await cartService.clearCart();
+      applyCartResponse(updatedCart);
+    } catch (err) {
+      console.error('Lỗi khi xóa toàn bộ giỏ hàng:', err);
+      applyCartResponse(null);
+    }
+  }, [applyCartResponse]);
 
   const value = {
     cartItems,
     totalItems,
     totalPrice,
+    loading,
     addToCart,
     removeFromCart,
     updateQuantity,
-    clearCart
+    clearCart,
+    refreshCart: fetchCart
   };
 
   return (

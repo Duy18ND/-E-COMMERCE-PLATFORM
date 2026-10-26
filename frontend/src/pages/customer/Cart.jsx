@@ -5,10 +5,11 @@ import CartItem from '../../components/cart/CartItem';
 import CartSummary from '../../components/cart/CartSummary';
 import EmptyState from '../../components/common/EmptyState';
 import Button from '../../components/common/Button';
+import Loading from '../../components/common/Loading';
 
 const Cart = () => {
   const { isAuthenticated, isAdmin } = useAuth();
-  const { cartItems, totalItems, totalPrice, clearCart } = useCart();
+  const { cartItems, totalItems, totalPrice, clearCart, loading } = useCart();
   const location = useLocation();
 
   if (!isAuthenticated) {
@@ -50,6 +51,13 @@ const Cart = () => {
     );
   }
 
+  if (loading && cartItems.length === 0) {
+    return (
+      <div className="container page-container">
+        <Loading message="Đang tải giỏ hàng của bạn..." />
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -77,7 +85,7 @@ const Cart = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', alignItems: 'start' }}>
         <div className="card" style={{ padding: 0 }}>
           {cartItems.map((item) => (
-            <CartItem key={item.id} item={item} />
+            <CartItem key={item.id || item.itemId} item={item} />
           ))}
         </div>
 
