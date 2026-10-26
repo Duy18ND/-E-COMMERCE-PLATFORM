@@ -1,56 +1,65 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.1.1'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.springframework.boot' version '3.3.4' apply false
+    id 'io.spring.dependency-management' version '1.1.6' apply false
 }
 
-group = 'com.re'
-version = '0.0.1-SNAPSHOT'
-description = 'backend'
+// ─────────────────────────────────────────────────────────────
+// Properties shared across ALL submodules
+// ─────────────────────────────────────────────────────────────
+ext {
+    set('springCloudVersion', '2023.0.3')
+    set('javaVersion', JavaVersion.VERSION_21)
+    set('lombokVersion', '1.18.32')
+    set('jjwtVersion', '0.12.5')
+    set('springdocVersion', '2.5.0')
+    set('mapstructVersion', '1.5.5.Final')
+}
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+// ─────────────────────────────────────────────────────────────
+// Configuration applied to every subproject
+// ─────────────────────────────────────────────────────────────
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+
+    group   = 'com.ecommerce'
+    version = '1.0.0-SNAPSHOT'
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
-}
 
-repositories {
-    mavenCentral()
-}
+    repositories {
+        mavenCentral()
+    }
 
-dependencies {
-    // Spring Boot Starters
-    implementation 'org.springframework.boot:spring-boot-starter'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // Import Spring Cloud BOM so all submodules share the same managed versions
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        }
+    }
 
-    // Database: MySQL Connector
-    runtimeOnly 'com.mysql:mysql-connector-j'
+    // Dependencies available in every submodule
+    dependencies {
+        compileOnly         "org.projectlombok:lombok:${lombokVersion}"
+        annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+        testCompileOnly     "org.projectlombok:lombok:${lombokVersion}"
+        testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
-    // Security: JWT (JSON Web Token)
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
+    }
 
-    // API Documentation & Testing: Swagger / OpenAPI UI
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
+    tasks.named('test') {
+        useJUnitPlatform()
+    }
 
-    // Lombok (Boilerplate reduction for Entities/DTOs)
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-    testCompileOnly 'org.projectlombok:lombok'
-    testAnnotationProcessor 'org.projectlombok:lombok'
-
-    // Testing
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.security:spring-security-test'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    // H2 in-memory database for integration tests (no MySQL needed)
-    testRuntimeOnly 'com.h2database:h2'
-}
-
-tasks.named('test') {
-    useJUnitPlatform()
+    // Ensure UTF-8 encoding for all compile tasks
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
 }

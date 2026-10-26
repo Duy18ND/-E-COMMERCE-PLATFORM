@@ -1,0 +1,162 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # ─── Redis (for Rate Limiting filter) ───────────────────────
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redispassword}
+      timeout: 2000ms
+
+  # ─── Spring Cloud Gateway Routes ────────────────────────────
+  cloud:
+    gateway:
+      # Enable route discovery from Eureka (auto-routes lb://<service-name>)
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      # Default filters applied to ALL routes
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            redis-rate-limiter.requestedTokens: 1
+
+      # Explicit routes (more specific than discovery locator)
+      routes:
+
+        # ── Auth Service ─────────────────────────────────────
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - StripPrefix=0
+            - name: CircuitBreaker
+              args:
+                name: auth-cb
+                fallbackUri: forward:/fallback/auth
+
+        # ── Product Service ──────────────────────────────────
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/**
+          filters:
+            - StripPrefix=0
+            - name: CircuitBreaker
+              args:
+                name: product-cb
+                fallbackUri: forward:/fallback/product
+
+        # ── Order Service ────────────────────────────────────
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**,/api/v1/cart/**
+          filters:
+            - StripPrefix=0
+            - name: CircuitBreaker
+              args:
+                name: order-cb
+                fallbackUri: forward:/fallback/order
+
+        # ── Payment Service ──────────────────────────────────
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/payments/**
+          filters:
+            - StripPrefix=0
+            - name: CircuitBreaker
+              args:
+                name: payment-cb
+                fallbackUri: forward:/fallback/payment
+
+      # ── CORS Global Configuration ────────────────────────────
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - "http://localhost:3000"
+              - "http://localhost:5173"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowed-headers: "*"
+            allow-credentials: true
+            max-age: 3600
+
+# ─── Eureka Client ───────────────────────────────────────────
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka:eurekapassword@localhost:8761/eureka/}
+
+# ─── Resilience4j Circuit Breaker config ─────────────────────
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      auth-cb:
+        base-config: default
+      product-cb:
+        base-config: default
+      order-cb:
+        base-config: default
+      payment-cb:
+        base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+    instances:
+      auth-cb:
+        base-config: default
+      product-cb:
+        base-config: default
+      order-cb:
+        base-config: default
+      payment-cb:
+        base-config: default
+
+# ─── Actuator ────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty: WARN

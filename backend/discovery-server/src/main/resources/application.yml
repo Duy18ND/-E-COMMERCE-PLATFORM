@@ -1,0 +1,41 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: discovery-server
+  # Disable Spring Security auto-generated password (use fixed credentials below)
+  security:
+    user:
+      name: eureka
+      password: eurekapassword
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    # This is the Eureka Server itself — it should NOT register with itself
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    # Wait time in ms after the last heartbeat is received before evicting the instance
+    eviction-interval-timer-in-ms: 5000
+    # Disable self-preservation mode in development
+    enable-self-preservation: false
+    renewal-percent-threshold: 0.85
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
