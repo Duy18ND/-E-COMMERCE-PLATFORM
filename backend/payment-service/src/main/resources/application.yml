@@ -1,0 +1,90 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: payment-service
+
+  # ─── Database ────────────────────────────────────────────────
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8}
+    username: ${SPRING_DATASOURCE_USERNAME:ecommerce_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:ecommerce_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: PaymentServicePool
+      maximum-pool-size: 10
+      minimum-idle: 3
+
+  # ─── JPA / Hibernate ─────────────────────────────────────────
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+
+  # ─── Kafka Consumer & Producer ───────────────────────────────
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: payment-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.ecommerce.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+        acks: all
+        retries: 3
+        retry.backoff.ms: 1000
+
+# ─── Kafka Topics ─────────────────────────────────────────────
+kafka:
+  topics:
+    order-created: order.created
+    payment-completed: payment.completed
+    payment-failed: payment.failed
+
+# ─── Mock Payment config ──────────────────────────────────────
+payment:
+  mock:
+    # Simulate success rate (0.0 - 1.0), 0.95 = 95% success
+    success-rate: 0.95
+    # Simulated processing delay in milliseconds
+    processing-delay-ms: 500
+
+# ─── Eureka Client ───────────────────────────────────────────
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+    health-check-url-path: /actuator/health
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka:eurekapassword@localhost:8761/eureka/}
+
+# ─── OpenAPI / Swagger ────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# ─── Actuator ────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

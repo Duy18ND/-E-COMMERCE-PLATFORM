@@ -1,0 +1,83 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: order-service
+
+  # ─── Database ────────────────────────────────────────────────
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8}
+    username: ${SPRING_DATASOURCE_USERNAME:ecommerce_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:ecommerce_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: OrderServicePool
+      maximum-pool-size: 10
+      minimum-idle: 3
+
+  # ─── JPA / Hibernate ─────────────────────────────────────────
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+
+  # ─── Kafka Producer ──────────────────────────────────────────
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+        acks: all
+        retries: 3
+        retry.backoff.ms: 1000
+    consumer:
+      group-id: order-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.ecommerce.*"
+
+# ─── Kafka Topics ─────────────────────────────────────────────
+kafka:
+  topics:
+    order-created: order.created
+    order-cancelled: order.cancelled
+    payment-completed: payment.completed
+    payment-failed: payment.failed
+
+# ─── Eureka Client ───────────────────────────────────────────
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+    health-check-url-path: /actuator/health
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka:eurekapassword@localhost:8761/eureka/}
+
+# ─── OpenAPI / Swagger ────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# ─── Actuator ────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
