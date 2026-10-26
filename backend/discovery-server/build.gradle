@@ -1,0 +1,14 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+    id 'java'
+}
+
+description = 'Discovery Server (Eureka)'
+
+dependencies {
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-server'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // Security for Eureka dashboard (optional — can remove in dev)
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+}
