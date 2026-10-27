@@ -46,10 +46,10 @@ spring:
 # ─── Kafka Topics ─────────────────────────────────────────────
 kafka:
   topics:
-    order-created: order.created
-    order-cancelled: order.cancelled
-    payment-completed: payment.completed
-    payment-failed: payment.failed
+    order-created: order-created
+    order-cancelled: order-cancelled
+    payment-success: payment-success
+    payment-failed: payment-failed
 
 # ─── Eureka Client ───────────────────────────────────────────
 eureka:
