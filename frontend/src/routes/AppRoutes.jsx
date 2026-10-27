@@ -11,6 +11,7 @@ import AdminRoute from './AdminRoute';
 import Home from '../pages/customer/Home';
 import Products from '../pages/customer/Products';
 import ProductDetail from '../pages/customer/ProductDetail';
+import FlashSale from '../pages/customer/FlashSale';
 import Cart from '../pages/customer/Cart';
 import Checkout from '../pages/customer/Checkout';
 import OrderSuccess from '../pages/customer/OrderSuccess';
@@ -28,6 +29,8 @@ import AdminProductForm from '../pages/admin/ProductForm';
 import AdminCategories from '../pages/admin/Categories';
 import AdminOrders from '../pages/admin/Orders';
 import AdminInventory from '../pages/admin/Inventory';
+import AdminSales from '../pages/admin/AdminSales';
+import AdminSaleForm from '../pages/admin/AdminSaleForm';
 
 // Admin Layout wrapper
 const AdminLayout = ({ children }) => {
@@ -48,18 +51,16 @@ const AppRoutes = () => {
       <Route path="/" element={<Home />} />
       <Route path="/products" element={<Products />} />
       <Route path="/products/:id" element={<ProductDetail />} />
+      <Route path="/flash-sale" element={<FlashSale />} />
+      <Route path="/cart" element={<Cart />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* Protected Customer Routes (Yêu cầu đăng nhập) */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/cart" element={<Cart />} />
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/order-success" element={<OrderSuccess />} />
-        <Route path="/orders" element={<Orders />} />
-        <Route path="/orders/:id" element={<OrderDetail />} />
-      </Route>
-
+      {/* Customer Routes */}
+      <Route path="/checkout" element={<Checkout />} />
+      <Route path="/order-success" element={<OrderSuccess />} />
+      <Route path="/orders" element={<Orders />} />
+      <Route path="/orders/:id" element={<OrderDetail />} />
 
       {/* Admin Routes */}
       <Route element={<AdminRoute />}>
@@ -116,6 +117,32 @@ const AppRoutes = () => {
           element={
             <AdminLayout>
               <AdminInventory />
+            </AdminLayout>
+          }
+        />
+
+        {/* Admin Sales & Promotion Management Routes */}
+        <Route
+          path="/admin/sales"
+          element={
+            <AdminLayout>
+              <AdminSales />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/admin/sales/new"
+          element={
+            <AdminLayout>
+              <AdminSaleForm />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/admin/sales/:id/edit"
+          element={
+            <AdminLayout>
+              <AdminSaleForm />
             </AdminLayout>
           }
         />

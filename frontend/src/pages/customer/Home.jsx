@@ -439,6 +439,81 @@ const Home = () => {
         </div>
       </section>
 
+      {/* FLASH SALE SPOTLIGHT BANNER */}
+      <section
+        style={{
+          background: 'linear-gradient(90deg, #991b1b 0%, #dc2626 50%, #ea580c 100%)',
+          color: '#ffffff',
+          padding: '1.1rem 0',
+          boxShadow: '0 4px 20px rgba(220, 38, 38, 0.25)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+      >
+        <div
+          className="container"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                padding: '0.35rem 0.85rem',
+                borderRadius: '9999px',
+                fontWeight: 800,
+                fontSize: '0.8rem',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase'
+              }}
+            >
+              <span>⚡</span>
+              <span>FLASH SALE ĐỘC QUYỀN</span>
+            </div>
+            <div>
+              <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>
+                Giảm Sốc Đến 50% Toàn Bộ Thiết Bị Hot
+              </span>
+              <span style={{ fontSize: '0.825rem', opacity: 0.9, marginLeft: '0.5rem', display: 'inline-block' }}>
+                • Số lượng có hạn theo từng khung giờ
+              </span>
+            </div>
+          </div>
+
+          <Link
+            to="/flash-sale"
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#dc2626',
+              padding: '0.6rem 1.35rem',
+              borderRadius: '9999px',
+              fontWeight: 800,
+              fontSize: '0.875rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              textDecoration: 'none',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+          >
+            <span>Săn Flash Sale ngay</span>
+            <span>⚡ ➔</span>
+          </Link>
+        </div>
+      </section>
+
       {/* 2. CATEGORIES SECTION (EXACT DESIGN AS SCREENSHOT) */}
       <section style={{ padding: '3.5rem 0 4rem', backgroundColor: '#ffffff' }}>
         <div className="container">

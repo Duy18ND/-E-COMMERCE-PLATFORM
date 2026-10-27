@@ -376,6 +376,27 @@ const Header = () => {
                 >
                   🏭 Quản lý Tồn kho
                 </NavLink>
+
+                <NavLink
+                  to="/admin/sales"
+                  style={({ isActive }) => ({
+                    fontSize: '0.875rem',
+                    fontWeight: isActive ? 700 : 600,
+                    color: isActive ? '#dc2626' : '#ea580c',
+                    backgroundColor: isActive ? '#fee2e2' : '#fff7ed',
+                    border: '1px solid #ffedd5',
+                    padding: '0.45rem 0.85rem',
+                    borderRadius: '9999px',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    textDecoration: 'none'
+                  })}
+                >
+                  <span>⚡</span>
+                  <span>Quản lý Sale</span>
+                </NavLink>
               </nav>
             ) : (
               /* KHI LÀ KHÁCH HÀNG: Hiển thị các trang khách hàng */
@@ -407,6 +428,28 @@ const Header = () => {
                     })}
                   >
                     Sản phẩm
+                  </NavLink>
+
+                  <NavLink
+                    to="/flash-sale"
+                    style={({ isActive }) => ({
+                      fontSize: '0.925rem',
+                      fontWeight: 700,
+                      color: isActive ? '#ffffff' : '#dc2626',
+                      backgroundColor: isActive ? '#dc2626' : '#fee2e2',
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '9999px',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      textDecoration: 'none',
+                      boxShadow: isActive ? '0 2px 8px rgba(220, 38, 38, 0.4)' : 'none',
+                      transition: 'all 0.2s ease'
+                    })}
+                  >
+                    <span>⚡</span>
+                    <span>Flash Sale</span>
                   </NavLink>
 
                   <NavLink
