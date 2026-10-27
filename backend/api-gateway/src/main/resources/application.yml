@@ -25,16 +25,11 @@ spring:
       # Default filters applied to ALL routes
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
-        - name: RequestRateLimiter
-          args:
-            redis-rate-limiter.replenishRate: 100
-            redis-rate-limiter.burstCapacity: 200
-            redis-rate-limiter.requestedTokens: 1
 
-      # Explicit routes (more specific than discovery locator)
+      # Explicit routes
       routes:
 
-        # ── Auth Service ─────────────────────────────────────
+        # ── 1. Auth Service (Public: Login, Register, Refresh) ─────────
         - id: auth-service
           uri: lb://auth-service
           predicates:
@@ -46,11 +41,12 @@ spring:
                 name: auth-cb
                 fallbackUri: forward:/fallback/auth
 
-        # ── Product Service ──────────────────────────────────
-        - id: product-service
+        # ── 2. Product Service — Public Read APIs (GET) ────────────────
+        - id: product-service-public
           uri: lb://product-service
           predicates:
             - Path=/api/v1/products/**
+            - Method=GET
           filters:
             - StripPrefix=0
             - name: CircuitBreaker
@@ -58,37 +54,79 @@ spring:
                 name: product-cb
                 fallbackUri: forward:/fallback/product
 
-        # ── Order Service ────────────────────────────────────
+        # ── 3. Product Service — Data Mutation APIs (POST, PUT, DELETE, PATCH)
+        - id: product-service-mutation
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/**
+            - Method=POST,PUT,DELETE,PATCH
+          filters:
+            - StripPrefix=0
+            - AuthenticationFilter
+            - name: CircuitBreaker
+              args:
+                name: product-cb
+                fallbackUri: forward:/fallback/product
+
+        # ── 4. Order Service — Checkout Anti-Spam Rate Limiter ─────────
+        - id: order-service-checkout
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/checkout
+          filters:
+            - StripPrefix=0
+            - AuthenticationFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 5
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: order-cb
+                fallbackUri: forward:/fallback/order
+
+        # ── 5. Order Service — General Orders & Cart ───────────────────
         - id: order-service
           uri: lb://order-service
           predicates:
             - Path=/api/v1/orders/**,/api/v1/cart/**
           filters:
             - StripPrefix=0
+            - AuthenticationFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
             - name: CircuitBreaker
               args:
                 name: order-cb
                 fallbackUri: forward:/fallback/order
 
-        # ── Payment Service ──────────────────────────────────
+        # ── 6. Payment Service ─────────────────────────────────────────
         - id: payment-service
           uri: lb://payment-service
           predicates:
             - Path=/api/v1/payments/**
           filters:
             - StripPrefix=0
+            - AuthenticationFilter
             - name: CircuitBreaker
               args:
                 name: payment-cb
                 fallbackUri: forward:/fallback/payment
 
-      # ── CORS Global Configuration ────────────────────────────
+      # ── CORS Global Configuration ────────────────────────────────────
       globalcors:
         cors-configurations:
           '[/**]':
             allowed-origins:
               - "http://localhost:3000"
               - "http://localhost:5173"
+              - "http://localhost:8080"
             allowed-methods:
               - GET
               - POST
@@ -99,6 +137,10 @@ spring:
             allowed-headers: "*"
             allow-credentials: true
             max-age: 3600
+
+# ─── JWT Secret Configuration (Shared with auth-service) ─────
+jwt:
+  secret: ${JWT_SECRET:ecommerce-super-secret-key-change-in-production-must-be-256-bits}
 
 # ─── Eureka Client ───────────────────────────────────────────
 eureka:
@@ -158,5 +200,6 @@ management:
 
 logging:
   level:
-    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    com.ecommerce.gateway: DEBUG
     reactor.netty: WARN
