@@ -21,4 +21,12 @@ dependencies {
 
     // Redis Reactive — for Rate Limiting filter
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+
+    // JWT (jjwt) for Gateway Authentication Filter
+    implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+    runtimeOnly    "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+    runtimeOnly    "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+
+    // Test
+    testImplementation 'io.projectreactor:reactor-test'
 }

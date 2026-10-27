@@ -1,8 +1,14 @@
 version: '3.9'
 
 # ═══════════════════════════════════════════════════════════════
-#  E-Commerce Microservices — Shared Infrastructure
-#  Day 1 (26/10): MySQL · Redis · Kafka · Zookeeper
+#  E-Commerce Microservices — Full Platform Infrastructure
+#  Startup Order:
+#  1. Zookeeper
+#  2. Kafka (depends on Zookeeper)
+#  3. MySQL & Redis (Shared Datastores)
+#  4. Discovery Server (Eureka Registry)
+#  5. Core Microservices (Auth, Product, Order, Payment)
+#  6. API Gateway (Port 8080 - Entry Point)
 # ═══════════════════════════════════════════════════════════════
 
 networks:
@@ -19,52 +25,7 @@ volumes:
 services:
 
   # ─────────────────────────────────────────────
-  #  MySQL 8 — 4 isolated databases
-  # ─────────────────────────────────────────────
-  mysql:
-    image: mysql:8.2
-    container_name: ecommerce-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_USER: ecommerce_user
-      MYSQL_PASSWORD: ecommerce_pass
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - ecommerce-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  # ─────────────────────────────────────────────
-  #  Redis 7 — Cache / Rate-Limiting / Sessions
-  # ─────────────────────────────────────────────
-  redis:
-    image: redis:7.2-alpine
-    container_name: ecommerce-redis
-    restart: unless-stopped
-    command: redis-server --requirepass redispassword --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - ecommerce-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ─────────────────────────────────────────────
-  #  Zookeeper (Kafka coordination)
+  #  1. Zookeeper (Kafka coordination)
   # ─────────────────────────────────────────────
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
@@ -88,7 +49,7 @@ services:
       retries: 5
 
   # ─────────────────────────────────────────────
-  #  Kafka Broker
+  #  2. Kafka Broker
   # ─────────────────────────────────────────────
   kafka:
     image: confluentinc/cp-kafka:7.6.1
@@ -121,7 +82,7 @@ services:
       start_period: 30s
 
   # ─────────────────────────────────────────────
-  #  Kafka UI (optional — remove in prod)
+  #  Kafka UI (Optional management dashboard)
   # ─────────────────────────────────────────────
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -140,7 +101,52 @@ services:
       - ecommerce-network
 
   # ─────────────────────────────────────────────
-  #  Discovery Server (Eureka) — Port 8761
+  #  3. MySQL 8 — 4 isolated databases
+  # ─────────────────────────────────────────────
+  mysql:
+    image: mysql:8.2
+    container_name: ecommerce-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: ecommerce_user
+      MYSQL_PASSWORD: ecommerce_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  #  3. Redis 7 — Cache / Rate-Limiting / Sessions
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: ecommerce-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redispassword --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  #  4. Discovery Server (Eureka) — Port 8761
   # ─────────────────────────────────────────────
   discovery-server:
     build:
@@ -148,38 +154,26 @@ services:
       dockerfile: Dockerfile
     container_name: ecommerce-discovery-server
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     ports:
       - "8761:8761"
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8761/actuator/health | grep UP || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8761/actuator/health | grep UP || curl -sf http://localhost:8761/actuator/health | grep UP || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 8
-      start_period: 40s
+      start_period: 35s
 
   # ─────────────────────────────────────────────
-  #  API Gateway — Port 8080
-  # ─────────────────────────────────────────────
-  api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
-    container_name: ecommerce-api-gateway
-    restart: unless-stopped
-    depends_on:
-      discovery-server:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
-    networks:
-      - ecommerce-network
-
-  # ─────────────────────────────────────────────
-  #  Auth Service — Port 8081
+  #  5. Auth Service — Port 8081
   # ─────────────────────────────────────────────
   auth-service:
     build:
@@ -190,6 +184,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       discovery-server:
         condition: service_healthy
     ports:
@@ -198,12 +194,22 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/auth_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ecommerce_user
       SPRING_DATASOURCE_PASSWORD: ecommerce_pass
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redispassword
+      JWT_SECRET: ecommerce-super-secret-key-change-in-production-must-be-256-bits
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8081/actuator/health | grep UP || curl -sf http://localhost:8081/actuator/health | grep UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 35s
 
   # ─────────────────────────────────────────────
-  #  Product Service — Port 8082
+  #  5. Product Service — Port 8082
   # ─────────────────────────────────────────────
   product-service:
     build:
@@ -214,6 +220,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       discovery-server:
         condition: service_healthy
     ports:
@@ -222,12 +230,21 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/product_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ecommerce_user
       SPRING_DATASOURCE_PASSWORD: ecommerce_pass
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redispassword
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8082/actuator/health | grep UP || curl -sf http://localhost:8082/actuator/health | grep UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 35s
 
   # ─────────────────────────────────────────────
-  #  Order Service — Port 8083
+  #  5. Order Service — Port 8083
   # ─────────────────────────────────────────────
   order-service:
     build:
@@ -249,12 +266,18 @@ services:
       SPRING_DATASOURCE_USERNAME: ecommerce_user
       SPRING_DATASOURCE_PASSWORD: ecommerce_pass
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8083/actuator/health | grep UP || curl -sf http://localhost:8083/actuator/health | grep UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 35s
 
   # ─────────────────────────────────────────────
-  #  Payment Service — Port 8084
+  #  5. Payment Service — Port 8084
   # ─────────────────────────────────────────────
   payment-service:
     build:
@@ -276,6 +299,51 @@ services:
       SPRING_DATASOURCE_USERNAME: ecommerce_user
       SPRING_DATASOURCE_PASSWORD: ecommerce_pass
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/actuator/health | grep UP || curl -sf http://localhost:8084/actuator/health | grep UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 35s
+
+  # ─────────────────────────────────────────────
+  #  6. API Gateway — Port 8080 (Single Entrypoint)
+  # ─────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: ecommerce-api-gateway
+    restart: unless-stopped
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redispassword
+      JWT_SECRET: ecommerce-super-secret-key-change-in-production-must-be-256-bits
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health | grep UP || curl -sf http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 35s
