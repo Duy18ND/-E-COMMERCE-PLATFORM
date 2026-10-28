@@ -21,14 +21,11 @@ public class CheckoutItemRequest implements Serializable {
     @NotNull(message = "Product ID không được để trống")
     private Long productId;
 
-    @NotBlank(message = "Tên sản phẩm không được để trống")
     private String productName;
 
     @NotNull(message = "Số lượng không được để trống")
     @Min(value = 1, message = "Số lượng phải lớn hơn hoặc bằng 1")
     private Integer quantity;
 
-    @NotNull(message = "Giá tại thời điểm mua không được để trống")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Giá mua phải lớn hơn 0")
     private BigDecimal priceAtPurchase;
 }

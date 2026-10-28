@@ -23,6 +23,12 @@ public interface OrderService {
     OrderResponse cancelOrder(Long orderId);
 
     /**
+     * Hủy đơn hàng kèm xác thực người dùng sở hữu:
+     * Kiểm tra quyền sở hữu đơn hàng (chống IDOR).
+     */
+    OrderResponse cancelOrder(Long orderId, Long userId);
+
+    /**
      * Lấy chi tiết đơn hàng theo ID (sử dụng fetch join để chống N+1).
      */
     OrderResponse getOrderById(Long id);

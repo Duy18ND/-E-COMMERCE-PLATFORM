@@ -1,6 +1,7 @@
 package com.ecommerce.order.service;
 
 import com.ecommerce.order.client.ProductClient;
+import com.ecommerce.order.client.dto.ProductResponse;
 import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.request.CheckoutItemRequest;
 import com.ecommerce.order.dto.request.CheckoutRequest;
@@ -11,6 +12,7 @@ import com.ecommerce.order.entity.OrderItem;
 import com.ecommerce.order.enums.OrderStatus;
 import com.ecommerce.order.enums.PaymentMethod;
 import com.ecommerce.order.event.OrderEvent;
+import com.ecommerce.order.exception.AccessDeniedException;
 import com.ecommerce.order.exception.NotEnoughStockException;
 import com.ecommerce.order.exception.ProductNotFoundException;
 import com.ecommerce.order.exception.ResourceNotFoundException;
@@ -54,9 +56,25 @@ class OrderServiceTest {
 
     private CheckoutRequest sampleCheckoutRequest;
     private Order samplePendingOrder;
+    private ProductResponse sampleProduct1;
+    private ProductResponse sampleProduct2;
 
     @BeforeEach
     void setUp() {
+        sampleProduct1 = ProductResponse.builder()
+                .id(101L)
+                .name("iPhone 15 Pro")
+                .price(new BigDecimal("1000.00"))
+                .stockQuantity(10)
+                .build();
+
+        sampleProduct2 = ProductResponse.builder()
+                .id(102L)
+                .name("Ốp lưng MagSafe")
+                .price(new BigDecimal("50.00"))
+                .stockQuantity(20)
+                .build();
+
         CheckoutItemRequest item1 = CheckoutItemRequest.builder()
                 .productId(101L)
                 .productName("iPhone 15 Pro")
@@ -105,9 +123,11 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("Checkout thành công: Trừ kho Feign thành công -> Lưu DB PENDING -> Bắn Kafka event")
+    @DisplayName("Checkout thành công: Lấy giá chính xác từ ProductClient -> Trừ kho Feign -> Lưu DB PENDING -> Bắn Kafka event")
     void checkout_Success() {
-        // GIVEN: Feign trừ kho thành công
+        // GIVEN: Feign lấy giá và trừ kho thành công
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(sampleProduct1));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(sampleProduct2));
         when(productClient.reserveStock(any())).thenReturn(ApiResponse.success(null));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order o = invocation.getArgument(0);
@@ -125,6 +145,10 @@ class OrderServiceTest {
         assertThat(response.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(response.getTotalAmount()).isEqualByComparingTo(new BigDecimal("2050.00"));
         assertThat(response.getItems()).hasSize(2);
+
+        // VERIFY: Đã gọi getProductById cho từng item để chống Price Tampering
+        verify(productClient, times(1)).getProductById(101L);
+        verify(productClient, times(1)).getProductById(102L);
 
         // VERIFY: Đã gọi trừ kho 1 lần
         verify(productClient, times(1)).reserveStock(any());
@@ -144,9 +168,57 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("Chống Price Tampering: Client gửi giá 1.00 -> Hệ thống tự ghi đè bằng giá DB 1000.00 & 50.00, tổng tiền vẫn là 2050.00")
+    void checkout_PriceTamperingPrevention() {
+        // GIVEN: Client cố tình gửi giá 1.00 VNĐ
+        CheckoutItemRequest tamperedItem1 = CheckoutItemRequest.builder()
+                .productId(101L)
+                .productName("Fake name")
+                .quantity(2)
+                .priceAtPurchase(new BigDecimal("1.00")) // Client hack giá
+                .build();
+
+        CheckoutItemRequest tamperedItem2 = CheckoutItemRequest.builder()
+                .productId(102L)
+                .productName("Fake case")
+                .quantity(1)
+                .priceAtPurchase(new BigDecimal("1.00")) // Client hack giá
+                .build();
+
+        CheckoutRequest tamperedRequest = CheckoutRequest.builder()
+                .userId(1L)
+                .receiverName("Hacker")
+                .receiverPhone("0987654321")
+                .shippingAddress("Nowhere")
+                .paymentMethod(PaymentMethod.MOCK_ONLINE)
+                .items(List.of(tamperedItem1, tamperedItem2))
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(sampleProduct1));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(sampleProduct2));
+        when(productClient.reserveStock(any())).thenReturn(ApiResponse.success(null));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order o = invocation.getArgument(0);
+            o.setId(1L);
+            o.setCreatedAt(LocalDateTime.now());
+            return o;
+        });
+
+        // WHEN
+        OrderResponse response = orderService.checkout(tamperedRequest);
+
+        // THEN: Tổng tiền phải tính theo giá 1000.00 * 2 + 50.00 * 1 = 2050.00 chứ KHÔNG PHẢI 3.00
+        assertThat(response.getTotalAmount()).isEqualByComparingTo(new BigDecimal("2050.00"));
+        assertThat(tamperedItem1.getPriceAtPurchase()).isEqualByComparingTo(new BigDecimal("1000.00"));
+        assertThat(tamperedItem2.getPriceAtPurchase()).isEqualByComparingTo(new BigDecimal("50.00"));
+    }
+
+    @Test
     @DisplayName("Checkout thất bại do thiếu tồn kho: Feign quăng NotEnoughStockException -> KHÔNG lưu database, KHÔNG bắn Kafka")
     void checkout_StockReservationFailed_ShouldNotSaveDatabaseAndNotSendKafka() {
         // GIVEN: Product Client trả về lỗi thiếu hàng trong kho
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(sampleProduct1));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(sampleProduct2));
         when(productClient.reserveStock(any()))
                 .thenThrow(new NotEnoughStockException("Sản phẩm ID 101 không đủ số lượng tồn kho"));
 
@@ -166,15 +238,14 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("Checkout thất bại do không tìm thấy sản phẩm: Feign quăng ProductNotFoundException -> KHÔNG lưu database")
+    @DisplayName("Checkout thất bại do không tìm thấy sản phẩm: ProductClient trả về null -> Ném ResourceNotFoundException")
     void checkout_ProductNotFound_ShouldNotSaveDatabase() {
-        // GIVEN: Product Client trả về lỗi 404 không tìm thấy sản phẩm
-        when(productClient.reserveStock(any()))
-                .thenThrow(new ProductNotFoundException("Không tìm thấy sản phẩm với ID: 101"));
+        // GIVEN: Product Client trả về null (sản phẩm không tồn tại)
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.error("Không tìm thấy"));
 
         // WHEN & THEN
         assertThrows(
-                ProductNotFoundException.class,
+                ResourceNotFoundException.class,
                 () -> orderService.checkout(sampleCheckoutRequest)
         );
 
@@ -210,6 +281,35 @@ class OrderServiceTest {
         assertThat(restoredItems).hasSize(1);
         assertThat(restoredItems.get(0).getProductId()).isEqualTo(101L);
         assertThat(restoredItems.get(0).getQuantity()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Hủy đơn hàng thất bại do IDOR: Người dùng không phải chủ sở hữu đơn hàng -> Ném AccessDeniedException")
+    void cancelOrder_UnauthorizedUser_ShouldThrowAccessDeniedException() {
+        // GIVEN: Đơn hàng thuộc userId = 1L
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        // WHEN & THEN: User 999L cố hủy đơn của User 1L -> Ném AccessDeniedException
+        assertThrows(
+                AccessDeniedException.class,
+                () -> orderService.cancelOrder(1L, 999L)
+        );
+
+        verify(productClient, never()).restoreStock(any());
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    @DisplayName("Hủy đơn hàng thành công khi đúng chủ sở hữu đơn hàng")
+    void cancelOrder_AuthorizedUser_Success() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productClient.restoreStock(any())).thenReturn(ApiResponse.success(null));
+
+        OrderResponse response = orderService.cancelOrder(1L, 1L);
+
+        assertThat(response.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(productClient, times(1)).restoreStock(any());
     }
 
     @Test
