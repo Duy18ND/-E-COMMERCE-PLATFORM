@@ -41,6 +41,18 @@ spring:
                 name: auth-cb
                 fallbackUri: forward:/fallback/auth
 
+        - id: auth-service-protected
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/users/**,/api/v1/admin/users/**
+          filters:
+            - StripPrefix=0
+            - AuthenticationFilter
+            - name: CircuitBreaker
+              args:
+                name: auth-cb
+                fallbackUri: forward:/fallback/auth
+
         # ── 2. Product Service — Public Read APIs (GET) ────────────────
         - id: product-service-public
           uri: lb://product-service
@@ -91,7 +103,7 @@ spring:
         - id: order-service
           uri: lb://order-service
           predicates:
-            - Path=/api/v1/orders/**,/api/v1/cart/**
+            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**
           filters:
             - StripPrefix=0
             - AuthenticationFilter

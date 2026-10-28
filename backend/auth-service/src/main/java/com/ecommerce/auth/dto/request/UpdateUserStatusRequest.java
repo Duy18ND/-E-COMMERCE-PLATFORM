@@ -6,12 +6,12 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Request DTO cho Admin c?p nh?t tr?ng th�i t�i kho?n user (ACTIVE / BLOCKED).
+ * Request DTO cho Admin cập nhật trạng thái tài khoản user (ACTIVE / BLOCKED).
  */
 @Getter
 @Setter
 public class UpdateUserStatusRequest {
 
-    @NotNull(message = "status kh�ng ��?c �? tr?ng (ACTIVE ho?c BLOCKED)")
+    @NotNull(message = "status không được để trống (ACTIVE hoặc BLOCKED)")
     private UserStatus status;
 }

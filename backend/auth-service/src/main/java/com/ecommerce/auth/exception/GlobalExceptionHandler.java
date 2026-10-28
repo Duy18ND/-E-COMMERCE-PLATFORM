@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
@@ -112,9 +111,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
+    @ExceptionHandler({
+            AccessDeniedException.class,
+            org.springframework.security.access.AccessDeniedException.class
+    })
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(
-            AccessDeniedException ex, HttpServletRequest request) {
+            Exception ex, HttpServletRequest request) {
 
         log.warn("Access denied on path {}: {}", request.getRequestURI(), ex.getMessage());
 
@@ -122,7 +124,7 @@ public class GlobalExceptionHandler {
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.FORBIDDEN.value())
                 .error("Forbidden")
-                .message("Bạn không có quyền thực hiện hành động này")
+                .message(ex.getMessage() != null && !ex.getMessage().isBlank() ? ex.getMessage() : "Bạn không có quyền thực hiện hành động này")
                 .path(request.getRequestURI())
                 .build();
 
