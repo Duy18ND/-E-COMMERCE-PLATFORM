@@ -13,19 +13,19 @@ import java.util.Optional;
 @Repository
 public interface ProductReviewRepository extends JpaRepository<ProductReview, Long> {
 
-    /** L?y t?t c? ��nh gi� c?a m?t s?n ph?m (ph�n trang) */
+    /** Lấy tất cả đánh giá của một sản phẩm (phân trang) */
     Page<ProductReview> findByProductId(Long productId, Pageable pageable);
 
-    /** Ki?m tra user �? ��nh gi� s?n ph?m n�y ch�a */
+    /** Kiểm tra user đã đánh giá sản phẩm này chưa */
     boolean existsByProductIdAndUserId(Long productId, Long userId);
 
-    /** L?y ��nh gi� c? th? c?a user cho s?n ph?m (�? c?p nh?t/xo�) */
+    /** Lấy đánh giá cụ thể của user cho sản phẩm (để cập nhật/xoá) */
     Optional<ProductReview> findByProductIdAndUserId(Long productId, Long userId);
 
-    /** T�nh �i?m trung b?nh c?a s?n ph?m */
+    /** Tính điểm trung bình của sản phẩm */
     @Query("SELECT COALESCE(AVG(r.rating), 0.0) FROM ProductReview r WHERE r.productId = :productId")
     Double calculateAverageRatingByProductId(@Param("productId") Long productId);
 
-    /** �?m s? l�?ng ��nh gi� c?a s?n ph?m */
+    /** Đếm số lượng đánh giá của sản phẩm */
     long countByProductId(Long productId);
 }

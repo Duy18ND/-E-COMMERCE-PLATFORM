@@ -1,8 +1,8 @@
 {
 	"info": {
-		"_postman_id": "8b5f3a21-7e4d-4c91-9a1f-3d6e5a4b2c1e",
-		"name": "TV2 E2E Automated Test Collection (Port 8080 Gateway)",
-		"description": "Bộ kiểm thử End-to-End (E2E) tự động 100% cho hệ thống E-commerce Microservices qua API Gateway (Port 8080).\n\nBao gồm 6 kịch bản theo đúng thứ tự:\n1. Auth Flow: Đăng ký user mới & Đăng nhập, trích xuất JWT Token.\n2. Security & Gateway Flow: Kiểm tra GatewayFilter chặn 401 khi không có token và cho phép khi có Bearer token.\n3. Product Flow: Tạo sản phẩm mới (10 triệu, kho 10), xác thực cache Redis.\n4. Saga Pattern - Happy Path: Mua 1 sản phẩm (< 50 triệu), xác thực thanh toán thành công (PAID) và trừ kho.\n5. Saga Pattern - Rollback Flow: Mua 6 sản phẩm (> 50 triệu), xác thực thanh toán từ chối (FAILED) và hoàn kho bù trừ (Compensating Transaction).\n6. Rate Limiting Flow: Gửi liên tiếp 5 request checkout, xác thực Redis Rate Limiter trả về HTTP 429 Too Many Requests.",
+		"_postman_id": "7a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d",
+		"name": "TV2 E-Commerce API Collection (Auth, User, Cart, Order, Payment)",
+		"description": "Bộ sưu tập API cho Thành viên 2 phục vụ kiến trúc Modular Monolith E-Commerce.\nBao gồm đầy đủ các module: Auth, User Profile, Giỏ hàng (Cart), Đơn hàng (Order), Thanh toán mô phỏng (Payment) và Quản trị đơn hàng (Admin Order).\n\nCó sẵn Test Script để tự động trích xuất `accessToken` vào biến `token` và `orderId` sau khi login/checkout.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -12,95 +12,32 @@
 			"type": "string"
 		},
 		{
-			"key": "jwt_token",
+			"key": "token",
 			"value": "",
 			"type": "string"
 		},
 		{
-			"key": "userId",
+			"key": "adminToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "orderId",
 			"value": "1",
 			"type": "string"
 		},
 		{
-			"key": "test_user_email",
-			"value": "user_e2e@example.com",
-			"type": "string"
-		},
-		{
-			"key": "test_user_password",
-			"value": "Password123!",
-			"type": "string"
-		},
-		{
-			"key": "productId",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "success_order_id",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "failed_order_id",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "rate_limit_triggered",
-			"value": "false",
+			"key": "itemId",
+			"value": "1",
 			"type": "string"
 		}
 	],
 	"item": [
 		{
-			"name": "01. Auth Flow",
+			"name": "01. Authentication",
 			"item": [
 				{
-					"name": "1.1 Đăng ký User mới (POST /api/v1/auth/register)",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"exec": [
-									"// Tạo email ngẫu nhiên theo timestamp để test lặp lại không bị trùng email",
-									"var timestamp = Date.now();",
-									"var randomEmail = 'e2e_user_' + timestamp + '@ecommerce.com';",
-									"var defaultPassword = 'Password123!';",
-									"var fullName = 'Nguyen Van E2E ' + timestamp;",
-									"",
-									"pm.environment.set('test_user_email', randomEmail);",
-									"pm.collectionVariables.set('test_user_email', randomEmail);",
-									"pm.environment.set('test_user_password', defaultPassword);",
-									"pm.collectionVariables.set('test_user_password', defaultPassword);",
-									"pm.environment.set('test_user_name', fullName);",
-									"pm.collectionVariables.set('test_user_name', fullName);",
-									"console.log('Generating test account: ' + randomEmail);"
-								],
-								"type": "text/javascript"
-							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('1.1 Đăng ký: Trả về HTTP 201 Created', function () {",
-									"    pm.response.to.have.status(201);",
-									"});",
-									"",
-									"pm.test('1.1 Đăng ký: Cấu trúc response hợp lệ', function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"    if (jsonData.data && jsonData.data.userId) {",
-									"        pm.environment.set('userId', jsonData.data.userId);",
-									"        pm.collectionVariables.set('userId', jsonData.data.userId);",
-									"    }",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
+					"name": "1.1 Đăng ký tài khoản (Register)",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -111,52 +48,37 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"{{test_user_email}}\",\n    \"password\": \"{{test_user_password}}\",\n    \"fullName\": \"{{test_user_name}}\",\n    \"phone\": \"0987654321\"\n}"
+							"raw": "{\n    \"email\": \"user_new@gmail.com\",\n    \"password\": \"123456\",\n    \"fullName\": \"Nguyen Van Moi\",\n    \"phone\": \"0988776655\",\n    \"address\": \"123 Duong Lang, Dong Da, Ha Noi\"\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"raw": "{{baseUrl}}/api/auth/register",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"api",
-								"v1",
 								"auth",
 								"register"
 							]
 						},
-						"description": "Tạo user mới qua API Gateway. Mong đợi HTTP 201 Created."
+						"description": "Đăng ký người dùng mới với vai trò mặc định là ROLE_USER."
 					},
 					"response": []
 				},
 				{
-					"name": "1.2 Đăng nhập & Lấy JWT Token (POST /api/v1/auth/login)",
+					"name": "1.2 Đăng nhập User (user@gmail.com)",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test('1.2 Đăng nhập: Trả về HTTP 200 OK', function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test('1.2 Đăng nhập: Trích xuất accessToken và lưu vào {{jwt_token}}', function () {",
+									"if (pm.response.code === 200) {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"    var token = (jsonData.data && jsonData.data.accessToken) ? jsonData.data.accessToken : jsonData.accessToken;",
-									"    pm.expect(token).to.be.a('string').and.not.empty;",
-									"    ",
-									"    pm.environment.set('jwt_token', token);",
-									"    pm.collectionVariables.set('jwt_token', token);",
-									"    console.log('jwt_token extracted: ' + token.substring(0, 20) + '...');",
-									"    ",
-									"    var userId = (jsonData.data && jsonData.data.userId) ? jsonData.data.userId : jsonData.userId;",
-									"    if (userId) {",
-									"        pm.environment.set('userId', userId);",
-									"        pm.collectionVariables.set('userId', userId);",
-									"        console.log('userId extracted: ' + userId);",
+									"    if (jsonData.data && jsonData.data.accessToken) {",
+									"        pm.collectionVariables.set(\"token\", jsonData.data.accessToken);",
+									"        console.log(\"User Token saved successfully: \" + jsonData.data.accessToken);",
 									"    }",
-									"});"
+									"}"
 								],
 								"type": "text/javascript"
 							}
@@ -172,495 +94,46 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"{{test_user_email}}\",\n    \"password\": \"{{test_user_password}}\"\n}"
+							"raw": "{\n    \"email\": \"user@gmail.com\",\n    \"password\": \"123456\"\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"raw": "{{baseUrl}}/api/auth/login",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"api",
-								"v1",
 								"auth",
 								"login"
 							]
 						},
-						"description": "Đăng nhập với user vừa tạo. Lưu accessToken vào biến {{jwt_token}}."
-					},
-					"response": []
-				}
-			],
-			"description": "Kịch bản xác thực tài khoản qua API Gateway."
-		},
-		{
-			"name": "02. Security & Gateway Flow",
-			"item": [
-				{
-					"name": "2.1 Truy cập Order Không Token (GET /api/v1/orders/1) - Expect 401",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('2.1 Security Gateway: Expect HTTP 401 Unauthorized khi không truyền Token', function () {",
-									"    pm.response.to.have.status(401);",
-									"});",
-									"",
-									"pm.test('2.1 Security Gateway: Xác nhận AuthenticationFilter chặn thành công', function () {",
-									"    pm.expect(pm.response.code).to.equal(401);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/1",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"1"
-							]
-						},
-						"description": "Gọi API Order không có Authorization Header. AuthenticationFilter tại Gateway phải chặn và trả về HTTP 401 Unauthorized."
+						"description": "Đăng nhập với tài khoản khách hàng mặc định (đã được DataSeeder khởi tạo).\nTự động lưu accessToken vào biến `token` của Collection."
 					},
 					"response": []
 				},
 				{
-					"name": "2.2 Truy cập Order Có Token (GET /api/v1/orders/1) - Expect Pass Filter",
+					"name": "1.3 Đăng nhập Admin (admin@gmail.com)",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test('2.2 Security Gateway: Có Token hợp lệ, Gateway cho phép đi qua (Không bị 401)', function () {",
-									"    pm.expect(pm.response.code).to.not.equal(401);",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/1",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"1"
-							]
-						},
-						"description": "Gọi API Order kèm Bearer Token. Xác nhận AuthenticationFilter xác thực thành công và định tuyến xuống Order Service."
-					},
-					"response": []
-				}
-			],
-			"description": "Kiểm tra bảo mật tập trung tại API Gateway qua AuthenticationFilter."
-		},
-		{
-			"name": "03. Product Flow",
-			"item": [
-				{
-					"name": "3.1 Tạo sản phẩm mới (POST /api/v1/products)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('3.1 Product Flow: Tạo sản phẩm trả về HTTP 201 Created', function () {",
-									"    pm.response.to.have.status(201);",
-									"});",
-									"",
-									"pm.test('3.1 Product Flow: Lưu productId, xác nhận giá 10 triệu và tồn kho 10', function () {",
+									"if (pm.response.code === 200) {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"    var product = jsonData.data || jsonData;",
-									"    var prodId = product.id;",
-									"    pm.expect(prodId).to.not.be.undefined;",
-									"    ",
-									"    pm.environment.set('productId', prodId);",
-									"    pm.collectionVariables.set('productId', prodId);",
-									"    console.log('Created test product ID: ' + prodId);",
-									"    ",
-									"    pm.expect(Number(product.price)).to.equal(10000000);",
-									"    pm.expect(product.stockQuantity).to.equal(10);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"E2E Test Laptop Ultra 15\",\n    \"description\": \"Sản phẩm phục vụ kiểm thử End-to-End tự động\",\n    \"price\": 10000000,\n    \"stockQuantity\": 10,\n    \"category\": \"Electronics\",\n    \"imageUrl\": \"https://images.unsplash.com/photo-1496181133206-80ce9b88a853\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/products",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"products"
-							]
-						},
-						"description": "Tạo 1 sản phẩm mới với giá 10,000,000 VND và số lượng tồn kho là 10. Trích xuất id lưu vào biến {{productId}}."
-					},
-					"response": []
-				},
-				{
-					"name": "3.2 Kiểm tra chi tiết & Cache Redis (GET /api/v1/products/{{productId}})",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('3.2 Product Flow: Trả về HTTP 200 OK', function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test('3.2 Product Flow: Dữ liệu sản phẩm trên Redis Cache chính xác', function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"    var product = jsonData.data || jsonData;",
-									"    pm.expect(product.id.toString()).to.equal(pm.collectionVariables.get('productId').toString());",
-									"    pm.expect(Number(product.price)).to.equal(10000000);",
-									"    pm.expect(product.stockQuantity).to.equal(10);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/products/{{productId}}",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"products",
-								"{{productId}}"
-							]
-						},
-						"description": "Lấy chi tiết sản phẩm {{productId}}. Xác nhận thông tin sản phẩm đã sẵn sàng và được cache trên Redis."
-					},
-					"response": []
-				}
-			],
-			"description": "Quản lý sản phẩm và xác thực cơ chế Redis Cache."
-		},
-		{
-			"name": "04. Saga Pattern - Happy Path",
-			"item": [
-				{
-					"name": "4.1 Đặt hàng thành công 1 SP (POST /api/v1/orders/checkout)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('4.1 Happy Path Checkout: Trả về HTTP 200 hoặc 201', function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-									"});",
-									"",
-									"pm.test('4.1 Happy Path Checkout: Trích xuất success_order_id', function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"    var order = jsonData.data || jsonData;",
-									"    var orderId = order.id;",
-									"    pm.expect(orderId).to.not.be.undefined;",
-									"    ",
-									"    pm.environment.set('success_order_id', orderId);",
-									"    pm.collectionVariables.set('success_order_id', orderId);",
-									"    console.log('Placed order success ID: ' + orderId);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"userId\": {{userId}},\n    \"receiverName\": \"Nguyen Van Thanh Toan\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"123 Pham Van Dong, Cau Giay, Ha Noi\",\n    \"paymentMethod\": \"MOCK_ONLINE\",\n    \"items\": [\n        {\n            \"productId\": {{productId}},\n            \"productName\": \"E2E Test Laptop Ultra 15\",\n            \"quantity\": 1,\n            \"priceAtPurchase\": 10000000\n        }\n    ]\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/checkout",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"checkout"
-							]
-						},
-						"description": "Mua 1 sản phẩm với tổng tiền 10,000,000 VND (< 50 triệu). Lưu orderId vào {{success_order_id}}."
-					},
-					"response": []
-				},
-				{
-					"name": "4.2 Kiểm tra đơn hàng sau 2s - Status PAID (GET /api/v1/orders/{{success_order_id}})",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"exec": [
-									"// Chờ 2 giây để Payment Service và Kafka xử lý bất đồng bộ sự kiện thanh toán",
-									"console.log('Chờ 2000ms để Kafka & Payment Service xử lý Saga hoàn tất...');",
-									"var start = Date.now();",
-									"while (Date.now() - start < 2000) {",
-									"    // Chờ 2s đồng bộ tương thích cả Newman runner và Postman Desktop",
+									"    if (jsonData.data && jsonData.data.accessToken) {",
+									"        pm.collectionVariables.set(\"token\", jsonData.data.accessToken);",
+									"        pm.collectionVariables.set(\"adminToken\", jsonData.data.accessToken);",
+									"        console.log(\"Admin Token saved successfully: \" + jsonData.data.accessToken);",
+									"    }",
 									"}"
 								],
 								"type": "text/javascript"
 							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('4.2 Happy Path Verify: Trả về HTTP 200 OK', function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test('4.2 Happy Path Verify: Order status == PAID (Payment Service & Kafka thành công)', function () {",
-									"    var jsonData = pm.response.json();",
-									"    var order = jsonData.data || jsonData;",
-									"    pm.expect(order.status).to.equal('PAID');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
 						}
 					],
 					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/{{success_order_id}}",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"{{success_order_id}}"
-							]
-						},
-						"description": "Gọi sau 2 giây delay. Trạng thái đơn hàng phải chuyển sang PAID."
-					},
-					"response": []
-				},
-				{
-					"name": "4.3 Xác nhận tồn kho đã bị trừ còn 9 (GET /api/v1/products/{{productId}})",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('4.3 Happy Path Verify Stock: Trả về HTTP 200 OK', function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test('4.3 Happy Path Verify Stock: Tồn kho đã trừ 1 còn 9 (10 - 1 = 9)', function () {",
-									"    var jsonData = pm.response.json();",
-									"    var product = jsonData.data || jsonData;",
-									"    pm.expect(product.stockQuantity).to.equal(9);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/products/{{productId}}",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"products",
-								"{{productId}}"
-							]
-						},
-						"description": "Kiểm tra kho sản phẩm sau khi đơn hàng thanh toán thành công. Tồn kho phải giảm từ 10 xuống 9."
-					},
-					"response": []
-				}
-			],
-			"description": "Kịch bản Saga thành công: Trừ kho -> Tạo đơn PENDING -> Thanh toán thành công -> Đơn PAID."
-		},
-		{
-			"name": "05. Saga Pattern - Rollback Flow",
-			"item": [
-				{
-					"name": "5.1 Đặt hàng vượt hạn mức 6 SP (POST /api/v1/orders/checkout)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('5.1 Saga Rollback Checkout: Trả về HTTP 200 hoặc 201', function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-									"});",
-									"",
-									"pm.test('5.1 Saga Rollback Checkout: Trích xuất failed_order_id', function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"    var order = jsonData.data || jsonData;",
-									"    var orderId = order.id;",
-									"    pm.expect(orderId).to.not.be.undefined;",
-									"    ",
-									"    pm.environment.set('failed_order_id', orderId);",
-									"    pm.collectionVariables.set('failed_order_id', orderId);",
-									"    console.log('Placed order rollback ID: ' + orderId);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
 						"method": "POST",
 						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
 							{
 								"key": "Content-Type",
 								"value": "application/json"
@@ -668,57 +141,254 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"userId\": {{userId}},\n    \"receiverName\": \"Nguyen Van Rollback\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"456 Kim Ma, Ba Dinh, Ha Noi\",\n    \"paymentMethod\": \"MOCK_ONLINE\",\n    \"items\": [\n        {\n            \"productId\": {{productId}},\n            \"productName\": \"E2E Test Laptop Ultra 15\",\n            \"quantity\": 6,\n            \"priceAtPurchase\": 10000000\n        }\n    ]\n}"
+							"raw": "{\n    \"email\": \"admin@gmail.com\",\n    \"password\": \"123456\"\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/checkout",
+							"raw": "{{baseUrl}}/api/auth/login",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"api",
-								"v1",
-								"orders",
-								"checkout"
+								"auth",
+								"login"
 							]
 						},
-						"description": "Mua 6 sản phẩm với tổng tiền 60,000,000 VND (> 50 triệu hạn mức). Payment Service sẽ từ chối thanh toán. Lưu orderId vào {{failed_order_id}}."
+						"description": "Đăng nhập với tài khoản Admin mặc định (đã được DataSeeder khởi tạo).\nTự động lưu accessToken vào cả hai biến `token` và `adminToken` của Collection."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "02. User Profile",
+			"item": [
+				{
+					"name": "2.1 Lấy thông tin cá nhân (Profile)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"me"
+							]
+						},
+						"description": "Lấy thông tin tài khoản hiện tại từ JWT access token."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "03. Giỏ hàng (Cart)",
+			"item": [
+				{
+					"name": "3.1 Xem giỏ hàng",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/cart",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart"
+							]
+						},
+						"description": "Lấy thông tin giỏ hàng của user đang đăng nhập (tự động tạo giỏ rỗng nếu chưa tồn tại)."
 					},
 					"response": []
 				},
 				{
-					"name": "5.2 Kiểm tra đơn hàng sau 2s - Status FAILED (GET /api/v1/orders/{{failed_order_id}})",
+					"name": "3.2 Thêm sản phẩm vào giỏ",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"productId\": 1,\n    \"quantity\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/items",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"items"
+							]
+						},
+						"description": "Thêm sản phẩm vào giỏ hàng. Nếu sản phẩm đã có trong giỏ, số lượng sẽ được cộng dồn."
+					},
+					"response": []
+				},
+				{
+					"name": "3.3 Cập nhật số lượng sản phẩm",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quantity\": 3\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/items/{{itemId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"items",
+								"{{itemId}}"
+							]
+						},
+						"description": "Cập nhật số lượng của một CartItem theo itemId. Nếu quantity <= 0 thì mục đó sẽ bị xóa."
+					},
+					"response": []
+				},
+				{
+					"name": "3.4 Xóa mục khỏi giỏ",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/items/{{itemId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"items",
+								"{{itemId}}"
+							]
+						},
+						"description": "Xóa 1 item cụ thể khỏi giỏ hàng theo itemId."
+					},
+					"response": []
+				},
+				{
+					"name": "3.5 Xóa toàn bộ giỏ hàng (Clear)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/cart/clear",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cart",
+								"clear"
+							]
+						},
+						"description": "Làm trống toàn bộ các món đồ trong giỏ hàng."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "04. Đơn hàng (Order)",
+			"item": [
+				{
+					"name": "4.1 Đặt hàng từ giỏ (Checkout)",
 					"event": [
 						{
-							"listen": "prerequest",
+							"listen": "test",
 							"script": {
 								"exec": [
-									"// Chờ 2 giây để Payment Service từ chối và Kafka gửi sự kiện payment-failed để rollback",
-									"console.log('Chờ 2000ms để Kafka & Payment xử lý Rollback...');",
-									"var start = Date.now();",
-									"while (Date.now() - start < 2000) {",
-									"    // Chờ 2s",
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set(\"orderId\", jsonData.data.id);",
+									"        console.log(\"Saved created orderId: \" + jsonData.data.id);",
+									"    }",
 									"}"
 								],
 								"type": "text/javascript"
 							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('5.2 Saga Rollback Verify: Trả về HTTP 200 OK', function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test('5.2 Saga Rollback Verify: Order status == FAILED (Payment từ chối > 50 triệu)', function () {",
-									"    var jsonData = pm.response.json();",
-									"    var order = jsonData.data || jsonData;",
-									"    pm.expect(order.status).to.equal('FAILED');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
 						}
 					],
 					"request": {
@@ -727,124 +397,142 @@
 							"bearer": [
 								{
 									"key": "token",
-									"value": "{{jwt_token}}",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"receiverName\": \"Nguyen Van User\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"123 Duong Cau Giay, Ha Noi\",\n    \"note\": \"Giao gio hanh chinh\",\n    \"paymentMethod\": \"MOCK_ONLINE\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/checkout",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"checkout"
+							]
+						},
+						"description": "Thực hiện Checkout đơn hàng từ giỏ hiện tại:\n- Trừ tồn kho sản phẩm trong DB\n- Làm trống giỏ hàng\n- Khởi tạo bản ghi Payment\n- Trả về thông tin đơn hàng ở trạng thái PENDING\n- Tự động lưu orderId vào biến Collection."
+					},
+					"response": []
+				},
+				{
+					"name": "4.2 Xem lịch sử đơn hàng của tôi",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
 									"type": "string"
 								}
 							]
 						},
 						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
+						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/{{failed_order_id}}",
+							"raw": "{{baseUrl}}/api/orders/my-orders",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"api",
-								"v1",
 								"orders",
-								"{{failed_order_id}}"
+								"my-orders"
 							]
 						},
-						"description": "Gọi sau 2 giây. Trạng thái đơn hàng phải chuyển sang FAILED do vượt quá hạn mức thanh toán."
+						"description": "Lấy danh sách các đơn hàng đã đặt của người dùng đang đăng nhập."
 					},
 					"response": []
 				},
 				{
-					"name": "5.3 Xác nhận tồn kho đã được hoàn lại 9 (GET /api/v1/products/{{productId}})",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('5.3 Saga Rollback Stock: Trả về HTTP 200 OK', function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test('5.3 Saga Rollback Stock: Tồn kho hoàn lại nguyên vẹn là 9 (Compensating Transaction hoạt động)', function () {",
-									"    var jsonData = pm.response.json();",
-									"    var product = jsonData.data || jsonData;",
-									"    // 6 sản phẩm tạm trừ lúc checkout đã được cộng bù hoàn lại, kho giữ nguyên là 9",
-									"    pm.expect(product.stockQuantity).to.equal(9);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
+					"name": "4.3 Xem chi tiết 1 đơn hàng",
 					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
 						"method": "GET",
-						"header": [
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
+						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/products/{{productId}}",
+							"raw": "{{baseUrl}}/api/orders/{{orderId}}",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"api",
-								"v1",
-								"products",
-								"{{productId}}"
+								"orders",
+								"{{orderId}}"
 							]
 						},
-						"description": "Kiểm tra kho sản phẩm sau rollback. 6 sản phẩm đã được hoàn lại qua Feign restoreStock, tồn kho vẫn giữ nguyên là 9."
+						"description": "Xem chi tiết một đơn hàng theo orderId (kiểm tra quyền sở hữu của user)."
+					},
+					"response": []
+				},
+				{
+					"name": "4.4 Khách hủy đơn hàng (khi PENDING)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/{{orderId}}/cancel",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"{{orderId}}",
+								"cancel"
+							]
+						},
+						"description": "Khách hàng tự hủy đơn hàng khi đơn còn ở trạng thái PENDING. Hệ thống tự động hoàn kho sản phẩm."
 					},
 					"response": []
 				}
-			],
-			"description": "Kịch bản Saga Rollback: Trừ kho -> Thanh toán > 50M thất bại -> Bắn sự kiện rollback -> Compensating Transaction hoàn kho thành công."
+			]
 		},
 		{
-			"name": "06. Rate Limiting Flow",
+			"name": "05. Thanh toán (Payment)",
 			"item": [
 				{
-					"name": "6.1 Spam Checkout Request #1",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"exec": [
-									"pm.collectionVariables.set('rate_limit_triggered', 'false');"
-								],
-								"type": "text/javascript"
-							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('6.1 Spam #1: Nhận phản hồi từ Gateway', function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 429]);",
-									"    if (pm.response.code === 429) {",
-									"        pm.collectionVariables.set('rate_limit_triggered', 'true');",
-									"    }",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
+					"name": "5.1 Thanh toán mô phỏng (Mock Pay - Thành công)",
 					"request": {
 						"auth": {
 							"type": "bearer",
 							"bearer": [
 								{
 									"key": "token",
-									"value": "{{jwt_token}}",
+									"value": "{{token}}",
 									"type": "string"
 								}
 							]
@@ -852,280 +540,236 @@
 						"method": "POST",
 						"header": [
 							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
 								"key": "Content-Type",
 								"value": "application/json"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"userId\": {{userId}},\n    \"receiverName\": \"Spam Test 1\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"Spam Street 1\",\n    \"paymentMethod\": \"MOCK_ONLINE\",\n    \"items\": [\n        {\n            \"productId\": {{productId}},\n            \"productName\": \"E2E Test Laptop Ultra 15\",\n            \"quantity\": 1,\n            \"priceAtPurchase\": 10000000\n        }\n    ]\n}"
+							"raw": "{\n    \"success\": true\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/checkout",
+							"raw": "{{baseUrl}}/api/payments/mock-pay/{{orderId}}",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"api",
-								"v1",
-								"orders",
-								"checkout"
+								"payments",
+								"mock-pay",
+								"{{orderId}}"
 							]
 						},
-						"description": "Request checkout #1 gửi liên tiếp để kiểm tra Rate Limiter."
+						"description": "Mô phỏng kết quả thanh toán trực tuyến:\n- Nếu success = true: Cập nhật Payment thành SUCCESS, sinh mã transactionCode, cập nhật trạng thái đơn hàng sang PAID.\n- Nếu success = false: Cập nhật Payment thành FAILED."
 					},
 					"response": []
 				},
 				{
-					"name": "6.2 Spam Checkout Request #2",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('6.2 Spam #2: Nhận phản hồi từ Gateway', function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 429]);",
-									"    if (pm.response.code === 429) {",
-									"        pm.collectionVariables.set('rate_limit_triggered', 'true');",
-									"    }",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
+					"name": "5.2 Xem thông tin thanh toán theo mã đơn",
 					"request": {
 						"auth": {
 							"type": "bearer",
 							"bearer": [
 								{
 									"key": "token",
-									"value": "{{jwt_token}}",
+									"value": "{{token}}",
 									"type": "string"
 								}
 							]
 						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"userId\": {{userId}},\n    \"receiverName\": \"Spam Test 2\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"Spam Street 2\",\n    \"paymentMethod\": \"MOCK_ONLINE\",\n    \"items\": [\n        {\n            \"productId\": {{productId}},\n            \"productName\": \"E2E Test Laptop Ultra 15\",\n            \"quantity\": 1,\n            \"priceAtPurchase\": 10000000\n        }\n    ]\n}"
-						},
+						"method": "GET",
+						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/checkout",
+							"raw": "{{baseUrl}}/api/payments/order/{{orderId}}",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"api",
-								"v1",
-								"orders",
-								"checkout"
+								"payments",
+								"order",
+								"{{orderId}}"
 							]
 						},
-						"description": "Request checkout #2 gửi liên tiếp để kiểm tra Rate Limiter."
-					},
-					"response": []
-				},
-				{
-					"name": "6.3 Spam Checkout Request #3",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('6.3 Spam #3: Nhận phản hồi (Rate Limiter bắt đầu kích hoạt)', function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 429]);",
-									"    if (pm.response.code === 429) {",
-									"        pm.collectionVariables.set('rate_limit_triggered', 'true');",
-									"        console.log('Redis Rate Limiter kích hoạt 429 tại request #3');",
-									"    }",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"userId\": {{userId}},\n    \"receiverName\": \"Spam Test 3\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"Spam Street 3\",\n    \"paymentMethod\": \"MOCK_ONLINE\",\n    \"items\": [\n        {\n            \"productId\": {{productId}},\n            \"productName\": \"E2E Test Laptop Ultra 15\",\n            \"quantity\": 1,\n            \"priceAtPurchase\": 10000000\n        }\n    ]\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/checkout",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"checkout"
-							]
-						},
-						"description": "Request checkout #3 gửi liên tiếp không delay."
-					},
-					"response": []
-				},
-				{
-					"name": "6.4 Spam Checkout Request #4 - Expect 429 Too Many Requests",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('6.4 Spam #4: Redis Rate Limiter trả về 429 Too Many Requests', function () {",
-									"    // Request thứ 3 hoặc 4 vượt quá burstCapacity (5 token đã tiêu hao cùng 2 đơn trước) => 429",
-									"    var isRateLimited = pm.response.code === 429 || pm.collectionVariables.get('rate_limit_triggered') === 'true';",
-									"    if (pm.response.code === 429) {",
-									"        pm.response.to.have.status(429);",
-									"        pm.collectionVariables.set('rate_limit_triggered', 'true');",
-									"        console.log('Thành công: Redis Rate Limiter trả về 429 Too Many Requests tại request #4');",
-									"    } else {",
-									"        pm.expect(isRateLimited || pm.response.code === 429).to.be.true;",
-									"    }",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"userId\": {{userId}},\n    \"receiverName\": \"Spam Test 4\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"Spam Street 4\",\n    \"paymentMethod\": \"MOCK_ONLINE\",\n    \"items\": [\n        {\n            \"productId\": {{productId}},\n            \"productName\": \"E2E Test Laptop Ultra 15\",\n            \"quantity\": 1,\n            \"priceAtPurchase\": 10000000\n        }\n    ]\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/checkout",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"checkout"
-							]
-						},
-						"description": "Request checkout #4 gửi dồn dập. Redis Token Bucket cạn kiệt và Gateway trả về HTTP 429 Too Many Requests."
-					},
-					"response": []
-				},
-				{
-					"name": "6.5 Spam Checkout Request #5 - Verify Gateway Rate Limiting Active",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('6.5 Spam #5: Xác nhận Gateway chặn spam với HTTP 429 Too Many Requests', function () {",
-									"    pm.expect(pm.response.code).to.equal(429);",
-									"    console.log('Xác nhận hoàn tất kiểm thử Rate Limiting tại API Gateway (HTTP 429)!');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{jwt_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{jwt_token}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"userId\": {{userId}},\n    \"receiverName\": \"Spam Test 5\",\n    \"receiverPhone\": \"0987654321\",\n    \"shippingAddress\": \"Spam Street 5\",\n    \"paymentMethod\": \"MOCK_ONLINE\",\n    \"items\": [\n        {\n            \"productId\": {{productId}},\n            \"productName\": \"E2E Test Laptop Ultra 15\",\n            \"quantity\": 1,\n            \"priceAtPurchase\": 10000000\n        }\n    ]\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/checkout",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"checkout"
-							]
-						},
-						"description": "Request checkout #5 tiếp tục bị chặn bởi Redis Rate Limiter với HTTP 429 Too Many Requests."
+						"description": "Lấy thông tin bản ghi Payment gắn liền với đơn hàng orderId."
 					},
 					"response": []
 				}
-			],
-			"description": "Kiểm thử cơ chế chống Spam bằng Redis RequestRateLimiter tại API Gateway."
+			]
+		},
+		{
+			"name": "06. Quản trị đơn hàng (Admin Order)",
+			"item": [
+				{
+					"name": "6.1 Xem toàn bộ danh sách đơn hàng",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders"
+							]
+						},
+						"description": "Dành cho Admin: Xem toàn bộ đơn hàng trong hệ thống kèm thông tin khách hàng và chi tiết sản phẩm."
+					},
+					"response": []
+				},
+				{
+					"name": "6.2 Lọc đơn hàng theo trạng thái (status=PENDING)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders?status=PENDING",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "PENDING"
+								}
+							]
+						},
+						"description": "Lọc đơn hàng theo trạng thái (PENDING, PAID, SHIPPING, COMPLETED, CANCELLED)."
+					},
+					"response": []
+				},
+				{
+					"name": "6.3 Xem chi tiết đơn hàng bất kỳ",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/{{orderId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders",
+								"{{orderId}}"
+							]
+						},
+						"description": "Dành cho Admin: Xem chi tiết bất kỳ đơn hàng nào mà không bị ràng buộc người sở hữu."
+					},
+					"response": []
+				},
+				{
+					"name": "6.4 Cập nhật trạng thái đơn hàng (Admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"SHIPPING\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/{{orderId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders",
+								"{{orderId}}",
+								"status"
+							]
+						},
+						"description": "Dành cho Admin: Chuyển đổi trạng thái đơn hàng (PAID, SHIPPING, COMPLETED, CANCELLED). Nếu chuyển sang CANCELLED thì kho hàng sẽ tự động được hoàn trả."
+					},
+					"response": []
+				},
+				{
+					"name": "6.5 Thống kê Dashboard (Stats & Doanh thu)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/stats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"orders",
+								"stats"
+							]
+						},
+						"description": "Thống kê tổng quan cho trang Dashboard Admin:\n- Tổng số đơn hàng\n- Tổng doanh thu (chỉ tính các đơn PAID, SHIPPING, COMPLETED)\n- Số lượng đơn theo từng trạng thái\n- Tổng số người dùng đăng ký."
+					},
+					"response": []
+				}
+			]
 		}
 	]
 }

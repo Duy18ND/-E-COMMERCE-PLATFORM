@@ -1,22 +1,31 @@
--- KEYS[1]: flash_sale_stock:{productId}
--- ARGV[1]: quantity to deduct
+-- ============================================================
+-- Flash Sale Atomic Stock Deduction Script
+-- ============================================================
+-- Executed atomically on a single Redis node (single-threaded
+-- Lua execution guarantees no race conditions / overselling).
+--
+-- KEYS[1] : Redis key for the product stock
+--           e.g. "flash_sale_stock:42"
+-- ARGV[1] : Quantity to deduct (as string)
+--
+-- Return values:
+--   1  -> Success: stock was sufficient; DECRBY applied.
+--   0  -> Failure: not enough stock (out of stock).
+--  -1  -> Key does not exist (product not in flash sale).
+-- ============================================================
 
-local key = KEYS[1]
+local key      = KEYS[1]
 local quantity = tonumber(ARGV[1])
 
--- 1. Kiểm tra sự tồn tại của key trong Redis
-if redis.call('EXISTS', key) == 0 then
+-- Check existence first to distinguish "not in flash sale" from "out of stock"
+local current = redis.call('GET', key)
+if current == false then
     return -1
 end
 
--- 2. Lấy số lượng tồn kho hiện tại
-local current_stock = tonumber(redis.call('GET', key))
-if not current_stock then
-    return -1
-end
+current = tonumber(current)
 
--- 3. Kiểm tra số lượng tồn và trừ kho nguyên tử (Atomic DECRBY)
-if current_stock >= quantity then
+if current >= quantity then
     redis.call('DECRBY', key, quantity)
     return 1
 else
