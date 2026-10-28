@@ -1,7 +1,11 @@
 import api from './api';
 import { INITIAL_PRODUCTS } from './mockData';
+import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
 
-let localProducts = [...INITIAL_PRODUCTS];
+let localProducts = [
+  ...INITIAL_FLASH_PRODUCTS,
+  ...INITIAL_PRODUCTS.filter((p) => !INITIAL_FLASH_PRODUCTS.some((fp) => String(fp.id) === String(p.id)))
+];
 
 export const productService = {
   // Chuẩn bị kết nối GET /api/products, fallback về mockData nếu Backend chưa có Controller
@@ -30,7 +34,9 @@ export const productService = {
     try {
       return await api.get(`/products/${id}`);
     } catch (err) {
-      const found = localProducts.find((p) => String(p.id) === String(id));
+      const found = localProducts.find(
+        (p) => String(p.id) === String(id) || (p.sku && String(p.sku) === String(id))
+      );
       if (!found) {
         throw new Error('Không tìm thấy sản phẩm!');
       }

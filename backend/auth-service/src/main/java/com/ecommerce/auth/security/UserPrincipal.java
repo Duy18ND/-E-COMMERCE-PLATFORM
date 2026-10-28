@@ -1,6 +1,7 @@
 package com.ecommerce.auth.security;
 
 import com.ecommerce.auth.entity.User;
+import com.ecommerce.auth.enums.UserStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,6 +26,7 @@ public class UserPrincipal implements UserDetails {
     private String password;
     private String fullName;
     private String phone;
+    private UserStatus status;
     private Collection<? extends GrantedAuthority> authorities;
 
     public static UserPrincipal create(User user) {
@@ -38,6 +40,7 @@ public class UserPrincipal implements UserDetails {
                 .password(user.getPassword())
                 .fullName(user.getFullName())
                 .phone(user.getPhone())
+                .status(user.getStatus())
                 .authorities(authorities)
                 .build();
     }
@@ -64,7 +67,8 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        // Tài khoản bị Admin khóa (BLOCKED) sẽ bị từ chối đăng nhập bởi Spring Security
+        return status == null || status != UserStatus.BLOCKED;
     }
 
     @Override

@@ -46,9 +46,9 @@ spring:
 # ─── Kafka Topics ─────────────────────────────────────────────
 kafka:
   topics:
-    order-created: order.created
-    payment-completed: payment.completed
-    payment-failed: payment.failed
+    order-created: order-created
+    payment-success: payment-success
+    payment-failed: payment-failed
 
 # ─── Mock Payment config ──────────────────────────────────────
 payment:

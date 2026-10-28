@@ -1,0 +1,29 @@
+package com.ecommerce.auth.service;
+
+import com.ecommerce.auth.dto.request.AddressRequest;
+import com.ecommerce.auth.dto.request.UpdateUserStatusRequest;
+import com.ecommerce.auth.dto.response.AddressResponse;
+import com.ecommerce.auth.dto.response.PagedResponse;
+import com.ecommerce.auth.dto.response.UserSummaryResponse;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+
+public interface UserService {
+
+    // ?? Profile & Address (User scope) ????????????????????????????????????????
+
+    List<AddressResponse> getAddressesByUser(Long userId);
+
+    AddressResponse addAddress(Long userId, AddressRequest request);
+
+    AddressResponse updateAddress(Long userId, Long addressId, AddressRequest request);
+
+    void deleteAddress(Long userId, Long addressId);
+
+    // ?? Admin scope ????????????????????????????????????????????????????????????
+
+    PagedResponse<UserSummaryResponse> getAllUsers(Pageable pageable);
+
+    UserSummaryResponse updateUserStatus(Long targetUserId, UpdateUserStatusRequest request);
+}

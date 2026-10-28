@@ -1,126 +1,128 @@
-# E-COMMERCE PLATFORM
+# E-COMMERCE PLATFORM — MICROSERVICES SYSTEM
 
-> Dự án Hệ thống thương mại điện tử - Full-stack Web Application (ReactJS, Spring Boot, MySQL, Docker)
-
----
-
-## 🌿 Mô hình phân nhánh Git (Branching Workflow)
-
-Hệ thống quản lý mã nguồn tập trung vào 2 nhánh chính trên GitHub:
-
-- **`master` (Nhánh phát triển chính / Development):**
-  - Là nhánh làm việc chính của toàn nhóm.
-  - Tất cả các thành viên lấy mã nguồn mới nhất từ `master`.
-  - Khi thành viên hoàn thành công việc, gửi **Pull Request (PR) vào `master`**.
-  - **Trưởng nhóm (Team Lead)** sẽ review code và thực hiện merge vào `master`.
-
-- **`main` (Nhánh Release / Production):**
-  - Là nhánh sản phẩm chính thức, ổn định tuyệt đối.
-  - **Chỉ Trưởng nhóm mới có quyền merge từ `master` sang `main`** sau khi đã kiểm thử toàn diện, đảm bảo hệ thống chạy mượt mà và không phát sinh lỗi.
+> **Hệ thống Thương Mại Điện Tử Kiến Trúc Microservices Toàn Diện**  
+> **Sprint 5 ngày hoàn thành:** Kiến trúc Microservices phân tán với Spring Boot 3.3, Spring Cloud, Spring WebFlux API Gateway, Apache Kafka Event-Driven Saga Pattern, Redis Caching & Rate Limiting, MySQL, và Docker Compose.
 
 ---
 
-## 🛠️ Cấu trúc thư mục dự án
+## 🏗️ 1. Kiến trúc Hệ thống (Architecture Overview)
+
+Toàn bộ hệ thống giao tiếp qua cổng tập trung **API Gateway (Port 8080)**, điều phối qua **Eureka Discovery Server (Port 8761)**, sử dụng cơ chế sự kiện bất đồng bộ qua **Apache Kafka**:
 
 ```
--E-COMMERCE-PLATFORM/
-├── backend/            # Spring Boot REST API (Java 21, Gradle, JPA, Security, JWT, Swagger)
-│   ├── src/
-│   ├── build.gradle
-│   └── gradlew.bat
-├── frontend/           # Frontend ReactJS + Vite (React Router, Axios, CSS)
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
-├── .gitignore          # Cấu hình bỏ qua file build, node_modules, cache
-└── README.md           # Hướng dẫn dự án & quy trình làm việc nhóm
+Client (Browser / ReactJS / Postman)
+               │
+               ▼ HTTP (REST)
+     [API Gateway :8080]  ◄── JWT Auth Filter, Redis Rate Limiter, Resilience4j Circuit Breaker
+               │
+       ┌───────┴────────────────────┐
+       │   Eureka Registry :8761    │
+       └────────────────────────────┘
+               │
+       ┌───────┴──────────────────────────────────────────────────────┐
+       ▼                            ▼                ▼                ▼
+[Auth Service]              [Product Service] [Order Service]  [Payment Service]
+    :8081                        :8082            :8083            :8084
+       │                            │                │                │
+       │                            │   Feign (Sync) │                │
+       │                            ├────────────────┤                │
+       │                            │ Reserve / Comp │                │
+       ▼                            ▼                ▼                ▼
+[MySQL: auth_db]             [MySQL: product_db]  [MySQL: order_db] [MySQL: payment_db]
+[Redis: token_bl]            [Redis: cache]                │                │
+                                                           ▼                ▼
+                                                    [Apache Kafka Broker :9092]
+                                                    Topics: order-created
+                                                            payment-success
+                                                            payment-failed
 ```
 
 ---
 
-## 🚀 Hướng dẫn chạy dự án Local
+## 🛡️ 2. Tính năng Bảo mật & Gateway (API Gateway :8080)
 
-### 1. Backend (Spring Boot)
-Yêu cầu: JDK 21+ và MySQL đang chạy.
+1. **Bảo mật JWT Filter (`AuthenticationFilter`):**
+   - Đón bắt header `Authorization: Bearer <token>`.
+   - Xác thực token bằng `jjwt` (dùng chung secret key với `auth-service`).
+   - Trích xuất `userId`, `roles`, mutate request gắn headers `X-User-Id`, `X-User-Roles` trước khi route downstream.
+   - Trả về HTTP `401 Unauthorized` nếu token thiếu, sai, hoặc hết hạn.
+   - Bỏ qua xác thực cho `/api/v1/auth/**` và GET `/api/v1/products/**`. Bắt buộc xác thực cho Order, Payment, và các thao tác thay đổi dữ liệu của Product (`POST, PUT, DELETE, PATCH`).
+
+2. **CORS & Rate Limiting (Redis):**
+   - Global CORS cho phép mọi phương thức `GET, POST, PUT, DELETE, PATCH, OPTIONS`.
+   - Redis Rate Limiter chống spam/DDoS cho endpoint checkout `/api/v1/orders/checkout` (`replenishRate: 2`, `burstCapacity: 5`).
+
+3. **Circuit Breaker & Fallback (Resilience4j):**
+   - Giám sát độ trễ và tỷ lệ lỗi downstream services. Tự động kích hoạt Circuit Breaker khi lỗi vượt ngưỡng 50%.
+   - `FallbackController` trả về `Mono<ApiResponse>` kèm mã HTTP `503 Service Unavailable` khi bất kỳ service nào bị sự cố hoặc timeout.
+
+---
+
+## 🔄 3. Luồng Giao Dịch Phân Tán: Saga Pattern (Choreography)
+
+Hệ thống triển khai cơ chế **Choreography-based Saga** đảm bảo tính nhất quán dữ liệu giữa `order-service`, `product-service` và `payment-service`:
+
+1. **Khởi tạo Đơn hàng (Order Checkout):**
+   - Khách hàng checkout tại `order-service` $\rightarrow$ gọi OpenFeign đồng bộ sang `product-service` giữ trước hàng tồn kho (`reserveStock`).
+   - Đơn hàng tạo ở trạng thái **`PENDING`**.
+2. **Phát sự kiện (Publish Event):**
+   - `order-service` phát sự kiện `OrderCreatedEvent` vào Kafka topic **`order-created`**.
+3. **Xử lý thanh toán (Payment Processing):**
+   - `payment-service` lắng nghe topic `order-created` và tiến hành xử lý thanh toán.
+4. **Kịch bản thành công (Happy Path):**
+   - `payment-service` phát sự kiện `PaymentSuccessEvent` vào topic **`payment-success`**.
+   - `order-service` cập nhật đơn hàng thành **`PAID`**.
+5. **Kịch bản thất bại & Bù trừ (Compensating Transaction):**
+   - Nếu thanh toán thất bại, `payment-service` phát sự kiện `PaymentFailedEvent` vào topic **`payment-failed`**.
+   - `order-service` cập nhật đơn hàng thành **`FAILED`** và thực thi **Giao dịch bù trừ (Compensation)**: gọi API `restoreStock` của `product-service` để hoàn trả lại số lượng tồn kho.
+
+---
+
+## 🚀 4. Lệnh Khởi Chạy Toàn Bộ Hệ Thống (Chuẩn bị Bảo vệ Đồ Án)
+
+### Yêu cầu Tiên quyết:
+- **JDK 21+**
+- **Docker Desktop / Docker Engine**
+
+### Lệnh thực thi:
+
 ```bash
+# 1. Điều hướng vào thư mục backend
 cd backend
+
+# 2. Build toàn bộ dự án Gradle (bỏ qua chạy test để build nhanh)
+# Trên Linux/macOS:
+./gradlew clean bootJar -x test
 # Trên Windows:
-.\gradlew.bat bootRun
-# Hoặc trên Linux/macOS:
-./gradlew bootRun
-```
-- API Base URL: `http://localhost:8080/api`
-- Swagger UI Documentation: `http://localhost:8080/swagger-ui.html`
+.\gradlew.bat clean bootJar -x test
 
-### 2. Frontend (ReactJS + Vite)
-Yêu cầu: Node.js 18+.
-```bash
-cd frontend
-npm install
-npm run dev
+# 3. Khởi chạy toàn bộ hệ thống bằng Docker Compose (Đã thiết lập thứ tự chuẩn)
+docker compose up -d --build
+
+# 4. Kiểm tra trạng thái sức khỏe các containers (chờ các container chuyển sang healthy)
+docker compose ps
+
+# 5. Theo dõi log thời gian thực
+docker compose logs -f
 ```
-- Local URL: `http://localhost:5173`
 
 ---
 
-## 👥 Hướng dẫn quy trình làm việc cho Thành viên nhóm
+## 🔌 5. Bảng Cổng & Đường Dẫn Dịch Vụ
 
-### Bước 1: Clone dự án về máy
-```bash
-git clone https://github.com/Duy18ND/-E-COMMERCE-PLATFORM.git
-cd -E-COMMERCE-PLATFORM
-```
-
-### Bước 2: Chuyển sang nhánh `master` và cập nhật code mới nhất
-```bash
-git checkout master
-git pull origin master
-```
-
-### Bước 3: Tạo nhánh tính năng riêng của mình để làm việc
-```bash
-# Đặt tên nhánh theo cú pháp: feat/<tên-thành-viên>-<tính-năng>
-git checkout -b feat/tv1-product
-# hoặc:
-# git checkout -b feat/tv2-auth
-# git checkout -b feat/tv3-ui-cart
-# git checkout -b feat/tv4-docker
-```
-
-### Bước 4: Commit và đẩy lên GitHub
-```bash
-git add .
-git commit -m "feat: hoàn thành module sản phẩm"
-git push -u origin feat/tv1-product
-```
-
-### Bước 5: Tạo Pull Request (PR) vào `master`
-1. Lên trang GitHub dự án: [https://github.com/Duy18ND/-E-COMMERCE-PLATFORM/pulls](https://github.com/Duy18ND/-E-COMMERCE-PLATFORM/pulls)
-2. Bấm **New pull request**.
-3. Chọn:
-   - **base (nhánh đích):** `master`
-   - **compare (nhánh của bạn):** `feat/tv1-product`
-4. Bấm **Create pull request** và thông báo cho Trưởng nhóm review.
+| Dịch vụ | Cổng | URL Truy cập | Ghi chú |
+|:---|:---:|:---|:---|
+| **API Gateway** | `8080` | `http://localhost:8080` | Điểm vào chính của toàn bộ API |
+| **Eureka Server** | `8761` | `http://localhost:8761` | `eureka` / `eurekapassword` |
+| **Auth Service** | `8081` | `http://localhost:8081/swagger-ui.html` | Quản lý người dùng & JWT |
+| **Product Service** | `8082` | `http://localhost:8082/swagger-ui.html` | Quản lý sản phẩm & tồn kho |
+| **Order Service** | `8083` | `http://localhost:8083/swagger-ui.html` | Quản lý đơn hàng & giỏ hàng |
+| **Payment Service** | `8084` | `http://localhost:8084/swagger-ui.html` | Xử lý thanh toán |
+| **Kafka UI** | `8090` | `http://localhost:8090` | Giám sát Kafka topics & events |
+| **Frontend UI** | `5173` | `http://localhost:5173` | Giao diện ReactJS + Vite |
 
 ---
 
-## 👑 Hướng dẫn quy trình cho Trưởng nhóm (Leader)
-
-### 1. Merge code thành viên vào `master`:
-- Mở Pull Request trên GitHub, kiểm tra code (Files changed).
-- Nếu không có xung đột (No conflicts), bấm **Merge pull request** $\rightarrow$ **Confirm merge**.
-
-### 2. Đẩy code từ `master` sang `main` khi đã chạy ổn định:
-Sau khi test kỹ trên local/môi trường dev, không còn lỗi:
-```bash
-# Chuyển sang main và cập nhật mới nhất
-git checkout main
-git pull origin main
-
-# Merge code ổn định từ master vào main
-git merge master
-
-# Đẩy lên GitHub
-git push origin main
-```
-Hoặc tạo **Pull Request** trên GitHub: `base: main` $\leftarrow$ `compare: master` rồi bấm Merge.
+## 🌿 6. Quy trình Phân nhánh Git Nhóm (Branching Workflow)
+- **`master`:** Nhánh phát triển chính, toàn bộ PR tính năng merge vào đây sau review.
+- **`main`:** Nhánh phát hành chính thức, chỉ merge từ `master` khi hệ thống đã ổn định hoàn toàn.
