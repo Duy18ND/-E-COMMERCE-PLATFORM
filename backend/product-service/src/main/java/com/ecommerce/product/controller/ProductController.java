@@ -6,6 +6,7 @@ import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.ApiResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
+import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,10 +51,12 @@ public class ProductController {
 
     @PostMapping
     @CacheEvict(value = "products", allEntries = true)
-    @Operation(summary = "Tạo mới sản phẩm", description = "Tạo một sản phẩm mới và xóa toàn bộ cache products")
+    @Operation(summary = "Tạo mới sản phẩm [ADMIN]", description = "Chỉ ADMIN được phép tạo sản phẩm. Lấy role từ header X-User-Roles do API Gateway truyền xuống.")
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @Valid @RequestBody ProductCreateRequest request) {
 
+        requireAdminRole(roles);
         ProductResponse response = productService.createProduct(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Tạo sản phẩm mới thành công", response));
@@ -61,21 +64,40 @@ public class ProductController {
 
     @PutMapping("/{id}")
     @CacheEvict(value = "products", allEntries = true)
-    @Operation(summary = "Cập nhật sản phẩm", description = "Cập nhật thông tin sản phẩm theo ID và xóa cache")
+    @Operation(summary = "Cập nhật sản phẩm [ADMIN]", description = "Chỉ ADMIN được phép cập nhật sản phẩm. Lấy role từ header X-User-Roles do API Gateway truyền xuống.")
     public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @PathVariable Long id,
             @Valid @RequestBody ProductUpdateRequest request) {
 
+        requireAdminRole(roles);
         ProductResponse response = productService.updateProduct(id, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật sản phẩm thành công", response));
     }
 
     @DeleteMapping("/{id}")
     @CacheEvict(value = "products", allEntries = true)
-    @Operation(summary = "Xóa mềm sản phẩm", description = "Chuyển trạng thái sản phẩm sang INACTIVE")
-    public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable Long id) {
+    @Operation(summary = "Xóa mềm sản phẩm [ADMIN]", description = "Chỉ ADMIN được phép xóa (mềm) sản phẩm. Chuyển trạng thái sang INACTIVE.")
+    public ResponseEntity<ApiResponse<Void>> deleteProduct(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long id) {
+
+        requireAdminRole(roles);
         productService.deleteProduct(id);
         return ResponseEntity.ok(ApiResponse.success("Xóa mềm sản phẩm thành công", null));
+    }
+
+    // ─── Helper: kiểm tra quyền ADMIN ─────────────────────────────────────────
+    /**
+     * Kiểm tra xem roles header có chứa ROLE_ADMIN không.
+     * Nếu không, ném AccessDeniedException (HTTP 403).
+     *
+     * @param roles chuỗi roles nhận từ API Gateway qua header X-User-Roles
+     */
+    private void requireAdminRole(String roles) {
+        if (roles == null || !roles.contains("ROLE_ADMIN")) {
+            throw new AccessDeniedException("Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
+        }
     }
 
     @PostMapping("/reserve-stock")

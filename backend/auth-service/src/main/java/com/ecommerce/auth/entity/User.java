@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import com.ecommerce.auth.enums.UserStatus;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -38,6 +39,12 @@ public class User {
 
     @Column(length = 20)
     private String phone;
+
+    /** Trạng thái tài khoản: ACTIVE (mặc định) hoặc BLOCKED (bị Admin khóa). */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private UserStatus status = UserStatus.ACTIVE;
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.EAGER)

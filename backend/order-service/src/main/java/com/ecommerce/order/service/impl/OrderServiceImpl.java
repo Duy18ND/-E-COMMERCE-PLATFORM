@@ -1,9 +1,11 @@
 package com.ecommerce.order.service.impl;
 
 import com.ecommerce.order.client.ProductClient;
+import com.ecommerce.order.client.dto.ProductResponse;
 import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.request.CheckoutItemRequest;
 import com.ecommerce.order.dto.request.CheckoutRequest;
+import com.ecommerce.order.dto.response.ApiResponse;
 import com.ecommerce.order.dto.response.OrderItemResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
 import com.ecommerce.order.entity.Order;
@@ -12,6 +14,7 @@ import com.ecommerce.order.enums.OrderStatus;
 import com.ecommerce.order.event.OrderEvent;
 import com.ecommerce.order.event.PaymentFailedEvent;
 import com.ecommerce.order.event.PaymentSuccessEvent;
+import com.ecommerce.order.exception.AccessDeniedException;
 import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.producer.KafkaOrderProducer;
 import com.ecommerce.order.repository.OrderRepository;
@@ -38,7 +41,31 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse checkout(CheckoutRequest request) {
         log.info("Processing checkout for userId: {}, items count: {}", request.getUserId(), request.getItems().size());
 
-        // 1. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
+        // 1. Chống Price Tampering: Lấy giá chính xác mới nhất và tên từ Product Service (DB)
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (CheckoutItemRequest itemReq : request.getItems()) {
+            ApiResponse<ProductResponse> productApiResponse = productClient.getProductById(itemReq.getProductId());
+            if (productApiResponse == null || productApiResponse.getData() == null) {
+                throw new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + itemReq.getProductId());
+            }
+            ProductResponse product = productApiResponse.getData();
+
+            BigDecimal actualPrice = product.getPrice();
+            if (actualPrice == null) {
+                throw new IllegalStateException("Sản phẩm ID: " + itemReq.getProductId() + " chưa có giá hợp lệ");
+            }
+
+            // Ghi đè giá và tên sản phẩm từ DB chính xác
+            itemReq.setPriceAtPurchase(actualPrice);
+            if (product.getName() != null) {
+                itemReq.setProductName(product.getName());
+            }
+
+            BigDecimal itemTotal = actualPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
+            totalAmount = totalAmount.add(itemTotal);
+        }
+
+        // 2. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
         List<StockReservationItem> reservationItems = request.getItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -46,20 +73,13 @@ public class OrderServiceImpl implements OrderService {
                         .build())
                 .toList();
 
-        // Bước 1: Gọi FeignClient reserve-stock. Nếu Product Service trả về 409 hoặc 404,
+        // Bước 2: Gọi FeignClient reserve-stock. Nếu Product Service trả về 409 hoặc 404,
         // ProductErrorDecoder sẽ ném ra NotEnoughStockException hoặc ProductNotFoundException
         // làm Spring Transaction tự động rollback toàn bộ dữ liệu.
         log.info("Calling ProductClient reserveStock for items: {}", reservationItems);
         productClient.reserveStock(reservationItems);
 
-        // 2. Tính tổng tiền đơn hàng và tạo entity Order
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        for (CheckoutItemRequest itemReq : request.getItems()) {
-            BigDecimal itemTotal = itemReq.getPriceAtPurchase()
-                    .multiply(BigDecimal.valueOf(itemReq.getQuantity()));
-            totalAmount = totalAmount.add(itemTotal);
-        }
-
+        // 3. Tạo entity Order với tổng tiền thực tế
         Order order = Order.builder()
                 .userId(request.getUserId())
                 .receiverName(request.getReceiverName())
@@ -80,11 +100,11 @@ public class OrderServiceImpl implements OrderService {
             order.addOrderItem(orderItem);
         }
 
-        // Bước 2: Lưu Order với status = PENDING và list OrderItem (CascadeType.ALL)
+        // Bước 3: Lưu Order với status = PENDING và list OrderItem (CascadeType.ALL)
         Order savedOrder = orderRepository.save(order);
         log.info("Order created successfully with id: {}, totalAmount: {}", savedOrder.getId(), savedOrder.getTotalAmount());
 
-        // Bước 3: Bắn sự kiện order-created qua Kafka cho payment-service
+        // Bước 4: Bắn sự kiện order-created qua Kafka cho payment-service
         OrderEvent orderEvent = OrderEvent.builder()
                 .orderId(savedOrder.getId())
                 .userId(savedOrder.getUserId())
@@ -102,23 +122,34 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponse cancelOrder(Long orderId) {
-        log.info("Processing cancelOrder for orderId: {}", orderId);
+        return cancelOrder(orderId, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderResponse cancelOrder(Long orderId, Long userId) {
+        log.info("Processing cancelOrder for orderId: {}, userId: {}", orderId, userId);
 
         // 1. Tìm đơn hàng kèm chi tiết items
         Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
 
-        // 2. Kiểm tra trạng thái: chỉ cho phép hủy nếu đơn hàng đang ở trạng thái PENDING
+        // 2. Kiểm tra quyền sở hữu đơn hàng (chống IDOR)
+        if (userId != null && !order.getUserId().equals(userId)) {
+            throw new AccessDeniedException("Bạn không có quyền hủy đơn hàng này");
+        }
+
+        // 3. Kiểm tra trạng thái: chỉ cho phép hủy nếu đơn hàng đang ở trạng thái PENDING
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new IllegalStateException("Chỉ có thể hủy đơn hàng ở trạng thái PENDING. Trạng thái hiện tại: " + order.getStatus());
         }
 
-        // 3. Cập nhật trạng thái thành CANCELLED
+        // 4. Cập nhật trạng thái thành CANCELLED
         order.setStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
         log.info("Order status updated to CANCELLED for orderId: {}", orderId);
 
-        // 4. Gọi FeignClient restore-stock để hoàn lại tồn kho cho Product Service
+        // 5. Gọi FeignClient restore-stock để hoàn lại tồn kho cho Product Service
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())

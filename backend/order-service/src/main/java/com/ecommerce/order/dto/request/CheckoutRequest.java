@@ -20,7 +20,6 @@ public class CheckoutRequest implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @NotNull(message = "User ID không được để trống")
     private Long userId;
 
     @NotBlank(message = "Tên người nhận không được để trống")
