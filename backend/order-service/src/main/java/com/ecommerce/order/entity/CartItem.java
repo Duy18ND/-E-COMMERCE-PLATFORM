@@ -9,6 +9,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+/**
+ * [Task ECOM-117 / ECOM-252 / ECOM-118] Thiết kế thực thể bảng `cart_items` trên MySQL:
+ * - Lưu từng sản phẩm (`product_id`) và số lượng (`quantity`) trong giỏ hàng (`cart_id`).
+ * - Ràng buộc duy nhất `uk_cart_item_cart_product` đảm bảo mỗi sản phẩm chỉ xuất hiện 1 dòng trong cùng 1 giỏ.
+ */
 @Entity
 @Table(
     name = "cart_items",

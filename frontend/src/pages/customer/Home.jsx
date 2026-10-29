@@ -657,6 +657,273 @@ const Home = () => {
         </div>
       </section>
 
+      {/* VOUCHER SPOTLIGHT BANNER WIDGET */}
+      <section style={{ padding: '0 0 3.5rem', backgroundColor: '#ffffff' }}>
+        <div className="container">
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #1e3a8a 100%)',
+              borderRadius: '20px',
+              padding: '2.5rem 2.25rem',
+              color: '#ffffff',
+              boxShadow: '0 16px 36px -10px rgba(30, 27, 75, 0.35)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Background decorative glow */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '-50px',
+                right: '-50px',
+                width: '260px',
+                height: '260px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(239, 68, 68, 0.35) 0%, rgba(239, 68, 68, 0) 70%)',
+                pointerEvents: 'none'
+              }}
+            />
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1.2fr 1.8fr',
+                gap: '2.5rem',
+                alignItems: 'center',
+                position: 'relative',
+                zIndex: 1
+              }}
+            >
+              {/* Left headline */}
+              <div>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color: '#fde047',
+                    marginBottom: '1rem'
+                  }}
+                >
+                  <span>🎟️</span>
+                  <span>KHO MÃ GIẢM GIÁ ĐỘC QUYỀN</span>
+                </div>
+
+                <h2
+                  style={{
+                    fontSize: '2rem',
+                    fontWeight: 900,
+                    lineHeight: 1.2,
+                    letterSpacing: '-0.02em',
+                    marginBottom: '0.75rem',
+                    color: '#ffffff'
+                  }}
+                >
+                  Săn Voucher Ngay, <br />
+                  <span style={{ color: '#f87171' }}>Tiết Kiệm Lên Đến 500K</span>
+                </h2>
+
+                <p style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+                  Lưu ngay các mã giảm giá % và freeship có giá trị tốt nhất trong tháng. Sử dụng tiện lợi khi đặt hàng!
+                </p>
+
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <Link
+                    to="/vouchers"
+                    style={{
+                      backgroundColor: '#dc2626',
+                      color: '#ffffff',
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '9999px',
+                      fontWeight: 700,
+                      fontSize: '0.9rem',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+                  >
+                    <span>Vào kho voucher</span>
+                    <span>➔</span>
+                  </Link>
+
+                  <Link
+                    to="/my-vouchers"
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.25)',
+                      color: '#ffffff',
+                      padding: '0.75rem 1.35rem',
+                      borderRadius: '9999px',
+                      fontWeight: 600,
+                      fontSize: '0.9rem',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
+                  >
+                    <span>🎒</span>
+                    <span>Mã đã lưu</span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Right: 3 Mini Voucher Showcase Cards */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '1rem'
+                }}
+              >
+                {/* Voucher 1 */}
+                <div
+                  style={{
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    borderRadius: '14px',
+                    padding: '1.1rem',
+                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    borderLeft: '5px solid #dc2626'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#dc2626', backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>
+                        GIAM50K
+                      </span>
+                      <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700 }}>HOT</span>
+                    </div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#dc2626', lineHeight: 1.1, marginBottom: '0.35rem' }}>
+                      GIẢM 50K
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                      Đơn từ 500.000đ
+                    </div>
+                  </div>
+                  <Link
+                    to="/vouchers"
+                    style={{
+                      marginTop: '0.75rem',
+                      fontSize: '0.78rem',
+                      color: '#2563eb',
+                      fontWeight: 700,
+                      textDecoration: 'none'
+                    }}
+                  >
+                    Lưu mã ngay →
+                  </Link>
+                </div>
+
+                {/* Voucher 2 */}
+                <div
+                  style={{
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    borderRadius: '14px',
+                    padding: '1.1rem',
+                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    borderLeft: '5px solid #2563eb'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#2563eb', backgroundColor: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>
+                        TECHVIP
+                      </span>
+                      <span style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 700 }}>VIP</span>
+                    </div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#2563eb', lineHeight: 1.1, marginBottom: '0.35rem' }}>
+                      GIẢM 15%
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                      Tối đa 300.000đ
+                    </div>
+                  </div>
+                  <Link
+                    to="/vouchers"
+                    style={{
+                      marginTop: '0.75rem',
+                      fontSize: '0.78rem',
+                      color: '#2563eb',
+                      fontWeight: 700,
+                      textDecoration: 'none'
+                    }}
+                  >
+                    Lưu mã ngay →
+                  </Link>
+                </div>
+
+                {/* Voucher 3 */}
+                <div
+                  style={{
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    borderRadius: '14px',
+                    padding: '1.1rem',
+                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    borderLeft: '5px solid #16a34a'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#16a34a', backgroundColor: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>
+                        FREESHIP
+                      </span>
+                      <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700 }}>SHIP</span>
+                    </div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#16a34a', lineHeight: 1.1, marginBottom: '0.35rem' }}>
+                      GIẢM 30K
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                      Đơn từ 150.000đ
+                    </div>
+                  </div>
+                  <Link
+                    to="/vouchers"
+                    style={{
+                      marginTop: '0.75rem',
+                      fontSize: '0.78rem',
+                      color: '#2563eb',
+                      fontWeight: 700,
+                      textDecoration: 'none'
+                    }}
+                  >
+                    Lưu mã ngay →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 3. FEATURED PRODUCTS SECTION */}
       <section style={{ padding: '3.5rem 0 5rem', backgroundColor: '#f8fafc' }}>
         <div className="container">

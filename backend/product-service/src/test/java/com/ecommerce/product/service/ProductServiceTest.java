@@ -1,12 +1,15 @@
 package com.ecommerce.product.service;
 
 import com.ecommerce.product.dto.request.ProductCreateRequest;
+import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
+import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
 import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
+import com.ecommerce.product.repository.CategoryRepository;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.service.impl.ProductServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +19,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.math.BigDecimal;
@@ -32,6 +40,9 @@ class ProductServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private CategoryRepository categoryRepository;
 
     @InjectMocks
     private ProductServiceImpl productService;
@@ -173,5 +184,45 @@ class ProductServiceTest {
         assertThatThrownBy(() -> productService.getProductById(99L))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Không tìm thấy sản phẩm");
+    }
+
+    @Test
+    @DisplayName("Lấy danh sách sản phẩm với bộ lọc hợp lệ")
+    void shouldGetProductsWithFilterSuccessfully() {
+        ProductFilterRequest filter = ProductFilterRequest.builder()
+                .keyword("MacBook")
+                .minPrice(BigDecimal.valueOf(1000))
+                .maxPrice(BigDecimal.valueOf(3000))
+                .inStock(true)
+                .build();
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Product> productPage = new PageImpl<>(List.of(sampleProduct), pageable, 1);
+
+        when(productRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(productPage);
+
+        PagedResponse<ProductResponse> response = productService.getProducts(filter, pageable);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getContent()).hasSize(1);
+        assertThat(response.getContent().get(0).getName()).isEqualTo("MacBook Pro M3");
+        verify(productRepository, times(1)).findAll(any(Specification.class), eq(pageable));
+    }
+
+    @Test
+    @DisplayName("Ném IllegalArgumentException khi minPrice > maxPrice")
+    void shouldThrowIllegalArgumentExceptionWhenMinPriceGreaterThanMaxPrice() {
+        ProductFilterRequest filter = ProductFilterRequest.builder()
+                .minPrice(BigDecimal.valueOf(5000))
+                .maxPrice(BigDecimal.valueOf(1000))
+                .build();
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> productService.getProducts(filter, pageable))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("không được lớn hơn");
+
+        verify(productRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 }

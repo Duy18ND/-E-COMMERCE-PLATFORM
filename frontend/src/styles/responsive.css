@@ -119,5 +119,15 @@
   .product-filter-bar {
     padding: 0.85rem !important;
   }
+
+  .product-search-form {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .product-filter-advanced-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
 }
 

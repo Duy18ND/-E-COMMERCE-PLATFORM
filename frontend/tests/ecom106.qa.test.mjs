@@ -152,7 +152,7 @@ test('ECOM-210 (TC-106-17 → TC-106-27): Kiểm thử Responsive (375px, 768px,
   // 4. Kiểm tra Backend ProductController đã sửa lỗi import Java và hỗ trợ lọc category (BUG-106-11)
   assert.doesNotMatch(productControllerJava, /import main\.java\./, 'ProductController.java không được chứa import sai main.java.* (đã sửa BUG-106-11)');
   assert.doesNotMatch(productControllerJava, /java\.nio\.file\.AccessDeniedException/, 'ProductController.java phải dùng com.ecommerce.product.exception.AccessDeniedException');
-  assert.match(productControllerJava, /@RequestParam\(value = "category", required = false\) String category/, 'ProductController.java phải hỗ trợ lọc theo @RequestParam category');
+  assert.match(productControllerJava, /ProductFilterRequest/, 'ProductController.java phải hỗ trợ lọc sản phẩm qua ProductFilterRequest (keyword, category, categoryId)');
   assert.match(productRepoJava, /searchActiveProductsByKeywordAndCategory/, 'ProductRepository.java phải có truy vấn lọc kết hợp keyword và category');
 
   // 5. Kiểm tra quyền truy cập Guest không cần JWT và cấu hình CORS trên API Gateway (TC-106-26)

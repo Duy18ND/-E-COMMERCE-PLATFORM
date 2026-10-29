@@ -7,6 +7,14 @@ const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
 
 /**
+ * Chuẩn hóa từ khóa tìm kiếm: cắt khoảng trắng đầu/cuối và gộp khoảng trắng thừa ở giữa
+ */
+export const normalizeKeyword = (raw = '') =>
+  String(raw ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
  * Xác định categoryId chuẩn ('phones', 'laptops', 'accessories', 'smarthome') từ tên danh mục
  */
 export const resolveCategorySlug = (categoryValue, explicitCategoryId = '') => {
@@ -74,35 +82,75 @@ let localProducts = buildInitialLocalProducts();
 /**
  * Chuyển đổi tham số sắp xếp trên UI sang cú pháp Spring Data Pageable (`field,direction`)
  */
-const mapSortParam = (sortOrder) => {
+export const mapSortParam = (sortOrder) => {
   switch (sortOrder) {
     case 'price_asc':
+    case 'price,asc':
       return 'price,asc';
     case 'price_desc':
+    case 'price,desc':
       return 'price,desc';
     case 'name_asc':
+    case 'name,asc':
       return 'name,asc';
     case 'name_desc':
+    case 'name,desc':
       return 'name,desc';
+    case 'newest':
+    case 'createdAt,desc':
+      return 'createdAt,desc';
     default:
       return undefined;
   }
 };
 
 /**
- * Áp dụng lọc danh mục, tìm kiếm từ khóa và sắp xếp trên danh sách sản phẩm
+ * Kiểm tra tính hợp lệ của tham số bộ lọc trước khi gửi lên Backend ProductFilterRequest
+ */
+export const validateProductFilterParams = (params = {}) => {
+  const minRaw = params?.minPrice;
+  const maxRaw = params?.maxPrice;
+
+  const hasMin = minRaw !== undefined && minRaw !== null && String(minRaw).trim() !== '';
+  const hasMax = maxRaw !== undefined && maxRaw !== null && String(maxRaw).trim() !== '';
+
+  const minPrice = hasMin ? Number(minRaw) : null;
+  const maxPrice = hasMax ? Number(maxRaw) : null;
+
+  if (hasMin && (Number.isNaN(minPrice) || minPrice < 0)) {
+    throw new Error('Giá tối thiểu (minPrice) không được nhỏ hơn 0');
+  }
+
+  if (hasMax && (Number.isNaN(maxPrice) || maxPrice < 0)) {
+    throw new Error('Giá tối đa (maxPrice) không được nhỏ hơn 0');
+  }
+
+  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+    throw new Error('Giá tối thiểu (minPrice) không được lớn hơn giá tối đa (maxPrice)');
+  }
+
+  return { minPrice, maxPrice };
+};
+
+/**
+ * Áp dụng lọc danh mục, từ khóa, khoảng giá, tồn kho và sắp xếp trên danh sách sản phẩm
  */
 export const filterAndSortProducts = (items = [], params = {}) => {
+  const { minPrice, maxPrice } = validateProductFilterParams(params);
   let result = [...items].map(normalizeProduct).filter(Boolean);
 
-  const categoryParam = params?.category ?? params?.selectedCategory ?? '';
+  // 1. Lọc theo danh mục (category / categoryId)
+  const categoryParam = String(
+    params?.category ?? params?.selectedCategory ?? params?.categoryId ?? ''
+  ).trim();
   if (categoryParam && categoryParam !== 'ALL') {
     result = result.filter((p) =>
       matchesCategoryFilter(p.category, categoryParam, p.categoryId)
     );
   }
 
-  const keywordParam = (params?.keyword ?? params?.search ?? '').trim();
+  // 2. Tìm kiếm theo từ khóa (tên sản phẩm, danh mục, mô tả)
+  const keywordParam = normalizeKeyword(params?.keyword ?? params?.search ?? '');
   if (keywordParam) {
     const q = keywordParam.toLowerCase();
     result = result.filter(
@@ -114,14 +162,30 @@ export const filterAndSortProducts = (items = [], params = {}) => {
     );
   }
 
+  // 3. Lọc theo khoảng giá (minPrice, maxPrice)
+  if (minPrice !== null) {
+    result = result.filter((p) => Number(p.salePrice ?? p.price ?? 0) >= minPrice);
+  }
+  if (maxPrice !== null) {
+    result = result.filter((p) => Number(p.salePrice ?? p.price ?? 0) <= maxPrice);
+  }
+
+  // 4. Lọc theo tình trạng còn hàng (inStock = true => stockQuantity > 0)
+  const inStockParam =
+    params?.inStock === true || String(params?.inStock).toLowerCase() === 'true';
+  if (inStockParam) {
+    result = result.filter((p) => Number(p.stockQuantity ?? p.stock ?? 0) > 0);
+  }
+
+  // 5. Sắp xếp toàn bộ tập dữ liệu trước khi cắt trang
   const sortOrder = params?.sortOrder ?? params?.sort ?? '';
   if (sortOrder === 'price_asc' || sortOrder === 'price,asc') {
     result.sort(
-      (a, b) => (a.salePrice || a.price || 0) - (b.salePrice || b.price || 0)
+      (a, b) => Number(a.salePrice ?? a.price ?? 0) - Number(b.salePrice ?? b.price ?? 0)
     );
   } else if (sortOrder === 'price_desc' || sortOrder === 'price,desc') {
     result.sort(
-      (a, b) => (b.salePrice || b.price || 0) - (a.salePrice || a.price || 0)
+      (a, b) => Number(b.salePrice ?? b.price ?? 0) - Number(a.salePrice ?? a.price ?? 0)
     );
   } else if (sortOrder === 'name_asc' || sortOrder === 'name,asc') {
     result.sort((a, b) => String(a.name).localeCompare(String(b.name), 'vi'));
@@ -130,6 +194,80 @@ export const filterAndSortProducts = (items = [], params = {}) => {
   }
 
   return result;
+};
+
+/**
+ * Xây dựng queryParams chuẩn khớp với Backend `ProductController.getProducts(ProductFilterRequest, Pageable)`
+ */
+export const buildProductQueryParams = (params = {}) => {
+  const { minPrice, maxPrice } = validateProductFilterParams(params);
+
+  const pageSize = Number(params?.size ?? params?.itemsPerPage ?? 8) || 8;
+  const pageNumber = Math.max(
+    0,
+    params?.page !== undefined
+      ? Number(params.page)
+      : params?.currentPage
+      ? Number(params.currentPage) - 1
+      : 0
+  );
+  const keyword = normalizeKeyword(params?.keyword ?? params?.search ?? '');
+  const category = String(params?.category ?? params?.selectedCategory ?? '').trim();
+  const explicitCategoryId = params?.categoryId;
+  const sortOrder = params?.sortOrder ?? params?.sort ?? '';
+  const inStock =
+    params?.inStock === true || String(params?.inStock).toLowerCase() === 'true';
+
+  const queryParams = {
+    page: pageNumber,
+    size: pageSize
+  };
+
+  if (keyword) {
+    queryParams.keyword = keyword;
+  }
+
+  if (explicitCategoryId !== undefined && explicitCategoryId !== null && String(explicitCategoryId).trim() !== '') {
+    const numId = Number(explicitCategoryId);
+    if (Number.isInteger(numId) && numId > 0) {
+      queryParams.categoryId = numId;
+    } else {
+      queryParams.category = String(explicitCategoryId).trim();
+    }
+  } else if (category && category !== 'ALL') {
+    const numId = Number(category);
+    if (Number.isInteger(numId) && numId > 0) {
+      queryParams.categoryId = numId;
+    }
+    queryParams.category = category;
+  }
+
+  if (minPrice !== null) {
+    queryParams.minPrice = minPrice;
+  }
+  if (maxPrice !== null) {
+    queryParams.maxPrice = maxPrice;
+  }
+  if (inStock) {
+    queryParams.inStock = true;
+  }
+
+  const mappedSort = mapSortParam(sortOrder);
+  if (mappedSort) {
+    queryParams.sort = mappedSort;
+  }
+
+  return {
+    queryParams,
+    pageNumber,
+    pageSize,
+    keyword,
+    category,
+    minPrice,
+    maxPrice,
+    inStock,
+    sortOrder
+  };
 };
 
 /**
@@ -170,7 +308,7 @@ export const extractPagedProducts = (apiPayload, params = {}) => {
     };
   }
 
-  // Nếu API trả về mảng thuần, thực hiện lọc và phân trang phía client
+  // Nếu API trả về mảng thuần, thực hiện lọc, sắp xếp trên toàn bộ tập dữ liệu rồi mới phân trang
   const filtered = filterAndSortProducts(normalizedItems, params);
   const pageSize = Number(params?.size ?? params?.itemsPerPage ?? (filtered.length || 8));
   const pageNumber = Math.max(
@@ -203,8 +341,9 @@ export const extractPagedProducts = (apiPayload, params = {}) => {
 
 export const productService = {
   /**
-   * Lấy danh mục sản phẩm có phân trang chuẩn `PagedResponse` phục vụ trang `/products` (ECOM-106 / ECOM-209)
-   * Gọi `GET /api/v1/products` với đầy đủ tham số `keyword`, `category`, `page`, `size`, `sort`
+   * Lấy danh mục sản phẩm có phân trang chuẩn `PagedResponse` phục vụ trang `/products`
+   * (ECOM-106 / ECOM-209 / ECOM-226 / ECOM-227)
+   * Gọi `GET /api/v1/products` với đầy đủ tham số `keyword`, `category`, `categoryId`, `minPrice`, `maxPrice`, `inStock`, `page`, `size`, `sort`
    */
   getCatalog: async (params = {}) => {
     if (params?.simulateError) {
@@ -215,27 +354,18 @@ export const productService = {
       );
     }
 
-    const pageSize = Number(params?.size ?? params?.itemsPerPage ?? 8) || 8;
-    const pageNumber = Math.max(
-      0,
-      params?.page !== undefined
-        ? Number(params.page)
-        : params?.currentPage
-        ? Number(params.currentPage) - 1
-        : 0
-    );
-    const keyword = (params?.keyword ?? params?.search ?? '').trim();
-    const category = (params?.category ?? params?.selectedCategory ?? '').trim();
-    const sortOrder = params?.sortOrder ?? params?.sort ?? '';
-
-    const queryParams = {
-      page: pageNumber,
-      size: pageSize
-    };
-    if (keyword) queryParams.keyword = keyword;
-    if (category && category !== 'ALL') queryParams.category = category;
-    const mappedSort = mapSortParam(sortOrder);
-    if (mappedSort) queryParams.sort = mappedSort;
+    // Kiểm tra hợp lệ tham số lọc trước khi gọi API (không gửi tham số không hợp lệ lên Backend)
+    const {
+      queryParams,
+      pageNumber,
+      pageSize,
+      keyword,
+      category,
+      minPrice,
+      maxPrice,
+      inStock,
+      sortOrder
+    } = buildProductQueryParams(params);
 
     try {
       const response = await api.get('/products', { params: queryParams });
@@ -245,31 +375,28 @@ export const productService = {
         size: pageSize
       });
 
-      // Nếu người dùng có chọn bộ lọc/sắp xếp mà Backend trả về danh sách thô cần hậu kiểm
-      if (category || sortOrder) {
-        const refinedContent = filterAndSortProducts(extracted.content, {
-          category,
-          keyword,
-          sortOrder
-        });
-        return {
-          ...extracted,
-          content: refinedContent
-        };
-      }
-
       return extracted;
     } catch (err) {
-      if (params?.rejectOnError) {
+      const strictApiMode =
+        params?.rejectOnError === true ||
+        params?.allowMockFallback === false ||
+        (typeof import.meta !== 'undefined' &&
+          import.meta.env &&
+          import.meta.env.VITE_STRICT_API === 'true');
+
+      if (strictApiMode) {
         throw new Error(
           err?.message || 'Máy chủ sản phẩm hiện không phản hồi. Vui lòng thử lại sau!'
         );
       }
 
-      // Fallback thông minh về dữ liệu cục bộ để Guest vẫn trải nghiệm được lọc + tìm kiếm + phân trang
+      // Chế độ dự phòng cục bộ khi chạy Frontend độc lập (opt-in demo mode)
       const filtered = filterAndSortProducts(localProducts, {
         category,
         keyword,
+        minPrice,
+        maxPrice,
+        inStock,
         sortOrder
       });
       const totalElements = filtered.length;
@@ -306,26 +433,27 @@ export const productService = {
       );
     }
 
-    const keyword = (params?.keyword ?? params?.search ?? '').trim();
-    const category = (params?.category ?? params?.selectedCategory ?? '').trim();
-    const sortOrder = params?.sortOrder ?? params?.sort ?? '';
+    const {
+      queryParams,
+      keyword,
+      category,
+      minPrice,
+      maxPrice,
+      inStock,
+      sortOrder
+    } = buildProductQueryParams(params);
 
-    const queryParams = {};
-    if (keyword) queryParams.keyword = keyword;
-    if (category && category !== 'ALL') queryParams.category = category;
-    if (params?.page !== undefined) queryParams.page = Number(params.page);
-    if (params?.size !== undefined) queryParams.size = Number(params.size);
-    const mappedSort = mapSortParam(sortOrder);
-    if (mappedSort) queryParams.sort = mappedSort;
+    if (params?.page === undefined && params?.currentPage === undefined) {
+      delete queryParams.page;
+    }
+    if (params?.size === undefined && params?.itemsPerPage === undefined) {
+      delete queryParams.size;
+    }
 
     try {
       const response = await api.get('/products', { params: queryParams });
       const extracted = extractPagedProducts(response, params);
-      const list = filterAndSortProducts(extracted.content, {
-        category,
-        keyword,
-        sortOrder
-      });
+      const list = [...extracted.content];
       Object.defineProperty(list, 'pagination', {
         value: {
           pageNumber: extracted.pageNumber,
@@ -338,12 +466,15 @@ export const productService = {
       });
       return list;
     } catch (err) {
-      if (params?.rejectOnError) {
+      if (params?.rejectOnError || params?.allowMockFallback === false) {
         throw err;
       }
       const filtered = filterAndSortProducts(localProducts, {
         category,
         keyword,
+        minPrice,
+        maxPrice,
+        inStock,
         sortOrder
       });
       if (params?.page !== undefined || params?.size !== undefined) {
