@@ -5,6 +5,49 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[0-9]{10,11}$/;
+
+export const validateRegisterForm = ({ fullName, email, phone, password, confirmPassword }) => {
+  const errors = {};
+  const cleanName = (fullName || '').trim();
+  const cleanEmail = (email || '').trim();
+  const cleanPhone = (phone || '').trim();
+
+  if (!cleanName) {
+    errors.fullName = 'Họ và tên không được để trống.';
+  } else if (cleanName.length < 2 || cleanName.length > 150) {
+    errors.fullName = 'Họ và tên phải từ 2 đến 150 ký tự.';
+  }
+
+  if (!cleanEmail) {
+    errors.email = 'Email không được để trống.';
+  } else if (!EMAIL_REGEX.test(cleanEmail)) {
+    errors.email = 'Địa chỉ Email không đúng định dạng.';
+  }
+
+  if (cleanPhone && !PHONE_REGEX.test(cleanPhone)) {
+    errors.phone = 'Số điện thoại phải từ 10 đến 11 chữ số.';
+  }
+
+  if (!password) {
+    errors.password = 'Mật khẩu không được để trống.';
+  } else if (password.length < 6 || password.length > 50) {
+    errors.password = 'Mật khẩu phải từ 6 đến 50 ký tự.';
+  }
+
+  if (!confirmPassword) {
+    errors.confirmPassword = 'Vui lòng xác nhận mật khẩu.';
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = 'Mật khẩu xác nhận không khớp!';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
+};
+
 const Register = () => {
   const navigate = useNavigate();
 
@@ -16,6 +59,7 @@ const Register = () => {
     password: '',
     confirmPassword: ''
   });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,6 +67,12 @@ const Register = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+    if (error) {
+      setError('');
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -30,19 +80,18 @@ const Register = () => {
     setError('');
     setSuccess('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp!');
+    const validation = validateRegisterForm(formData);
+    if (!validation.isValid) {
+      setFieldErrors(validation.errors);
+      setError(Object.values(validation.errors)[0]);
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự!');
-      return;
-    }
-
+    setFieldErrors({});
     setLoading(true);
+
     try {
-      // Gửi đúng DTO Backend RegisterRequest: { email, password, fullName, phone, address }
+      // Gửi đúng DTO Backend RegisterRequest: { email, password, fullName, phone }
       await authService.register({
         email: formData.email.trim(),
         password: formData.password,
@@ -56,6 +105,9 @@ const Register = () => {
         navigate('/login');
       }, 1500);
     } catch (err) {
+      if (err.fieldErrors && typeof err.fieldErrors === 'object') {
+        setFieldErrors(err.fieldErrors);
+      }
       setError(err.message || 'Đăng ký không thành công. Vui lòng kiểm tra lại thông tin!');
     } finally {
       setLoading(false);
@@ -63,8 +115,8 @@ const Register = () => {
   };
 
   return (
-    <div className="container page-container" style={{ maxWidth: '480px' }}>
-      <div className="card" style={{ padding: '2rem' }}>
+    <div className="container page-container auth-page-wrapper" style={{ maxWidth: '480px' }}>
+      <div className="card auth-card" style={{ padding: '2rem' }}>
         <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem', textAlign: 'center' }}>Đăng ký tài khoản</h1>
         <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1.5rem', textAlign: 'center' }}>
           Tạo tài khoản để trải nghiệm mua sắm nhanh chóng và tiện lợi
@@ -89,13 +141,14 @@ const Register = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <Input
             label="Họ và tên"
             name="fullName"
             required
             value={formData.fullName}
             onChange={handleChange}
+            error={fieldErrors.fullName}
             placeholder="Nguyễn Văn A"
           />
 
@@ -106,6 +159,7 @@ const Register = () => {
             required
             value={formData.email}
             onChange={handleChange}
+            error={fieldErrors.email}
             placeholder="example@gmail.com"
           />
 
@@ -115,6 +169,7 @@ const Register = () => {
             type="tel"
             value={formData.phone}
             onChange={handleChange}
+            error={fieldErrors.phone}
             placeholder="0912345678"
           />
 
@@ -123,6 +178,7 @@ const Register = () => {
             name="address"
             value={formData.address}
             onChange={handleChange}
+            error={fieldErrors.address}
             placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố"
           />
 
@@ -133,6 +189,7 @@ const Register = () => {
             required
             value={formData.password}
             onChange={handleChange}
+            error={fieldErrors.password}
             placeholder="Tối thiểu 6 ký tự"
           />
 
@@ -143,17 +200,24 @@ const Register = () => {
             required
             value={formData.confirmPassword}
             onChange={handleChange}
+            error={fieldErrors.confirmPassword}
             placeholder="••••••••"
           />
 
-          <Button type="submit" variant="primary" size="lg" style={{ width: '100%', marginTop: '0.5rem' }} disabled={loading}>
-            {loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            style={{ width: '100%', marginTop: '0.5rem' }}
+            disabled={loading || Boolean(success)}
+          >
+            {loading ? 'Đang tạo tài khoản...' : success ? 'Đang chuyển hướng...' : 'Đăng ký'}
           </Button>
         </form>
 
         <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem', color: '#64748b' }}>
           Đã có tài khoản?{' '}
-          <Link to="/login" style={{ fontWeight: 600 }}>
+          <Link to="/login" style={{ fontWeight: 600, color: '#2563eb' }}>
             Đăng nhập
           </Link>
         </p>

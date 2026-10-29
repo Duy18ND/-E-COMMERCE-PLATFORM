@@ -37,7 +37,7 @@ const AdminLayout = ({ children }) => {
   return (
     <div className="admin-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <AdminSidebar />
-      <main style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+      <main className="admin-main-content" style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
         {children}
       </main>
     </div>
@@ -56,13 +56,15 @@ const AppRoutes = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* Customer Routes */}
-      <Route path="/checkout" element={<Checkout />} />
-      <Route path="/order-success" element={<OrderSuccess />} />
-      <Route path="/orders" element={<Orders />} />
-      <Route path="/orders/:id" element={<OrderDetail />} />
+      {/* Protected Customer Routes (Yêu cầu đăng nhập) */}
+      <Route element={<ProtectedRoute allowedRoles={['ROLE_USER']} />}>
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/order-success" element={<OrderSuccess />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/:id" element={<OrderDetail />} />
+      </Route>
 
-      {/* Admin Routes */}
+      {/* Protected Admin Routes (Chỉ dành cho ROLE_ADMIN) */}
       <Route element={<AdminRoute />}>
         <Route
           path="/admin"

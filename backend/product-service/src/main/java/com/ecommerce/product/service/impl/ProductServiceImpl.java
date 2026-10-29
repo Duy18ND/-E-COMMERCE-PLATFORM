@@ -16,19 +16,19 @@ import org.springframework.util.StringUtils;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
+import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
 import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
+import com.ecommerce.product.repository.CategoryRepository;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.service.ProductService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import main.java.com.ecommerce.product.dto.response.CategoryResponse;
-import main.java.com.ecommerce.product.repository.CategoryRepository;
 
 @Slf4j
 @Service
@@ -40,11 +40,29 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize", unless = "#keyword != null && !#keyword.isBlank()")
+    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()", unless = "#keyword != null && !#keyword.isBlank()")
     public PagedResponse<ProductResponse> getProducts(String keyword, Pageable pageable) {
+        return getProducts(keyword, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @Cacheable(
+        value = "products",
+        key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString() + '-' + (#category != null ? #category : '') + '-' + (#keyword != null ? #keyword : '')",
+        unless = "(#keyword != null && !#keyword.isBlank()) || (#category != null && !#category.isBlank())"
+    )
+    public PagedResponse<ProductResponse> getProducts(String keyword, String category, Pageable pageable) {
         Page<Product> page;
-        if (StringUtils.hasText(keyword)) {
-            page = productRepository.searchActiveProducts(keyword.trim(), ProductStatus.ACTIVE, pageable);
+        boolean hasKeyword = StringUtils.hasText(keyword);
+        boolean hasCategory = StringUtils.hasText(category);
+
+        if (hasKeyword || hasCategory) {
+            page = productRepository.searchActiveProductsByKeywordAndCategory(
+                    hasKeyword ? keyword.trim() : null,
+                    hasCategory ? category.trim() : null,
+                    ProductStatus.ACTIVE,
+                    pageable);
         } else {
             page = productRepository.findByStatus(ProductStatus.ACTIVE, pageable);
         }

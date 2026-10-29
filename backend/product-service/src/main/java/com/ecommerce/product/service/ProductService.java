@@ -7,10 +7,9 @@ import org.springframework.data.domain.Pageable;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
+import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
-
-import main.java.com.ecommerce.product.dto.response.CategoryResponse;
 
 public interface ProductService {
 
@@ -18,6 +17,13 @@ public interface ProductService {
      * Get paginated products, optionally filtered by keyword. Cached in Redis.
      */
     PagedResponse<ProductResponse> getProducts(String keyword, Pageable pageable);
+
+    /**
+     * Get paginated products, optionally filtered by keyword and category.
+     */
+    default PagedResponse<ProductResponse> getProducts(String keyword, String category, Pageable pageable) {
+        return getProducts(keyword, pageable);
+    }
 
     /**
      * Get product details by ID.

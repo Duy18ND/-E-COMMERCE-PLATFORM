@@ -6,14 +6,14 @@ import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
 
+import com.ecommerce.product.entity.Category;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
+import com.ecommerce.product.repository.CategoryRepository;
 import com.ecommerce.product.repository.ProductRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import main.java.com.ecommerce.product.entity.Category;
-import main.java.com.ecommerce.product.repository.CategoryRepository;
 
 @Slf4j
 @Configuration

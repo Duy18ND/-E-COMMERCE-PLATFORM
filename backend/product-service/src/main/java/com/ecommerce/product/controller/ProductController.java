@@ -1,12 +1,10 @@
 package com.ecommerce.product.controller;
 
-import java.nio.file.AccessDeniedException;
 import java.util.List;
 
 import jakarta.validation.Valid;
 
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -18,14 +16,15 @@ import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.ApiResponse;
+import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
+import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import main.java.com.ecommerce.product.dto.response.CategoryResponse;
 
 @RestController
 @RequestMapping("/api/v1/products")
@@ -36,13 +35,13 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize")
-    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có phân trang và Redis cache")
+    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có phân trang, lọc theo danh mục/từ khóa và Redis cache")
     public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> getProducts(
             @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "category", required = false) String category,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        PagedResponse<ProductResponse> response = productService.getProducts(keyword, pageable);
+        PagedResponse<ProductResponse> response = productService.getProducts(keyword, category, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", response));
     }
 

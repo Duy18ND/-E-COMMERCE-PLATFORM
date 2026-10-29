@@ -2,8 +2,8 @@ package com.ecommerce.product.dto.response;
 
 import java.io.Serializable;
 
+import com.ecommerce.product.entity.Category;
 import lombok.*;
-import main.java.com.ecommerce.product.entity.Category;
 
 @Getter
 @Setter
