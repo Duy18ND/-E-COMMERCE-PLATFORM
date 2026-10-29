@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * DTO nh?n thông tin ğõn hàng t? Order Service qua Feign.
- * Ch? c?n status và danh sách items ğ? ki?m tra ği?u ki?n ğánh giá.
+ * DTO nháº­n thÃ´ng tin Ä‘Æ¡n hÃ ng tá»« Order Service qua Feign.
+ * DÃ¹ng Ä‘á»ƒ kiá»ƒm tra Ä‘iá»u kiá»‡n Ä‘Ã¡nh giÃ¡ (status DELIVERED vÃ  chá»©a sáº£n pháº©m).
  */
 @Getter
 @Setter

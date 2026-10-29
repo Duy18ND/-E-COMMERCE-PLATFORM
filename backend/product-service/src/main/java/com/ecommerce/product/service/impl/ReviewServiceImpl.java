@@ -21,11 +21,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Tri?n khai nghi?p v? ·nh gi· s?n ph?m v?i 3 l?p b?o v?:
- * 1. S?n ph?m ph?i t?n t?i.
- * 2. –ın h‡ng ph?i ? tr?ng th·i DELIVERED v‡ thu?c v? userId.
- * 3. –ın h‡ng ph?i ch?a productId.
- * 4. M?i user ch? ˝?c ·nh gi· 1 l?n cho 1 s?n ph?m (unique constraint).
+ * Tri·ªÉn khai nghi·ªáp v·ª• ƒë√°nh gi√° s·∫£n ph·∫©m v·ªõi 3 l·ªõp b·∫£o v·ªá:
+ * 1. S·∫£n ph·∫©m ph·∫£i t·ªìn t·∫°i.
+ * 2. ƒê∆°n h√†ng ph·∫£i ·ªü tr·∫°ng th√°i DELIVERED v√† thu·ªôc v·ªÅ userId.
+ * 3. ƒê∆°n h√†ng ph·∫£i ch·ª©a productId.
+ * 4. M·ªói user ch·ªâ ƒë∆∞·ª£c ƒë√°nh gi√° 1 l·∫ßn cho 1 s·∫£n ph·∫©m (unique constraint).
  */
 @Slf4j
 @Service
@@ -41,20 +41,20 @@ public class ReviewServiceImpl implements ReviewService {
     public ReviewResponse createReview(Long productId, Long userId, CreateReviewRequest request) {
         log.info("Creating review for productId={}, userId={}, orderId={}", productId, userId, request.getOrderId());
 
-        // 1. Ki?m tra s?n ph?m t?n t?i
+        // 1. Ki·ªÉm tra s·∫£n ph·∫©m t·ªìn t·∫°i
         if (!productRepository.existsById(productId)) {
-            throw new ResourceNotFoundException("KhÙng t?m th?y s?n ph?m v?i ID: " + productId);
+            throw new ResourceNotFoundException("Kh√¥ng t√¨m th·∫•y s·∫£n ph·∫©m v·ªõi ID: " + productId);
         }
 
-        // 2. Ki?m tra user ch˝a ·nh gi· s?n ph?m n‡y
+        // 2. Ki·ªÉm tra user ch∆∞a ƒë√°nh gi√° s·∫£n ph·∫©m n√†y
         if (reviewRepository.existsByProductIdAndUserId(productId, userId)) {
-            throw new IllegalStateException("B?n ? ·nh gi· s?n ph?m n‡y r?i. Vui l?ng ch?nh s?a ·nh gi· hi?n cÛ.");
+            throw new IllegalStateException("B·∫°n ƒë√£ ƒë√°nh gi√° s·∫£n ph·∫©m n√†y r·ªìi. Vui l√≤ng ch·ªânh s·ª≠a ƒë√°nh gi√° hi·ªán c√≥.");
         }
 
-        // 3. X·c minh ın h‡ng qua Feign Client
+        // 3. X√°c minh ƒë∆°n h√†ng qua Feign Client
         OrderDetailResponse order = fetchAndValidateOrder(request.getOrderId(), userId, productId);
 
-        // 4. T?o v‡ l˝u ·nh gi·
+        // 4. T·∫°o v√† l∆∞u ƒë√°nh gi√°
         ProductReview review = ProductReview.builder()
                 .productId(productId)
                 .userId(userId)
@@ -75,11 +75,11 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("Updating review id={} by userId={}", reviewId, userId);
 
         ProductReview review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new ResourceNotFoundException("KhÙng t?m th?y ·nh gi· v?i ID: " + reviewId));
+                .orElseThrow(() -> new ResourceNotFoundException("Kh√¥ng t√¨m th·∫•y ƒë√°nh gi√° v·ªõi ID: " + reviewId));
 
-        // Ch? owner m?i ˝?c c?p nh?t
+        // Ch·ªâ owner m·ªõi ƒë∆∞·ª£c c·∫≠p nh·∫≠t
         if (!review.getUserId().equals(userId)) {
-            throw new AccessDeniedException("B?n khÙng cÛ quy?n ch?nh s?a ·nh gi· n‡y");
+            throw new AccessDeniedException("B·∫°n kh√¥ng c√≥ quy·ªÅn ch·ªânh s·ª≠a ƒë√°nh gi√° n√†y");
         }
 
         review.setRating(request.getRating());
@@ -97,13 +97,13 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("Deleting review id={} by userId={}, roles={}", reviewId, userId, userRoles);
 
         ProductReview review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new ResourceNotFoundException("KhÙng t?m th?y ·nh gi· v?i ID: " + reviewId));
+                .orElseThrow(() -> new ResourceNotFoundException("Kh√¥ng t√¨m th·∫•y ƒë√°nh gi√° v·ªõi ID: " + reviewId));
 
         boolean isAdmin = userRoles != null && userRoles.contains("ROLE_ADMIN");
         boolean isOwner = review.getUserId().equals(userId);
 
         if (!isAdmin && !isOwner) {
-            throw new AccessDeniedException("B?n khÙng cÛ quy?n xo· ·nh gi· n‡y");
+            throw new AccessDeniedException("B·∫°n kh√¥ng c√≥ quy·ªÅn xo√° ƒë√°nh gi√° n√†y");
         }
 
         reviewRepository.delete(review);
@@ -116,7 +116,7 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("Fetching reviews for productId={}, page={}", productId, pageable.getPageNumber());
 
         if (!productRepository.existsById(productId)) {
-            throw new ResourceNotFoundException("KhÙng t?m th?y s?n ph?m v?i ID: " + productId);
+            throw new ResourceNotFoundException("Kh√¥ng t√¨m th·∫•y s·∫£n ph·∫©m v·ªõi ID: " + productId);
         }
 
         Page<ProductReview> reviewPage = reviewRepository.findByProductId(productId, pageable);
@@ -128,20 +128,20 @@ public class ReviewServiceImpl implements ReviewService {
 
         return ReviewSummaryResponse.builder()
                 .productId(productId)
-                .averageRating(Math.round(avgRating * 10.0) / 10.0)   // l‡m tr?n 1 ch? s? th?p ph‚n
+                .averageRating(Math.round(avgRating * 10.0) / 10.0)
                 .totalReviews(totalReviews)
                 .reviews(pagedResponse)
                 .build();
     }
 
-    // ??? Private Helpers ??????????????????????????????????????????????????????
+    // --- Private Helpers -----------------------------------------------------
 
     /**
-     * G?i Feign sang Order Service ? l?y ın h‡ng v‡ x·c minh:
-     * 1. –ın h‡ng t?n t?i.
-     * 2. –ın h‡ng thu?c v? userId.
-     * 3. –ın h‡ng cÛ tr?ng th·i DELIVERED.
-     * 4. –ın h‡ng ch?a productId.
+     * G·ªçi Feign sang Order Service ƒë·ªÉ l·∫•y ƒë∆°n h√†ng v√† x√°c minh:
+     * 1. ƒê∆°n h√†ng t·ªìn t·∫°i.
+     * 2. ƒê∆°n h√†ng thu·ªôc v·ªÅ userId.
+     * 3. ƒê∆°n h√†ng c√≥ tr·∫°ng th√°i DELIVERED.
+     * 4. ƒê∆°n h√†ng ch·ª©a productId.
      */
     private OrderDetailResponse fetchAndValidateOrder(Long orderId, Long userId, Long productId) {
         ApiResponse<OrderDetailResponse> orderApiResponse;
@@ -149,35 +149,35 @@ public class ReviewServiceImpl implements ReviewService {
             orderApiResponse = orderClient.getOrderById(orderId);
         } catch (Exception e) {
             log.error("Failed to fetch order {} from order-service: {}", orderId, e.getMessage());
-            throw new IllegalStateException("KhÙng th? x·c minh ın h‡ng. Vui l?ng th? l?i sau.");
+            throw new IllegalStateException("Kh√¥ng th·ªÉ x√°c minh ƒë∆°n h√†ng. Vui l√≤ng th·ª≠ l·∫°i sau.");
         }
 
         if (orderApiResponse == null || orderApiResponse.getData() == null) {
-            throw new ResourceNotFoundException("KhÙng t?m th?y ın h‡ng v?i ID: " + orderId);
+            throw new ResourceNotFoundException("Kh√¥ng t√¨m th·∫•y ƒë∆°n h√†ng v·ªõi ID: " + orderId);
         }
 
         OrderDetailResponse order = orderApiResponse.getData();
 
-        // Ki?m tra quy?n s? h?u
+        // Ki·ªÉm tra quy·ªÅn s·ªü h·ªØu
         if (!userId.equals(order.getUserId())) {
-            throw new AccessDeniedException("–ın h‡ng khÙng thu?c v? t‡i kho?n c?a b?n");
+            throw new AccessDeniedException("ƒê∆°n h√†ng kh√¥ng thu·ªôc v·ªÅ t√†i kho·∫£n c·ªßa b·∫°n");
         }
 
-        // Ki?m tra tr?ng th·i DELIVERED
+        // Ki·ªÉm tra tr·∫°ng th√°i DELIVERED
         if (!"DELIVERED".equalsIgnoreCase(order.getStatus())) {
             throw new IllegalStateException(
-                "Ch? cÛ th? ·nh gi· s?n ph?m t? ın h‡ng ? giao th‡nh cÙng (DELIVERED). " +
-                "Tr?ng th·i ın h‡ng hi?n t?i: " + order.getStatus()
+                "Ch·ªâ c√≥ th·ªÉ ƒë√°nh gi√° s·∫£n ph·∫©m t·ª´ ƒë∆°n h√†ng ƒë√£ giao th√†nh c√¥ng (DELIVERED). " +
+                "Tr·∫°ng th√°i ƒë∆°n h√†ng hi·ªán t·∫°i: " + order.getStatus()
             );
         }
 
-        // Ki?m tra ın h‡ng ch?a s?n ph?m
+        // Ki·ªÉm tra ƒë∆°n h√†ng ch·ª©a s·∫£n ph·∫©m
         boolean containsProduct = order.getItems() != null &&
                 order.getItems().stream()
                         .anyMatch(item -> productId.equals(item.getProductId()));
 
         if (!containsProduct) {
-            throw new IllegalStateException("–ın h‡ng " + orderId + " khÙng ch?a s?n ph?m " + productId);
+            throw new IllegalStateException("ƒê∆°n h√†ng " + orderId + " kh√¥ng ch·ª©a s·∫£n ph·∫©m " + productId);
         }
 
         return order;

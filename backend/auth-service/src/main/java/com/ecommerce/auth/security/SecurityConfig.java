@@ -70,6 +70,7 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/users/**", "/api/v1/admin/**").permitAll()
                         .requestMatchers(
                                 "/actuator/**",
                                 "/api-docs/**",

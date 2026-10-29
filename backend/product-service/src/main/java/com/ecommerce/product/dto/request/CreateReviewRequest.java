@@ -5,20 +5,20 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Request DTO �? t?o ho?c c?p nh?t m?t ��nh gi� s?n ph?m.
+ * Request DTO để tạo hoặc cập nhật một đánh giá sản phẩm.
  */
 @Getter
 @Setter
 public class CreateReviewRequest {
 
-    @NotNull(message = "orderId kh�ng ��?c �? tr?ng")
+    @NotNull(message = "orderId không được để trống")
     private Long orderId;
 
-    @NotNull(message = "rating kh�ng ��?c �? tr?ng")
-    @Min(value = 1, message = "rating t?i thi?u l� 1 sao")
-    @Max(value = 5, message = "rating t?i �a l� 5 sao")
+    @NotNull(message = "rating không được để trống")
+    @Min(value = 1, message = "rating tối thiểu là 1 sao")
+    @Max(value = 5, message = "rating tối đa là 5 sao")
     private Integer rating;
 
-    @Size(max = 2000, message = "B?nh lu?n kh�ng ��?c v�?t qu� 2000 k? t?")
+    @Size(max = 2000, message = "Bình luận không được vượt quá 2000 ký tự")
     private String comment;
 }

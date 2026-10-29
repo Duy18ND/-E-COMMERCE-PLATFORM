@@ -8,9 +8,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Entity ğánh giá s?n ph?m.
- * M?i user ch? ğı?c ğánh giá 1 l?n cho m?i s?n ph?m (unique constraint).
- * Ği?u ki?n: user ph?i có ğõn hàng DELIVERED ch?a s?n ph?m này.
+ * Entity Ä‘Ã¡nh giÃ¡ sáº£n pháº©m.
+ * Má»—i user chá»‰ Ä‘Æ°á»£c Ä‘Ã¡nh giÃ¡ 1 láº§n cho má»—i sáº£n pháº©m (unique constraint).
+ * Äiá»u kiá»‡n: user pháº£i cÃ³ Ä‘Æ¡n hÃ ng DELIVERED chá»©a sáº£n pháº©m nÃ y.
  */
 @Entity
 @Table(
@@ -30,23 +30,23 @@ public class ProductReview {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** ID s?n ph?m ğı?c ğánh giá */
+    /** ID sáº£n pháº©m Ä‘Æ°á»£c Ä‘Ã¡nh giÃ¡ */
     @Column(name = "product_id", nullable = false)
     private Long productId;
 
-    /** ID ngı?i dùng vi?t ğánh giá */
+    /** ID ngÆ°á»i dÃ¹ng viáº¿t Ä‘Ã¡nh giÃ¡ */
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    /** ID ğõn hàng DELIVERED ch?a s?n ph?m — dùng ğ? xác minh ğ? ği?u ki?n ğánh giá */
+    /** ID Ä‘Æ¡n hÃ ng DELIVERED chá»©a sáº£n pháº©m - dÃ¹ng Ä‘á»ƒ xÃ¡c minh Ä‘á»§ Ä‘iá»u kiá»‡n Ä‘Ã¡nh giÃ¡ */
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
-    /** Ği?m ğánh giá t? 1 ğ?n 5 */
+    /** Äiá»ƒm Ä‘Ã¡nh giÃ¡ tá»« 1 Ä‘áº¿n 5 */
     @Column(name = "rating", nullable = false)
     private Integer rating;
 
-    /** N?i dung b?nh lu?n (tu? ch?n) */
+    /** Ná»™i dung bÃ¬nh luáº­n (tÃ¹y chá»n) */
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
 
