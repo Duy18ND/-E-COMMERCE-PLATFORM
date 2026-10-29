@@ -8,6 +8,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import org.springframework.util.StringUtils;
 
 import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
+import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
@@ -28,6 +30,7 @@ import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.CategoryRepository;
 import com.ecommerce.product.repository.ProductRepository;
+import com.ecommerce.product.repository.specification.ProductSpecification;
 import com.ecommerce.product.service.ProductService;
 
 import lombok.RequiredArgsConstructor;
@@ -47,14 +50,24 @@ public class ProductServiceImpl implements ProductService {
      */
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize", unless = "#keyword != null && !#keyword.isBlank()")
-    public PagedResponse<ProductResponse> getProducts(String keyword, Pageable pageable) {
-        Page<Product> page;
-        if (StringUtils.hasText(keyword)) {
-            page = productRepository.searchActiveProducts(keyword.trim(), ProductStatus.ACTIVE, pageable);
-        } else {
-            page = productRepository.findByStatus(ProductStatus.ACTIVE, pageable);
+    @Cacheable(value = "products", key = "'page:' + #pageable.pageNumber + ':size:' + #pageable.pageSize + ':sort:' + #pageable.sort.toString()", condition = "#filterRequest == null || !#filterRequest.hasFilters()")
+    public PagedResponse<ProductResponse> getProducts(ProductFilterRequest filterRequest, Pageable pageable) {
+        if (filterRequest != null && filterRequest.getMinPrice() != null && filterRequest.getMaxPrice() != null) {
+            if (filterRequest.getMinPrice().compareTo(filterRequest.getMaxPrice()) > 0) {
+                throw new IllegalArgumentException("Giá tối thiểu (minPrice) không được lớn hơn giá tối đa (maxPrice)");
+            }
         }
+
+        // Resolve category name if categoryId is provided
+        String resolvedCategoryName = null;
+        if (filterRequest != null && filterRequest.getCategoryId() != null) {
+            resolvedCategoryName = categoryRepository.findById(filterRequest.getCategoryId())
+                    .map(com.ecommerce.product.entity.Category::getName)
+                    .orElse(null);
+        }
+
+        Specification<Product> spec = ProductSpecification.filterBy(filterRequest, resolvedCategoryName);
+        Page<Product> page = productRepository.findAll(spec, pageable);
 
         Page<ProductResponse> dtoPage = page.map(ProductResponse::fromEntity);
         return PagedResponse.fromPage(dtoPage);
@@ -66,6 +79,12 @@ public class ProductServiceImpl implements ProductService {
      * kèm số lượng tồn kho (stockQuantity) và trạng thái sản phẩm (status).
      * Nếu không tìm thấy sản phẩm sẽ ném ResourceNotFoundException (HTTP 404).
      */
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<ProductResponse> getProducts(String keyword, Pageable pageable) {
+        return getProducts(ProductFilterRequest.builder().keyword(keyword).build(), pageable);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
