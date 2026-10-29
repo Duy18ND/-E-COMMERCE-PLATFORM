@@ -1,18 +1,20 @@
 package com.ecommerce.auth.dto.response;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
 
 /**
- * Wrapper phân trang chung dùng trong auth-service.
+ * Wrapper phÃ¢n trang chung dÃ¹ng trong auth-service.
  */
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class PagedResponse<T> {
 
     private List<T> content;

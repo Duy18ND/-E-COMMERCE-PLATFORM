@@ -4,6 +4,7 @@ import saleService from '../../services/saleService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import Button from '../../components/common/Button';
 import Modal from '../../components/common/Modal';
+import Pagination from '../../components/admin/Pagination';
 
 const AdminSales = () => {
   const navigate = useNavigate();
@@ -15,6 +16,10 @@ const AdminSales = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [timeFilter, setTimeFilter] = useState('this_month');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Preview Modal state
   const [previewCampaign, setPreviewCampaign] = useState(null);
@@ -61,6 +66,12 @@ const AdminSales = () => {
         return 0;
       });
   }, [campaigns, statusFilter, searchTerm, sortBy]);
+
+  // Paginated slice
+  const paginatedCampaigns = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredCampaigns.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredCampaigns, currentPage, itemsPerPage]);
 
   // Handlers
   const handleToggleSelectAll = () => {
@@ -538,7 +549,8 @@ const AdminSales = () => {
             </p>
           </div>
         ) : (
-          <div className="table-responsive">
+          <>
+            <div className="table-responsive">
             <table className="data-table">
               <thead>
                 <tr>
@@ -559,7 +571,7 @@ const AdminSales = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCampaigns.map((camp) => {
+                {paginatedCampaigns.map((camp) => {
                   const isChecked = selectedIds.includes(camp.id);
                   const isCampActive = camp.status === 'ACTIVE';
                   const isCampEnded = camp.status === 'ENDED';
@@ -805,6 +817,21 @@ const AdminSales = () => {
               </tbody>
             </table>
           </div>
+
+          {/* REUSABLE PAGINATION */}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredCampaigns.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => setCurrentPage(page)}
+            onItemsPerPageChange={(newSize) => {
+              setItemsPerPage(newSize);
+              setCurrentPage(1);
+            }}
+            itemsPerPageOptions={[5, 10, 20, 50]}
+            unitName="chiến dịch"
+          />
+          </>
         )}
       </div>
 

@@ -6,8 +6,10 @@ import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.request.CheckoutItemRequest;
 import com.ecommerce.order.dto.request.CheckoutRequest;
 import com.ecommerce.order.dto.response.ApiResponse;
+import com.ecommerce.order.dto.response.DashboardResponse;
 import com.ecommerce.order.dto.response.OrderItemResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
+import com.ecommerce.order.dto.response.PagedResponse;
 import com.ecommerce.order.entity.Order;
 import com.ecommerce.order.entity.OrderItem;
 import com.ecommerce.order.enums.OrderStatus;
@@ -21,11 +23,13 @@ import com.ecommerce.order.repository.OrderRepository;
 import com.ecommerce.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -35,6 +39,26 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final ProductClient productClient;
     private final KafkaOrderProducer kafkaOrderProducer;
+
+    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
+            OrderStatus.PENDING, Set.of(OrderStatus.PAID, OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED),
+            OrderStatus.PAID, Set.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED, OrderStatus.REFUNDED),
+            OrderStatus.CONFIRMED, Set.of(OrderStatus.PROCESSING, OrderStatus.SHIPPING, OrderStatus.CANCELLED),
+            OrderStatus.PROCESSING, Set.of(OrderStatus.SHIPPING, OrderStatus.CANCELLED),
+            OrderStatus.SHIPPING, Set.of(OrderStatus.DELIVERED, OrderStatus.CANCELLED),
+            OrderStatus.DELIVERED, Set.of(OrderStatus.REFUNDED),
+            OrderStatus.CANCELLED, Set.of(),
+            OrderStatus.FAILED, Set.of(),
+            OrderStatus.REFUNDED, Set.of()
+    );
+
+    private static final List<OrderStatus> REVENUE_STATUSES = List.of(
+            OrderStatus.PAID,
+            OrderStatus.CONFIRMED,
+            OrderStatus.PROCESSING,
+            OrderStatus.SHIPPING,
+            OrderStatus.DELIVERED
+    );
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -73,13 +97,10 @@ public class OrderServiceImpl implements OrderService {
                         .build())
                 .toList();
 
-        // Bước 2: Gọi FeignClient reserve-stock. Nếu Product Service trả về 409 hoặc 404,
-        // ProductErrorDecoder sẽ ném ra NotEnoughStockException hoặc ProductNotFoundException
-        // làm Spring Transaction tự động rollback toàn bộ dữ liệu.
-        log.info("Calling ProductClient reserveStock for items: {}", reservationItems);
+        log.info("Calling ProductClient reserveStock for {} items", reservationItems.size());
         productClient.reserveStock(reservationItems);
 
-        // 3. Tạo entity Order với tổng tiền thực tế
+        // 3. Khởi tạo Order và OrderItems, lưu vào DB
         Order order = Order.builder()
                 .userId(request.getUserId())
                 .receiverName(request.getReceiverName())
@@ -100,11 +121,10 @@ public class OrderServiceImpl implements OrderService {
             order.addOrderItem(orderItem);
         }
 
-        // Bước 3: Lưu Order với status = PENDING và list OrderItem (CascadeType.ALL)
         Order savedOrder = orderRepository.save(order);
         log.info("Order created successfully with id: {}, totalAmount: {}", savedOrder.getId(), savedOrder.getTotalAmount());
 
-        // Bước 4: Bắn sự kiện order-created qua Kafka cho payment-service
+        // 4. Bắn sự kiện order-created qua Kafka cho payment-service
         OrderEvent orderEvent = OrderEvent.builder()
                 .orderId(savedOrder.getId())
                 .userId(savedOrder.getUserId())
@@ -130,26 +150,21 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse cancelOrder(Long orderId, Long userId) {
         log.info("Processing cancelOrder for orderId: {}, userId: {}", orderId, userId);
 
-        // 1. Tìm đơn hàng kèm chi tiết items
         Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
 
-        // 2. Kiểm tra quyền sở hữu đơn hàng (chống IDOR)
         if (userId != null && !order.getUserId().equals(userId)) {
             throw new AccessDeniedException("Bạn không có quyền hủy đơn hàng này");
         }
 
-        // 3. Kiểm tra trạng thái: chỉ cho phép hủy nếu đơn hàng đang ở trạng thái PENDING
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new IllegalStateException("Chỉ có thể hủy đơn hàng ở trạng thái PENDING. Trạng thái hiện tại: " + order.getStatus());
         }
 
-        // 4. Cập nhật trạng thái thành CANCELLED
         order.setStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
         log.info("Order status updated to CANCELLED for orderId: {}", orderId);
 
-        // 5. Gọi FeignClient restore-stock để hoàn lại tồn kho cho Product Service
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -214,12 +229,10 @@ public class OrderServiceImpl implements OrderService {
             return;
         }
 
-        // 1. Cập nhật trạng thái đơn hàng sang FAILED
         order.setStatus(OrderStatus.FAILED);
         orderRepository.save(order);
         log.info("[Saga Step] Order status updated to FAILED for orderId: {}", event.getOrderId());
 
-        // 2. Kích hoạt Compensating Transaction: Gọi ProductClient restoreStock để hoàn lại tồn kho
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -237,6 +250,95 @@ public class OrderServiceImpl implements OrderService {
                     event.getOrderId(), ex.getMessage(), ex);
             throw ex;
         }
+    }
+
+    // ==========================================
+    // Admin Operations (Task 10 & 11)
+    // ==========================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<OrderResponse> getAllOrders(OrderStatus status, Pageable pageable) {
+        Page<Order> orderPage = (status != null)
+                ? orderRepository.findByStatus(status, pageable)
+                : orderRepository.findAll(pageable);
+
+        Page<OrderResponse> responsePage = orderPage.map(this::mapToOrderResponse);
+        return PagedResponse.fromPage(responsePage);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus) {
+        log.info("Admin updating order status for orderId: {} to {}", orderId, newStatus);
+
+        Order order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
+
+        OrderStatus currentStatus = order.getStatus();
+
+        if (currentStatus == newStatus) {
+            log.info("Order {} is already in status {}. No transition needed.", orderId, newStatus);
+            return mapToOrderResponse(order);
+        }
+
+        Set<OrderStatus> allowedNext = ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Collections.emptySet());
+        if (!allowedNext.contains(newStatus)) {
+            throw new IllegalStateException(String.format("Không thể chuyển trạng thái đơn hàng từ %s sang %s", currentStatus, newStatus));
+        }
+
+        // Nếu chuyển sang CANCELLED, bắt buộc phải gọi FeignClient ProductClient.restoreStock để hoàn lại kho
+        if (newStatus == OrderStatus.CANCELLED) {
+            List<StockReservationItem> restoreItems = order.getOrderItems().stream()
+                    .map(item -> StockReservationItem.builder()
+                            .productId(item.getProductId())
+                            .quantity(item.getQuantity())
+                            .build())
+                    .toList();
+
+            log.info("Calling ProductClient restoreStock on CANCELLED for orderId {}: {}", orderId, restoreItems);
+            productClient.restoreStock(restoreItems);
+        }
+
+        order.setStatus(newStatus);
+        Order savedOrder = orderRepository.save(order);
+        log.info("Order status updated successfully from {} to {} for orderId: {}", currentStatus, newStatus, orderId);
+
+        return mapToOrderResponse(savedOrder);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardResponse getOrderStatistics() {
+        Long totalOrders = orderRepository.countTotalOrders();
+        BigDecimal totalRevenue = orderRepository.sumTotalAmountByStatusIn(REVENUE_STATUSES);
+
+        Map<OrderStatus, Long> ordersByStatus = new EnumMap<>(OrderStatus.class);
+        for (OrderStatus s : OrderStatus.values()) {
+            ordersByStatus.put(s, 0L);
+        }
+
+        List<Object[]> rows = orderRepository.countOrdersByStatusGroup();
+        if (rows != null) {
+            for (Object[] row : rows) {
+                if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                    OrderStatus status;
+                    if (row[0] instanceof OrderStatus os) {
+                        status = os;
+                    } else {
+                        status = OrderStatus.valueOf(row[0].toString());
+                    }
+                    long count = ((Number) row[1]).longValue();
+                    ordersByStatus.put(status, count);
+                }
+            }
+        }
+
+        return DashboardResponse.builder()
+                .totalOrders(totalOrders != null ? totalOrders : 0L)
+                .totalRevenue(totalRevenue != null ? totalRevenue : BigDecimal.ZERO)
+                .ordersByStatus(ordersByStatus)
+                .build();
     }
 
     private OrderResponse mapToOrderResponse(Order order) {

@@ -6,7 +6,7 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 
 /**
- * Response DTO tr? v? th�ng tin m?t ��nh gi� s?n ph?m.
+ * Response DTO trả về thông tin một đánh giá sản phẩm.
  */
 @Getter
 @Builder

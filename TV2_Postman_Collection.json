@@ -111,7 +111,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"{{test_user_email}}\",\n    \"password\": \"{{test_user_password}}\",\n    \"fullName\": \"{{test_user_name}}\",\n    \"phone\": \"0987654321\"\n}"
+							"raw": "{\n    \"email\": \"{{test_user_email}}\",\n    \"password\": \"{{test_user_password}}\",\n    \"fullName\": \"{{test_user_name}}\",\n    \"phone\": \"0987654321\",\n    \"roles\": [\"ROLE_ADMIN\", \"ROLE_USER\"]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/register",
@@ -349,6 +349,11 @@
 							{
 								"key": "Content-Type",
 								"value": "application/json"
+							},
+							{
+								"key": "X-User-Roles",
+								"value": "ROLE_ADMIN",
+								"description": "Forwarded by Gateway or used directly on port 8081"
 							}
 						],
 						"body": {

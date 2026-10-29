@@ -7,18 +7,18 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
 /**
- * Feign Client g?i sang Order Service ğ? xác minh ğõn hàng trı?c khi cho phép ğánh giá s?n ph?m.
- * S? d?ng service name "order-service" ğ? ğãng k? trên Eureka.
+ * Feign Client gá»i sang Order Service Ä‘á»ƒ xÃ¡c minh Ä‘Æ¡n hÃ ng trÆ°á»›c khi cho phÃ©p Ä‘Ã¡nh giÃ¡ sáº£n pháº©m.
+ * Sá»­ dá»¥ng service name "order-service" Ä‘á»ƒ Ä‘Äƒng kÃ½ trÃªn Eureka.
  */
 @FeignClient(name = "order-service", path = "/api/v1/orders")
 public interface OrderClient {
 
     /**
-     * L?y chi ti?t ğõn hàng theo ID.
-     * Ğı?c dùng ğ? ki?m tra: ğõn hàng có status DELIVERED không? Có ch?a productId không?
+     * Láº¥y chi tiáº¿t Ä‘Æ¡n hÃ ng theo ID.
+     * ÄÆ°á»£c dÃ¹ng Ä‘á»ƒ kiá»ƒm tra: Ä‘Æ¡n hÃ ng cÃ³ status DELIVERED khÃ´ng vÃ  cÃ³ chá»©a productId khÃ´ng.
      *
-     * @param id ID ğõn hàng
-     * @return ApiResponse ch?a OrderDetailResponse
+     * @param id ID Ä‘Æ¡n hÃ ng
+     * @return ApiResponse chá»©a OrderDetailResponse
      */
     @GetMapping("/{id}")
     ApiResponse<OrderDetailResponse> getOrderById(@PathVariable("id") Long id);

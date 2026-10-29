@@ -67,7 +67,11 @@ public class CartController {
         return ResponseEntity.ok(ApiResponse.success("Xóa sản phẩm khỏi giỏ hàng thành công", response));
     }
 
-    @DeleteMapping
+    /**
+     * [Task ECOM-119 / ECOM-258] API Xóa toàn bộ giỏ hàng.
+     * Endpoint: DELETE /api/v1/cart hoặc DELETE /api/v1/cart/clear (tương thích với Frontend cartService.js).
+     */
+    @DeleteMapping(value = {"", "/clear"})
     @Operation(summary = "Xóa toàn bộ giỏ hàng", description = "Xóa rỗng giỏ hàng sau khi đặt hàng hoặc người dùng chủ động xóa")
     public ResponseEntity<ApiResponse<Void>> clearCart(
             @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId) {

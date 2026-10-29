@@ -3,9 +3,9 @@ package com.ecommerce.auth.exception;
 import com.ecommerce.auth.dto.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
@@ -112,9 +112,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
+    @ExceptionHandler({
+            AccessDeniedException.class,
+            org.springframework.security.access.AccessDeniedException.class
+    })
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(
-            AccessDeniedException ex, HttpServletRequest request) {
+            Exception ex, HttpServletRequest request) {
 
         log.warn("Access denied on path {}: {}", request.getRequestURI(), ex.getMessage());
 
@@ -122,7 +125,7 @@ public class GlobalExceptionHandler {
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.FORBIDDEN.value())
                 .error("Forbidden")
-                .message("Bạn không có quyền thực hiện hành động này")
+                .message(ex.getMessage() != null && !ex.getMessage().isBlank() ? ex.getMessage() : "Bạn không có quyền thực hiện hành động này")
                 .path(request.getRequestURI())
                 .build();
 
@@ -144,6 +147,28 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+
+        log.warn("Data integrity violation on path {}: {}", request.getRequestURI(), ex.getMessage());
+
+        // Phân biệt lỗi trùng email (unique constraint) với các vi phạm toàn vẹn khác
+        String message = ex.getMessage() != null && ex.getMessage().toLowerCase().contains("email")
+                ? "Email đã tồn tại trong hệ thống"
+                : "Dữ liệu vi phạm ràng buộc toàn vẹn";
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error("Conflict")
+                .message(message)
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)

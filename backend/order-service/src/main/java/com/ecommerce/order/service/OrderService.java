@@ -1,7 +1,11 @@
 package com.ecommerce.order.service;
 
 import com.ecommerce.order.dto.request.CheckoutRequest;
+import com.ecommerce.order.dto.response.DashboardResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
+import com.ecommerce.order.dto.response.PagedResponse;
+import com.ecommerce.order.enums.OrderStatus;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -50,4 +54,28 @@ public interface OrderService {
      * 2. Gọi ProductClient restoreStock để hoàn lại tồn kho cho Product Service (Saga Rollback).
      */
     void handlePaymentFailed(com.ecommerce.order.event.PaymentFailedEvent event);
+
+    // ==========================================
+    // Admin Operations (Task 10 & 11)
+    // ==========================================
+
+    /**
+     * Lấy toàn bộ danh sách đơn hàng toàn hệ thống có phân trang và tùy chọn lọc theo trạng thái.
+     */
+    PagedResponse<OrderResponse> getAllOrders(OrderStatus status, Pageable pageable);
+
+    /**
+     * Cập nhật trạng thái đơn hàng theo State Machine:
+     * - Kiểm tra các chuyển trạng thái hợp lệ.
+     * - Nếu chuyển sang CANCELLED, bắt buộc gọi FeignClient ProductClient.restoreStock để hoàn lại tồn kho.
+     */
+    OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus);
+
+    /**
+     * Lấy thống kê tổng quan (Dashboard) cho Admin:
+     * - Tổng số đơn hàng.
+     * - Tổng doanh thu (chỉ tính đơn có trạng thái PAID, DELIVERED hoặc hoàn thành).
+     * - Số lượng đơn hàng phân theo từng trạng thái.
+     */
+    DashboardResponse getOrderStatistics();
 }

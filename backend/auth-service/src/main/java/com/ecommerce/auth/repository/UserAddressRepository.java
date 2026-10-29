@@ -18,8 +18,8 @@ public interface UserAddressRepository extends JpaRepository<UserAddress, Long> 
     Optional<UserAddress> findByIdAndUserId(Long id, Long userId);
 
     /**
-     * B? m?c �?nh t?t c? �?a ch? c?a user tr�?c khi set �?a ch? m?i l�m m?c �?nh.
-     * D�ng @Modifying �? th?c hi?n UPDATE kh�ng c?n load entity v�o memory.
+     * Bỏ mặc định tất cả địa chỉ của user trước khi set địa chỉ mới làm mặc định.
+     * Dùng @Modifying để thực hiện UPDATE không cần load entity vào memory.
      */
     @Modifying
     @Query("UPDATE UserAddress a SET a.isDefault = false WHERE a.userId = :userId AND a.isDefault = true")

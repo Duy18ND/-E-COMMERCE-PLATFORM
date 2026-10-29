@@ -8,44 +8,44 @@ import org.springframework.data.domain.Pageable;
 public interface ReviewService {
 
     /**
-     * T?o ğánh giá m?i cho s?n ph?m.
-     * Ği?u ki?n: userId ph?i có ğõn hàng DELIVERED ch?a productId.
-     * M?i user ch? ğı?c ğánh giá 1 l?n cho m?i s?n ph?m.
+     * Táº¡o Ä‘Ã¡nh giÃ¡ má»›i cho sáº£n pháº©m.
+     * Äiá»u kiá»‡n: userId pháº£i cÃ³ Ä‘Æ¡n hÃ ng DELIVERED chá»©a productId.
+     * Má»—i user chá»‰ Ä‘Æ°á»£c Ä‘Ã¡nh giÃ¡ 1 láº§n cho má»—i sáº£n pháº©m.
      *
-     * @param productId  ID s?n ph?m c?n ğánh giá
-     * @param userId     ID ngı?i dùng (l?y t? header X-User-Id)
-     * @param request    D? li?u ğánh giá (rating, comment, orderId)
+     * @param productId  ID sáº£n pháº©m cáº§n Ä‘Ã¡nh giÃ¡
+     * @param userId     ID ngÆ°á»i dÃ¹ng (láº¥y tá»« header X-User-Id)
+     * @param request    Dá»¯ liá»‡u Ä‘Ã¡nh giÃ¡ (rating, comment, orderId)
      * @return ReviewResponse
      */
     ReviewResponse createReview(Long productId, Long userId, CreateReviewRequest request);
 
     /**
-     * C?p nh?t ğánh giá hi?n có.
-     * Ch? owner c?a ğánh giá m?i ğı?c phép c?p nh?t.
+     * Cáº­p nháº­t Ä‘Ã¡nh giÃ¡ hiá»‡n cÃ³.
+     * Chá»‰ owner cá»§a Ä‘Ã¡nh giÃ¡ má»›i Ä‘Æ°á»£c phÃ©p cáº­p nháº­t.
      *
-     * @param reviewId   ID ğánh giá
-     * @param userId     ID ngı?i dùng ğang th?c hi?n c?p nh?t
-     * @param request    D? li?u c?p nh?t
+     * @param reviewId   ID Ä‘Ã¡nh giÃ¡
+     * @param userId     ID ngÆ°á»i dÃ¹ng Ä‘ang thá»±c hiá»‡n cáº­p nháº­t
+     * @param request    Dá»¯ liá»‡u cáº­p nháº­t
      * @return ReviewResponse
      */
     ReviewResponse updateReview(Long reviewId, Long userId, CreateReviewRequest request);
 
     /**
-     * Xoá ğánh giá.
-     * Ch? owner ho?c ADMIN m?i ğı?c xoá.
+     * XoÃ¡ Ä‘Ã¡nh giÃ¡.
+     * Chá»‰ owner hoáº·c ADMIN má»›i Ä‘Æ°á»£c xoÃ¡.
      *
-     * @param reviewId   ID ğánh giá
-     * @param userId     ID ngı?i dùng ğang th?c hi?n xoá
-     * @param userRoles  Roles c?a ngı?i dùng (ğ? ki?m tra ADMIN)
+     * @param reviewId   ID Ä‘Ã¡nh giÃ¡
+     * @param userId     ID ngÆ°á»i dÃ¹ng Ä‘ang thá»±c hiá»‡n xoÃ¡
+     * @param userRoles  Roles cá»§a ngÆ°á»i dÃ¹ng (Ä‘á»ƒ kiá»ƒm tra ADMIN)
      */
     void deleteReview(Long reviewId, Long userId, String userRoles);
 
     /**
-     * L?y toàn b? ğánh giá c?a s?n ph?m kèm th?ng kê (phân trang).
+     * Láº¥y toÃ n bá»™ Ä‘Ã¡nh giÃ¡ cá»§a sáº£n pháº©m kÃ¨m thá»‘ng kÃª (phÃ¢n trang).
      *
-     * @param productId  ID s?n ph?m
-     * @param pageable   Thông tin phân trang
-     * @return ReviewSummaryResponse (avg rating, total, danh sách)
+     * @param productId  ID sáº£n pháº©m
+     * @param pageable   ThÃ´ng tin phÃ¢n trang
+     * @return ReviewSummaryResponse (avg rating, total, danh sÃ¡ch)
      */
     ReviewSummaryResponse getReviewsByProduct(Long productId, Pageable pageable);
 }

@@ -151,4 +151,83 @@ class CartControllerTest {
 
         verify(cartService).clearCart(10L);
     }
+
+    /**
+     * [Task ECOM-119 / ECOM-258] Kiểm tra endpoint DELETE /api/v1/cart/clear tương thích với Frontend (cartService.js).
+     */
+    @Test
+    @DisplayName("Xóa toàn bộ giỏ qua /api/v1/cart/clear (Frontend): Thành công -> 200 OK [ECOM-258]")
+    void clearCart_WithClearPath_Success() throws Exception {
+        mockMvc.perform(delete("/api/v1/cart/clear")
+                        .header("X-User-Id", 10L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Xóa toàn bộ giỏ hàng thành công"));
+
+        verify(cartService).clearCart(10L);
+    }
+
+    /**
+     * [Task ECOM-118 / ECOM-258] Kiểm tra validate dữ liệu khi thêm vào giỏ (số lượng <= 0 hoặc thiếu productId -> 400 Bad Request).
+     */
+    @Test
+    @DisplayName("Thêm vào giỏ hàng: Số lượng <= 0 hoặc thiếu productId -> 400 Bad Request [ECOM-118 / ECOM-258]")
+    void addToCart_InvalidQuantity_ShouldReturnBadRequest() throws Exception {
+        AddToCartRequest invalidRequest = AddToCartRequest.builder()
+                .productId(null)
+                .quantity(0)
+                .build();
+
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    /**
+     * [Task ECOM-259] Kiểm tra phản hồi JSON trả về đầy đủ cả totalAmount và totalPrice được tính từ phía Server.
+     */
+    @Test
+    @DisplayName("Xem giỏ hàng: Kiểm tra tính tổng tiền phía Server (totalAmount & totalPrice) [ECOM-259]")
+    void getCart_VerifyServerCalculatedTotals() throws Exception {
+        CartResponse response = CartResponse.builder()
+                .id(1L)
+                .userId(10L)
+                .totalItems(3)
+                .totalAmount(new BigDecimal("3500.00"))
+                .items(List.of(
+                        CartItemResponse.builder()
+                                .id(101L)
+                                .productId(101L)
+                                .productName("iPhone 15 Pro")
+                                .price(new BigDecimal("1000.00"))
+                                .quantity(2)
+                                .subTotal(new BigDecimal("2000.00"))
+                                .stockAvailable(10)
+                                .build(),
+                        CartItemResponse.builder()
+                                .id(102L)
+                                .productId(102L)
+                                .productName("iPad Pro")
+                                .price(new BigDecimal("1500.00"))
+                                .quantity(1)
+                                .subTotal(new BigDecimal("1500.00"))
+                                .stockAvailable(5)
+                                .build()))
+                .build();
+
+        when(cartService.getCart(10L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/cart")
+                        .header("X-User-Id", 10L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.totalItems").value(3))
+                .andExpect(jsonPath("$.data.totalAmount").value(3500.00))
+                .andExpect(jsonPath("$.data.totalPrice").value(3500.00))
+                .andExpect(jsonPath("$.data.items[0].subTotal").value(2000.00))
+                .andExpect(jsonPath("$.data.items[0].stockAvailable").value(10));
+    }
 }
