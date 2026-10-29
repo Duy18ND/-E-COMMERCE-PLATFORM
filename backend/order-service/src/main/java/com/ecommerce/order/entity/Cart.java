@@ -11,6 +11,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * [Task ECOM-117 / ECOM-252 / ECOM-118] Thiết kế thực thể bảng `carts` trên MySQL:
+ * - Liên kết 1-1 với người dùng thông qua `user_id` (unique = true, có đánh index `idx_carts_user_id`).
+ * - Quan hệ 1-N với bảng `cart_items` (cascade ALL, orphanRemoval = true để tự động xóa item khi bỏ khỏi giỏ).
+ */
 @Entity
 @Table(
     name = "carts",

@@ -6,13 +6,14 @@ import org.springframework.data.domain.Pageable;
 
 import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
+import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
-
-import main.java.com.ecommerce.product.dto.response.CategoryResponse;
+import com.ecommerce.product.dto.response.ProductStockResponse;
+import com.ecommerce.product.enums.ProductStatus;
 
 public interface ProductService {
 

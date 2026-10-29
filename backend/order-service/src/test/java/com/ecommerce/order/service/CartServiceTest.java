@@ -244,4 +244,99 @@ class CartServiceTest {
         assertThat(sampleCart.getItems()).isEmpty();
         verify(cartRepository, times(1)).save(sampleCart);
     }
+
+    /**
+     * [Task ECOM-118 / ECOM-259] Kiểm tra chặn cập nhật số lượng khi vượt quá tồn kho hiện tại.
+     */
+    @Test
+    @DisplayName("Cập nhật số lượng thất bại khi vượt quá tồn kho -> Ném NotEnoughStockException [ECOM-118 / ECOM-259]")
+    void updateCartItem_NotEnoughStock_ThrowsNotEnoughStockException() {
+        CartItem item = CartItem.builder()
+                .id(5L)
+                .cart(sampleCart)
+                .productId(101L)
+                .quantity(2)
+                .build();
+        sampleCart.addItem(item);
+
+        UpdateCartItemRequest request = UpdateCartItemRequest.builder()
+                .quantity(25) // Tồn kho của sampleProduct chỉ có 10
+                .build();
+
+        when(cartItemRepository.findById(5L)).thenReturn(Optional.of(item));
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(sampleProduct));
+
+        NotEnoughStockException ex = assertThrows(
+                NotEnoughStockException.class,
+                () -> cartService.updateCartItem(10L, 5L, request)
+        );
+
+        assertThat(ex.getMessage()).contains("không đủ số lượng tồn kho");
+        verify(cartItemRepository, never()).save(any());
+    }
+
+    /**
+     * [Task ECOM-118 / ECOM-259] Kiểm tra chặn thêm vào giỏ khi sản phẩm đã ngừng kinh doanh (status = INACTIVE).
+     */
+    @Test
+    @DisplayName("Thêm vào giỏ thất bại khi sản phẩm ngừng kinh doanh (INACTIVE) -> Ném NotEnoughStockException [ECOM-118]")
+    void addToCart_InactiveProduct_ThrowsNotEnoughStockException() {
+        ProductResponse inactiveProduct = ProductResponse.builder()
+                .id(102L)
+                .name("iPhone 13 Pro")
+                .price(new BigDecimal("800.00"))
+                .stockQuantity(10)
+                .status("INACTIVE")
+                .build();
+
+        AddToCartRequest request = AddToCartRequest.builder()
+                .productId(102L)
+                .quantity(1)
+                .build();
+
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(inactiveProduct));
+        when(cartRepository.findByUserIdWithItems(10L)).thenReturn(Optional.of(sampleCart));
+
+        NotEnoughStockException ex = assertThrows(
+                NotEnoughStockException.class,
+                () -> cartService.addToCart(10L, request)
+        );
+
+        assertThat(ex.getMessage()).contains("không còn kinh doanh");
+        verify(cartRepository, never()).save(any(Cart.class));
+    }
+
+    /**
+     * [Task ECOM-259] Kiểm tra tính tổng tiền phía Server (subTotal, totalItems, totalAmount, totalPrice)
+     * với nhiều mặt hàng khác nhau trong giỏ hàng.
+     */
+    @Test
+    @DisplayName("Xem giỏ hàng: Tính đúng tạm tính (subTotal) và tổng tiền (totalAmount) phía Server cho nhiều sản phẩm [ECOM-259]")
+    void getCart_MultipleItems_CalculatesTotalAmountCorrectlyOnServer() {
+        ProductResponse secondProduct = ProductResponse.builder()
+                .id(102L)
+                .name("AirPods Pro 2")
+                .price(new BigDecimal("250.00"))
+                .stockQuantity(20)
+                .status("ACTIVE")
+                .build();
+
+        CartItem item1 = CartItem.builder().id(1L).cart(sampleCart).productId(101L).quantity(2).build(); // 2 * 1000 = 2000
+        CartItem item2 = CartItem.builder().id(2L).cart(sampleCart).productId(102L).quantity(3).build(); // 3 * 250 = 750
+        sampleCart.addItem(item1);
+        sampleCart.addItem(item2);
+
+        when(cartRepository.findByUserIdWithItems(10L)).thenReturn(Optional.of(sampleCart));
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(sampleProduct));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(secondProduct));
+
+        CartResponse response = cartService.getCart(10L);
+
+        assertThat(response.getItems()).hasSize(2);
+        assertThat(response.getTotalItems()).isEqualTo(5); // 2 + 3
+        assertThat(response.getItems().get(0).getSubTotal()).isEqualByComparingTo(new BigDecimal("2000.00"));
+        assertThat(response.getItems().get(1).getSubTotal()).isEqualByComparingTo(new BigDecimal("750.00"));
+        assertThat(response.getTotalAmount()).isEqualByComparingTo(new BigDecimal("2750.00"));
+        assertThat(response.getTotalPrice()).isEqualByComparingTo(new BigDecimal("2750.00"));
+    }
 }

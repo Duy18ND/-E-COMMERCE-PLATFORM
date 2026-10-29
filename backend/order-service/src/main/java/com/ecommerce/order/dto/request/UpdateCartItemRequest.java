@@ -6,6 +6,10 @@ import lombok.*;
 
 import java.io.Serializable;
 
+/**
+ * [Task ECOM-118 / ECOM-119 / ECOM-258] DTO nhận dữ liệu khi khách hàng cập nhật số lượng sản phẩm trong giỏ.
+ * Validate `quantity` bắt buộc có và phải `>= 1`.
+ */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -9,6 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
+/**
+ * [Task ECOM-117 / ECOM-118] Repository truy vấn bảng `cart_items` trên MySQL.
+ */
 @Repository
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 

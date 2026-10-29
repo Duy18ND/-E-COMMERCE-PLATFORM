@@ -6,6 +6,10 @@ import lombok.*;
 
 import java.io.Serializable;
 
+/**
+ * [Task ECOM-118 / ECOM-119 / ECOM-258] DTO nhận dữ liệu khi khách hàng thêm sản phẩm vào giỏ.
+ * Validate `productId` bắt buộc có và `quantity >= 1`.
+ */
 @Getter
 @Setter
 @NoArgsConstructor

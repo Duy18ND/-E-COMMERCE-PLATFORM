@@ -4,6 +4,10 @@ import com.ecommerce.order.dto.request.AddToCartRequest;
 import com.ecommerce.order.dto.request.UpdateCartItemRequest;
 import com.ecommerce.order.dto.response.CartResponse;
 
+/**
+ * [Task ECOM-117 / ECOM-252 / ECOM-118 / ECOM-119 / ECOM-258 / ECOM-259]
+ * Interface định nghĩa các nghiệp vụ Quản lý giỏ hàng (Shopping Cart Management).
+ */
 public interface CartService {
 
     /**
