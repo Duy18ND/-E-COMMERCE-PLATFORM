@@ -4,7 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * T�m t?t th?ng k� ��nh gi� c?a m?t s?n ph?m (�i?m trung b?nh + t?ng s? ��nh gi�).
+ * Tóm tắt thống kê đánh giá của một sản phẩm (điểm trung bình + tổng số đánh giá).
  */
 @Getter
 @Builder

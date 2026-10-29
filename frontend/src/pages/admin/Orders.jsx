@@ -5,6 +5,7 @@ import OrderStatus from '../../components/order/OrderStatus';
 import { ORDER_STATUS } from '../../utils/constants';
 import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import Pagination from '../../components/admin/Pagination';
 
 // Quy trình chuyển đổi trạng thái đơn hàng chuẩn đồng bộ với Backend
 const ORDER_TRANSITIONS = {
@@ -34,6 +35,11 @@ const AdminOrders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
 
   // Tải danh sách đơn hàng từ Backend GET /api/admin/orders
   const fetchOrders = useCallback(async () => {
@@ -93,10 +99,32 @@ const AdminOrders = () => {
       });
   }, [orders, searchTerm, statusFilter, sortBy]);
 
+  // Paginated slice
+  const paginatedOrders = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredOrders.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredOrders, currentPage, itemsPerPage]);
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusFilterChange = (e) => {
+    setStatusFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleSortChange = (e) => {
+    setSortBy(e.target.value);
+    setCurrentPage(1);
+  };
+
   const handleResetFilter = () => {
     setSearchTerm('');
     setStatusFilter('');
     setSortBy('');
+    setCurrentPage(1);
   };
 
   // Cập nhật trạng thái gọi API Backend PUT /api/admin/orders/{orderId}/status
@@ -247,7 +275,7 @@ const AdminOrders = () => {
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchChange}
               placeholder="Tìm theo mã đơn (#1), tên người nhận hoặc số điện thoại..."
               style={{
                 width: '100%',
@@ -264,7 +292,7 @@ const AdminOrders = () => {
           {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={handleStatusFilterChange}
             style={{
               padding: '0.6rem 0.85rem',
               borderRadius: '8px',
@@ -285,7 +313,7 @@ const AdminOrders = () => {
           {/* Sort By */}
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            onChange={handleSortChange}
             style={{
               padding: '0.6rem 0.85rem',
               borderRadius: '8px',
@@ -339,7 +367,8 @@ const AdminOrders = () => {
             <p style={{ fontSize: '0.85rem' }}>Thử thay đổi từ khóa tìm kiếm hoặc chọn trạng thái khác</p>
           </div>
         ) : (
-          <div className="table-responsive">
+          <>
+            <div className="table-responsive">
             <table className="data-table">
               <thead>
                 <tr>
@@ -353,7 +382,7 @@ const AdminOrders = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.map((order) => {
+                {paginatedOrders.map((order) => {
                   const allowedTransitions = ORDER_TRANSITIONS[order.status] || [];
                   const isCompleted = order.status === ORDER_STATUS.COMPLETED;
                   const isCancelled = order.status === ORDER_STATUS.CANCELLED;
@@ -413,6 +442,21 @@ const AdminOrders = () => {
               </tbody>
             </table>
           </div>
+
+          {/* REUSABLE PAGINATION */}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredOrders.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => setCurrentPage(page)}
+            onItemsPerPageChange={(newSize) => {
+              setItemsPerPage(newSize);
+              setCurrentPage(1);
+            }}
+            itemsPerPageOptions={[5, 10, 20, 50]}
+            unitName="đơn hàng"
+          />
+          </>
         )}
       </div>
     </div>

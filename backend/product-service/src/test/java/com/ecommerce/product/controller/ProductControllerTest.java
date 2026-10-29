@@ -137,6 +137,7 @@ class ProductControllerTest {
         when(productService.createProduct(any(ProductCreateRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/products")
+                        .header("X-User-Roles", "ROLE_ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -150,7 +151,8 @@ class ProductControllerTest {
     void shouldDeleteProduct() throws Exception {
         doNothing().when(productService).deleteProduct(1L);
 
-        mockMvc.perform(delete("/api/v1/products/1"))
+        mockMvc.perform(delete("/api/v1/products/1")
+                        .header("X-User-Roles", "ROLE_ADMIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Xóa mềm sản phẩm thành công"));

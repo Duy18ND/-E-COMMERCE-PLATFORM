@@ -1,15 +1,21 @@
 package com.ecommerce.auth.dto.response;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 /**
- * Response DTO tr? v? th�ng tin m?t �?a ch? trong s? �?a ch?.
+ * Response DTO trả về thông tin một địa chỉ trong sổ địa chỉ.
  */
-@Getter
+@Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AddressResponse {
+
     private Long id;
     private Long userId;
     private String receiverName;

@@ -1,18 +1,23 @@
 package com.ecommerce.auth.dto.response;
 
 import com.ecommerce.auth.enums.UserStatus;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Response DTO tóm t?t thông tin User — dùng cho Admin dashboard.
+ * Response DTO tÃ³m táº¯t thÃ´ng tin User á»Ÿ dáº¡ng cho Admin dashboard.
  */
-@Getter
+@Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UserSummaryResponse {
+
     private Long id;
     private String email;
     private String fullName;

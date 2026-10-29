@@ -12,45 +12,73 @@ export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
+  const [totalOriginalPrice, setTotalOriginalPrice] = useState(0);
+  const [totalDiscount, setTotalDiscount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Chuẩn hóa dữ liệu từ CartResponse của Backend để tương thích giao diện
+  // Chuẩn hóa dữ liệu từ CartResponse của Backend hoặc Local Mock
   const applyCartResponse = useCallback((cartData) => {
     if (!cartData) {
       setCartItems([]);
       setTotalItems(0);
       setTotalPrice(0);
+      setTotalOriginalPrice(0);
+      setTotalDiscount(0);
       return;
     }
 
     const rawItems = cartData.items || [];
-    const normalized = rawItems.map((item) => ({
-      ...item,
-      id: item.itemId, // Định danh cho hành động update/delete
-      itemId: item.itemId,
-      productId: item.productId,
-      name: item.productName || item.name || 'Sản phẩm',
-      productName: item.productName || item.name || 'Sản phẩm',
-      price: Number(item.unitPrice ?? item.price ?? 0),
-      unitPrice: Number(item.unitPrice ?? item.price ?? 0),
-      imageUrl: item.imageUrl || '',
-      quantity: Number(item.quantity || 0),
-      subTotal: Number(item.subTotal ?? (item.quantity * (item.unitPrice || 0)))
-    }));
+    const normalized = rawItems.map((item) => {
+      const isSale = Boolean(item.isFlashSale || item.salePrice);
+      const unitPrice = Number(item.unitPrice ?? item.salePrice ?? item.price ?? 0);
+      const originalPrice = Number(item.originalPrice ?? item.price ?? unitPrice);
+      const qty = Number(item.quantity || 1);
+      const subTotal = Number(item.subTotal ?? (qty * unitPrice));
+      const originalSubTotal = Number(item.originalSubTotal ?? (qty * originalPrice));
+      const savedAmount = Math.max(0, originalSubTotal - subTotal);
+
+      return {
+        ...item,
+        id: item.id || item.itemId,
+        itemId: item.itemId || item.id,
+        productId: item.productId,
+        name: item.productName || item.name || 'Sản phẩm',
+        productName: item.productName || item.name || 'Sản phẩm',
+        resellerTag: item.resellerTag || 'CHÍNH HÃNG UỶ QUYỀN',
+        price: unitPrice,
+        unitPrice,
+        originalPrice,
+        salePrice: isSale ? unitPrice : null,
+        discountPercent: item.discountPercent || (originalPrice > unitPrice ? Math.round(((originalPrice - unitPrice) / originalPrice) * 100) : 0),
+        savedAmount,
+        imageUrl: item.imageUrl || '',
+        quantity: qty,
+        subTotal,
+        originalSubTotal,
+        isFlashSale: isSale,
+        stockNotice: item.stockNotice || (isSale ? 'Chỉ còn số lượng ít giá sốc' : '')
+      };
+    });
+
+    const sumQty = normalized.reduce((sum, item) => sum + item.quantity, 0);
+    const sumTotal = Number(
+      cartData.totalPrice ?? normalized.reduce((sum, item) => sum + item.subTotal, 0)
+    );
+    const sumOriginal = Number(
+      cartData.totalOriginalPrice ?? normalized.reduce((sum, item) => sum + item.originalSubTotal, 0)
+    );
+    const sumDiscount = Math.max(0, sumOriginal - sumTotal);
 
     setCartItems(normalized);
-    setTotalItems(normalized.reduce((sum, item) => sum + item.quantity, 0));
-    setTotalPrice(
-      Number(
-        cartData.totalPrice ??
-        normalized.reduce((sum, item) => sum + item.subTotal, 0)
-      )
-    );
+    setTotalItems(sumQty);
+    setTotalPrice(sumTotal);
+    setTotalOriginalPrice(sumOriginal);
+    setTotalDiscount(sumDiscount);
   }, []);
 
-  // Lấy giỏ hàng từ Backend khi người dùng đăng nhập thành công
+  // Lấy giỏ hàng từ Backend hoặc Local Mock
   const fetchCart = useCallback(async () => {
-    if (!isAuthenticated || isAdmin) {
+    if (isAdmin) {
       applyCartResponse(null);
       return;
     }
@@ -60,12 +88,17 @@ export const CartProvider = ({ children }) => {
       const cartData = await cartService.getCart();
       applyCartResponse(cartData);
     } catch (error) {
-      console.warn('Không thể tải giỏ hàng từ máy chủ:', error.message);
-      applyCartResponse(null);
+      console.warn('Không thể tải giỏ hàng từ máy chủ, chuyển sang local mock:', error.message);
+      try {
+        const localData = await cartService.getCart();
+        applyCartResponse(localData);
+      } catch (e) {
+        applyCartResponse(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, isAdmin, applyCartResponse]);
+  }, [isAdmin, applyCartResponse]);
 
   useEffect(() => {
     fetchCart();
@@ -84,29 +117,18 @@ export const CartProvider = ({ children }) => {
       return false;
     }
 
-    if (!isAuthenticated) {
-      if (showToast) {
-        showToast({
-          type: 'error',
-          title: 'Yêu cầu đăng nhập',
-          message: 'Vui lòng đăng nhập tài khoản khách hàng để thêm sản phẩm vào giỏ hàng!',
-          action: { label: 'Đăng nhập ngay →', to: '/login' }
-        });
-      }
-      return false;
-    }
-
     const qty = Math.max(1, Number(quantity) || 1);
     const productId = product?.id || product?.productId;
 
     try {
-      const updatedCart = await cartService.addItem(productId, qty);
+      const updatedCart = await cartService.addItem(productId, qty, product);
       applyCartResponse(updatedCart);
 
       if (showToast) {
         showToast({
           type: 'cart',
-          title: 'Thêm vào giỏ hàng thành công!',
+          title: product?.isFlashSale || product?.salePrice ? '⚡ Thêm deal Flash Sale thành công!' : 'Thêm vào giỏ hàng thành công!',
+          message: product?.isFlashSale ? 'Sản phẩm Flash Sale đã được bảo lưu giá sốc trong 15 phút!' : '',
           product,
           quantity: qty
         });
@@ -122,7 +144,7 @@ export const CartProvider = ({ children }) => {
       }
       return false;
     }
-  }, [isAdmin, isAuthenticated, showToast, applyCartResponse]);
+  }, [isAdmin, showToast, applyCartResponse]);
 
   // 2. Cập nhật số lượng
   const updateQuantity = useCallback(async (itemId, quantity) => {
@@ -179,6 +201,8 @@ export const CartProvider = ({ children }) => {
     cartItems,
     totalItems,
     totalPrice,
+    totalOriginalPrice,
+    totalDiscount,
     loading,
     addToCart,
     removeFromCart,

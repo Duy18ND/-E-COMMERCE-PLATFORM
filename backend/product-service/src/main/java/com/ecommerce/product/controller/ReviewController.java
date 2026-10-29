@@ -18,43 +18,43 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Controller qu?n l? ğánh giá s?n ph?m.
- * T?t c? API yêu c?u user ğ? xác th?c (X-User-Id t? API Gateway).
- * API xem ğánh giá là public, API t?o/s?a/xoá yêu c?u userId.
+ * Controller quáº£n lÃ½ Ä‘Ã¡nh giÃ¡ sáº£n pháº©m.
+ * Táº¥t cáº£ API yÃªu cáº§u user Ä‘Ã£ xÃ¡c thá»±c (X-User-Id tá»« API Gateway).
+ * API xem Ä‘Ã¡nh giÃ¡ lÃ  public, API táº¡o/sá»­a/xoÃ¡ yÃªu cáº§u userId.
  */
 @RestController
 @RequestMapping("/api/v1/products/{productId}/reviews")
 @RequiredArgsConstructor
-@Tag(name = "Review Controller", description = "Qu?n l? ğánh giá và x?p h?ng s?n ph?m")
+@Tag(name = "Review Controller", description = "Quáº£n lÃ½ Ä‘Ã¡nh giÃ¡ vÃ  xáº¿p háº¡ng sáº£n pháº©m")
 public class ReviewController {
 
     private final ReviewService reviewService;
 
     /**
      * GET /api/v1/products/{productId}/reviews
-     * Xem t?t c? ğánh giá c?a s?n ph?m (public, không c?n ğãng nh?p).
+     * Xem táº¥t cáº£ Ä‘Ã¡nh giÃ¡ cá»§a sáº£n pháº©m (public, khÃ´ng cáº§n Ä‘Äƒng nháº­p).
      */
     @GetMapping
     @Operation(
-        summary = "Xem ğánh giá s?n ph?m",
-        description = "L?y danh sách ğánh giá c?a s?n ph?m kèm ği?m trung b?nh và t?ng s? ğánh giá (phân trang). Endpoint public."
+        summary = "Xem Ä‘Ã¡nh giÃ¡ sáº£n pháº©m",
+        description = "Láº¥y danh sÃ¡ch Ä‘Ã¡nh giÃ¡ cá»§a sáº£n pháº©m kÃ¨m Ä‘iá»ƒm trung bÃ¬nh vÃ  tá»•ng sá»‘ Ä‘Ã¡nh giÃ¡ (phÃ¢n trang). Endpoint public."
     )
     public ResponseEntity<ApiResponse<ReviewSummaryResponse>> getReviews(
             @PathVariable Long productId,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         ReviewSummaryResponse response = reviewService.getReviewsByProduct(productId, pageable);
-        return ResponseEntity.ok(ApiResponse.success("L?y danh sách ğánh giá thành công", response));
+        return ResponseEntity.ok(ApiResponse.success("Láº¥y danh sÃ¡ch Ä‘Ã¡nh giÃ¡ thÃ nh cÃ´ng", response));
     }
 
     /**
      * POST /api/v1/products/{productId}/reviews
-     * T?o ğánh giá m?i — user ph?i có ğõn hàng DELIVERED ch?a s?n ph?m.
+     * Táº¡o Ä‘Ã¡nh giÃ¡ má»›i - user pháº£i cÃ³ Ä‘Æ¡n hÃ ng DELIVERED chá»©a sáº£n pháº©m.
      */
     @PostMapping
     @Operation(
-        summary = "T?o ğánh giá s?n ph?m [USER]",
-        description = "T?o ğánh giá m?i. Yêu c?u: có ğõn hàng DELIVERED ch?a s?n ph?m. M?i user ch? ğı?c ğánh giá 1 l?n."
+        summary = "Táº¡o Ä‘Ã¡nh giÃ¡ sáº£n pháº©m [USER]",
+        description = "Táº¡o Ä‘Ã¡nh giÃ¡ má»›i. YÃªu cáº§u: cÃ³ Ä‘Æ¡n hÃ ng DELIVERED chá»©a sáº£n pháº©m. Má»—i user chá»‰ Ä‘Æ°á»£c Ä‘Ã¡nh giÃ¡ 1 láº§n."
     )
     public ResponseEntity<ApiResponse<ReviewResponse>> createReview(
             @PathVariable Long productId,
@@ -64,17 +64,17 @@ public class ReviewController {
         requireAuthenticated(userId);
         ReviewResponse response = reviewService.createReview(productId, userId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Ğánh giá s?n ph?m thành công", response));
+                .body(ApiResponse.success("ÄÃ¡nh giÃ¡ sáº£n pháº©m thÃ nh cÃ´ng", response));
     }
 
     /**
      * PUT /api/v1/products/{productId}/reviews/{reviewId}
-     * C?p nh?t ğánh giá — ch? owner m?i ğı?c s?a.
+     * Cáº­p nháº­t Ä‘Ã¡nh giÃ¡ - chá»‰ owner má»›i Ä‘Æ°á»£c sá»­a.
      */
     @PutMapping("/{reviewId}")
     @Operation(
-        summary = "C?p nh?t ğánh giá [OWNER]",
-        description = "Ch?nh s?a rating và comment c?a ğánh giá. Ch? ngı?i vi?t ğánh giá m?i ğı?c s?a."
+        summary = "Cáº­p nháº­t Ä‘Ã¡nh giÃ¡ [OWNER]",
+        description = "Chá»‰nh sá»­a rating vÃ  comment cá»§a Ä‘Ã¡nh giÃ¡. Chá»‰ ngÆ°á»i viáº¿t Ä‘Ã¡nh giÃ¡ má»›i Ä‘Æ°á»£c sá»­a."
     )
     public ResponseEntity<ApiResponse<ReviewResponse>> updateReview(
             @PathVariable Long productId,
@@ -84,17 +84,17 @@ public class ReviewController {
 
         requireAuthenticated(userId);
         ReviewResponse response = reviewService.updateReview(reviewId, userId, request);
-        return ResponseEntity.ok(ApiResponse.success("C?p nh?t ğánh giá thành công", response));
+        return ResponseEntity.ok(ApiResponse.success("Cáº­p nháº­t Ä‘Ã¡nh giÃ¡ thÃ nh cÃ´ng", response));
     }
 
     /**
      * DELETE /api/v1/products/{productId}/reviews/{reviewId}
-     * Xoá ğánh giá — owner ho?c ADMIN.
+     * XoÃ¡ Ä‘Ã¡nh giÃ¡ - owner hoáº·c ADMIN.
      */
     @DeleteMapping("/{reviewId}")
     @Operation(
-        summary = "Xoá ğánh giá [OWNER / ADMIN]",
-        description = "Xoá ğánh giá s?n ph?m. Ngı?i vi?t ho?c Admin m?i có quy?n xoá."
+        summary = "XoÃ¡ Ä‘Ã¡nh giÃ¡ [OWNER / ADMIN]",
+        description = "XoÃ¡ Ä‘Ã¡nh giÃ¡ sáº£n pháº©m. NgÆ°á»i viáº¿t hoáº·c Admin má»›i cÃ³ quyá»n xoÃ¡."
     )
     public ResponseEntity<ApiResponse<Void>> deleteReview(
             @PathVariable Long productId,
@@ -104,14 +104,14 @@ public class ReviewController {
 
         requireAuthenticated(userId);
         reviewService.deleteReview(reviewId, userId, userRoles);
-        return ResponseEntity.ok(ApiResponse.success("Xoá ğánh giá thành công", null));
+        return ResponseEntity.ok(ApiResponse.success("XoÃ¡ Ä‘Ã¡nh giÃ¡ thÃ nh cÃ´ng", null));
     }
 
-    // ??? Helper ??????????????????????????????????????????????????????????????
+    // --- Helper -------------------------------------------------------------
 
     private void requireAuthenticated(Long userId) {
         if (userId == null) {
-            throw new AccessDeniedException("B?n c?n ğãng nh?p ğ? th?c hi?n thao tác này (thi?u X-User-Id)");
+            throw new AccessDeniedException("Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ thá»±c hiá»‡n thao tÃ¡c nÃ y (thiáº¿u X-User-Id)");
         }
     }
 }

@@ -28,7 +28,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserAddressRepository addressRepository;
 
-    // ?? Address CRUD ??????????????????????????????????????????????????????????
+    // Address CRUD
 
     @Override
     @Transactional(readOnly = true)
@@ -44,7 +44,7 @@ public class UserServiceImpl implements UserService {
     public AddressResponse addAddress(Long userId, AddressRequest request) {
         log.info("Adding address for userId={}, isDefault={}", userId, request.getIsDefault());
 
-        // N?u �?a ch? m?i l� m?c �?nh -> b? m?c �?nh t?t c? �?a ch? c? tr�?c
+        // Nếu địa chỉ mới là mặc định -> bỏ mặc định tất cả địa chỉ cũ trước
         if (Boolean.TRUE.equals(request.getIsDefault())) {
             addressRepository.clearDefaultByUserId(userId);
             log.info("Cleared default flag for all addresses of userId={}", userId);
@@ -71,9 +71,9 @@ public class UserServiceImpl implements UserService {
     public AddressResponse updateAddress(Long userId, Long addressId, AddressRequest request) {
         UserAddress address = addressRepository.findByIdAndUserId(addressId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Kh�ng t?m th?y �?a ch? ID " + addressId + " c?a user " + userId));
+                        "Không tìm thấy địa chỉ ID " + addressId + " của user " + userId));
 
-        // N?u �?t l�m m?c �?nh -> b? flag c?a c�c �?a ch? kh�c
+        // Nếu đặt làm mặc định -> bỏ flag của các địa chỉ khác
         if (Boolean.TRUE.equals(request.getIsDefault()) && !Boolean.TRUE.equals(address.getIsDefault())) {
             addressRepository.clearDefaultByUserId(userId);
         }
@@ -94,13 +94,13 @@ public class UserServiceImpl implements UserService {
     public void deleteAddress(Long userId, Long addressId) {
         UserAddress address = addressRepository.findByIdAndUserId(addressId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Kh�ng t?m th?y �?a ch? ID " + addressId + " c?a user " + userId));
+                        "Không tìm thấy địa chỉ ID " + addressId + " của user " + userId));
 
         addressRepository.delete(address);
         log.info("Address id={} deleted for userId={}", addressId, userId);
     }
 
-    // ?? Admin: User management ?????????????????????????????????????????????????
+    // Admin: User management
 
     @Override
     @Transactional(readOnly = true)
@@ -117,7 +117,7 @@ public class UserServiceImpl implements UserService {
 
         User user = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Kh�ng t?m th?y ng�?i d�ng v?i ID: " + targetUserId));
+                        "Không tìm thấy người dùng với ID: " + targetUserId));
 
         user.setStatus(request.getStatus());
         User updated = userRepository.save(user);
@@ -125,7 +125,7 @@ public class UserServiceImpl implements UserService {
         return mapToUserSummary(updated);
     }
 
-    // ?? Mappers ????????????????????????????????????????????????????????????????
+    // Mappers
 
     private AddressResponse mapToAddressResponse(UserAddress a) {
         return AddressResponse.builder()

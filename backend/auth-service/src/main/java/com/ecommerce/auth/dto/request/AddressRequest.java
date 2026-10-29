@@ -7,32 +7,32 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Request DTO �? t?o m?i ho?c c?p nh?t m?t �?a ch? trong s? �?a ch?.
+ * Request DTO để tạo mới hoặc cập nhật một địa chỉ trong sổ địa chỉ.
  */
 @Getter
 @Setter
 public class AddressRequest {
 
-    @NotBlank(message = "T�n ng�?i nh?n kh�ng ��?c �? tr?ng")
-    @Size(max = 150, message = "T�n ng�?i nh?n t?i �a 150 k? t?")
+    @NotBlank(message = "Tên người nhận không được để trống")
+    @Size(max = 150, message = "Tên người nhận tối đa 150 ký tự")
     private String receiverName;
 
-    @NotBlank(message = "S? �i?n tho?i kh�ng ��?c �? tr?ng")
-    @Pattern(regexp = "^(\\+84|0)[3-9]\\d{8}$", message = "S? �i?n tho?i kh�ng h?p l?")
+    @NotBlank(message = "Số điện thoại không được để trống")
+    @Pattern(regexp = "^(\\+84|0)[3-9]\\d{8}$", message = "Số điện thoại không hợp lệ")
     private String phone;
 
-    @NotBlank(message = "�?a ch? kh�ng ��?c �? tr?ng")
-    @Size(max = 255, message = "�?a ch? t?i �a 255 k? t?")
+    @NotBlank(message = "Địa chỉ không được để trống")
+    @Size(max = 255, message = "Địa chỉ tối đa 255 ký tự")
     private String addressLine;
 
-    @NotBlank(message = "T?nh/Th�nh ph? kh�ng ��?c �? tr?ng")
-    @Size(max = 100, message = "T�n t?nh/th�nh t?i �a 100 k? t?")
+    @NotBlank(message = "Tỉnh/Thành phố không được để trống")
+    @Size(max = 100, message = "Tên tỉnh/thành tối đa 100 ký tự")
     private String city;
 
-    @Size(max = 100, message = "T�n qu?n/huy?n t?i �a 100 k? t?")
+    @Size(max = 100, message = "Tên quận/huyện tối đa 100 ký tự")
     private String district;
 
-    @Size(max = 100, message = "T�n ph�?ng/x? t?i �a 100 k? t?")
+    @Size(max = 100, message = "Tên phường/xã tối đa 100 ký tự")
     private String ward;
 
     private Boolean isDefault = false;

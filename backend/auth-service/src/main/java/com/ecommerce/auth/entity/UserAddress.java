@@ -8,8 +8,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * S? �?a ch? giao h�ng c?a User.
- * M?i user c� th? c� nhi?u �?a ch?, trong �� ch? 1 �?a ch? m?c �?nh (isDefault = true).
+ * Sổ địa chỉ giao hàng của User.
+ * Mỗi user có thể có nhiều địa chỉ, trong đó chỉ 1 địa chỉ mặc định (isDefault = true).
  */
 @Entity
 @Table(
@@ -50,7 +50,7 @@ public class UserAddress {
     @Column(name = "ward", length = 100)
     private String ward;
 
-    /** �?a ch? m?c �?nh. Ch? 1 �?a ch? per user c� th? l� true. */
+    /** Địa chỉ mặc định. Chỉ 1 địa chỉ per user có thể là true. */
     @Builder.Default
     @Column(name = "is_default", nullable = false)
     private Boolean isDefault = false;
