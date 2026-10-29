@@ -75,12 +75,8 @@ public class CartServiceImpl implements CartService {
             targetQuantity += existingItemOpt.get().getQuantity();
         }
 
-        // 4. Kiểm tra tồn kho đối với tổng số lượng yêu cầu
-        if (product.getStockQuantity() == null || product.getStockQuantity() < targetQuantity) {
-            int available = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
-            throw new NotEnoughStockException("Sản phẩm '" + product.getName() + "' không đủ số lượng tồn kho (Còn lại: "
-                    + available + ", yêu cầu trong giỏ: " + targetQuantity + ")");
-        }
+        // 4. [Task ECOM-118 / ECOM-259] Kiểm tra tồn kho đối với tổng số lượng yêu cầu
+        validateProductStock(product, targetQuantity);
 
         // 5. Cập nhật số lượng hoặc thêm mới item
         if (existingItemOpt.isPresent()) {
@@ -113,11 +109,7 @@ public class CartServiceImpl implements CartService {
         }
 
         ProductResponse product = getProductOrThrow(item.getProductId());
-        if (product.getStockQuantity() == null || product.getStockQuantity() < request.getQuantity()) {
-            int available = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
-            throw new NotEnoughStockException("Sản phẩm '" + product.getName() + "' không đủ số lượng tồn kho (Còn lại: "
-                    + available + ", yêu cầu: " + request.getQuantity() + ")");
-        }
+        validateProductStock(product, request.getQuantity());
 
         item.setQuantity(request.getQuantity());
         cartItemRepository.save(item);
@@ -165,6 +157,21 @@ public class CartServiceImpl implements CartService {
             throw new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + productId);
         }
         return productApiResponse.getData();
+    }
+
+    /**
+     * [Task ECOM-118 / ECOM-259] Hàm kiểm tra trạng thái kinh doanh và số lượng tồn kho của sản phẩm:
+     * Chặn thêm/cập nhật vào giỏ nếu sản phẩm ngừng kinh doanh hoặc số lượng yêu cầu lớn hơn tồn kho.
+     */
+    private void validateProductStock(ProductResponse product, int requestedQuantity) {
+        if (product.getStatus() != null && !"ACTIVE".equalsIgnoreCase(product.getStatus())) {
+            throw new NotEnoughStockException("Sản phẩm '" + product.getName() + "' hiện không còn kinh doanh hoặc đã ngừng bán");
+        }
+        if (product.getStockQuantity() == null || product.getStockQuantity() < requestedQuantity) {
+            int available = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+            throw new NotEnoughStockException("Sản phẩm '" + product.getName() + "' không đủ số lượng tồn kho (Còn lại: "
+                    + available + ", yêu cầu trong giỏ: " + requestedQuantity + ")");
+        }
     }
 
     private CartResponse mapToCartResponse(Cart cart) {
