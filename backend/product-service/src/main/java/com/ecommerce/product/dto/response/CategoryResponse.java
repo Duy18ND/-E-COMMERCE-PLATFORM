@@ -2,8 +2,13 @@ package com.ecommerce.product.dto.response;
 
 import java.io.Serializable;
 
-import lombok.*;
-import main.java.com.ecommerce.product.entity.Category;
+import com.ecommerce.product.entity.Category;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
 @Setter

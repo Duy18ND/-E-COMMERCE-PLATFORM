@@ -1,13 +1,24 @@
 package com.ecommerce.product.dto.response;
 
-import com.ecommerce.product.entity.Product;
-import com.ecommerce.product.enums.ProductStatus;
-import lombok.*;
-
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.ecommerce.product.entity.Product;
+import com.ecommerce.product.enums.ProductStatus;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+/**
+ * [Task ECOM-111 / ECOM-112 / ECOM-220] DTO trả về thông tin chi tiết sản phẩm
+ * kèm số lượng tồn kho
+ * (stockQuantity) và trạng thái (status) cho khách vãng lai (Guest) và người
+ * dùng.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
