@@ -157,6 +157,7 @@ class ProductServiceTest {
                 .version(0L)
                 .build();
 
+        when(categoryRepository.existsByNameIgnoreCase("Phones")).thenReturn(true);
         when(productRepository.save(any(Product.class))).thenReturn(createdProduct);
 
         ProductResponse response = productService.createProduct(request);

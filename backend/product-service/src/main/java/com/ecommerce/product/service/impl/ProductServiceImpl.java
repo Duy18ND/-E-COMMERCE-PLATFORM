@@ -107,12 +107,16 @@ public class ProductServiceImpl implements ProductService {
     @CacheEvict(value = "products", allEntries = true)
     public ProductResponse createProduct(ProductCreateRequest request) {
         validatePriceAndStock(request.getPrice(), request.getStockQuantity());
+        validateCategoryExists(request.getCategory());
+        String normalizedCategory = StringUtils.hasText(request.getCategory())
+                ? request.getCategory().trim()
+                : request.getCategory();
         Product product = Product.builder()
                 .name(request.getName().trim())
                 .description(request.getDescription())
                 .price(request.getPrice())
                 .stockQuantity(request.getStockQuantity())
-                .category(request.getCategory())
+                .category(normalizedCategory)
                 .imageUrl(request.getImageUrl())
                 .status(ProductStatus.ACTIVE)
                 .build();
@@ -136,11 +140,15 @@ public class ProductServiceImpl implements ProductService {
         validatePriceAndStock(request.getPrice(), request.getStockQuantity());
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+        validateCategoryExists(request.getCategory());
+        String normalizedCategory = StringUtils.hasText(request.getCategory())
+                ? request.getCategory().trim()
+                : request.getCategory();
         product.setName(request.getName().trim());
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
         product.setStockQuantity(request.getStockQuantity());
-        product.setCategory(request.getCategory());
+        product.setCategory(normalizedCategory);
         product.setImageUrl(request.getImageUrl());
         if (request.getStatus() != null) {
             product.setStatus(request.getStatus());
@@ -404,6 +412,19 @@ public class ProductServiceImpl implements ProductService {
         }
         if (stockQuantity == null || stockQuantity < 0) {
             throw new IllegalArgumentException("Số lượng tồn kho không được nhỏ hơn 0");
+        }
+    }
+
+    /**
+     * Kiểm tra danh mục sản phẩm có tồn tại trong hệ thống hay không (nếu chuỗi không rỗng).
+     * Nếu danh mục không tồn tại sẽ ném ResourceNotFoundException (HTTP 404).
+     */
+    private void validateCategoryExists(String categoryName) {
+        if (StringUtils.hasText(categoryName)) {
+            String trimmedCategory = categoryName.trim();
+            if (!categoryRepository.existsByNameIgnoreCase(trimmedCategory)) {
+                throw new ResourceNotFoundException("Danh mục '" + trimmedCategory + "' không tồn tại trong hệ thống");
+            }
         }
     }
 }
