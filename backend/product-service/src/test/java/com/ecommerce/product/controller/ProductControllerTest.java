@@ -37,177 +37,224 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 @ExtendWith(MockitoExtension.class)
 class ProductControllerTest {
 
-    private MockMvc mockMvc;
+        private MockMvc mockMvc;
 
-    @Mock
-    private ProductService productService;
+        @Mock
+        private ProductService productService;
 
-    @InjectMocks
-    private ProductController productController;
+        @InjectMocks
+        private ProductController productController;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+        private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(productController)
-                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .build();
-    }
+        @BeforeEach
+        void setUp() {
+                mockMvc = MockMvcBuilders.standaloneSetup(productController)
+                                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
+                                .setControllerAdvice(new GlobalExceptionHandler())
+                                .build();
+        }
 
-    @Test
-    @DisplayName("GET /api/v1/products - Lấy danh sách sản phẩm phân trang")
-    void shouldGetProductsList() throws Exception {
-        ProductResponse item = ProductResponse.builder()
-                .id(1L)
-                .name("iPad Air")
-                .price(BigDecimal.valueOf(599.99))
-                .stockQuantity(20)
-                .status(ProductStatus.ACTIVE)
-                .build();
+        @Test
+        @DisplayName("GET /api/v1/products - Lấy danh sách sản phẩm phân trang")
+        void shouldGetProductsList() throws Exception {
+                ProductResponse item = ProductResponse.builder()
+                                .id(1L)
+                                .name("iPad Air")
+                                .price(BigDecimal.valueOf(599.99))
+                                .stockQuantity(20)
+                                .status(ProductStatus.ACTIVE)
+                                .build();
 
-        PagedResponse<ProductResponse> pagedResponse = PagedResponse.<ProductResponse>builder()
-                .content(List.of(item))
-                .pageNumber(0)
-                .pageSize(10)
-                .totalElements(1)
-                .totalPages(1)
-                .last(true)
-                .build();
+                PagedResponse<ProductResponse> pagedResponse = PagedResponse.<ProductResponse>builder()
+                                .content(List.of(item))
+                                .pageNumber(0)
+                                .pageSize(10)
+                                .totalElements(1)
+                                .totalPages(1)
+                                .last(true)
+                                .build();
 
-        when(productService.getProducts(any(), any(Pageable.class))).thenReturn(pagedResponse);
+                when(productService.getProducts(any(com.ecommerce.product.dto.request.ProductFilterRequest.class),
+                                any(Pageable.class))).thenReturn(pagedResponse);
 
-        mockMvc.perform(get("/api/v1/products")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.content[0].name").value("iPad Air"));
-    }
+                mockMvc.perform(get("/api/v1/products")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data.content[0].name").value("iPad Air"));
+        }
 
-    @Test
-    @DisplayName("GET /api/v1/products/{id} - Lấy chi tiết sản phẩm")
-    void shouldGetProductById() throws Exception {
-        ProductResponse item = ProductResponse.builder()
-                .id(1L)
-                .name("iPad Air")
-                .price(BigDecimal.valueOf(599.99))
-                .stockQuantity(20)
-                .status(ProductStatus.ACTIVE)
-                .build();
+        @Test
+        @DisplayName("GET /api/v1/products/{id} - Lấy chi tiết sản phẩm")
+        void shouldGetProductById() throws Exception {
+                ProductResponse item = ProductResponse.builder()
+                                .id(1L)
+                                .name("iPad Air")
+                                .price(BigDecimal.valueOf(599.99))
+                                .stockQuantity(20)
+                                .status(ProductStatus.ACTIVE)
+                                .build();
 
-        when(productService.getProductById(1L)).thenReturn(item);
+                when(productService.getProductById(1L)).thenReturn(item);
 
-        mockMvc.perform(get("/api/v1/products/1")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.name").value("iPad Air"));
-    }
+                mockMvc.perform(get("/api/v1/products/1")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data.name").value("iPad Air"));
+        }
 
-    @Test
-    @DisplayName("GET /api/v1/products/{id} - Trả về 404 khi không tìm thấy")
-    void shouldReturn404WhenProductNotFound() throws Exception {
-        when(productService.getProductById(99L)).thenThrow(new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: 99"));
+        @Test
+        @DisplayName("GET /api/v1/products/{id} - Trả về 404 khi không tìm thấy")
+        void shouldReturn404WhenProductNotFound() throws Exception {
+                when(productService.getProductById(99L))
+                                .thenThrow(new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: 99"));
 
-        mockMvc.perform(get("/api/v1/products/99")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("Not Found"))
-                .andExpect(jsonPath("$.message").value("Không tìm thấy sản phẩm với ID: 99"));
-    }
+                mockMvc.perform(get("/api/v1/products/99")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.error").value("Not Found"))
+                                .andExpect(jsonPath("$.message").value("Không tìm thấy sản phẩm với ID: 99"));
+        }
 
-    @Test
-    @DisplayName("POST /api/v1/products - Tạo mới sản phẩm")
-    void shouldCreateProduct() throws Exception {
-        ProductCreateRequest request = ProductCreateRequest.builder()
-                .name("Sony WH-1000XM5")
-                .price(BigDecimal.valueOf(399.99))
-                .stockQuantity(15)
-                .category("Headphones")
-                .build();
+        @Test
+        @DisplayName("POST /api/v1/products - Tạo mới sản phẩm")
+        void shouldCreateProduct() throws Exception {
+                ProductCreateRequest request = ProductCreateRequest.builder()
+                                .name("Sony WH-1000XM5")
+                                .price(BigDecimal.valueOf(399.99))
+                                .stockQuantity(15)
+                                .category("Headphones")
+                                .build();
 
-        ProductResponse response = ProductResponse.builder()
-                .id(5L)
-                .name("Sony WH-1000XM5")
-                .price(BigDecimal.valueOf(399.99))
-                .stockQuantity(15)
-                .status(ProductStatus.ACTIVE)
-                .build();
+                ProductResponse response = ProductResponse.builder()
+                                .id(5L)
+                                .name("Sony WH-1000XM5")
+                                .price(BigDecimal.valueOf(399.99))
+                                .stockQuantity(15)
+                                .status(ProductStatus.ACTIVE)
+                                .build();
 
-        when(productService.createProduct(any(ProductCreateRequest.class))).thenReturn(response);
+                when(productService.createProduct(any(ProductCreateRequest.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/products")
-                        .header("X-User-Roles", "ROLE_ADMIN")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.id").value(5L))
-                .andExpect(jsonPath("$.data.name").value("Sony WH-1000XM5"));
-    }
+                mockMvc.perform(post("/api/v1/products")
+                                .header("X-User-Roles", "ROLE_ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data.id").value(5L))
+                                .andExpect(jsonPath("$.data.name").value("Sony WH-1000XM5"));
+        }
 
-    @Test
-    @DisplayName("DELETE /api/v1/products/{id} - Xóa mềm sản phẩm")
-    void shouldDeleteProduct() throws Exception {
-        doNothing().when(productService).deleteProduct(1L);
+        @Test
+        @DisplayName("DELETE /api/v1/products/{id} - Xóa mềm sản phẩm")
+        void shouldDeleteProduct() throws Exception {
+                doNothing().when(productService).deleteProduct(1L);
 
-        mockMvc.perform(delete("/api/v1/products/1")
-                        .header("X-User-Roles", "ROLE_ADMIN"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Xóa mềm sản phẩm thành công"));
+                mockMvc.perform(delete("/api/v1/products/1")
+                                .header("X-User-Roles", "ROLE_ADMIN"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.message").value("Xóa mềm sản phẩm thành công"));
 
-        verify(productService, times(1)).deleteProduct(1L);
-    }
+                verify(productService, times(1)).deleteProduct(1L);
+        }
 
-    @Test
-    @DisplayName("POST /api/v1/products/reserve-stock - Đặt trước tồn kho thành công")
-    void shouldReserveStock() throws Exception {
-        List<StockReservationItem> items = List.of(
-                StockReservationItem.builder().productId(1L).quantity(2).build()
-        );
+        @Test
+        @DisplayName("POST /api/v1/products/reserve-stock - Đặt trước tồn kho thành công")
+        void shouldReserveStock() throws Exception {
+                List<StockReservationItem> items = List.of(
+                                StockReservationItem.builder().productId(1L).quantity(2).build());
 
-        doNothing().when(productService).reserveStock(any());
+                doNothing().when(productService).reserveStock(any());
 
-        mockMvc.perform(post("/api/v1/products/reserve-stock")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(items)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Đặt trước tồn kho thành công"));
-    }
+                mockMvc.perform(post("/api/v1/products/reserve-stock")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(items)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.message").value("Đặt trước tồn kho thành công"));
+        }
 
-    @Test
-    @DisplayName("POST /api/v1/products/reserve-stock - Trả về 409 Conflict khi hết hàng hoặc xung đột lock")
-    void shouldReturn409WhenStockInsufficient() throws Exception {
-        List<StockReservationItem> items = List.of(
-                StockReservationItem.builder().productId(1L).quantity(20).build()
-        );
+        @Test
+        @DisplayName("POST /api/v1/products/reserve-stock - Trả về 409 Conflict khi hết hàng hoặc xung đột lock")
+        void shouldReturn409WhenStockInsufficient() throws Exception {
+                List<StockReservationItem> items = List.of(
+                                StockReservationItem.builder().productId(1L).quantity(20).build());
 
-        doThrow(new NotEnoughStockException("Không đủ tồn kho")).when(productService).reserveStock(any());
+                doThrow(new NotEnoughStockException("Không đủ tồn kho")).when(productService).reserveStock(any());
 
-        mockMvc.perform(post("/api/v1/products/reserve-stock")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(items)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("Conflict"))
-                .andExpect(jsonPath("$.message").value("Không đủ tồn kho"));
-    }
+                mockMvc.perform(post("/api/v1/products/reserve-stock")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(items)))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.error").value("Conflict"))
+                                .andExpect(jsonPath("$.message").value("Không đủ tồn kho"));
+        }
 
-    @Test
-    @DisplayName("POST /api/v1/products/restore-stock - Khôi phục tồn kho thành công")
-    void shouldRestoreStock() throws Exception {
-        List<StockReservationItem> items = List.of(
-                StockReservationItem.builder().productId(1L).quantity(2).build()
-        );
+        @Test
+        @DisplayName("POST /api/v1/products/restore-stock - Khôi phục tồn kho thành công")
+        void shouldRestoreStock() throws Exception {
+                List<StockReservationItem> items = List.of(
+                                StockReservationItem.builder().productId(1L).quantity(2).build());
 
-        doNothing().when(productService).restoreStock(any());
+                doNothing().when(productService).restoreStock(any());
 
-        mockMvc.perform(post("/api/v1/products/restore-stock")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(items)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Khôi phục tồn kho thành công"));
-    }
+                mockMvc.perform(post("/api/v1/products/restore-stock")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(items)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.message").value("Khôi phục tồn kho thành công"));
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/products - Lọc sản phẩm theo keyword, danh mục, khoảng giá và tồn kho")
+        void shouldFilterProductsWithCriteria() throws Exception {
+                ProductResponse item = ProductResponse.builder()
+                                .id(2L)
+                                .name("MacBook Air M2")
+                                .price(BigDecimal.valueOf(1199.99))
+                                .stockQuantity(15)
+                                .category("Laptop")
+                                .status(ProductStatus.ACTIVE)
+                                .build();
+
+                PagedResponse<ProductResponse> pagedResponse = PagedResponse.<ProductResponse>builder()
+                                .content(List.of(item))
+                                .pageNumber(0)
+                                .pageSize(10)
+                                .totalElements(1)
+                                .totalPages(1)
+                                .last(true)
+                                .build();
+
+                when(productService.getProducts(any(com.ecommerce.product.dto.request.ProductFilterRequest.class),
+                                any(Pageable.class)))
+                                .thenReturn(pagedResponse);
+
+                mockMvc.perform(get("/api/v1/products")
+                                .param("keyword", "MacBook")
+                                .param("category", "Laptop")
+                                .param("minPrice", "1000")
+                                .param("maxPrice", "2000")
+                                .param("inStock", "true")
+                                .param("sort", "price,asc"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data.content[0].name").value("MacBook Air M2"))
+                                .andExpect(jsonPath("$.data.content[0].category").value("Laptop"));
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/products - Trả về 400 Bad Request khi minPrice > maxPrice")
+        void shouldReturn400WhenPriceRangeInvalid() throws Exception {
+                mockMvc.perform(get("/api/v1/products")
+                                .param("minPrice", "5000")
+                                .param("maxPrice", "1000"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("Validation Failed"));
+        }
 }

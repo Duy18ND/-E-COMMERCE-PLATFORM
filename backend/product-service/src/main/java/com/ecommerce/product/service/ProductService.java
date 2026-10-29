@@ -10,14 +10,22 @@ import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
 
-import main.java.com.ecommerce.product.dto.response.CategoryResponse;
+import com.ecommerce.product.dto.request.ProductFilterRequest;
+import com.ecommerce.product.dto.response.CategoryResponse;
 
 public interface ProductService {
 
     /**
-     * Get paginated products, optionally filtered by keyword. Cached in Redis.
+     * Get paginated products, filtered dynamically by ProductFilterRequest.
      */
-    PagedResponse<ProductResponse> getProducts(String keyword, Pageable pageable);
+    PagedResponse<ProductResponse> getProducts(ProductFilterRequest filterRequest, Pageable pageable);
+
+    /**
+     * Backward-compatible overload for keyword-only search.
+     */
+    default PagedResponse<ProductResponse> getProducts(String keyword, Pageable pageable) {
+        return getProducts(ProductFilterRequest.builder().keyword(keyword).build(), pageable);
+    }
 
     /**
      * Get product details by ID.

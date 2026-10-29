@@ -1,6 +1,6 @@
 package com.ecommerce.product.controller;
 
-import java.nio.file.AccessDeniedException;
+import com.ecommerce.product.exception.AccessDeniedException;
 import java.util.List;
 
 import jakarta.validation.Valid;
@@ -25,7 +25,8 @@ import com.ecommerce.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import main.java.com.ecommerce.product.dto.response.CategoryResponse;
+import com.ecommerce.product.dto.request.ProductFilterRequest;
+import com.ecommerce.product.dto.response.CategoryResponse;
 
 @RestController
 @RequestMapping("/api/v1/products")
@@ -36,13 +37,12 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize")
-    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có phân trang và Redis cache")
+    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có tìm kiếm, lọc theo danh mục, khoảng giá, tồn kho, phân trang và sắp xếp")
     public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> getProducts(
-            @RequestParam(value = "keyword", required = false) String keyword,
+            @Valid @ModelAttribute ProductFilterRequest filterRequest,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        PagedResponse<ProductResponse> response = productService.getProducts(keyword, pageable);
+        PagedResponse<ProductResponse> response = productService.getProducts(filterRequest, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", response));
     }
 
