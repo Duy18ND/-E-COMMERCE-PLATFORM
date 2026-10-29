@@ -40,6 +40,10 @@ const Categories = () => {
     status: 'ACTIVE'
   });
   const [formErrors, setFormErrors] = useState({});
+  // Image handling states for category form
+  const [categoryImageFile, setCategoryImageFile] = useState(null);
+  const [categoryImagePreview, setCategoryImagePreview] = useState('');
+  const [categoryImageError, setCategoryImageError] = useState('');
 
   // 1. Tải danh mục từ Service
   const loadCategories = useCallback(async () => {
@@ -182,15 +186,66 @@ const Categories = () => {
     return Object.keys(errors).length === 0;
   };
 
+  // --- IMAGE UPLOAD HELPERS ---
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const MAX_IMAGE_SIZE_MB = 5;
+
+  const handleCategoryImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setCategoryImageError('Vui lòng chọn file hình ảnh JPG, PNG hoặc WEBP.');
+      showToast({ type: 'error', title: 'File không hợp lệ', message: 'Vui lòng chọn file hình ảnh JPG, PNG hoặc WEBP.' });
+      e.target.value = '';
+      return;
+    }
+
+    // Validate size
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      setCategoryImageError(`Ảnh vượt quá dung lượng cho phép (tối đa ${MAX_IMAGE_SIZE_MB}MB).`);
+      showToast({ type: 'error', title: 'File quá lớn', message: `Ảnh vượt quá dung lượng cho phép (tối đa ${MAX_IMAGE_SIZE_MB}MB).` });
+      e.target.value = '';
+      return;
+    }
+
+    // Revoke old object URL to avoid memory leak
+    if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(categoryImagePreview);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setCategoryImageFile(file);
+    setCategoryImagePreview(previewUrl);
+    setCategoryImageError('');
+    // Also update formData.image so existing logic still works
+    setFormData((prev) => ({ ...prev, image: previewUrl }));
+    e.target.value = '';
+  };
+
+  const handleCategoryImageRemove = () => {
+    if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(categoryImagePreview);
+    }
+    setCategoryImageFile(null);
+    setCategoryImagePreview('');
+    setCategoryImageError('');
+    setFormData((prev) => ({ ...prev, image: '' }));
+  };
+
   // 6. Xử lý Thêm danh mục
   const handleOpenAddModal = () => {
     setFormData({
       name: '',
-      image: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80',
+      image: '',
       description: '',
       status: 'ACTIVE'
     });
     setFormErrors({});
+    setCategoryImageFile(null);
+    setCategoryImagePreview('');
+    setCategoryImageError('');
     setIsAddModalOpen(true);
   };
 
@@ -199,10 +254,18 @@ const Categories = () => {
     if (!validateForm(false)) return;
 
     try {
+      // formData.image already has the blob URL or empty string.
+      // When connecting to real API: upload categoryImageFile first, then use returned URL.
       await categoryService.create(formData);
       await loadCategories();
       setIsAddModalOpen(false);
       setCurrentPage(1);
+      // Clean up object URL
+      if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(categoryImagePreview);
+      }
+      setCategoryImageFile(null);
+      setCategoryImagePreview('');
       showToast({
         type: 'success',
         title: 'Thành công',
@@ -233,6 +296,13 @@ const Categories = () => {
       status: category.status || 'ACTIVE'
     });
     setFormErrors({});
+    // Reset image upload state; show existing image as preview
+    if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(categoryImagePreview);
+    }
+    setCategoryImageFile(null);
+    setCategoryImagePreview(category.image || '');
+    setCategoryImageError('');
     setIsEditModalOpen(true);
   };
 
@@ -242,9 +312,16 @@ const Categories = () => {
     if (!validateForm(true, selectedCategory.id)) return;
 
     try {
+      // If user selected a new file, formData.image already has the blob URL.
+      // Otherwise it keeps the original URL. When connecting real API: upload new file first.
       await categoryService.update(selectedCategory.id, formData);
       await loadCategories();
       setIsEditModalOpen(false);
+      if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(categoryImagePreview);
+      }
+      setCategoryImageFile(null);
+      setCategoryImagePreview('');
       showToast({
         type: 'success',
         title: 'Thành công',
@@ -1116,57 +1193,114 @@ const Categories = () => {
             />
           </div>
 
-          {/* Hình ảnh */}
+          {/* Hình ảnh danh mục – Upload từ máy */}
           <div style={{ marginBottom: '1rem' }}>
-            <label
-              style={{
-                display: 'block',
-                marginBottom: '0.375rem',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                color: '#334155'
-              }}
-            >
-              Hình ảnh danh mục (URL)
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#334155' }}>
+              Ảnh danh mục
             </label>
+
+            {/* Hidden file input */}
             <input
-              type="text"
-              value={formData.image}
-              onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-              placeholder="https://images.unsplash.com/..."
-              style={{
-                width: '100%',
-                padding: '0.5rem 0.75rem',
-                fontSize: '0.9rem',
-                borderRadius: '0.375rem',
-                border: '1px solid #cbd5e1',
-                outline: 'none',
-                backgroundColor: '#ffffff'
-              }}
+              id="add-category-image-input"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleCategoryImageChange}
             />
-            {formData.image && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginTop: '0.5rem' }}>
+
+            {categoryImagePreview ? (
+              /* Preview khi đã chọn ảnh */
+              <div>
                 <div
                   style={{
-                    width: '44px',
-                    height: '44px',
-                    borderRadius: '6px',
+                    width: '100%',
+                    height: '160px',
+                    borderRadius: '8px',
                     overflow: 'hidden',
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#f8fafc'
+                    border: '2px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    marginBottom: '0.5rem'
                   }}
                 >
                   <img
-                    src={formData.image}
+                    src={categoryImagePreview}
                     alt="Preview"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
                   />
                 </div>
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Xem trước ảnh danh mục</span>
+                {categoryImageFile && (
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
+                    📎 {categoryImageFile.name}
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('add-category-image-input').click()}
+                    style={{
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      fontSize: '0.825rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      color: '#334155'
+                    }}
+                  >
+                    🔄 Thay ảnh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCategoryImageRemove}
+                    style={{
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '6px',
+                      border: '1px solid #fecaca',
+                      backgroundColor: '#fef2f2',
+                      fontSize: '0.825rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      color: '#dc2626'
+                    }}
+                  >
+                    🗑 Xóa
+                  </button>
+                </div>
               </div>
+            ) : (
+              /* Trạng thái chưa chọn ảnh */
+              <button
+                type="button"
+                onClick={() => document.getElementById('add-category-image-input').click()}
+                style={{
+                  width: '100%',
+                  height: '120px',
+                  borderRadius: '8px',
+                  border: '2px dashed #cbd5e1',
+                  backgroundColor: '#f8fafc',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  color: '#94a3b8',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  transition: 'border-color 0.15s'
+                }}
+              >
+                <span style={{ fontSize: '1.75rem' }}>🖼️</span>
+                <span>+ Chọn ảnh từ máy tính</span>
+                <span style={{ fontSize: '0.75rem', color: '#b0bec5' }}>JPG, PNG, WEBP – Tối đa 5MB</span>
+              </button>
+            )}
+
+            {categoryImageError && (
+              <p style={{ margin: '0.35rem 0 0', fontSize: '0.8rem', color: '#dc2626' }}>
+                {categoryImageError}
+              </p>
             )}
           </div>
 
@@ -1276,57 +1410,116 @@ const Categories = () => {
             />
           </div>
 
-          {/* Hình ảnh */}
+          {/* Hình ảnh danh mục – Upload từ máy */}
           <div style={{ marginBottom: '1rem' }}>
-            <label
-              style={{
-                display: 'block',
-                marginBottom: '0.375rem',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                color: '#334155'
-              }}
-            >
-              Hình ảnh danh mục (URL)
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#334155' }}>
+              Ảnh danh mục
             </label>
+
+            {/* Hidden file input */}
             <input
-              type="text"
-              value={formData.image}
-              onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-              placeholder="https://images.unsplash.com/..."
-              style={{
-                width: '100%',
-                padding: '0.5rem 0.75rem',
-                fontSize: '0.9rem',
-                borderRadius: '0.375rem',
-                border: '1px solid #cbd5e1',
-                outline: 'none',
-                backgroundColor: '#ffffff'
-              }}
+              id="edit-category-image-input"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleCategoryImageChange}
             />
-            {formData.image && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginTop: '0.5rem' }}>
+
+            {categoryImagePreview ? (
+              /* Preview khi đã chọn / có ảnh cũ */
+              <div>
                 <div
                   style={{
-                    width: '44px',
-                    height: '44px',
-                    borderRadius: '6px',
+                    width: '100%',
+                    height: '160px',
+                    borderRadius: '8px',
                     overflow: 'hidden',
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#f8fafc'
+                    border: '2px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    marginBottom: '0.5rem'
                   }}
                 >
                   <img
-                    src={formData.image}
+                    src={categoryImagePreview}
                     alt="Preview"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
+                    onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}
                   />
                 </div>
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Xem trước ảnh danh mục</span>
+                {categoryImageFile ? (
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
+                    📎 {categoryImageFile.name} <span style={{ color: '#16a34a', fontWeight: 600 }}>(Ảnh mới)</span>
+                  </p>
+                ) : (
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>Ảnh hiện tại</p>
+                )}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('edit-category-image-input').click()}
+                    style={{
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      fontSize: '0.825rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      color: '#334155'
+                    }}
+                  >
+                    🔄 Thay ảnh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCategoryImageRemove}
+                    style={{
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '6px',
+                      border: '1px solid #fecaca',
+                      backgroundColor: '#fef2f2',
+                      fontSize: '0.825rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      color: '#dc2626'
+                    }}
+                  >
+                    🗑 Xóa
+                  </button>
+                </div>
               </div>
+            ) : (
+              /* Trạng thái chưa có ảnh */
+              <button
+                type="button"
+                onClick={() => document.getElementById('edit-category-image-input').click()}
+                style={{
+                  width: '100%',
+                  height: '120px',
+                  borderRadius: '8px',
+                  border: '2px dashed #cbd5e1',
+                  backgroundColor: '#f8fafc',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  color: '#94a3b8',
+                  fontSize: '0.875rem',
+                  fontWeight: 500
+                }}
+              >
+                <span style={{ fontSize: '1.75rem' }}>🖼️</span>
+                <span>+ Chọn ảnh từ máy tính</span>
+                <span style={{ fontSize: '0.75rem', color: '#b0bec5' }}>JPG, PNG, WEBP – Tối đa 5MB</span>
+              </button>
+            )}
+
+            {categoryImageError && (
+              <p style={{ margin: '0.35rem 0 0', fontSize: '0.8rem', color: '#dc2626' }}>
+                {categoryImageError}
+              </p>
             )}
           </div>
 

@@ -5,6 +5,7 @@ import useCart from '../../hooks/useCart';
 import Modal from '../common/Modal';
 import Input from '../common/Input';
 import Button from '../common/Button';
+import voucherService from '../../services/voucherService';
 
 const Header = () => {
   const { user, isAuthenticated, isAdmin, logout, updateUser } = useAuth();
@@ -16,6 +17,7 @@ const Header = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
+  const [savedVoucherCount, setSavedVoucherCount] = useState(() => voucherService.getSavedIds().length);
   const dropdownRef = useRef(null);
 
   // Profile Edit Form state
@@ -37,6 +39,19 @@ const Header = () => {
       });
     }
   }, [user, isEditModalOpen]);
+
+  // Sync saved voucher count
+  useEffect(() => {
+    const handleUpdate = () => {
+      setSavedVoucherCount(voucherService.getSavedIds().length);
+    };
+    window.addEventListener('app_saved_vouchers_changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('app_saved_vouchers_changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
 
   // Click outside listener for dropdown
   useEffect(() => {
@@ -397,6 +412,26 @@ const Header = () => {
                   <span>⚡</span>
                   <span>Quản lý Sale</span>
                 </NavLink>
+
+                <NavLink
+                  to="/admin/vouchers"
+                  style={({ isActive }) => ({
+                    fontSize: '0.875rem',
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? '#2563eb' : '#475569',
+                    backgroundColor: isActive ? '#eff6ff' : 'transparent',
+                    padding: '0.45rem 0.75rem',
+                    borderRadius: '9999px',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    textDecoration: 'none'
+                  })}
+                >
+                  <span>🎫</span>
+                  <span>Quản lý Voucher</span>
+                </NavLink>
               </nav>
             ) : (
               /* KHI LÀ KHÁCH HÀNG: Hiển thị các trang khách hàng */
@@ -428,6 +463,23 @@ const Header = () => {
                     })}
                   >
                     Sản phẩm
+                  </NavLink>
+
+                  <NavLink
+                    to="/vouchers"
+                    style={({ isActive }) => ({
+                      fontSize: '0.925rem',
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? '#dc2626' : '#334155',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      textDecoration: 'none'
+                    })}
+                  >
+                    <span>🎟️</span>
+                    <span>Mã giảm giá</span>
                   </NavLink>
 
                   <NavLink
@@ -688,27 +740,67 @@ const Header = () => {
                       </button>
 
                       {!isAdmin && (
-                        <Link
-                          to="/orders"
-                          onClick={() => setIsDropdownOpen(false)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.65rem',
-                            padding: '0.55rem 0.65rem',
-                            borderRadius: '8px',
-                            color: '#334155',
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                            textDecoration: 'none',
-                            transition: 'background-color 0.15s'
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                        >
-                          <span>📦</span>
-                          <span>Lịch sử đơn hàng</span>
-                        </Link>
+                        <>
+                          <Link
+                            to="/my-vouchers"
+                            onClick={() => setIsDropdownOpen(false)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '0.55rem 0.65rem',
+                              borderRadius: '8px',
+                              color: '#334155',
+                              fontSize: '0.875rem',
+                              fontWeight: 500,
+                              textDecoration: 'none',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                              <span>🎟️</span>
+                              <span>Mã giảm giá của tôi</span>
+                            </span>
+                            {savedVoucherCount > 0 && (
+                              <span
+                                style={{
+                                  backgroundColor: '#fee2e2',
+                                  color: '#dc2626',
+                                  fontSize: '0.7rem',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: '9999px'
+                                }}
+                              >
+                                {savedVoucherCount}
+                              </span>
+                            )}
+                          </Link>
+
+                          <Link
+                            to="/orders"
+                            onClick={() => setIsDropdownOpen(false)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.65rem',
+                              padding: '0.55rem 0.65rem',
+                              borderRadius: '8px',
+                              color: '#334155',
+                              fontSize: '0.875rem',
+                              fontWeight: 500,
+                              textDecoration: 'none',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            <span>📦</span>
+                            <span>Lịch sử đơn hàng</span>
+                          </Link>
+                        </>
                       )}
 
                       <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '0.25rem 0' }} />
