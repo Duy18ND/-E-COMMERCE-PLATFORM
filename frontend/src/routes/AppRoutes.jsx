@@ -31,6 +31,9 @@ import AdminOrders from '../pages/admin/Orders';
 import AdminInventory from '../pages/admin/Inventory';
 import AdminSales from '../pages/admin/AdminSales';
 import AdminSaleForm from '../pages/admin/AdminSaleForm';
+import AdminVouchers from '../pages/admin/AdminVouchers';
+import Vouchers from '../pages/customer/Vouchers';
+import MyVouchers from '../pages/customer/MyVouchers';
 
 // Admin Layout wrapper
 const AdminLayout = ({ children }) => {
@@ -61,6 +64,9 @@ const AppRoutes = () => {
       <Route path="/order-success" element={<OrderSuccess />} />
       <Route path="/orders" element={<Orders />} />
       <Route path="/orders/:id" element={<OrderDetail />} />
+      <Route path="/vouchers" element={<Vouchers />} />
+      <Route path="/my-vouchers" element={<MyVouchers />} />
+
 
       {/* Admin Routes */}
       <Route element={<AdminRoute />}>
@@ -143,6 +149,15 @@ const AppRoutes = () => {
           element={
             <AdminLayout>
               <AdminSaleForm />
+            </AdminLayout>
+          }
+        />
+        {/* Admin Vouchers */}
+        <Route
+          path="/admin/vouchers"
+          element={
+            <AdminLayout>
+              <AdminVouchers />
             </AdminLayout>
           }
         />
