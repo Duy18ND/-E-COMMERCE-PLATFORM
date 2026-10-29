@@ -7,7 +7,6 @@ import com.ecommerce.auth.dto.response.PagedResponse;
 import com.ecommerce.auth.dto.response.UserSummaryResponse;
 import com.ecommerce.auth.entity.User;
 import com.ecommerce.auth.entity.UserAddress;
-import com.ecommerce.auth.exception.AccessDeniedException;
 import com.ecommerce.auth.exception.ResourceNotFoundException;
 import com.ecommerce.auth.repository.UserAddressRepository;
 import com.ecommerce.auth.repository.UserRepository;
@@ -45,7 +44,7 @@ public class UserServiceImpl implements UserService {
     public AddressResponse addAddress(Long userId, AddressRequest request) {
         log.info("Adding address for userId={}, isDefault={}", userId, request.getIsDefault());
 
-        // N?u ð?a ch? m?i là m?c ð?nh -> b? m?c ð?nh t?t c? ð?a ch? c? trý?c
+        // N?u ï¿½?a ch? m?i lï¿½ m?c ï¿½?nh -> b? m?c ï¿½?nh t?t c? ï¿½?a ch? c? trï¿½?c
         if (Boolean.TRUE.equals(request.getIsDefault())) {
             addressRepository.clearDefaultByUserId(userId);
             log.info("Cleared default flag for all addresses of userId={}", userId);
@@ -72,9 +71,9 @@ public class UserServiceImpl implements UserService {
     public AddressResponse updateAddress(Long userId, Long addressId, AddressRequest request) {
         UserAddress address = addressRepository.findByIdAndUserId(addressId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không t?m th?y ð?a ch? ID " + addressId + " c?a user " + userId));
+                        "Khï¿½ng t?m th?y ï¿½?a ch? ID " + addressId + " c?a user " + userId));
 
-        // N?u ð?t làm m?c ð?nh -> b? flag c?a các ð?a ch? khác
+        // N?u ï¿½?t lï¿½m m?c ï¿½?nh -> b? flag c?a cï¿½c ï¿½?a ch? khï¿½c
         if (Boolean.TRUE.equals(request.getIsDefault()) && !Boolean.TRUE.equals(address.getIsDefault())) {
             addressRepository.clearDefaultByUserId(userId);
         }
@@ -95,7 +94,7 @@ public class UserServiceImpl implements UserService {
     public void deleteAddress(Long userId, Long addressId) {
         UserAddress address = addressRepository.findByIdAndUserId(addressId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không t?m th?y ð?a ch? ID " + addressId + " c?a user " + userId));
+                        "Khï¿½ng t?m th?y ï¿½?a ch? ID " + addressId + " c?a user " + userId));
 
         addressRepository.delete(address);
         log.info("Address id={} deleted for userId={}", addressId, userId);
@@ -118,7 +117,7 @@ public class UserServiceImpl implements UserService {
 
         User user = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không t?m th?y ngý?i dùng v?i ID: " + targetUserId));
+                        "Khï¿½ng t?m th?y ngï¿½?i dï¿½ng v?i ID: " + targetUserId));
 
         user.setStatus(request.getStatus());
         User updated = userRepository.save(user);

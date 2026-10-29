@@ -1,17 +1,10 @@
 package com.ecommerce.product.controller;
 
-import com.ecommerce.product.dto.request.ProductCreateRequest;
-import com.ecommerce.product.dto.request.ProductUpdateRequest;
-import com.ecommerce.product.dto.request.StockReservationItem;
-import com.ecommerce.product.dto.response.ApiResponse;
-import com.ecommerce.product.dto.response.PagedResponse;
-import com.ecommerce.product.dto.response.ProductResponse;
-import com.ecommerce.product.exception.AccessDeniedException;
-import com.ecommerce.product.service.ProductService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import java.nio.file.AccessDeniedException;
+import java.util.List;
+
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
@@ -21,7 +14,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import com.ecommerce.product.dto.request.ProductCreateRequest;
+import com.ecommerce.product.dto.request.ProductUpdateRequest;
+import com.ecommerce.product.dto.request.StockReservationItem;
+import com.ecommerce.product.dto.response.ApiResponse;
+import com.ecommerce.product.dto.response.PagedResponse;
+import com.ecommerce.product.dto.response.ProductResponse;
+import com.ecommerce.product.service.ProductService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import main.java.com.ecommerce.product.dto.response.CategoryResponse;
 
 @RestController
 @RequestMapping("/api/v1/products")
@@ -117,4 +121,13 @@ public class ProductController {
         productService.restoreStock(items);
         return ResponseEntity.ok(ApiResponse.success("Khôi phục tồn kho thành công", null));
     }
+
+    // Get category
+    @GetMapping("/categories")
+    @Operation(summary = "Lấy danh mục sản phẩm công khai", description = "Cho phép khách vãng lai và người dùng lấy danh mục sản phẩm phục vụ hiển thị menu/bộ lọc")
+    public ResponseEntity<ApiResponse<List<CategoryResponse>>> getCategories() {
+        List<CategoryResponse> response = productService.getCategories();
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh mục sản phẩm thành công", response));
+    }
+
 }
