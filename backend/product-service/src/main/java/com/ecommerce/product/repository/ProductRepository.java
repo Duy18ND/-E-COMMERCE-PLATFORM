@@ -70,4 +70,16 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
                         @Param("keyword") String keyword,
                         @Param("status") ProductStatus status,
                         Pageable pageable);
+
+        /**
+         * [Task ECOM-132 / ECOM-238] Kiểm tra còn sản phẩm nào thuộc danh mục (theo
+         * tên, không phân biệt hoa thường) hay không trước khi xóa danh mục.
+         */
+        boolean existsByCategoryIgnoreCase(String categoryName);
+
+        /**
+         * [Task ECOM-132 / ECOM-238] Đếm số sản phẩm đang thuộc danh mục (theo tên,
+         * không phân biệt hoa thường).
+         */
+        long countByCategoryIgnoreCase(String categoryName);
 }

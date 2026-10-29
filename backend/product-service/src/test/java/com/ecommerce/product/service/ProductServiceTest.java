@@ -1,12 +1,16 @@
 package com.ecommerce.product.service;
 
+import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
+import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
+import com.ecommerce.product.entity.Category;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
+import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.CategoryRepository;
@@ -224,5 +228,49 @@ class ProductServiceTest {
                 .hasMessageContaining("không được lớn hơn");
 
         verify(productRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("Tạo danh mục mới thành công [ECOM-238]")
+    void shouldCreateCategorySuccessfully() {
+        CategoryRequest request = CategoryRequest.builder()
+                .name("  Phụ Kiện  ")
+                .description("Cáp sạc, ốp lưng")
+                .imageUrl("https://example.com/accessories.jpg")
+                .build();
+        Category savedCategory = Category.builder()
+                .id(10L)
+                .name("Phụ Kiện")
+                .description("Cáp sạc, ốp lưng")
+                .imageUrl("https://example.com/accessories.jpg")
+                .build();
+
+        when(categoryRepository.existsByNameIgnoreCase("Phụ Kiện")).thenReturn(false);
+        when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
+
+        CategoryResponse response = productService.createCategory(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(10L);
+        assertThat(response.getName()).isEqualTo("Phụ Kiện");
+        assertThat(response.getDescription()).isEqualTo("Cáp sạc, ốp lưng");
+        verify(categoryRepository, times(1)).existsByNameIgnoreCase("Phụ Kiện");
+        verify(categoryRepository, times(1)).save(any(Category.class));
+    }
+
+    @Test
+    @DisplayName("Ném DuplicateResourceException khi tạo danh mục trùng tên [ECOM-239]")
+    void shouldThrowExceptionWhenCreateCategoryWithExistingName() {
+        CategoryRequest request = CategoryRequest.builder()
+                .name("Laptop")
+                .build();
+
+        when(categoryRepository.existsByNameIgnoreCase("Laptop")).thenReturn(true);
+
+        assertThatThrownBy(() -> productService.createCategory(request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("đã tồn tại");
+
+        verify(categoryRepository, never()).save(any(Category.class));
     }
 }

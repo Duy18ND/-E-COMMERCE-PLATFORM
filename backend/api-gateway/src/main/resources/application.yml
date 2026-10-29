@@ -53,7 +53,23 @@ spring:
                 name: auth-cb
                 fallbackUri: forward:/fallback/auth
 
-        # ── 2. Product Service — Public Read APIs (GET) ────────────────
+        # ── 2a. Product Service — Admin APIs (kể cả GET) ───────────────
+        # PHẢI khai báo TRƯỚC route product-service-public, vì Gateway chọn route khớp
+        # đầu tiên; nếu đặt sau, GET /api/v1/products/** sẽ rơi vào route public
+        # (không có AuthenticationFilter) và header X-User-Roles không được truyền xuống.
+        - id: product-service-admin
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/admin/**,/api/v1/products/categories/search
+          filters:
+            - StripPrefix=0
+            - AuthenticationFilter
+            - name: CircuitBreaker
+              args:
+                name: product-cb
+                fallbackUri: forward:/fallback/product
+
+        # ── 2b. Product Service — Public Read APIs (GET) ───────────────
         - id: product-service-public
           uri: lb://product-service
           predicates:

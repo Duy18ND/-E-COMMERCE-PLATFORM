@@ -26,6 +26,7 @@ import com.ecommerce.product.dto.response.ProductStockResponse;
 import com.ecommerce.product.entity.Category;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
+import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.CategoryRepository;
@@ -313,14 +314,14 @@ public class ProductServiceImpl implements ProductService {
     /**
      * [Task ECOM-132 / ECOM-238 / ECOM-239] Thêm mới một danh mục sản phẩm.
      * Kiểm tra trùng tên danh mục (không phân biệt hoa thường); nếu trùng sẽ ném
-     * IllegalStateException (HTTP 422).
+     * DuplicateResourceException (HTTP 409).
      */
     @Override
     @Transactional
     public CategoryResponse createCategory(CategoryRequest request) {
         String trimmedName = request.getName().trim();
         if (categoryRepository.existsByNameIgnoreCase(trimmedName)) {
-            throw new IllegalStateException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
+            throw new DuplicateResourceException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
         }
         Category category = Category.builder()
                 .name(trimmedName)
@@ -335,7 +336,7 @@ public class ProductServiceImpl implements ProductService {
     /**
      * [Task ECOM-132 / ECOM-238 / ECOM-239] Cập nhật thông tin danh mục theo ID.
      * Kiểm tra danh mục tồn tại (404) và kiểm tra tên mới không trùng với danh mục
-     * khác (422).
+     * khác (409).
      */
     @Override
     @Transactional
@@ -346,7 +347,7 @@ public class ProductServiceImpl implements ProductService {
         // Nếu đổi sang tên mới thì kiểm tra xem tên mới đã tồn tại ở danh mục khác chưa
         if (!category.getName().equalsIgnoreCase(trimmedName)
                 && categoryRepository.existsByNameIgnoreCase(trimmedName)) {
-            throw new IllegalStateException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
+            throw new DuplicateResourceException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
         }
         category.setName(trimmedName);
         category.setDescription(request.getDescription());
@@ -360,12 +361,19 @@ public class ProductServiceImpl implements ProductService {
      * [Task ECOM-132 / ECOM-238] Xóa danh mục sản phẩm theo ID.
      * Kiểm tra danh mục tồn tại trước khi xóa; nếu không có ném
      * ResourceNotFoundException (HTTP 404).
+     * Ràng buộc toàn vẹn: nếu vẫn còn sản phẩm thuộc danh mục thì ném
+     * IllegalStateException (HTTP 422) và không cho phép xóa.
      */
     @Override
     @Transactional
     public void deleteCategory(Long id) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục với ID: " + id));
+        if (productRepository.existsByCategoryIgnoreCase(category.getName())) {
+            long productCount = productRepository.countByCategoryIgnoreCase(category.getName());
+            throw new IllegalStateException("Không thể xóa danh mục '" + category.getName()
+                    + "' vì vẫn còn " + productCount + " sản phẩm thuộc danh mục này");
+        }
         categoryRepository.delete(category);
         log.info("Deleted category ID: {}", id);
     }
