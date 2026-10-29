@@ -7,7 +7,8 @@ const AdminSidebar = () => {
     { label: '🏷️ Quản lý danh mục', path: '/admin/categories' },
     { label: '📑 Quản lý đơn hàng', path: '/admin/orders' },
     { label: '🏭 Quản lý tồn kho', path: '/admin/inventory' },
-    { label: '⚡ Quản lý Sale / Khuyến mãi', path: '/admin/sales' }
+    { label: '⚡ Quản lý Sale / Khuyến mãi', path: '/admin/sales' },
+    { label: '🎫 Quản lý mã giảm giá', path: '/admin/vouchers' }
   ];
 
   return (

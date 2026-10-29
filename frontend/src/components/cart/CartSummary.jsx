@@ -108,6 +108,32 @@ const CartSummary = ({
         </div>
       )}
 
+      {/* Voucher prompt */}
+      <div
+        style={{
+          backgroundColor: '#eff6ff',
+          border: '1px dashed #bfdbfe',
+          borderRadius: '10px',
+          padding: '0.65rem 0.85rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '1rem',
+          fontSize: '0.825rem'
+        }}
+      >
+        <span style={{ color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <span>🎟️</span>
+          <span>Chọn voucher đã lưu khi thanh toán</span>
+        </span>
+        <Link
+          to="/vouchers"
+          style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'none' }}
+        >
+          Săn mã →
+        </Link>
+      </div>
+
       {/* Checkout Button */}
       {showCheckoutButton && (
         <Link to="/checkout" style={{ width: '100%', display: 'block', textDecoration: 'none' }}>
