@@ -1,6 +1,10 @@
 package com.ecommerce.product.dto.request;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -10,7 +14,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class CreateReviewRequest {
-
     @NotNull(message = "orderId không được để trống")
     private Long orderId;
 

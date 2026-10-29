@@ -1,5 +1,18 @@
 package com.ecommerce.product.service.impl;
 
+import java.util.List;
+
+import jakarta.persistence.OptimisticLockException;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
@@ -11,20 +24,11 @@ import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.service.ProductService;
-import jakarta.persistence.OptimisticLockException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-
-import java.util.List;
+import main.java.com.ecommerce.product.dto.response.CategoryResponse;
+import main.java.com.ecommerce.product.repository.CategoryRepository;
 
 @Slf4j
 @Service
@@ -32,6 +36,7 @@ import java.util.List;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -122,15 +127,18 @@ public class ProductServiceImpl implements ProductService {
         try {
             for (StockReservationItem item : items) {
                 Product product = productRepository.findById(item.getProductId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
 
                 if (product.getStatus() != ProductStatus.ACTIVE) {
-                    throw new NotEnoughStockException("Sản phẩm '" + product.getName() + "' (ID: " + product.getId() + ") hiện không khả dụng");
+                    throw new NotEnoughStockException(
+                            "Sản phẩm '" + product.getName() + "' (ID: " + product.getId() + ") hiện không khả dụng");
                 }
 
                 if (product.getStockQuantity() < item.getQuantity()) {
-                    throw new NotEnoughStockException("Sản phẩm '" + product.getName() + "' không đủ số lượng tồn kho (Còn lại: "
-                            + product.getStockQuantity() + ", yêu cầu: " + item.getQuantity() + ")");
+                    throw new NotEnoughStockException(
+                            "Sản phẩm '" + product.getName() + "' không đủ số lượng tồn kho (Còn lại: "
+                                    + product.getStockQuantity() + ", yêu cầu: " + item.getQuantity() + ")");
                 }
 
                 product.setStockQuantity(product.getStockQuantity() - item.getQuantity());
@@ -141,10 +149,12 @@ public class ProductServiceImpl implements ProductService {
             }
         } catch (ObjectOptimisticLockingFailureException ex) {
             log.error("Optimistic locking conflict during stock reservation: {}", ex.getMessage());
-            throw new NotEnoughStockException("Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
+            throw new NotEnoughStockException(
+                    "Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
         } catch (OptimisticLockException ex) {
             log.error("JPA Optimistic locking conflict during stock reservation: {}", ex.getMessage());
-            throw new NotEnoughStockException("Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
+            throw new NotEnoughStockException(
+                    "Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
         }
     }
 
@@ -158,7 +168,8 @@ public class ProductServiceImpl implements ProductService {
 
         for (StockReservationItem item : items) {
             Product product = productRepository.findById(item.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
 
             product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
             productRepository.save(product);
@@ -166,4 +177,14 @@ public class ProductServiceImpl implements ProductService {
                     product.getId(), item.getQuantity(), product.getStockQuantity());
         }
     }
+
+    // Get Category
+    @Override
+    @Transactional(readOnly = true)
+    public List<CategoryResponse> getCategories() {
+        return categoryRepository.findAll().stream()
+                .map(CategoryResponse::fromEntity)
+                .toList();
+    }
+
 }

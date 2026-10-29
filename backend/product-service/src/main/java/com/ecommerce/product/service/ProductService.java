@@ -1,13 +1,16 @@
 package com.ecommerce.product.service;
 
+import java.util.List;
+
+import org.springframework.data.domain.Pageable;
+
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
-import org.springframework.data.domain.Pageable;
 
-import java.util.List;
+import main.java.com.ecommerce.product.dto.response.CategoryResponse;
 
 public interface ProductService {
 
@@ -45,4 +48,9 @@ public interface ProductService {
      * Restore inventory when an order is cancelled.
      */
     void restoreStock(List<StockReservationItem> items);
+
+    /**
+     * Lấy danh sách tất cả các danh mục sản phẩm công khai.
+     */
+    List<CategoryResponse> getCategories();
 }
