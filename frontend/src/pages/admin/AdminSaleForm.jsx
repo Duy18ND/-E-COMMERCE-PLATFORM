@@ -240,21 +240,18 @@ const AdminSaleForm = () => {
 
       {/* 2-COLUMN SPLIT LAYOUT (FORM TRÊN TRÁI, LIVE PREVIEW BÊN PHẢI NHƯ ẢNH MẪU 5) */}
       <div
+        className="layout-split"
         style={{
-          display: 'grid',
-          gridTemplateColumns: '1.45fr 1fr',
-          gap: '2rem',
           alignItems: 'start'
         }}
-        className="grid-cols-2"
       >
         {/* ========================================================
             LEFT COLUMN: THE CONFIGURATION FORM
            ======================================================== */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* SECTION 1: Thông tin chung & Thời gian áp dụng */}
-          <div className="card" style={{ padding: '1.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+          <div className="card" style={{ padding: 'clamp(1rem, 2.5vw, 1.75rem)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div
                   style={{
@@ -320,7 +317,7 @@ const AdminSaleForm = () => {
                 Banner quảng bá chiến dịch (Tỷ lệ 16:9 hoặc 21:9)
               </label>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem', alignItems: 'center' }}>
+              <div className="form-grid-2" style={{ alignItems: 'center' }}>
                 {/* Drag / preset box */}
                 <div
                   style={{
@@ -403,7 +400,7 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Start and End Times */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div className="form-grid-2" style={{ marginBottom: '1.25rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
                   🕒 Thời điểm bắt đầu
@@ -444,7 +441,7 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Giới hạn mua & Trạng thái công bố */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.25fr', gap: '1rem', alignItems: 'center' }}>
+            <div className="form-grid-2" style={{ alignItems: 'center' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
                   👥 Giới hạn mua / khách hàng
@@ -474,7 +471,7 @@ const AdminSaleForm = () => {
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
                   Trạng thái công bố
                 </label>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                   {['ACTIVE', 'UPCOMING', 'DRAFT'].map((st) => (
                     <button
                       key={st}
@@ -500,8 +497,8 @@ const AdminSaleForm = () => {
           </div>
 
           {/* SECTION 2: Danh sách sản phẩm & Phân bổ suất Flash Sale */}
-          <div className="card" style={{ padding: '1.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+          <div className="card" style={{ padding: 'clamp(1rem, 2.5vw, 1.75rem)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div
                   style={{
@@ -535,7 +532,7 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Table Search & Filter Toolbar */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div className="form-grid-2" style={{ marginBottom: '1rem' }}>
               <input
                 type="text"
                 placeholder="Tìm tên thiết bị, mã SKU hoặc Barcode..."
@@ -668,7 +665,9 @@ const AdminSaleForm = () => {
                 paddingTop: '1rem',
                 marginTop: '1rem',
                 borderTop: '1px solid #f1f5f9',
-                fontSize: '0.85rem'
+                fontSize: '0.85rem',
+                flexWrap: 'wrap',
+                gap: '0.5rem'
               }}
             >
               <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -699,7 +698,7 @@ const AdminSaleForm = () => {
           </div>
 
           {/* FORM FOOTER ACTIONS */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => navigate('/admin/sales')}
@@ -764,7 +763,7 @@ const AdminSaleForm = () => {
            ======================================================== */}
         <div style={{ position: 'sticky', top: '85px' }}>
           {/* Preview Header & Device Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.925rem', fontWeight: 800, color: '#0f172a' }}>
               <span>👁️</span>
               <span>Xem trước hiển thị Khách Hàng</span>

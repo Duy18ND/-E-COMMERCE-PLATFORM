@@ -1,7 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 
-// Layout components
-import AdminSidebar from '../components/layout/AdminSidebar';
+// Layouts (Tách biệt hoàn toàn UserLayout và AdminLayout)
+import UserLayout from '../layouts/UserLayout';
+import AdminLayout from '../layouts/AdminLayout';
 
 // Route guards
 import ProtectedRoute from './ProtectedRoute';
@@ -17,6 +18,8 @@ import Checkout from '../pages/customer/Checkout';
 import OrderSuccess from '../pages/customer/OrderSuccess';
 import Orders from '../pages/customer/Orders';
 import OrderDetail from '../pages/customer/OrderDetail';
+import Vouchers from '../pages/customer/Vouchers';
+import MyVouchers from '../pages/customer/MyVouchers';
 
 // Auth pages
 import Login from '../pages/auth/Login';
@@ -32,44 +35,38 @@ import AdminInventory from '../pages/admin/Inventory';
 import AdminSales from '../pages/admin/AdminSales';
 import AdminSaleForm from '../pages/admin/AdminSaleForm';
 import AdminVouchers from '../pages/admin/AdminVouchers';
-import Vouchers from '../pages/customer/Vouchers';
-import MyVouchers from '../pages/customer/MyVouchers';
-
-// Admin Layout wrapper
-const AdminLayout = ({ children }) => {
-  return (
-    <div className="admin-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <AdminSidebar />
-      <main className="admin-main-content" style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
-        {children}
-      </main>
-    </div>
-  );
-};
 
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Public Customer Routes */}
-      <Route path="/" element={<Home />} />
-      <Route path="/products" element={<Products />} />
-      <Route path="/products/:id" element={<ProductDetail />} />
-      <Route path="/flash-sale" element={<FlashSale />} />
-      <Route path="/cart" element={<Cart />} />
-      <Route path="/vouchers" element={<Vouchers />} />
-      <Route path="/my-vouchers" element={<MyVouchers />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      {/* =========================================================
+          USER LAYOUT (UserHeader + CategoryNav + UserContent + Footer)
+         ========================================================= */}
+      <Route element={<UserLayout />}>
+        {/* Public Customer Routes */}
+        <Route path="/" element={<Home />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/products/:id" element={<ProductDetail />} />
+        <Route path="/flash-sale" element={<FlashSale />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/vouchers" element={<Vouchers />} />
+        <Route path="/my-vouchers" element={<MyVouchers />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-      {/* Protected Customer Routes (Yêu cầu đăng nhập) */}
-      <Route element={<ProtectedRoute allowedRoles={['ROLE_USER']} />}>
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/order-success" element={<OrderSuccess />} />
-        <Route path="/orders" element={<Orders />} />
-        <Route path="/orders/:id" element={<OrderDetail />} />
+        {/* Protected Customer Routes (Yêu cầu đăng nhập) */}
+        <Route element={<ProtectedRoute allowedRoles={['ROLE_USER']} />}>
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/order-success" element={<OrderSuccess />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/orders/:id" element={<OrderDetail />} />
+        </Route>
       </Route>
 
-      {/* Protected Admin Routes (Chỉ dành cho ROLE_ADMIN) */}
+      {/* =========================================================
+          ADMIN LAYOUT (AdminHeader + AdminSidebar + AdminContent)
+          Không có CategoryNav của User
+         ========================================================= */}
       <Route element={<AdminRoute />}>
         <Route
           path="/admin"

@@ -137,7 +137,7 @@ const OrderDetail = () => {
             Ngày đặt: {order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN') : 'Mới đặt'}
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
           <OrderStatus status={order.status} />
 
           {isPending && (
@@ -163,9 +163,9 @@ const OrderDetail = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', alignItems: 'start' }}>
+      <div className="layout-split">
         {/* Sản phẩm trong đơn */}
-        <div className="card">
+        <div className="card" style={{ minWidth: 0 }}>
           <h2 style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>Sản phẩm đã đặt ({items.length} món)</h2>
           <div className="table-responsive">
             <table className="data-table">
@@ -190,15 +190,15 @@ const OrderDetail = () => {
                             <img
                               src={item.imageUrl}
                               alt={item.productName || item.name}
-                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }}
                             />
                           )}
                           <span style={{ fontWeight: 600 }}>{item.productName || item.name}</span>
                         </div>
                       </td>
-                      <td>{formatCurrency(price)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{formatCurrency(price)}</td>
                       <td>{qty}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#2563eb' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#2563eb', whiteSpace: 'nowrap' }}>
                         {formatCurrency(subTotal)}
                       </td>
                     </tr>
@@ -210,7 +210,7 @@ const OrderDetail = () => {
         </div>
 
         {/* Thông tin nhận hàng & thanh toán */}
-        <div className="card">
+        <div className="card" style={{ minWidth: 0 }}>
           <h2 style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>Thông tin giao hàng</h2>
           <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
             <strong>Người nhận:</strong> {receiverName}

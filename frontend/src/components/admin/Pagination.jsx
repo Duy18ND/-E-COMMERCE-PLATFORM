@@ -160,6 +160,7 @@ const Pagination = ({
         style={{
           display: 'flex',
           alignItems: 'center',
+          flexWrap: 'wrap',
           gap: '0.4rem',
           userSelect: 'none'
         }}

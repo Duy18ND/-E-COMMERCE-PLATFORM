@@ -170,7 +170,7 @@ const ProductDetail = () => {
       {/* 1. BREADCRUMBS & FLASH SALE ACTIVE PILL */}
       <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9', padding: '0.85rem 0' }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.85rem', color: '#64748b' }}>
             <Link to="/" style={{ color: '#64748b' }}>Trang chủ</Link>
             <span>›</span>
             <Link to="/products" style={{ color: '#64748b' }}>{product.category || 'Sản phẩm'}</Link>
@@ -202,38 +202,30 @@ const ProductDetail = () => {
       </div>
 
       {/* 2. MAIN PRODUCT DETAIL CONTENT */}
-      <div className="container" style={{ paddingTop: '2rem' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1.25fr',
-            gap: '2.5rem',
-            alignItems: 'start'
-          }}
-          className="grid-cols-2"
-        >
+      <div className="container" style={{ paddingTop: 'clamp(1.25rem, 2.5vw, 2rem)' }}>
+        <div className="product-detail-main" style={{ padding: 0 }}>
           {/* LEFT: PRODUCT IMAGE & GALLERY */}
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div
               style={{
                 backgroundColor: '#ffffff',
                 borderRadius: '20px',
                 border: '1px solid #e2e8f0',
-                padding: '1.5rem',
+                padding: 'clamp(1rem, 2.5vw, 1.5rem)',
                 position: 'relative',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.04)'
               }}
             >
               {/* Badges on Image */}
-              <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 3, display: 'flex', gap: '0.5rem' }}>
+              <div style={{ position: 'absolute', top: '16px', left: '16px', right: '60px', zIndex: 3, display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                 {isSale && (
                   <span
                     style={{
                       backgroundColor: '#dc2626',
                       color: '#ffffff',
                       fontWeight: 800,
-                      fontSize: '0.75rem',
-                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      padding: '4px 9px',
                       borderRadius: '8px',
                       boxShadow: '0 2px 6px rgba(220, 38, 38, 0.4)'
                     }}
@@ -246,7 +238,7 @@ const ProductDetail = () => {
                     backgroundColor: '#eff6ff',
                     color: '#2563eb',
                     fontWeight: 700,
-                    fontSize: '0.75rem',
+                    fontSize: '0.72rem',
                     padding: '4px 8px',
                     borderRadius: '8px',
                     border: '1px solid #dbeafe'
@@ -285,7 +277,7 @@ const ProductDetail = () => {
               {/* Main Image */}
               <div
                 style={{
-                  height: '380px',
+                  height: 'clamp(220px, 35vw, 380px)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -300,6 +292,7 @@ const ProductDetail = () => {
                   style={{
                     maxWidth: '100%',
                     maxHeight: '100%',
+                    height: 'auto',
                     objectFit: 'contain',
                     transition: 'transform 0.3s ease'
                   }}
@@ -307,13 +300,13 @@ const ProductDetail = () => {
               </div>
 
               {/* Thumbnails Row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.65rem', marginTop: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '0.5rem', marginTop: '1rem' }}>
                 {galleryImages.map((img, idx) => (
                   <div
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
                     style={{
-                      height: '64px',
+                      height: 'clamp(48px, 8vw, 64px)',
                       borderRadius: '8px',
                       overflow: 'hidden',
                       border: selectedImage === idx ? '2px solid #2563eb' : '1px solid #e2e8f0',
@@ -330,7 +323,7 @@ const ProductDetail = () => {
                 {/* 360 icon button as in Image 2 */}
                 <div
                   style={{
-                    height: '64px',
+                    height: 'clamp(48px, 8vw, 64px)',
                     borderRadius: '8px',
                     border: '1px solid #e2e8f0',
                     backgroundColor: '#f8fafc',
@@ -339,14 +332,15 @@ const ProductDetail = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    fontSize: '0.7rem',
+                    fontSize: '0.68rem',
                     color: '#64748b',
-                    fontWeight: 600
+                    fontWeight: 600,
+                    textAlign: 'center'
                   }}
                   onClick={() => alert('Chế độ xem 360° tương tác mô phỏng')}
                 >
-                  <span style={{ fontSize: '1.25rem' }}>🔄</span>
-                  <span>Video 360°</span>
+                  <span style={{ fontSize: '1.1rem' }}>🔄</span>
+                  <span>360°</span>
                 </div>
               </div>
 
@@ -354,26 +348,26 @@ const ProductDetail = () => {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                   gap: '0.5rem',
-                  marginTop: '1.5rem',
-                  paddingTop: '1.25rem',
+                  marginTop: '1.25rem',
+                  paddingTop: '1.1rem',
                   borderTop: '1px solid #f1f5f9'
                 }}
               >
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.2rem', marginBottom: '2px' }}>🛡️</div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>100% Chính Hãng</div>
+                <div style={{ textAlign: 'center', minWidth: 0 }}>
+                  <div style={{ fontSize: '1.15rem', marginBottom: '2px' }}>🛡️</div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>100% Chính Hãng</div>
                   <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Apple VN (VNA)</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.2rem', marginBottom: '2px' }}>🔄</div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>1 Đổi 1 - 30 Ngày</div>
+                <div style={{ textAlign: 'center', minWidth: 0 }}>
+                  <div style={{ fontSize: '1.15rem', marginBottom: '2px' }}>🔄</div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>1 Đổi 1 - 30 Ngày</div>
                   <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Lỗi phần cứng</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.2rem', marginBottom: '2px' }}>🚚</div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Freeship Tốc Độ</div>
+                <div style={{ textAlign: 'center', minWidth: 0 }}>
+                  <div style={{ fontSize: '1.15rem', marginBottom: '2px' }}>🚚</div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>Freeship Tốc Độ</div>
                   <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Giao 2H nội thành</div>
                 </div>
               </div>
@@ -381,23 +375,23 @@ const ProductDetail = () => {
           </div>
 
           {/* RIGHT: PRODUCT INFO & FLASH SALE CONTROLS */}
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div
               style={{
                 backgroundColor: '#ffffff',
                 borderRadius: '20px',
                 border: '1px solid #e2e8f0',
-                padding: '2rem',
+                padding: 'clamp(1rem, 2.5vw, 2rem)',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.04)'
               }}
             >
               {/* Brand & SKU Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.5rem' }}>
                 <span
                   style={{
                     backgroundColor: '#eff6ff',
                     color: '#2563eb',
-                    fontSize: '0.75rem',
+                    fontSize: '0.72rem',
                     fontWeight: 800,
                     padding: '2px 8px',
                     borderRadius: '6px',
@@ -406,18 +400,18 @@ const ProductDetail = () => {
                 >
                   THƯƠNG HIỆU: {product.storeName ? product.storeName.toUpperCase() : 'APPLE STORE FLAGSHIP'}
                 </span>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                   MÃ SP: {product.sku || 'MBP14-M3P-18-512'}
                 </span>
               </div>
 
               {/* Title */}
-              <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.3, marginBottom: '0.65rem' }}>
+              <h1 style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.65rem)', fontWeight: 800, color: '#0f172a', lineHeight: 1.3, marginBottom: '0.65rem' }}>
                 {product.name}
               </h1>
 
               {/* Rating & Sold count */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem', color: '#64748b', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.82rem', color: '#64748b', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#eab308', fontWeight: 700 }}>
                   <span>★</span>
                   <span>{product.rating || 4.9}</span>
@@ -430,7 +424,7 @@ const ProductDetail = () => {
                 <span>•</span>
                 <button
                   onClick={() => alert('Đã sao chép liên kết sản phẩm!')}
-                  style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.85rem' }}
+                  style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.82rem' }}
                 >
                   🔗 Chia sẻ
                 </button>
@@ -457,7 +451,7 @@ const ProductDetail = () => {
                     <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.9 }}>
                       ĐỢT GIẢM GIÁ GIỜ VÀNG ĐẶC BIỆT
                     </div>
-                    <div style={{ fontSize: '1rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       <span>⚡</span>
                       <span>FLASH SALE GIẢM {currentDiscount}%</span>
                     </div>
@@ -472,18 +466,18 @@ const ProductDetail = () => {
                 style={{
                   backgroundColor: '#f8fafc',
                   borderRadius: '14px',
-                  padding: '1.25rem',
-                  marginBottom: '1.5rem',
+                  padding: 'clamp(0.95rem, 2vw, 1.25rem)',
+                  marginBottom: '1.35rem',
                   border: '1px solid #e2e8f0'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.85rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '2.25rem', fontWeight: 900, color: '#dc2626', lineHeight: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)', fontWeight: 900, color: '#dc2626', lineHeight: 1 }}>
                     {formatCurrency(currentSalePrice)}
                   </span>
                   {currentOriginalPrice > currentSalePrice && (
                     <>
-                      <span style={{ fontSize: '1.1rem', color: '#94a3b8', textDecoration: 'line-through' }}>
+                      <span style={{ fontSize: '1rem', color: '#94a3b8', textDecoration: 'line-through' }}>
                         {formatCurrency(currentOriginalPrice)}
                       </span>
                       <span
@@ -491,7 +485,7 @@ const ProductDetail = () => {
                           backgroundColor: '#dc2626',
                           color: '#ffffff',
                           fontWeight: 800,
-                          fontSize: '0.8rem',
+                          fontSize: '0.78rem',
                           padding: '2px 8px',
                           borderRadius: '6px'
                         }}
@@ -508,8 +502,9 @@ const ProductDetail = () => {
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
+                        flexWrap: 'wrap',
                         gap: '0.35rem',
-                        fontSize: '0.8rem',
+                        fontSize: '0.78rem',
                         fontWeight: 700,
                         color: '#dc2626',
                         backgroundColor: '#fee2e2',
@@ -522,7 +517,7 @@ const ProductDetail = () => {
                       <span style={{ fontWeight: 400, opacity: 0.85 }}>(Áp dụng độc quyền trực tuyến đến hết khung giờ)</span>
                     </div>
 
-                    <div style={{ fontSize: '0.775rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
                       <span>🏷️</span>
                       <span>So sánh giá thường ngày: 42.990.000 đ</span>
                       <span style={{ color: '#16a34a', fontWeight: 600 }}>(Rẻ hơn thường lệ 10.500.000 đ)</span>
@@ -533,7 +528,7 @@ const ProductDetail = () => {
                 {/* Stock progress in detail page */}
                 {isSale && (
                   <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.775rem', marginBottom: '0.35rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', fontSize: '0.75rem', marginBottom: '0.35rem' }}>
                       <span style={{ color: '#475569', fontWeight: 600 }}>
                         🔥 Đã bán {sold}/{totalStock} suất
                       </span>
@@ -557,11 +552,11 @@ const ProductDetail = () => {
 
               {/* QUICK SPECS IF TECH PRODUCT */}
               {product.specs && (
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: '1.35rem' }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.65rem' }}>
                     Cấu hình chi tiết nhanh:
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.65rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))', gap: '0.65rem' }}>
                     {Object.entries(product.specs).map(([key, val]) => (
                       <div
                         key={key}
@@ -569,7 +564,8 @@ const ProductDetail = () => {
                           backgroundColor: '#f8fafc',
                           padding: '0.65rem 0.85rem',
                           borderRadius: '10px',
-                          border: '1px solid #e2e8f0'
+                          border: '1px solid #e2e8f0',
+                          minWidth: 0
                         }}
                       >
                         <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'capitalize' }}>{key}</div>
@@ -583,25 +579,25 @@ const ProductDetail = () => {
               {/* COLOR SELECTOR */}
               {product.colors && (
                 <div style={{ marginBottom: '1.25rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                     <span style={{ fontWeight: 600 }}>
                       Màu sắc: <strong>{product.colors[selectedColor]}</strong>
                     </span>
                     <span style={{ color: '#dc2626', fontSize: '0.75rem', fontWeight: 600 }}>Chỉ còn 9 máy màu Đen</span>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.65rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     {product.colors.map((color, idx) => (
                       <button
                         key={color}
                         onClick={() => setSelectedColor(idx)}
                         style={{
-                          padding: '0.55rem 1rem',
+                          padding: '0.5rem 0.9rem',
                           borderRadius: '8px',
                           border: selectedColor === idx ? '2px solid #2563eb' : '1px solid #cbd5e1',
                           backgroundColor: selectedColor === idx ? '#eff6ff' : '#ffffff',
                           color: selectedColor === idx ? '#1d4ed8' : '#334155',
                           fontWeight: selectedColor === idx ? 700 : 500,
-                          fontSize: '0.85rem',
+                          fontSize: '0.825rem',
                           cursor: 'pointer'
                         }}
                       >
@@ -614,12 +610,12 @@ const ProductDetail = () => {
 
               {/* STORAGE OPTIONS */}
               {product.storageOptions && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                <div style={{ marginBottom: '1.35rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                     <span style={{ fontWeight: 600 }}>Dung lượng ổ cứng:</span>
                     <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Chọn nâng cấp theo nhu cầu</span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(125px, 100%), 1fr))', gap: '0.6rem' }}>
                     {product.storageOptions.map((opt, idx) => (
                       <div
                         key={opt.size}
@@ -630,11 +626,12 @@ const ProductDetail = () => {
                           border: selectedStorage === idx ? '2px solid #2563eb' : '1px solid #cbd5e1',
                           backgroundColor: selectedStorage === idx ? '#eff6ff' : '#ffffff',
                           cursor: 'pointer',
-                          transition: 'all 0.15s'
+                          transition: 'all 0.15s',
+                          minWidth: 0
                         }}
                       >
                         <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>{opt.size}</div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626', marginTop: '2px' }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dc2626', marginTop: '2px' }}>
                           {formatCurrency(opt.price)}
                         </div>
                         <div style={{ fontSize: '0.65rem', color: '#94a3b8', textDecoration: 'line-through' }}>
@@ -647,8 +644,8 @@ const ProductDetail = () => {
               )}
 
               {/* QUANTITY SELECTOR WITH FLASH SALE RESTRICTION NOTICE */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div style={{ marginBottom: '1.35rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Số lượng:</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <button
@@ -693,7 +690,7 @@ const ProductDetail = () => {
               )}
 
               {/* ACTION BUTTONS (MUA NGAY & THÊM VÀO GIỎ) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <div className="product-detail-actions">
                 <button
                   onClick={handleAddToCart}
                   disabled={isAdmin}
@@ -704,7 +701,7 @@ const ProductDetail = () => {
                     borderRadius: '10px',
                     padding: '0.85rem',
                     fontWeight: 700,
-                    fontSize: '0.925rem',
+                    fontSize: '0.9rem',
                     cursor: isAdmin ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -727,7 +724,7 @@ const ProductDetail = () => {
                     borderRadius: '10px',
                     padding: '0.85rem',
                     fontWeight: 800,
-                    fontSize: '0.95rem',
+                    fontSize: '0.9rem',
                     cursor: isAdmin ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -750,11 +747,10 @@ const ProductDetail = () => {
 
               {/* TRUST BADGES ROW */}
               <div
+                className="product-detail-trust"
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
                   gap: '0.5rem',
-                  padding: '1rem',
+                  padding: '0.9rem 1rem',
                   backgroundColor: '#f8fafc',
                   borderRadius: '12px',
                   border: '1px solid #e2e8f0',
@@ -780,17 +776,9 @@ const ProductDetail = () => {
         </div>
 
         {/* 3. THREE FEATURE CARDS AT BOTTOM (NHƯ TRONG ẢNH MẪU 2) */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '1.25rem',
-            marginTop: '2.5rem'
-          }}
-          className="grid-cols-3"
-        >
+        <div className="grid-cols-3" style={{ gap: '1.25rem', marginTop: '2rem' }}>
           {/* Card 1: Đặc quyền Deal Flash Sale */}
-          <div className="card" style={{ padding: '1.5rem' }}>
+          <div className="card" style={{ padding: 'clamp(1.1rem, 2vw, 1.5rem)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#dc2626' }}>
               <span style={{ fontSize: '1.25rem' }}>⚡</span>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
@@ -817,35 +805,35 @@ const ProductDetail = () => {
           </div>
 
           {/* Card 2: Hộp sản phẩm bao gồm */}
-          <div className="card" style={{ padding: '1.5rem' }}>
+          <div className="card" style={{ padding: 'clamp(1.1rem, 2vw, 1.5rem)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#2563eb' }}>
               <span style={{ fontSize: '1.25rem' }}>📦</span>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Hộp sản phẩm bao gồm
               </h3>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.85rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '2px' }}>💻</div>
-                <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#0f172a' }}>MacBook Pro 14 M3 Pro</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.65rem' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>💻</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>MacBook Pro 14 M3 Pro</div>
               </div>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.85rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '2px' }}>🔌</div>
-                <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#0f172a' }}>Cáp MagSafe 3</div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>🔌</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Cáp MagSafe 3</div>
               </div>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.85rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '2px' }}>⚡</div>
-                <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#0f172a' }}>Củ sạc USB-C 70W / 96W</div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>⚡</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Củ sạc USB-C 70W / 96W</div>
               </div>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.85rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '2px' }}>📖</div>
-                <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#0f172a' }}>Sách hướng dẫn sử dụng</div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>📖</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Sách hướng dẫn sử dụng</div>
               </div>
             </div>
           </div>
 
           {/* Card 3: Cần tư vấn đặt giữ chỗ? */}
-          <div className="card" style={{ padding: '1.5rem' }}>
+          <div className="card" style={{ padding: 'clamp(1.1rem, 2vw, 1.5rem)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#ea580c' }}>
               <span style={{ fontSize: '1.25rem' }}>📞</span>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
@@ -863,14 +851,16 @@ const ProductDetail = () => {
                 border: '1px solid #fed7aa',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.5rem'
               }}
             >
               <div>
                 <div style={{ fontSize: '0.675rem', color: '#9a3412', textTransform: 'uppercase', fontWeight: 700 }}>
                   HOTLINE TRỰC TIẾP
                 </div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#c2410c' }}>
+                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#c2410c' }}>
                   1900 8888 (Nhánh 1)
                 </div>
               </div>

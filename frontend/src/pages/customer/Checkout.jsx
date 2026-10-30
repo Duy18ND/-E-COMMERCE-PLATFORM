@@ -48,8 +48,8 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
       >
         {/* Header */}
         <div style={{
-          padding: '1.25rem 1.5rem', borderBottom: '1px solid #f1f5f9',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+          padding: '1.1rem 1.25rem', borderBottom: '1px solid #f1f5f9',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem'
         }}>
           <div>
             <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>
@@ -65,13 +65,14 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
               width: '32px', height: '32px', borderRadius: '50%',
               border: '1px solid #e2e8f0', backgroundColor: '#f8fafc',
               cursor: 'pointer', fontSize: '1rem', color: '#64748b',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0
             }}
           >×</button>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem' }}>
           {savedVouchers.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
               <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎒</div>
@@ -121,8 +122,8 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
                       opacity: canApply ? 1 : 0.65
                     }}
                   >
-                    <div style={{ padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
-                      <div style={{ flex: 1 }}>
+                    <div style={{ padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div style={{ flex: '1 1 180px', minWidth: 0 }}>
                         {/* Code + name */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem', flexWrap: 'wrap' }}>
                           <span style={{
@@ -214,7 +215,7 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', textAlign: 'right' }}>
+        <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid #f1f5f9', textAlign: 'right' }}>
           <button
             onClick={onClose}
             style={{
@@ -453,15 +454,12 @@ const Checkout = () => {
           />
 
           <form onSubmit={handleSubmit}>
-            <div
-              style={{ display: 'grid', gridTemplateColumns: '1.75fr 1fr', gap: '2rem', alignItems: 'start' }}
-              className="grid-cols-2"
-            >
+            <div className="layout-split">
               {/* ── Left column ── */}
-              <div className="card" style={{ padding: '1.75rem' }}>
+              <div className="card" style={{ padding: 'clamp(1rem, 3vw, 1.75rem)', minWidth: 0 }}>
 
                 {/* Section 1: Shipping info */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <span>📍</span><span>1. Thông tin người nhận hàng</span>
                   </h2>
@@ -493,7 +491,7 @@ const Checkout = () => {
                         backgroundColor: formData.paymentMethod === pm.value ? '#eff6ff' : '#ffffff'
                       }}>
                         <input type="radio" name="paymentMethod" value={pm.value} checked={formData.paymentMethod === pm.value} onChange={handleChange} />
-                        <div>
+                        <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
                             {pm.icon} {PAYMENT_METHOD_LABELS[pm.value]}
                           </div>
@@ -515,9 +513,9 @@ const Checkout = () => {
                     <div style={{
                       backgroundColor: '#f0fdf4', border: '1px solid #86efac',
                       borderRadius: '10px', padding: '0.85rem 1rem',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem'
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem'
                     }}>
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
                           <span style={{
                             fontFamily: 'monospace', fontWeight: 800,
@@ -532,7 +530,7 @@ const Checkout = () => {
                           Tiết kiệm <strong>{fmtMoney(appliedVoucher.discountAmount)}</strong> cho đơn hàng này
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0, flexWrap: 'wrap' }}>
                         <button
                           type="button"
                           onClick={() => setPickerOpen(true)}
@@ -615,7 +613,7 @@ const Checkout = () => {
               </div>
 
               {/* ── Right column: Order Summary ── */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 0 }}>
                 <CartSummary
                   totalItems={totalItems}
                   totalPrice={totalPrice}
@@ -630,12 +628,12 @@ const Checkout = () => {
                     backgroundColor: '#f0fdf4', border: '1px solid #86efac',
                     borderRadius: '12px', padding: '1rem 1.1rem'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534', fontWeight: 700, marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', fontSize: '0.9rem', color: '#166534', fontWeight: 700, marginBottom: '0.5rem' }}>
                       <span>🎫 Voucher ({appliedVoucher.voucher.code})</span>
                       <span>-{fmtMoney(appliedVoucher.discountAmount)}</span>
                     </div>
                     <div style={{
-                      display: 'flex', justifyContent: 'space-between',
+                      display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem',
                       paddingTop: '0.6rem', borderTop: '1px solid #bbf7d0',
                       fontSize: '1.1rem', fontWeight: 800, color: '#0f172a'
                     }}>

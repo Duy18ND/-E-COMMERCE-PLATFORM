@@ -242,7 +242,7 @@ const AdminVouchers = () => {
   const renderForm = (onSubmit, submitLabel) => (
     <form onSubmit={onSubmit}>
       {/* Row 1: Mã + Tên */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.85rem', marginBottom: '0.85rem' }}>
+      <div className="form-grid-2" style={{ marginBottom: '0.85rem' }}>
         <div>
           <Input
             label="Mã voucher *"
@@ -278,7 +278,7 @@ const AdminVouchers = () => {
       </div>
 
       {/* Row 2: Loại + Giá trị + Giảm tối đa */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.85rem', marginBottom: '0.85rem' }}>
+      <div className="form-grid-3" style={{ marginBottom: '0.85rem' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.3rem', color: '#334155' }}>
             Loại giảm *
@@ -314,7 +314,7 @@ const AdminVouchers = () => {
       </div>
 
       {/* Row 3: Đơn tối thiểu + Số lượng */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginBottom: '0.85rem' }}>
+      <div className="form-grid-2" style={{ marginBottom: '0.85rem' }}>
         <div>
           <Input
             label="Đơn tối thiểu (đ)"
@@ -338,7 +338,7 @@ const AdminVouchers = () => {
       </div>
 
       {/* Row 4: Ngày */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginBottom: '0.85rem' }}>
+      <div className="form-grid-2" style={{ marginBottom: '0.85rem' }}>
         <div>
           <Input
             label="Ngày bắt đầu *"
@@ -364,7 +364,7 @@ const AdminVouchers = () => {
         <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.4rem', color: '#334155' }}>
           Trạng thái
         </label>
-        <div style={{ display: 'flex', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
           {['ACTIVE', 'INACTIVE'].map((s) => (
             <label key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.9rem' }}>
               <input type="radio" name="vStatus" value={s} checked={formData.status === s} onChange={() => handleField('status', s)} />
@@ -376,7 +376,7 @@ const AdminVouchers = () => {
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', flexWrap: 'wrap' }}>
         <Button variant="secondary" type="button" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }}>Hủy</Button>
         <Button variant="primary" type="submit">{submitLabel}</Button>
       </div>
@@ -413,16 +413,16 @@ const AdminVouchers = () => {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
+      <div className="grid-cols-4" style={{ marginBottom: '1.75rem' }}>
         {[
           { label: 'Tổng mã', value: stats.total, color: '#2563eb', bg: '#eff6ff', icon: '🎫' },
           { label: 'Đang hoạt động', value: stats.active, color: '#16a34a', bg: '#dcfce7', icon: '✅' },
           { label: 'Đã hết / Hết lượt', value: stats.expired, color: '#dc2626', bg: '#fef2f2', icon: '⏰' },
           { label: 'Tạm dừng', value: stats.inactive, color: '#64748b', bg: '#f1f5f9', icon: '⏸️' }
         ].map((s) => (
-          <div key={s.label} className="card" style={{ padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+          <div key={s.label} className="card" style={{ padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', borderRadius: '14px', border: '1px solid #e2e8f0', minWidth: 0 }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: s.bg, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>{s.icon}</div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>{s.label}</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color, lineHeight: 1.2 }}>{s.value}</div>
             </div>
@@ -430,9 +430,9 @@ const AdminVouchers = () => {
         ))}
       </div>
 
-      {/* Filter toolbar */}
-      <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: '14px', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: '1 1 220px' }}>
+      {/* Filter toolbar: Desktop [Search][Status][Type][Total] | Tablet [Search] / [Status][Type][Total] | Mobile stacked */}
+      <div className="card admin-voucher-filter-bar" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: '14px' }}>
+        <div className="voucher-filter-search" style={{ position: 'relative', minWidth: 0 }}>
           <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
           <input
             type="text"
@@ -442,8 +442,12 @@ const AdminVouchers = () => {
             style={{ width: '100%', padding: '0.55rem 0.75rem 0.55rem 2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}
           />
         </div>
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-          style={{ padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}>
+        <select
+          className="voucher-filter-select"
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+          style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none', backgroundColor: '#ffffff' }}
+        >
           <option value="ALL">Tất cả trạng thái</option>
           <option value="ACTIVE">✅ Đang hoạt động</option>
           <option value="UPCOMING">🕐 Sắp diễn ra</option>
@@ -451,13 +455,17 @@ const AdminVouchers = () => {
           <option value="SOLD_OUT">🚫 Đã hết lượt</option>
           <option value="INACTIVE">⏸️ Tạm dừng</option>
         </select>
-        <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-          style={{ padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}>
+        <select
+          className="voucher-filter-select"
+          value={typeFilter}
+          onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
+          style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none', backgroundColor: '#ffffff' }}
+        >
           <option value="ALL">Tất cả loại</option>
           <option value="FIXED">💰 Giảm tiền</option>
           <option value="PERCENT">% Giảm %</option>
         </select>
-        <span style={{ fontSize: '0.82rem', color: '#64748b', marginLeft: 'auto' }}>
+        <span className="voucher-filter-total" style={{ fontSize: '0.82rem', color: '#64748b', whiteSpace: 'nowrap' }}>
           {filtered.length} / {vouchers.length} mã
         </span>
       </div>
@@ -474,7 +482,7 @@ const AdminVouchers = () => {
           </div>
         ) : (
           <>
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-wrapper table-responsive">
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
@@ -581,7 +589,7 @@ const AdminVouchers = () => {
               <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{selected.name}</h3>
               {selected.description && <p style={{ margin: '0.4rem 0 0', color: '#64748b', fontSize: '0.875rem' }}>{selected.description}</p>}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-grid-2">
               {[
                 { label: 'Loại giảm', value: selected.discountType === 'FIXED' ? 'Giảm tiền cố định' : 'Giảm theo %' },
                 { label: 'Giá trị giảm', value: selected.discountType === 'PERCENT' ? `${selected.discountValue}%` : fmtMoney(selected.discountValue) },
@@ -596,7 +604,7 @@ const AdminVouchers = () => {
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', flexWrap: 'wrap' }}>
               <Button variant="outline" size="sm" onClick={() => { setIsDetailOpen(false); openEdit(selected); }}>✏️ Chỉnh sửa</Button>
               <Button variant="primary" size="sm" onClick={() => setIsDetailOpen(false)}>Đóng</Button>
             </div>
@@ -616,7 +624,7 @@ const AdminVouchers = () => {
                 ⚠️ Mã này đã được sử dụng <strong>{selected.usedQuantity}</strong> lần. Việc xóa sẽ không thể hoàn tác.
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', flexWrap: 'wrap' }}>
               <Button variant="secondary" onClick={() => setIsDeleteOpen(false)}>Hủy</Button>
               <Button variant="danger" onClick={handleDelete}>Xác nhận xóa</Button>
             </div>

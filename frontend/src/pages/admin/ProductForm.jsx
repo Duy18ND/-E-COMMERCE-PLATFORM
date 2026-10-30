@@ -173,7 +173,7 @@ const ProductForm = () => {
             placeholder="Nhập tên sản phẩm..."
           />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2">
             <Input
               label="Danh mục"
               name="category"
@@ -194,7 +194,7 @@ const ProductForm = () => {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2">
             <Input
               label="Số lượng tồn kho"
               name="stock"

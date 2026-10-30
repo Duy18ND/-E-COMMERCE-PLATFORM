@@ -27,14 +27,7 @@ const ProductGrid = ({
   }
 
   return (
-    <div
-      className="product-grid"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-        gap: '1.5rem'
-      }}
-    >
+    <div className="product-grid">
       {productList.map((product) => (
         <ProductCard key={product.id} product={product} />
       ))}

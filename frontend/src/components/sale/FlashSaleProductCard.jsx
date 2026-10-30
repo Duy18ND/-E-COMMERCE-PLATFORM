@@ -82,16 +82,18 @@ const FlashSaleProductCard = ({ product }) => {
 
   return (
     <div
+      className="product-card"
       style={{
         backgroundColor: '#ffffff',
         borderRadius: '16px',
         border: '1px solid #f1f5f9',
         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)',
-        padding: '1rem',
+        padding: 'clamp(0.75rem, 1.8vw, 1rem)',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         height: '100%',
+        minWidth: 0,
         position: 'relative',
         transition: 'all 0.25s ease'
       }}
@@ -106,18 +108,19 @@ const FlashSaleProductCard = ({ product }) => {
         e.currentTarget.style.borderColor = '#f1f5f9';
       }}
     >
-      <div>
+      <div style={{ minWidth: 0 }}>
         {/* Product Image Frame */}
         <div
+          className="product-card-img-wrap"
           style={{
-            height: '190px',
+            height: 'clamp(145px, 20vw, 190px)',
             backgroundColor: '#f8fafc',
             borderRadius: '12px',
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: '0.85rem',
+            marginBottom: '0.75rem',
             position: 'relative'
           }}
         >
@@ -131,8 +134,8 @@ const FlashSaleProductCard = ({ product }) => {
                 backgroundColor: '#dc2626',
                 color: '#ffffff',
                 fontWeight: 800,
-                fontSize: '0.75rem',
-                padding: '3px 8px',
+                fontSize: '0.7rem',
+                padding: '3px 7px',
                 borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
@@ -142,7 +145,7 @@ const FlashSaleProductCard = ({ product }) => {
               }}
             >
               <span>⚡</span>
-              <span>GIẢM -{discountPercent}%</span>
+              <span>-{discountPercent}%</span>
             </div>
           )}
 
@@ -156,9 +159,9 @@ const FlashSaleProductCard = ({ product }) => {
                 backgroundColor: 'rgba(15, 23, 42, 0.75)',
                 backdropFilter: 'blur(4px)',
                 color: '#f8fafc',
-                fontSize: '0.7rem',
+                fontSize: '0.68rem',
                 fontWeight: 600,
-                padding: '2px 8px',
+                padding: '2px 7px',
                 borderRadius: '9999px',
                 zIndex: 2
               }}
@@ -189,14 +192,14 @@ const FlashSaleProductCard = ({ product }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.35rem',
-            fontSize: '0.725rem',
+            gap: '0.3rem',
+            fontSize: '0.7rem',
             color: '#64748b',
-            marginBottom: '0.35rem'
+            marginBottom: '0.3rem'
           }}
         >
           <span style={{ color: '#2563eb', fontWeight: 700 }}>✓</span>
-          <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+          <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {product.storeName || 'ShopMart Official'}
           </span>
         </div>
@@ -204,7 +207,7 @@ const FlashSaleProductCard = ({ product }) => {
         {/* Title */}
         <h3
           style={{
-            fontSize: '0.925rem',
+            fontSize: 'clamp(0.85rem, 1.5vw, 0.925rem)',
             fontWeight: 700,
             lineHeight: 1.4,
             margin: '0 0 0.5rem',
@@ -227,28 +230,28 @@ const FlashSaleProductCard = ({ product }) => {
         </h3>
 
         {/* Pricing Section */}
-        <div style={{ marginBottom: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#dc2626', lineHeight: 1.1 }}>
+        <div style={{ marginBottom: '0.7rem' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 'clamp(1rem, 2vw, 1.25rem)', fontWeight: 800, color: '#dc2626', lineHeight: 1.1 }}>
               {formatCurrency(salePrice)}
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#94a3b8', textDecoration: 'line-through' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+            <span style={{ fontSize: '0.76rem', color: '#94a3b8', textDecoration: 'line-through' }}>
               {formatCurrency(originalPrice)}
             </span>
             {savedAmount > 0 && (
-              <span style={{ fontSize: '0.725rem', color: '#dc2626', fontWeight: 600 }}>
-                Tiết kiệm {formatCurrency(savedAmount)} (-{discountPercent}%)
+              <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600 }}>
+                -{discountPercent}%
               </span>
             )}
           </div>
         </div>
 
         {/* Progress Bar & Sold Count */}
-        <div style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.725rem', marginBottom: '0.25rem' }}>
+        <div style={{ marginBottom: '0.85rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.2rem', fontSize: '0.7rem', marginBottom: '0.25rem' }}>
             <span style={{ color: '#ea580c', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '2px' }}>
               <span>🔥</span>
               <span>{product.statusText || 'Đang bán chạy'}</span>
@@ -281,19 +284,20 @@ const FlashSaleProductCard = ({ product }) => {
       </div>
 
       {/* Action Buttons Row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: 'auto' }}>
         {/* Mua ngay button */}
         <button
           onClick={handleBuyNow}
           disabled={isAdmin}
           style={{
             flex: 1,
+            minWidth: 0,
             backgroundColor: '#dc2626',
             color: '#ffffff',
             border: 'none',
             borderRadius: '8px',
-            padding: '0.55rem 0.75rem',
-            fontSize: '0.85rem',
+            padding: '0.5rem 0.5rem',
+            fontSize: 'clamp(0.76rem, 1.5vw, 0.85rem)',
             fontWeight: 700,
             cursor: isAdmin ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s ease',
@@ -317,8 +321,8 @@ const FlashSaleProductCard = ({ product }) => {
           disabled={isAdmin}
           title="Thêm vào giỏ hàng"
           style={{
-            width: '36px',
-            height: '36px',
+            width: '34px',
+            height: '34px',
             borderRadius: '8px',
             border: '1px solid #e2e8f0',
             backgroundColor: isAdding ? '#dcfce7' : '#ffffff',
@@ -348,7 +352,7 @@ const FlashSaleProductCard = ({ product }) => {
           {isAdding ? (
             <span style={{ fontSize: '0.85rem', fontWeight: 800 }}>✓</span>
           ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
               <line x1="3" y1="6" x2="21" y2="6" />
               <path d="M16 10a4 4 0 0 1-8 0" />
@@ -361,8 +365,8 @@ const FlashSaleProductCard = ({ product }) => {
           onClick={handleToggleWishlist}
           title={isWishlisted ? 'Bỏ yêu thích' : 'Yêu thích sản phẩm'}
           style={{
-            width: '36px',
-            height: '36px',
+            width: '34px',
+            height: '34px',
             borderRadius: '8px',
             border: isWishlisted ? '1px solid #fecaca' : '1px solid #e2e8f0',
             backgroundColor: isWishlisted ? '#fef2f2' : '#ffffff',
@@ -388,8 +392,8 @@ const FlashSaleProductCard = ({ product }) => {
           }}
         >
           <svg
-            width="18"
-            height="18"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill={isWishlisted ? '#dc2626' : 'none'}
             stroke={isWishlisted ? '#dc2626' : 'currentColor'}

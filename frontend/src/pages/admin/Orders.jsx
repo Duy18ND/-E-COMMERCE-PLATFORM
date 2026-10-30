@@ -219,7 +219,7 @@ const AdminOrders = () => {
       </div>
 
       {/* QUICK STATUS METRICS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div className="grid-cols-4" style={{ gap: '1rem', marginBottom: '1.5rem' }}>
         <div className="card" style={{ padding: '1rem' }}>
           <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Tổng đơn hàng</span>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginTop: '0.2rem' }}>
@@ -257,7 +257,7 @@ const AdminOrders = () => {
           gap: '1rem'
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.85rem' }}>
+        <div className="admin-toolbar-grid" style={{ gap: '0.85rem' }}>
           {/* Search Input */}
           <div style={{ position: 'relative' }}>
             <span

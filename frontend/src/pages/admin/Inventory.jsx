@@ -133,7 +133,7 @@ const Inventory = () => {
       </div>
 
       {/* METRIC CARDS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div className="grid-cols-4" style={{ marginBottom: '1.5rem' }}>
         <div className="card" style={{ padding: '1.25rem' }}>
           <span style={{ fontSize: '0.825rem', color: '#64748b' }}>Tổng mặt hàng theo dõi</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', marginTop: '0.25rem' }}>
@@ -174,7 +174,7 @@ const Inventory = () => {
           gap: '1rem'
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
+        <div className="admin-toolbar-grid">
           {/* Search Input */}
           <div style={{ position: 'relative' }}>
             <span

@@ -87,6 +87,7 @@ const VoucherCard = ({ voucher, isSaved, onSave, onUnsave }) => {
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
+        minWidth: 0,
         opacity: isActive ? 1 : 0.65,
         boxShadow: isActive ? '0 2px 12px rgba(220,38,38,0.08)' : 'none',
         transition: 'transform 0.15s'
@@ -96,16 +97,16 @@ const VoucherCard = ({ voucher, isSaved, onSave, onUnsave }) => {
     >
       {/* Top – discount highlight */}
       <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem',
         backgroundColor: topBg,
         borderBottom: `2px dashed ${isActive ? '#fca5a5' : '#e2e8f0'}`,
-        padding: '1rem 1.25rem'
+        padding: '1rem 1.15rem'
       }}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.15rem' }}>
             {voucher.discountType === 'PERCENT' ? '% Giảm phần trăm' : '💰 Giảm tiền mặt'}
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: accentColor, lineHeight: 1.1 }}>
+          <div style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.5rem)', fontWeight: 900, color: accentColor, lineHeight: 1.1 }}>
             {voucher.discountType === 'PERCENT'
               ? `GIẢM ${voucher.discountValue}%`
               : `GIẢM ${fmtMoney(voucher.discountValue)}`}
@@ -118,7 +119,7 @@ const VoucherCard = ({ voucher, isSaved, onSave, onUnsave }) => {
         </div>
 
         <div style={{
-          fontFamily: 'monospace', fontWeight: 800, fontSize: '0.875rem',
+          fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem',
           backgroundColor: isActive ? '#fee2e2' : '#e2e8f0',
           color: isActive ? '#dc2626' : '#94a3b8',
           padding: '0.25rem 0.6rem', borderRadius: '6px', letterSpacing: '0.5px',
@@ -129,7 +130,7 @@ const VoucherCard = ({ voucher, isSaved, onSave, onUnsave }) => {
       </div>
 
       {/* Body */}
-      <div style={{ padding: '0.85rem 1.25rem', flex: 1 }}>
+      <div style={{ padding: '0.85rem 1.15rem', flex: 1 }}>
         <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
           {voucher.name}
         </div>
@@ -157,8 +158,8 @@ const VoucherCard = ({ voucher, isSaved, onSave, onUnsave }) => {
 
       {/* Footer */}
       <div style={{
-        padding: '0.75rem 1.25rem', borderTop: '1px solid #f1f5f9',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem'
+        padding: '0.75rem 1.15rem', borderTop: '1px solid #f1f5f9',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem'
       }}>
         <Link
           to="/my-vouchers"
@@ -313,7 +314,7 @@ const Vouchers = () => {
             key={f.key}
             onClick={() => setFilter(f.key)}
             style={{
-              padding: '0.45rem 1rem', borderRadius: '9999px', border: 'none',
+              padding: '0.45rem 0.9rem', borderRadius: '9999px', border: 'none',
               fontSize: '0.825rem', fontWeight: 600, cursor: 'pointer',
               backgroundColor: filter === f.key ? '#dc2626' : '#f1f5f9',
               color: filter === f.key ? '#ffffff' : '#475569',
@@ -327,7 +328,7 @@ const Vouchers = () => {
           </button>
         ))}
 
-        <div style={{ marginLeft: 'auto', position: 'relative', minWidth: '200px' }}>
+        <div style={{ marginLeft: 'auto', position: 'relative', flex: '1 1 180px', maxWidth: '300px', minWidth: 0 }}>
           <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }}>🔍</span>
           <input
             type="text"
@@ -350,7 +351,7 @@ const Vouchers = () => {
           Đang tải danh sách mã giảm giá...
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '4rem' }}>
+        <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
           <div style={{ fontSize: '3.5rem', marginBottom: '0.75rem' }}>🎫</div>
           <h3 style={{ color: '#0f172a', fontWeight: 700, marginBottom: '0.5rem' }}>Không có mã giảm giá phù hợp</h3>
           <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1.25rem' }}>Thử thay đổi bộ lọc hoặc tìm kiếm.</p>
@@ -369,7 +370,7 @@ const Vouchers = () => {
           <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1rem' }}>
             Hiển thị <strong style={{ color: '#334155' }}>{filtered.length}</strong> mã giảm giá
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: '1.25rem' }}>
             {filtered.map((v) => (
               <VoucherCard
                 key={v.id}

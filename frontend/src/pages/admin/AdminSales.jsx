@@ -212,10 +212,8 @@ const AdminSales = () => {
 
       {/* 2. SIX METRIC KPI CARDS (THEO ĐÚNG ẢNH MẪU 4) */}
       <div
+        className="admin-kpi-6"
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(6, 1fr)',
-          gap: '1rem',
           marginBottom: '1.5rem'
         }}
       >
@@ -457,7 +455,7 @@ const AdminSales = () => {
           </div>
 
           {/* Sort & Date Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -508,7 +506,7 @@ const AdminSales = () => {
         </div>
 
         {/* Filter tags below */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span>Đang áp dụng:</span>
             <span style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
@@ -860,7 +858,7 @@ const AdminSales = () => {
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '10px' }}>
               <div>
                 <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Trạng thái:</span>
                 <div style={{ fontWeight: 700, color: '#2563eb' }}>{previewCampaign.status}</div>

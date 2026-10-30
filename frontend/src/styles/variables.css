@@ -74,4 +74,8 @@
   /* Transitions */
   --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layout container (responsive.css ghi đè theo breakpoint) */
+  --container-max: 1400px;
+  --container-padding: clamp(0.75rem, 2.2vw, 2rem);
 }

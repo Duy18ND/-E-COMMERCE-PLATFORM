@@ -595,15 +595,9 @@ const Categories = () => {
           borderRadius: '14px'
         }}
       >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '0.85rem'
-          }}
-        >
+        <div className="admin-filter-grid">
           {/* Search Box */}
-          <div style={{ position: 'relative', gridColumn: 'span 2' }}>
+          <div style={{ position: 'relative' }}>
             <span
               style={{
                 position: 'absolute',
@@ -1666,7 +1660,7 @@ const Categories = () => {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                 gap: '0.75rem',
                 backgroundColor: '#f8fafc',
                 padding: '1rem',
