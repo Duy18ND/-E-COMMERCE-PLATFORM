@@ -1,16 +1,18 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
     name: api-gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
 
   # ─── Redis (for Rate Limiting filter) ───────────────────────
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:redispassword}
+      host: ${SPRING_DATA_REDIS_HOST:${REDIS_HOST:localhost}}
+      port: ${SPRING_DATA_REDIS_PORT:${REDIS_PORT:6379}}
+      password: ${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD:redispassword}}
       timeout: 2000ms
 
   # ─── Spring Cloud Gateway Routes ────────────────────────────
@@ -53,7 +55,21 @@ spring:
                 name: auth-cb
                 fallbackUri: forward:/fallback/auth
 
-        # ── 2. Product Service — Public Read APIs (GET) ────────────────
+        # ── 2a. Product Service — Admin Read API (requires JWT) ────────
+        - id: product-service-admin
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/admin,/api/v1/products/admin/**
+            - Method=GET
+          filters:
+            - StripPrefix=0
+            - AuthenticationFilter
+            - name: CircuitBreaker
+              args:
+                name: product-cb
+                fallbackUri: forward:/fallback/product
+
+        # ── 2b. Product Service — Public Read APIs (GET) ───────────────
         - id: product-service-public
           uri: lb://product-service
           predicates:
@@ -70,7 +86,7 @@ spring:
         - id: product-service-mutation
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/**
+            - Path=/api/v1/products/**,/api/v1/admin/flash-sales/**,/api/v1/flash-sales/**
             - Method=POST,PUT,DELETE,PATCH
           filters:
             - StripPrefix=0
@@ -136,6 +152,9 @@ spring:
         cors-configurations:
           '[/**]':
             allowed-origins:
+              - "http://localhost"
+              - "http://127.0.0.1"
+              - "http://localhost:80"
               - "http://localhost:3000"
               - "http://localhost:5173"
               - "http://localhost:8080"

@@ -1,0 +1,10 @@
+# ═══════════════════════════════════════════════════════════════
+#  Discovery Server — Development Profile (dev)
+# ═══════════════════════════════════════════════════════════════
+eureka:
+  server:
+    enable-self-preservation: false
+
+logging:
+  level:
+    com.ecommerce.discovery: DEBUG

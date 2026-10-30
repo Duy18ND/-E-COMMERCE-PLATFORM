@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import inventoryService from '../../services/inventoryService';
+import useToast from '../../hooks/useToast';
 import Button from '../../components/common/Button';
 import Pagination from '../../components/admin/Pagination';
 
@@ -10,22 +12,11 @@ const INITIAL_MOCK_INVENTORY = [
   { id: '5', name: 'MacBook Air M2 13 inch', sku: 'APPL-MBA-M2', stock: 2, minThreshold: 5 },
   { id: '6', name: 'Chuột không dây công thái học', sku: 'LOGI-MX-3S', stock: 18, minThreshold: 8 },
   { id: '7', name: 'Robot hút bụi Ecovacs X2', sku: 'ECO-DEE-X2', stock: 0, minThreshold: 4 },
-  { id: '8', name: 'iPad Pro 11 M2 128GB', sku: 'APPL-IPD-11', stock: 12, minThreshold: 6 },
-  { id: '9', name: 'Apple Watch Series 9 GPS', sku: 'APPL-WAT-S9', stock: 18, minThreshold: 8 },
-  { id: '10', name: 'Màn hình Dell UltraSharp 27 4K', sku: 'DELL-U2723QE', stock: 14, minThreshold: 5 },
-  { id: '11', name: 'Tai nghe Sony WH-1000XM5', sku: 'SNY-WH1000XM5', stock: 20, minThreshold: 7 },
-  { id: '12', name: 'Ghế công thái học Aeron', sku: 'HER-AERON-B', stock: 4, minThreshold: 5 },
-  { id: '13', name: 'Card đồ họa ASUS ROG RTX 4080', sku: 'ASUS-RTX4080', stock: 5, minThreshold: 5 },
-  { id: '14', name: 'Router Wi-Fi 7 ASUS ROG Rapture', sku: 'ASUS-GT-BE98', stock: 9, minThreshold: 4 },
-  { id: '15', name: 'SSD Samsung 990 Pro 2TB', sku: 'SAM-990P-2TB', stock: 45, minThreshold: 10 },
-  { id: '16', name: 'Loa Marshall Stanmore III', sku: 'MAR-STAN-3', stock: 11, minThreshold: 4 },
-  { id: '17', name: 'Máy lọc không khí Xiaomi 4', sku: 'MI-PUR-4', stock: 22, minThreshold: 6 },
-  { id: '18', name: 'Pin dự phòng Anker 737 24K', sku: 'ANK-737-24K', stock: 16, minThreshold: 8 },
-  { id: '19', name: 'Balo laptop chống nước Tomtoc', sku: 'TOM-BAG-15', stock: 28, minThreshold: 10 },
-  { id: '20', name: 'Củ sạc nhanh Baseus GaN 100W', sku: 'BAS-GAN-100W', stock: 50, minThreshold: 15 }
+  { id: '8', name: 'iPad Pro 11 M2 128GB', sku: 'APPL-IPD-11', stock: 12, minThreshold: 6 }
 ];
 
 const Inventory = () => {
+  const { showToast } = useToast();
   const [inventoryList, setInventoryList] = useState(INITIAL_MOCK_INVENTORY);
 
   // Search & Filter state
@@ -40,6 +31,21 @@ const Inventory = () => {
   // Editing state
   const [editingId, setEditingId] = useState(null);
   const [newStockVal, setNewStockVal] = useState('');
+
+  const loadInventory = useCallback(async () => {
+    try {
+      const data = await inventoryService.getInventory();
+      if (Array.isArray(data) && data.length > 0) {
+        setInventoryList(data);
+      }
+    } catch {
+      // Fallback sang INITIAL_MOCK_INVENTORY
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInventory();
+  }, [loadInventory]);
 
   // Metrics calculation
   const metrics = useMemo(() => {
@@ -59,8 +65,8 @@ const Inventory = () => {
       .filter((item) => {
         const term = searchTerm.toLowerCase().trim();
         const matchSearch =
-          item.sku.toLowerCase().includes(term) ||
-          item.name.toLowerCase().includes(term);
+          String(item.sku || '').toLowerCase().includes(term) ||
+          String(item.name || '').toLowerCase().includes(term);
 
         let matchStatus = true;
         if (stockStatusFilter === 'OUT_OF_STOCK') {
@@ -76,7 +82,7 @@ const Inventory = () => {
       .sort((a, b) => {
         if (sortBy === 'stock_asc') return a.stock - b.stock;
         if (sortBy === 'stock_desc') return b.stock - a.stock;
-        if (sortBy === 'name_asc') return a.name.localeCompare(b.name, 'vi');
+        if (sortBy === 'name_asc') return String(a.name).localeCompare(String(b.name), 'vi');
         return 0;
       });
   }, [inventoryList, searchTerm, stockStatusFilter, sortBy]);
@@ -114,13 +120,33 @@ const Inventory = () => {
     setNewStockVal(item.stock);
   };
 
-  const handleSaveStock = (id) => {
+  const handleSaveStock = async (id) => {
+    const parsedStock = Number(newStockVal);
+    if (Number.isNaN(parsedStock) || parsedStock < 0) {
+      if (showToast) {
+        showToast({
+          type: 'error',
+          title: 'Số lượng không hợp lệ',
+          message: 'Số lượng tồn kho không được nhỏ hơn 0.'
+        });
+      }
+      return;
+    }
+
+    await inventoryService.updateStock(id, parsedStock);
     setInventoryList(
       inventoryList.map((item) =>
-        item.id === id ? { ...item, stock: Number(newStockVal) || 0 } : item
+        item.id === id ? { ...item, stock: parsedStock, stockQuantity: parsedStock } : item
       )
     );
     setEditingId(null);
+    if (showToast) {
+      showToast({
+        type: 'success',
+        title: 'Đã cập nhật tồn kho',
+        message: `Số lượng tồn kho mới: ${parsedStock} sản phẩm.`
+      });
+    }
   };
 
   return (
