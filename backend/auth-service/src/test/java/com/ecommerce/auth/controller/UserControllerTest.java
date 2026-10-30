@@ -1,7 +1,10 @@
 package com.ecommerce.auth.controller;
 
 import com.ecommerce.auth.dto.request.AddressRequest;
+import com.ecommerce.auth.dto.request.UpdateProfileRequest;
 import com.ecommerce.auth.dto.response.AddressResponse;
+import com.ecommerce.auth.dto.response.UserProfileResponse;
+import com.ecommerce.auth.enums.UserStatus;
 import com.ecommerce.auth.exception.GlobalExceptionHandler;
 import com.ecommerce.auth.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -129,5 +132,61 @@ class UserControllerTest {
                         .header("X-User-Id", 100L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    // =========================================================================
+    // [Task ECOM-128] Unit Tests cho API Xem và Cập nhật hồ sơ cá nhân
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-128] GET /api/v1/users/profile: Lấy hồ sơ người dùng thành công")
+    void getProfile_Success() throws Exception {
+        UserProfileResponse profileResponse = UserProfileResponse.builder()
+                .id(100L)
+                .email("duy@example.com")
+                .fullName("Đoàn Mạnh Duy")
+                .phone("0987654321")
+                .status(UserStatus.ACTIVE)
+                .build();
+
+        when(userService.getProfile(100L)).thenReturn(profileResponse);
+
+        mockMvc.perform(get("/api/v1/users/profile")
+                        .header("X-User-Id", 100L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(100L))
+                .andExpect(jsonPath("$.data.email").value("duy@example.com"))
+                .andExpect(jsonPath("$.data.fullName").value("Đoàn Mạnh Duy"));
+    }
+
+    @Test
+    @DisplayName("[ECOM-128] PUT /api/v1/users/profile: Cập nhật thông tin cá nhân và địa chỉ thành công")
+    void updateProfile_Success() throws Exception {
+        UpdateProfileRequest updateRequest = UpdateProfileRequest.builder()
+                .fullName("Đoàn Mạnh Duy Updated")
+                .phone("0912345678")
+                .addressLine("456 Cầu Giấy")
+                .city("Hà Nội")
+                .build();
+
+        UserProfileResponse updatedProfile = UserProfileResponse.builder()
+                .id(100L)
+                .email("duy@example.com")
+                .fullName("Đoàn Mạnh Duy Updated")
+                .phone("0912345678")
+                .status(UserStatus.ACTIVE)
+                .build();
+
+        when(userService.updateProfile(eq(100L), any(UpdateProfileRequest.class))).thenReturn(updatedProfile);
+
+        mockMvc.perform(put("/api/v1/users/profile")
+                        .header("X-User-Id", 100L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.fullName").value("Đoàn Mạnh Duy Updated"))
+                .andExpect(jsonPath("$.data.phone").value("0912345678"));
     }
 }

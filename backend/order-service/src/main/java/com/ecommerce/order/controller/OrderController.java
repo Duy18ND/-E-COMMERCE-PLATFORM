@@ -23,6 +23,10 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    /**
+     * [Task ECOM-121 / ECOM-123 / ECOM-267] Đặt hàng (Checkout).
+     * Hỗ trợ cả đặt hàng kèm danh sách sản phẩm hoặc tự động lấy từ giỏ hàng nếu items rỗng.
+     */
     @PostMapping("/checkout")
     @Operation(summary = "Đặt hàng (Checkout)", description = "Lấy userId từ header nội bộ X-User-Id, kiểm tra giá thực tế, trừ kho qua Product Service (Feign), tạo Order PENDING, bắn sự kiện order-created qua Kafka")
     public ResponseEntity<ApiResponse<OrderResponse>> checkout(
@@ -38,6 +42,30 @@ public class OrderController {
         OrderResponse response = orderService.checkout(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Đặt hàng thành công", response));
+    }
+
+    /**
+     * [Task ECOM-267] Xây dựng API tạo đơn hàng từ giỏ (Checkout from Cart).
+     * Endpoint: POST /api/v1/orders/from-cart
+     * Phụ trách bởi: Đoàn Mạnh Duy
+     * - Trích xuất userId từ header X-User-Id.
+     * - Lấy toàn bộ sản phẩm trong giỏ hàng, trừ tồn kho (@Transactional), lưu đơn hàng và làm trống giỏ hàng.
+     */
+    @PostMapping("/from-cart")
+    @Operation(summary = "Tạo đơn hàng từ giỏ", description = "Lấy các sản phẩm trong giỏ hàng hiện tại của người dùng, kiểm tra tồn kho, tạo đơn hàng và làm trống giỏ hàng")
+    public ResponseEntity<ApiResponse<OrderResponse>> createOrderFromCart(
+            @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @Valid @RequestBody CheckoutRequest request) {
+
+        if (authenticatedUserId != null) {
+            request.setUserId(authenticatedUserId);
+        } else if (request.getUserId() == null) {
+            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
+        }
+
+        OrderResponse response = orderService.createOrderFromCart(request.getUserId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Tạo đơn hàng từ giỏ thành công", response));
     }
 
     @PutMapping("/{id}/cancel")

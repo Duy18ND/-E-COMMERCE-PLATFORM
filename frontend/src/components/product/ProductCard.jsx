@@ -4,10 +4,14 @@ import { formatCurrency } from '../../utils/formatCurrency';
 import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
 
+const DEFAULT_FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
+
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
   const { isAdmin } = useAuth();
   const [isAdded, setIsAdded] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   const handleAddToCart = () => {
     const success = addToCart(product, 1);
@@ -22,10 +26,21 @@ const ProductCard = ({ product }) => {
   const isSale = Boolean(product.salePrice || product.isFlashSale);
   const effectivePrice = isSale && product.salePrice ? product.salePrice : product.price;
   const originalPrice = product.price || effectivePrice;
-  const discountPercent = product.discountPercent || (originalPrice > effectivePrice ? Math.round(((originalPrice - effectivePrice) / originalPrice) * 100) : 0);
+  const discountPercent =
+    product.discountPercent ||
+    (originalPrice > effectivePrice
+      ? Math.round(((originalPrice - effectivePrice) / originalPrice) * 100)
+      : 0);
+
+  const stockCount = Number(product.stockQuantity ?? product.stock ?? 0);
+  const isOutOfStock = stockCount <= 0 && product.stock !== undefined && product.stockQuantity !== undefined;
+  const imageSrc = !imgError
+    ? product.imageUrl || product.image || DEFAULT_FALLBACK_IMAGE
+    : DEFAULT_FALLBACK_IMAGE;
 
   return (
     <div
+      className="product-card"
       style={{
         backgroundColor: '#ffffff',
         borderRadius: '16px',
@@ -67,10 +82,12 @@ const ProductCard = ({ product }) => {
             position: 'relative'
           }}
         >
-          {product.imageUrl ? (
+          {imageSrc ? (
             <img
-              src={product.imageUrl}
+              src={imageSrc}
               alt={product.name}
+              loading="lazy"
+              onError={() => setImgError(true)}
               style={{
                 width: '100%',
                 height: '100%',
@@ -175,7 +192,7 @@ const ProductCard = ({ product }) => {
         >
           <Link
             to={`/products/${product.id}`}
-            style={{ color: '#0f172a' }}
+            style={{ color: '#0f172a', textDecoration: 'none' }}
             onMouseEnter={(e) => (e.target.style.color = isSale ? '#dc2626' : '#2563eb')}
             onMouseLeave={(e) => (e.target.style.color = '#0f172a')}
           >
@@ -186,11 +203,23 @@ const ProductCard = ({ product }) => {
         {/* Price */}
         <div style={{ marginBottom: '0.85rem' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: isSale ? '#dc2626' : '#2563eb' }}>
+            <span
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: 800,
+                color: isSale ? '#dc2626' : '#2563eb'
+              }}
+            >
               {formatCurrency(effectivePrice)}
             </span>
             {isSale && originalPrice > effectivePrice && (
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', textDecoration: 'line-through' }}>
+              <span
+                style={{
+                  fontSize: '0.8rem',
+                  color: '#94a3b8',
+                  textDecoration: 'line-through'
+                }}
+              >
                 {formatCurrency(originalPrice)}
               </span>
             )}
@@ -201,31 +230,47 @@ const ProductCard = ({ product }) => {
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         <button
+          type="button"
           onClick={handleAddToCart}
-          disabled={isAdmin}
-          title={isAdmin ? 'Tài khoản Admin không được phép thêm sản phẩm vào giỏ' : ''}
+          disabled={isAdmin || isOutOfStock}
+          title={
+            isAdmin
+              ? 'Tài khoản Admin không được phép thêm sản phẩm vào giỏ'
+              : isOutOfStock
+              ? 'Sản phẩm tạm hết hàng'
+              : ''
+          }
           style={{
             flex: 1,
-            backgroundColor: isAdmin
-              ? '#f1f5f9'
-              : isAdded
-              ? '#dcfce7'
-              : isSale
-              ? '#fee2e2'
-              : '#eff6ff',
-            border: isAdmin
-              ? '1px solid #e2e8f0'
-              : isAdded
-              ? '1px solid #86efac'
-              : isSale
-              ? '1px solid #fecaca'
-              : '1px solid #dbeafe',
-            color: isAdmin ? '#94a3b8' : isAdded ? '#16a34a' : isSale ? '#dc2626' : '#2563eb',
+            backgroundColor:
+              isAdmin || isOutOfStock
+                ? '#f1f5f9'
+                : isAdded
+                ? '#dcfce7'
+                : isSale
+                ? '#fee2e2'
+                : '#eff6ff',
+            border:
+              isAdmin || isOutOfStock
+                ? '1px solid #e2e8f0'
+                : isAdded
+                ? '1px solid #86efac'
+                : isSale
+                ? '1px solid #fecaca'
+                : '1px solid #dbeafe',
+            color:
+              isAdmin || isOutOfStock
+                ? '#94a3b8'
+                : isAdded
+                ? '#16a34a'
+                : isSale
+                ? '#dc2626'
+                : '#2563eb',
             borderRadius: '9999px',
             padding: '0.55rem 0.75rem',
             fontSize: '0.85rem',
             fontWeight: 700,
-            cursor: isAdmin ? 'not-allowed' : 'pointer',
+            cursor: isAdmin || isOutOfStock ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s',
             display: 'flex',
             alignItems: 'center',
@@ -233,13 +278,13 @@ const ProductCard = ({ product }) => {
             gap: '4px'
           }}
           onMouseEnter={(e) => {
-            if (!isAdded && !isAdmin) {
+            if (!isAdded && !isAdmin && !isOutOfStock) {
               e.currentTarget.style.backgroundColor = isSale ? '#dc2626' : '#2563eb';
               e.currentTarget.style.color = '#ffffff';
             }
           }}
           onMouseLeave={(e) => {
-            if (!isAdded && !isAdmin) {
+            if (!isAdded && !isAdmin && !isOutOfStock) {
               e.currentTarget.style.backgroundColor = isSale ? '#fee2e2' : '#eff6ff';
               e.currentTarget.style.color = isSale ? '#dc2626' : '#2563eb';
             }
@@ -247,13 +292,17 @@ const ProductCard = ({ product }) => {
         >
           {isAdmin ? (
             'Admin (Khóa giỏ)'
+          ) : isOutOfStock ? (
+            'Tạm hết hàng'
           ) : isAdded ? (
             <>
               <span>✓</span>
               <span>Đã thêm</span>
             </>
+          ) : isSale ? (
+            '+ Săn Sale'
           ) : (
-            isSale ? '+ Săn Sale' : '+ Thêm vào giỏ'
+            '+ Thêm vào giỏ'
           )}
         </button>
 

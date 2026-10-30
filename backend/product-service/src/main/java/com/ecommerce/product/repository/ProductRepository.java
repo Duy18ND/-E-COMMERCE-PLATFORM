@@ -32,6 +32,17 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
                         @Param("status") ProductStatus status,
                         Pageable pageable);
 
+        @Query("SELECT p FROM Product p WHERE p.status = :status AND " +
+                        "(:category IS NULL OR :category = '' OR LOWER(p.category) LIKE LOWER(CONCAT('%', :category, '%'))) AND " +
+                        "(:keyword IS NULL OR :keyword = '' OR " +
+                        "LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+                        "LOWER(p.category) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+        Page<Product> searchActiveProductsByKeywordAndCategory(
+                        @Param("keyword") String keyword,
+                        @Param("category") String category,
+                        @Param("status") ProductStatus status,
+                        Pageable pageable);
+
         /**
          * [Task ECOM-114 / ECOM-224 / ECOM-229] Truy vấn tìm kiếm sản phẩm theo từ khóa
          * mở rộng:

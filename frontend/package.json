@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "node scripts/lint-check.mjs",
+    "test": "node --experimental-default-type=module --test tests/auth.qa.test.mjs tests/ecom106.qa.test.mjs tests/ecom226_227.qa.test.mjs"
   },
   "dependencies": {
     "axios": "^1.7.9",
