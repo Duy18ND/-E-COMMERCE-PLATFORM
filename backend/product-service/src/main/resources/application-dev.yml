@@ -1,0 +1,17 @@
+# ═══════════════════════════════════════════════════════════════
+#  Product Service — Development Profile (dev)
+# ═══════════════════════════════════════════════════════════════
+spring:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.ecommerce.product: DEBUG
+    org.hibernate.SQL: DEBUG
+

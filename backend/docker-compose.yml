@@ -59,7 +59,7 @@ services:
       zookeeper:
         condition: service_healthy
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT:-9092}:9092"
       - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
@@ -92,7 +92,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8090:8080"
+      - "${KAFKA_UI_PORT:-8090}:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
@@ -108,18 +108,19 @@ services:
     container_name: ecommerce-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_USER: ecommerce_user
-      MYSQL_PASSWORD: ecommerce_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-product_db}
+      MYSQL_USER: ${MYSQL_USER:-ecommerce_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -132,15 +133,15 @@ services:
     image: redis:7.2-alpine
     container_name: ecommerce-redis
     restart: unless-stopped
-    command: redis-server --requirepass redispassword --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redispassword} --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -162,7 +163,10 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8761:8761"
+      - "${EUREKA_PORT:-8761}:8761"
+    environment:
+      SPRING_SECURITY_USER_NAME: ${EUREKA_USER:-eureka}
+      SPRING_SECURITY_USER_PASSWORD: ${EUREKA_PASSWORD:-eurekapassword}
     networks:
       - ecommerce-network
     healthcheck:
@@ -191,14 +195,15 @@ services:
     ports:
       - "8081:8081"
     environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/auth_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: ecommerce_user
-      SPRING_DATASOURCE_PASSWORD: ecommerce_pass
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: redispassword
-      JWT_SECRET: ecommerce-super-secret-key-change-in-production-must-be-256-bits
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+      JWT_SECRET: ${JWT_SECRET:-ecommerce-super-secret-key-change-in-production-must-be-256-bits}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
     healthcheck:
@@ -227,13 +232,14 @@ services:
     ports:
       - "8082:8082"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/product_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: ecommerce_user
-      SPRING_DATASOURCE_PASSWORD: ecommerce_pass
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-product_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: redispassword
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
     healthcheck:
@@ -262,11 +268,12 @@ services:
     ports:
       - "8083:8083"
     environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: ecommerce_user
-      SPRING_DATASOURCE_PASSWORD: ecommerce_pass
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
     healthcheck:
@@ -295,11 +302,12 @@ services:
     ports:
       - "8084:8084"
     environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: ecommerce_user
-      SPRING_DATASOURCE_PASSWORD: ecommerce_pass
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
     healthcheck:
@@ -334,11 +342,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:eurekapassword@discovery-server:8761/eureka/
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: redispassword
-      JWT_SECRET: ecommerce-super-secret-key-change-in-production-must-be-256-bits
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+      JWT_SECRET: ${JWT_SECRET:-ecommerce-super-secret-key-change-in-production-must-be-256-bits}
     networks:
       - ecommerce-network
     healthcheck:
