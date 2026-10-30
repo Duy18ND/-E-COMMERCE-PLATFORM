@@ -232,7 +232,6 @@ class ProductServiceTest {
         verify(productRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
-<<<<<<< HEAD
     @Test
     @DisplayName("Tạo danh mục mới thành công [ECOM-238]")
     void shouldCreateCategorySuccessfully() {
@@ -249,7 +248,17 @@ class ProductServiceTest {
                 .build();
 
         when(categoryRepository.existsByNameIgnoreCase("Phụ Kiện")).thenReturn(false);
-=======
+        when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
+        CategoryResponse response = productService.createCategory(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(10L);
+        assertThat(response.getName()).isEqualTo("Phụ Kiện");
+        assertThat(response.getDescription()).isEqualTo("Cáp sạc, ốp lưng");
+        verify(categoryRepository, times(1)).existsByNameIgnoreCase("Phụ Kiện");
+        verify(categoryRepository, times(1)).save(any(Category.class));
+    }
+
     // =========================================================================
     // [Task ECOM-247] Unit Test cho CRUD sản phẩm (Product CRUD)
     // =========================================================================
@@ -370,42 +379,6 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("[ECOM-132 / ECOM-238 / ECOM-239] Tạo mới danh mục thành công")
-    void shouldCreateCategorySuccessfully() {
-        CategoryRequest request = CategoryRequest.builder()
-                .name("Tablet")
-                .description("Máy tính bảng")
-                .imageUrl("https://example.com/tablet.jpg")
-                .build();
-
-        Category savedCategory = Category.builder()
-                .id(3L)
-                .name("Tablet")
-                .description("Máy tính bảng")
-                .imageUrl("https://example.com/tablet.jpg")
-                .build();
-
-        when(categoryRepository.existsByNameIgnoreCase("Tablet")).thenReturn(false);
->>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
-        when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
-
-        CategoryResponse response = productService.createCategory(request);
-
-        assertThat(response).isNotNull();
-<<<<<<< HEAD
-        assertThat(response.getId()).isEqualTo(10L);
-        assertThat(response.getName()).isEqualTo("Phụ Kiện");
-        assertThat(response.getDescription()).isEqualTo("Cáp sạc, ốp lưng");
-        verify(categoryRepository, times(1)).existsByNameIgnoreCase("Phụ Kiện");
-=======
-        assertThat(response.getId()).isEqualTo(3L);
-        assertThat(response.getName()).isEqualTo("Tablet");
->>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
-        verify(categoryRepository, times(1)).save(any(Category.class));
-    }
-
-    @Test
-<<<<<<< HEAD
     @DisplayName("Ném DuplicateResourceException khi tạo danh mục trùng tên [ECOM-239]")
     void shouldThrowExceptionWhenCreateCategoryWithExistingName() {
         CategoryRequest request = CategoryRequest.builder()
@@ -416,25 +389,10 @@ class ProductServiceTest {
 
         assertThatThrownBy(() -> productService.createCategory(request))
                 .isInstanceOf(DuplicateResourceException.class)
-=======
-    @DisplayName("[ECOM-239] Ném IllegalStateException khi tạo danh mục bị trùng tên")
-    void shouldThrowIllegalStateExceptionWhenCreateDuplicateCategory() {
-        CategoryRequest request = CategoryRequest.builder()
-                .name("Laptops")
-                .description("Laptop trùng tên")
-                .build();
-
-        when(categoryRepository.existsByNameIgnoreCase("Laptops")).thenReturn(true);
-
-        assertThatThrownBy(() -> productService.createCategory(request))
-                .isInstanceOf(IllegalStateException.class)
->>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
                 .hasMessageContaining("đã tồn tại");
 
         verify(categoryRepository, never()).save(any(Category.class));
     }
-<<<<<<< HEAD
-=======
 
     @Test
     @DisplayName("[ECOM-132 / ECOM-238] Cập nhật danh mục thành công")
@@ -470,5 +428,4 @@ class ProductServiceTest {
 
         verify(categoryRepository, times(1)).delete(existingCategory);
     }
->>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
 }
