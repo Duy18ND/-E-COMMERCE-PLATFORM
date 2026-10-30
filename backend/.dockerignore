@@ -1,0 +1,28 @@
+# Gradle cache & local machine properties
+.gradle/
+**/build/
+**/bin/
+**/out/
+**/target/
+gradle.properties
+
+# Git & IDE files
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Docker volumes & local data
+docker/mysql/data/
+*.env
+.env*
+
+# Logs & OS files
+*.log
+logs/
+.DS_Store
+Thumbs.db
+README.md

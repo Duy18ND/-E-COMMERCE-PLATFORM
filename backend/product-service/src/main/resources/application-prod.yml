@@ -21,4 +21,3 @@ logging:
   level:
     root: WARN
     com.ecommerce.product: INFO
-

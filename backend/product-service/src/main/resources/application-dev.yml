@@ -14,4 +14,3 @@ logging:
   level:
     com.ecommerce.product: DEBUG
     org.hibernate.SQL: DEBUG
-

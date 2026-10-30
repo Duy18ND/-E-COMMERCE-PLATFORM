@@ -233,9 +233,51 @@ export const categoryService = {
   },
 
   /**
-   * Lấy danh mục theo ID hoặc Slug
+   * Tìm kiếm danh mục theo từ khóa (gọi API GET /api/v1/products/categories/search?keyword=...)
+   */
+  search: async (keyword = '') => {
+    const cleanKeyword = String(keyword ?? '').trim();
+    try {
+      const response = await api.get('/products/categories/search', {
+        params: cleanKeyword ? { keyword: cleanKeyword } : {}
+      });
+      const rawList = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.content)
+        ? response.content
+        : Array.isArray(response?.data)
+        ? response.data
+        : [];
+      if (rawList.length > 0 || cleanKeyword) {
+        return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
+      }
+    } catch {
+      // Fallback tìm kiếm trên localCategories khi offline
+    }
+    if (!cleanKeyword) return [...localCategories];
+    const q = cleanKeyword.toLowerCase();
+    return localCategories.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        String(c.id).toLowerCase().includes(q) ||
+        c.description?.toLowerCase().includes(q)
+    );
+  },
+
+  /**
+   * Lấy danh mục theo ID hoặc Slug (gọi API GET /api/v1/products/categories/{id})
    */
   getById: async (id) => {
+    try {
+      const numId = Number(id);
+      if (Number.isInteger(numId) && numId > 0) {
+        const apiCat = await api.get(`/products/categories/${numId}`);
+        if (apiCat) return normalizeCategory(apiCat);
+      }
+    } catch {
+      // Fallback sang dữ liệu cục bộ nếu không kết nối được Backend
+    }
+
     const publicMatch = INITIAL_CATEGORIES.find(
       (c) => String(c.id).toLowerCase() === String(id).toLowerCase()
     );
@@ -251,42 +293,120 @@ export const categoryService = {
   },
 
   /**
-   * Thêm danh mục mới
+   * Thêm danh mục mới [ADMIN] (gọi API POST /api/v1/products/categories)
    */
   create: async (categoryData) => {
-    const maxNum = localCategories.reduce((max, cat) => {
-      const match = String(cat.id).match(/^CAT(\d+)$/i);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        return num > max ? num : max;
-      }
-      return max;
-    }, 0);
+    const trimmedName = String(categoryData?.name ?? '').trim();
+    if (!trimmedName) {
+      throw new Error('Tên danh mục không được để trống');
+    }
 
-    const nextId = `CAT${String(maxNum + 1).padStart(3, '0')}`;
-    const today = new Date().toISOString().split('T')[0];
+    const imageUrl =
+      (categoryData.imageUrl ?? categoryData.image ?? '').trim() ||
+      'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80';
+    const description =
+      (categoryData.description ?? '').trim() || 'Chưa có mô tả cho danh mục này.';
 
-    const newCategory = {
-      id: nextId,
-      name: categoryData.name.trim(),
-      image:
-        categoryData.image?.trim() ||
-        'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80',
-      description: categoryData.description?.trim() || 'Chưa có mô tả cho danh mục này.',
-      productCount: 0,
-      status: categoryData.status || 'ACTIVE',
-      createdAt: today
+    const payload = {
+      name: trimmedName,
+      description,
+      imageUrl
     };
 
-    const updated = [newCategory, ...localCategories];
-    saveCategories(updated);
-    return newCategory;
+    try {
+      const createdFromApi = await api.post('/products/categories', payload);
+      const normalized = {
+        ...normalizeCategory(createdFromApi),
+        id: String(createdFromApi?.id ?? `CAT${String(localCategories.length + 1).padStart(3, '0')}`),
+        name: createdFromApi?.name || trimmedName,
+        image: createdFromApi?.imageUrl || imageUrl,
+        imageUrl: createdFromApi?.imageUrl || imageUrl,
+        description: createdFromApi?.description || description,
+        productCount: Number(createdFromApi?.productCount ?? 0),
+        status: categoryData.status || 'ACTIVE',
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      saveCategories([normalized, ...localCategories.filter((c) => String(c.id) !== String(normalized.id))]);
+      return normalized;
+    } catch (err) {
+      if (categoryData?.rejectOnError) {
+        throw err;
+      }
+      const maxNum = localCategories.reduce((max, cat) => {
+        const match = String(cat.id).match(/^CAT(\d+)$/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+
+      const nextId = `CAT${String(maxNum + 1).padStart(3, '0')}`;
+      const today = new Date().toISOString().split('T')[0];
+
+      const newCategory = {
+        id: nextId,
+        name: trimmedName,
+        image: imageUrl,
+        imageUrl,
+        description,
+        productCount: 0,
+        status: categoryData.status || 'ACTIVE',
+        createdAt: today
+      };
+
+      const updated = [newCategory, ...localCategories];
+      saveCategories(updated);
+      return newCategory;
+    }
   },
 
   /**
-   * Cập nhật danh mục
+   * Cập nhật danh mục [ADMIN] (gọi API PUT /api/v1/products/categories/{id})
    */
   update: async (id, categoryData) => {
+    const trimmedName = categoryData.name ? categoryData.name.trim() : '';
+    const imageUrl =
+      categoryData.imageUrl !== undefined
+        ? categoryData.imageUrl.trim()
+        : categoryData.image !== undefined
+        ? categoryData.image.trim()
+        : undefined;
+    const description =
+      categoryData.description !== undefined ? categoryData.description.trim() : undefined;
+
+    const payload = {
+      name: trimmedName,
+      description,
+      imageUrl
+    };
+
+    try {
+      const updatedFromApi = await api.put(`/products/categories/${id}`, payload);
+      if (updatedFromApi) {
+        const synced = localCategories.map((c) =>
+          String(c.id).toLowerCase() === String(id).toLowerCase()
+            ? {
+                ...c,
+                ...updatedFromApi,
+                id: c.id,
+                name: updatedFromApi.name || trimmedName || c.name,
+                image: updatedFromApi.imageUrl || imageUrl || c.image,
+                imageUrl: updatedFromApi.imageUrl || imageUrl || c.imageUrl,
+                description: updatedFromApi.description ?? description ?? c.description,
+                status: categoryData.status || c.status
+              }
+            : c
+        );
+        saveCategories(synced);
+        return normalizeCategory(updatedFromApi);
+      }
+    } catch (err) {
+      if (categoryData?.rejectOnError) {
+        throw err;
+      }
+    }
+
     let updatedItem = null;
     const updated = localCategories.map((c) => {
       if (String(c.id).toLowerCase() === String(id).toLowerCase()) {
@@ -294,10 +414,10 @@ export const categoryService = {
           ...c,
           ...categoryData,
           id: c.id,
-          name: categoryData.name ? categoryData.name.trim() : c.name,
-          image: categoryData.image !== undefined ? categoryData.image.trim() : c.image,
-          description:
-            categoryData.description !== undefined ? categoryData.description.trim() : c.description,
+          name: trimmedName || c.name,
+          image: imageUrl !== undefined ? imageUrl : c.image,
+          imageUrl: imageUrl !== undefined ? imageUrl : c.imageUrl || c.image,
+          description: description !== undefined ? description : c.description,
           status: categoryData.status || c.status
         };
         return updatedItem;
@@ -314,9 +434,15 @@ export const categoryService = {
   },
 
   /**
-   * Xóa danh mục
+   * Xóa danh mục [ADMIN] (gọi API DELETE /api/v1/products/categories/{id})
    */
   delete: async (id) => {
+    try {
+      await api.delete(`/products/categories/${id}`);
+    } catch {
+      // Fallback xóa trên localCategories khi chạy offline
+    }
+
     const exists = localCategories.some(
       (c) => String(c.id).toLowerCase() === String(id).toLowerCase()
     );

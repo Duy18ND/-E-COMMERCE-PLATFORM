@@ -17,6 +17,7 @@ const ProductDetail = () => {
   const { showToast } = useToast();
 
   const [product, setProduct] = useState(null);
+  const [stockInfo, setStockInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState(0);
@@ -27,17 +28,41 @@ const ProductDetail = () => {
 
   useEffect(() => {
     setLoading(true);
+    setQuantity(1);
     productService
       .getById(id)
-      .then((data) => {
+      .then(async (data) => {
         setProduct(data);
         setIsWishlisted(saleService.getWishlist().includes(data.id));
+        try {
+          const stockRes = await productService.checkStock(data.id ?? id, 1);
+          setStockInfo(stockRes);
+        } catch {
+          const fallbackQty = Math.max(0, Number(data.stockQuantity ?? data.stock ?? 0));
+          setStockInfo({
+            productId: data.id,
+            stockQuantity: fallbackQty,
+            inStock: fallbackQty > 0,
+            sufficientStock: fallbackQty >= 1,
+            stockStatusMessage:
+              fallbackQty > 0 ? `Còn hàng (${fallbackQty} sản phẩm có sẵn)` : 'Hết hàng'
+          });
+        }
       })
       .catch(() => {
         // Fallback tìm trong saleService
         const saleProd = saleService.getProductById(id);
         if (saleProd) {
           setProduct(saleProd);
+          const fallbackQty = Math.max(0, Number(saleProd.stockQuantity ?? saleProd.stock ?? 0));
+          setStockInfo({
+            productId: saleProd.id,
+            stockQuantity: fallbackQty,
+            inStock: fallbackQty > 0,
+            sufficientStock: fallbackQty >= 1,
+            stockStatusMessage:
+              fallbackQty > 0 ? `Còn hàng (${fallbackQty} sản phẩm có sẵn)` : 'Hết hàng'
+          });
           setIsWishlisted(saleService.getWishlist().includes(saleProd.id));
         }
       })
@@ -87,9 +112,23 @@ const ProductDetail = () => {
   const currentDiscount = storageOption ? storageOption.discount : (product.discountPercent || 0);
   const savedAmount = Math.max(0, currentOriginalPrice - currentSalePrice);
 
-  const sold = product.sold || 85;
-  const totalStock = product.stock || 100;
-  const remainingStock = Math.max(0, totalStock - sold);
+  const actualStockQuantity = Math.max(
+    0,
+    Number(stockInfo?.stockQuantity ?? product.stockQuantity ?? product.stock ?? 0)
+  );
+  const isOutOfStock = stockInfo
+    ? !stockInfo.inStock || actualStockQuantity <= 0
+    : actualStockQuantity <= 0;
+  const stockStatusMessage =
+    stockInfo?.stockStatusMessage ||
+    (isOutOfStock ? 'Hết hàng' : `Còn hàng (${actualStockQuantity} sản phẩm có sẵn)`);
+  const maxOrderQuantity = isSale
+    ? Math.max(1, Math.min(2, actualStockQuantity || 1))
+    : Math.max(1, actualStockQuantity || 1);
+
+  const sold = Number(product.sold ?? 15);
+  const totalStock = Math.max(actualStockQuantity + sold, 1);
+  const remainingStock = actualStockQuantity;
   const progressPercent = Math.min(100, Math.round((sold / totalStock) * 100));
 
   // Gallery images demo
@@ -107,6 +146,19 @@ const ProductDetail = () => {
           type: 'error',
           title: 'Khóa tài khoản',
           message: 'Tài khoản Quản trị viên (Admin) không được phép mua hàng.'
+        });
+      }
+      return;
+    }
+
+    if (isOutOfStock || quantity > actualStockQuantity) {
+      if (showToast) {
+        showToast({
+          type: 'error',
+          title: 'Không đủ tồn kho',
+          message: isOutOfStock
+            ? 'Sản phẩm hiện đã hết hàng.'
+            : `Kho chỉ còn ${actualStockQuantity} sản phẩm.`
         });
       }
       return;
@@ -135,6 +187,19 @@ const ProductDetail = () => {
           type: 'error',
           title: 'Khóa tài khoản',
           message: 'Tài khoản Quản trị viên (Admin) không được phép mua hàng.'
+        });
+      }
+      return;
+    }
+
+    if (isOutOfStock || quantity > actualStockQuantity) {
+      if (showToast) {
+        showToast({
+          type: 'error',
+          title: 'Không đủ tồn kho',
+          message: isOutOfStock
+            ? 'Sản phẩm hiện đã hết hàng.'
+            : `Kho chỉ còn ${actualStockQuantity} sản phẩm.`
         });
       }
       return;
@@ -538,7 +603,7 @@ const ProductDetail = () => {
                         🔥 Đã bán {sold}/{totalStock} suất
                       </span>
                       <span style={{ color: '#dc2626', fontWeight: 800 }}>
-                        CHỈ CÒN LẠI {remainingStock} SUẤT CUỐI CÙNG!
+                        {isOutOfStock ? 'ĐÃ HẾT SUẤT FLASH SALE!' : `CHỈ CÒN LẠI ${remainingStock} SUẤT CUỐI CÙNG!`}
                       </span>
                     </div>
                     <div style={{ height: '7px', backgroundColor: '#fee2e2', borderRadius: '9999px', overflow: 'hidden' }}>
@@ -646,21 +711,50 @@ const ProductDetail = () => {
                 </div>
               )}
 
-              {/* QUANTITY SELECTOR WITH FLASH SALE RESTRICTION NOTICE */}
+              {/* QUANTITY SELECTOR WITH STOCK STATUS & FLASH SALE RESTRICTION NOTICE */}
               <div style={{ marginBottom: '1.5rem' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '0.65rem',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '8px',
+                    backgroundColor: isOutOfStock ? '#fef2f2' : '#f0fdf4',
+                    border: isOutOfStock ? '1px solid #fecaca' : '1px solid #bbf7d0'
+                  }}
+                >
+                  <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#334155' }}>
+                    Tình trạng kho:
+                  </span>
+                  <span
+                    data-testid="product-stock-status"
+                    style={{
+                      fontSize: '0.825rem',
+                      fontWeight: 800,
+                      color: isOutOfStock ? '#dc2626' : '#16a34a'
+                    }}
+                  >
+                    {isOutOfStock ? '🔴 Hết hàng (0 sản phẩm)' : `🟢 ${stockStatusMessage}`}
+                  </span>
+                </div>
+
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Số lượng:</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <button
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+                      disabled={isOutOfStock || quantity <= 1}
+                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: isOutOfStock ? 'not-allowed' : 'pointer', fontWeight: 700 }}
                     >
                       -
                     </button>
-                    <span style={{ minWidth: '36px', textAlign: 'center', fontWeight: 800, fontSize: '0.95rem' }}>{quantity}</span>
+                    <span style={{ minWidth: '36px', textAlign: 'center', fontWeight: 800, fontSize: '0.95rem' }}>{isOutOfStock ? 0 : quantity}</span>
                     <button
-                      onClick={() => setQuantity((q) => Math.min(2, q + 1))}
-                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+                      onClick={() => setQuantity((q) => Math.min(maxOrderQuantity, q + 1))}
+                      disabled={isOutOfStock || quantity >= maxOrderQuantity}
+                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: isOutOfStock || quantity >= maxOrderQuantity ? 'not-allowed' : 'pointer', fontWeight: 700 }}
                     >
                       +
                     </button>
@@ -696,16 +790,16 @@ const ProductDetail = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
                 <button
                   onClick={handleAddToCart}
-                  disabled={isAdmin}
+                  disabled={isAdmin || isOutOfStock}
                   style={{
-                    backgroundColor: isAdded ? '#dcfce7' : '#ffffff',
-                    border: isAdded ? '1.5px solid #16a34a' : '1.5px solid #dc2626',
-                    color: isAdded ? '#16a34a' : '#dc2626',
+                    backgroundColor: isOutOfStock ? '#f1f5f9' : isAdded ? '#dcfce7' : '#ffffff',
+                    border: isOutOfStock ? '1.5px solid #cbd5e1' : isAdded ? '1.5px solid #16a34a' : '1.5px solid #dc2626',
+                    color: isOutOfStock ? '#94a3b8' : isAdded ? '#16a34a' : '#dc2626',
                     borderRadius: '10px',
                     padding: '0.85rem',
                     fontWeight: 700,
                     fontSize: '0.925rem',
-                    cursor: isAdmin ? 'not-allowed' : 'pointer',
+                    cursor: isAdmin || isOutOfStock ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -714,37 +808,37 @@ const ProductDetail = () => {
                   }}
                 >
                   <span>🛒</span>
-                  <span>{isAdded ? '✓ Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
+                  <span>{isOutOfStock ? 'Tạm hết hàng' : isAdded ? '✓ Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
                 </button>
 
                 <button
                   onClick={handleBuyNow}
-                  disabled={isAdmin}
+                  disabled={isAdmin || isOutOfStock}
                   style={{
-                    backgroundColor: '#dc2626',
+                    backgroundColor: isOutOfStock ? '#94a3b8' : '#dc2626',
                     border: 'none',
                     color: '#ffffff',
                     borderRadius: '10px',
                     padding: '0.85rem',
                     fontWeight: 800,
                     fontSize: '0.95rem',
-                    cursor: isAdmin ? 'not-allowed' : 'pointer',
+                    cursor: isAdmin || isOutOfStock ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.4rem',
-                    boxShadow: '0 4px 14px rgba(220, 38, 38, 0.4)',
+                    boxShadow: isOutOfStock ? 'none' : '0 4px 14px rgba(220, 38, 38, 0.4)',
                     transition: 'all 0.2s'
                   }}
                   onMouseEnter={(e) => {
-                    if (!isAdmin) e.currentTarget.style.backgroundColor = '#b91c1c';
+                    if (!isAdmin && !isOutOfStock) e.currentTarget.style.backgroundColor = '#b91c1c';
                   }}
                   onMouseLeave={(e) => {
-                    if (!isAdmin) e.currentTarget.style.backgroundColor = '#dc2626';
+                    if (!isAdmin && !isOutOfStock) e.currentTarget.style.backgroundColor = '#dc2626';
                   }}
                 >
                   <span>⚡</span>
-                  <span>MUA NGAY VỚI GIÁ FLASH SALE</span>
+                  <span>{isOutOfStock ? 'SẢN PHẨM ĐÃ HẾT HÀNG' : 'MUA NGAY VỚI GIÁ FLASH SALE'}</span>
                 </button>
               </div>
 
