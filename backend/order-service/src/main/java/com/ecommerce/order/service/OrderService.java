@@ -20,6 +20,15 @@ public interface OrderService {
     OrderResponse checkout(CheckoutRequest request);
 
     /**
+     * [Task ECOM-267] Xây dựng API tạo đơn hàng từ giỏ (Checkout from Cart):
+     * 1. Đọc danh sách sản phẩm trong giỏ hàng hiện tại của khách hàng.
+     * 2. Kiểm tra và bảo lưu tồn kho tự động qua ProductClient (@Transactional).
+     * 3. Tạo Order PENDING và xóa sạch giỏ hàng (clear cart).
+     * 4. Bắn sự kiện order-created qua Kafka sang payment-service.
+     */
+    OrderResponse createOrderFromCart(Long userId, CheckoutRequest request);
+
+    /**
      * Hủy đơn hàng:
      * Chỉ cho phép hủy khi trạng thái là PENDING.
      * Chuyển trạng thái sang CANCELLED và gọi ProductClient restore-stock để hoàn kho.

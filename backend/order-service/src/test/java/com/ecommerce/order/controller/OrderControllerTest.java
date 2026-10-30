@@ -118,4 +118,35 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"));
     }
+
+    @Test
+    @DisplayName("[ECOM-267] Tạo đơn hàng từ giỏ (POST /api/v1/orders/from-cart) thành công")
+    void createOrderFromCart_Success() throws Exception {
+        CheckoutRequest request = CheckoutRequest.builder()
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("123 Cầu Giấy, Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        OrderResponse response = OrderResponse.builder()
+                .id(2002L)
+                .userId(10L)
+                .receiverName("Đoàn Mạnh Duy")
+                .status(OrderStatus.PENDING)
+                .totalAmount(new BigDecimal("1500.00"))
+                .build();
+
+        when(orderService.createOrderFromCart(eq(10L), any(CheckoutRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/orders/from-cart")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(2002L))
+                .andExpect(jsonPath("$.data.receiverName").value("Đoàn Mạnh Duy"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
 }

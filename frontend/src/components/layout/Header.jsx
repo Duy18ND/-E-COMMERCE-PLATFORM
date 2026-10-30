@@ -5,6 +5,7 @@ import useCart from '../../hooks/useCart';
 import Modal from '../common/Modal';
 import Input from '../common/Input';
 import Button from '../common/Button';
+import { INITIAL_CATEGORIES } from '../../services/mockData';
 import voucherService from '../../services/voucherService';
 
 const Header = () => {
@@ -15,10 +16,12 @@ const Header = () => {
 
   // Dropdown & Modal states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
   const [savedVoucherCount, setSavedVoucherCount] = useState(() => voucherService.getSavedIds().length);
   const dropdownRef = useRef(null);
+  const categoryMenuRef = useRef(null);
 
   // Profile Edit Form state
   const [profileData, setProfileData] = useState({
@@ -59,6 +62,9 @@ const Header = () => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
       }
+      if (categoryMenuRef.current && !categoryMenuRef.current.contains(event.target)) {
+        setIsCategoryMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -71,9 +77,10 @@ const Header = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsDropdownOpen(false);
-    logout();
+    setIsEditModalOpen(false);
+    await logout();
     navigate('/login');
   };
 
@@ -125,7 +132,7 @@ const Header = () => {
       }}
     >
       <div className="container" style={{ padding: '0.85rem 1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem' }}>
+        <div className="header-main-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem' }}>
           {/* Logo ShopMart */}
           <Link
             to={isAdmin ? '/admin' : '/'}
@@ -211,7 +218,7 @@ const Header = () => {
               - Admin: Thanh trạng thái / huy hiệu quản trị
              ========================================= */}
           {!isAdmin ? (
-            <div style={{ flex: '1', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <div className="header-search-wrapper" style={{ flex: '1', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               <form
                 onSubmit={handleSearch}
                 style={{
@@ -265,6 +272,7 @@ const Header = () => {
 
               {/* Trending tags below search bar */}
               <div
+                className="header-trending-tags"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -300,12 +308,12 @@ const Header = () => {
           {/* =========================================
               PHẦN BÊN PHẢI (NAV ITEMS & USER PROFILE)
              ========================================= */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexShrink: 0 }}>
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexShrink: 0 }}>
             {isAdmin ? (
               /* KHI LÀ ADMIN:
                  - KHÔNG CÓ Trang chủ, Sản phẩm, Danh mục, Đơn hàng khách hàng.
                  - CHỈ CÓ CÁC MỤC QUẢN TRỊ ADMIN VÀ THÔNG TIN TÀI KHOẢN */
-              <nav style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              <nav className="header-nav-links" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                 <NavLink
                   to="/admin"
                   end
@@ -436,7 +444,7 @@ const Header = () => {
             ) : (
               /* KHI LÀ KHÁCH HÀNG: Hiển thị các trang khách hàng */
               <>
-                <nav style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                <nav className="header-nav-links" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                   <NavLink
                     to="/"
                     style={({ isActive }) => ({
@@ -504,19 +512,85 @@ const Header = () => {
                     <span>Flash Sale</span>
                   </NavLink>
 
-                  <NavLink
-                    to="/products"
-                    style={{
-                      fontSize: '0.925rem',
-                      fontWeight: 500,
-                      color: '#334155',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-block',
-                      textDecoration: 'none'
-                    }}
+                  <div
+                    ref={categoryMenuRef}
+                    style={{ position: 'relative', display: 'inline-block' }}
+                    onMouseEnter={() => setIsCategoryMenuOpen(true)}
+                    onMouseLeave={() => setIsCategoryMenuOpen(false)}
                   >
-                    Danh mục
-                  </NavLink>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
+                      style={{
+                        fontSize: '0.925rem',
+                        fontWeight: isCategoryMenuOpen ? 700 : 500,
+                        color: isCategoryMenuOpen ? '#2563eb' : '#334155',
+                        whiteSpace: 'nowrap',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span>Danh mục</span>
+                      <span style={{ fontSize: '0.7rem' }}>▾</span>
+                    </button>
+
+                    {isCategoryMenuOpen && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          marginTop: '0.45rem',
+                          minWidth: '235px',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '12px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 12px 28px rgba(15, 23, 42, 0.12)',
+                          padding: '0.45rem',
+                          zIndex: 120
+                        }}
+                      >
+                        <Link
+                          to="/products"
+                          onClick={() => setIsCategoryMenuOpen(false)}
+                          style={{
+                            display: 'block',
+                            padding: '0.55rem 0.75rem',
+                            borderRadius: '8px',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            color: '#2563eb',
+                            textDecoration: 'none'
+                          }}
+                        >
+                          Tất cả sản phẩm
+                        </Link>
+                        {INITIAL_CATEGORIES.map((cat) => (
+                          <Link
+                            key={cat.id}
+                            to={`/products?category=${encodeURIComponent(cat.id)}`}
+                            onClick={() => setIsCategoryMenuOpen(false)}
+                            style={{
+                              display: 'block',
+                              padding: '0.55rem 0.75rem',
+                              borderRadius: '8px',
+                              fontSize: '0.85rem',
+                              fontWeight: 500,
+                              color: '#334155',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            {cat.name}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <NavLink
                     to="/orders"
@@ -577,7 +651,6 @@ const Header = () => {
                     </span>
                   )}
                 </Link>
-
               </>
             )}
 

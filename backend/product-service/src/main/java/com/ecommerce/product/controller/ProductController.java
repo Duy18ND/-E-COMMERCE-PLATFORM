@@ -30,12 +30,12 @@ import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.ApiResponse;
-import com.ecommerce.product.dto.response.CategoryResponse; //  Đúng package chuẩn
+import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
 import com.ecommerce.product.dto.response.ProductStockResponse;
 import com.ecommerce.product.enums.ProductStatus;
-import com.ecommerce.product.exception.AccessDeniedException; //  Đúng: exception 403 Forbidden của dự án
+import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,7 +51,7 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có tìm kiếm, lọc theo danh mục, khoảng giá, tồn kho, phân trang và sắp xếp")
+    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có tìm kiếm, lọc theo danh mục (category/categoryId), khoảng giá, tồn kho, phân trang và sắp xếp")
     public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> getProducts(
             @Valid @ModelAttribute ProductFilterRequest filterRequest,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {

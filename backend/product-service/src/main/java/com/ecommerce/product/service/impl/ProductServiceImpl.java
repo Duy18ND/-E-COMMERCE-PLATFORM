@@ -88,6 +88,12 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public PagedResponse<ProductResponse> getProducts(String keyword, String category, Pageable pageable) {
+        return getProducts(ProductFilterRequest.builder().keyword(keyword).category(category).build(), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));

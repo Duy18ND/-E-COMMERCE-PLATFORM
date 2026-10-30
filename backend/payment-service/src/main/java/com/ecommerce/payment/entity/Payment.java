@@ -9,6 +9,14 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * [Task ECOM-122] Entity mapping bảng 'payments' trong MySQL.
+ * Phụ trách bởi: Đoàn Mạnh Duy
+ * Thiết kế schema lưu trữ lịch sử giao dịch thanh toán mô phỏng (COD, VNPAY, Online Mock).
+ * Tích hợp các Index tối ưu hóa truy vấn:
+ * - idx_payment_order_id: Tìm kiếm nhanh lịch sử thanh toán theo mã đơn hàng.
+ * - idx_payment_transaction_code: Đối soát giao dịch thông qua mã code thanh toán duy nhất.
+ */
 @Entity
 @Table(name = "payments", indexes = {
         @Index(name = "idx_payment_order_id", columnList = "orderId"),

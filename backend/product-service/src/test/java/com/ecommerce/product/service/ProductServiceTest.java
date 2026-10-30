@@ -3,6 +3,7 @@ package com.ecommerce.product.service;
 import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
+import com.ecommerce.product.dto.request.ProductUpdateRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
@@ -231,6 +232,7 @@ class ProductServiceTest {
         verify(productRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
+<<<<<<< HEAD
     @Test
     @DisplayName("Tạo danh mục mới thành công [ECOM-238]")
     void shouldCreateCategorySuccessfully() {
@@ -247,19 +249,163 @@ class ProductServiceTest {
                 .build();
 
         when(categoryRepository.existsByNameIgnoreCase("Phụ Kiện")).thenReturn(false);
+=======
+    // =========================================================================
+    // [Task ECOM-247] Unit Test cho CRUD sản phẩm (Product CRUD)
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-247] Lấy chi tiết sản phẩm theo ID thành công")
+    void shouldGetProductByIdSuccessfully() {
+        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+
+        ProductResponse response = productService.getProductById(1L);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getName()).isEqualTo("MacBook Pro M3");
+        verify(productRepository, times(1)).findById(1L);
+    }
+
+    @Test
+    @DisplayName("[ECOM-247] Cập nhật sản phẩm thành công")
+    void shouldUpdateProductSuccessfully() {
+        ProductUpdateRequest updateRequest = ProductUpdateRequest.builder()
+                .name("MacBook Pro M3 Max")
+                .description("Updated chip")
+                .price(BigDecimal.valueOf(2499.99))
+                .stockQuantity(15)
+                .category("Laptops")
+                .status(ProductStatus.ACTIVE)
+                .build();
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProductResponse response = productService.updateProduct(1L, updateRequest);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getName()).isEqualTo("MacBook Pro M3 Max");
+        assertThat(response.getPrice()).isEqualByComparingTo(BigDecimal.valueOf(2499.99));
+        assertThat(response.getStockQuantity()).isEqualTo(15);
+        verify(productRepository, times(1)).findById(1L);
+        verify(productRepository, times(1)).save(sampleProduct);
+    }
+
+    @Test
+    @DisplayName("[ECOM-247] Ném ResourceNotFoundException khi cập nhật sản phẩm không tồn tại")
+    void shouldThrowResourceNotFoundWhenUpdateNonExistentProduct() {
+        ProductUpdateRequest updateRequest = ProductUpdateRequest.builder()
+                .name("Non-existent")
+                .price(BigDecimal.valueOf(100))
+                .stockQuantity(5)
+                .build();
+
+        when(productRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productService.updateProduct(999L, updateRequest))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Không tìm thấy sản phẩm");
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    // =========================================================================
+    // [Task ECOM-132 / ECOM-238 / ECOM-239] Unit Test cho Category Service (CRUD Danh mục)
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-108 / ECOM-211] Lấy danh sách danh mục công khai")
+    void shouldGetCategoriesSuccessfully() {
+        Category cat1 = Category.builder().id(1L).name("Laptops").description("Laptop và máy tính").build();
+        Category cat2 = Category.builder().id(2L).name("Smartphones").description("Điện thoại di động").build();
+
+        when(categoryRepository.findAll()).thenReturn(List.of(cat1, cat2));
+
+        List<CategoryResponse> responses = productService.getCategories();
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).getName()).isEqualTo("Laptops");
+        assertThat(responses.get(1).getName()).isEqualTo("Smartphones");
+        verify(categoryRepository, times(1)).findAll();
+    }
+
+    @Test
+    @DisplayName("[ECOM-132 / ECOM-238] Tìm kiếm danh mục theo từ khóa")
+    void shouldSearchCategoriesSuccessfully() {
+        Category cat = Category.builder().id(1L).name("Laptops").description("Laptop và máy tính xách tay").build();
+
+        when(categoryRepository.searchCategoriesByKeyword("laptop")).thenReturn(List.of(cat));
+
+        List<CategoryResponse> responses = productService.searchCategories("laptop");
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getName()).isEqualTo("Laptops");
+        verify(categoryRepository, times(1)).searchCategoriesByKeyword("laptop");
+    }
+
+    @Test
+    @DisplayName("[ECOM-238] Lấy chi tiết danh mục theo ID thành công")
+    void shouldGetCategoryByIdSuccessfully() {
+        Category cat = Category.builder().id(1L).name("Laptops").description("Laptop cao cấp").build();
+
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(cat));
+
+        CategoryResponse response = productService.getCategoryById(1L);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getName()).isEqualTo("Laptops");
+        verify(categoryRepository, times(1)).findById(1L);
+    }
+
+    @Test
+    @DisplayName("[ECOM-238] Ném ResourceNotFoundException khi không tìm thấy danh mục")
+    void shouldThrowResourceNotFoundWhenCategoryNotFound() {
+        when(categoryRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productService.getCategoryById(999L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Không tìm thấy danh mục");
+    }
+
+    @Test
+    @DisplayName("[ECOM-132 / ECOM-238 / ECOM-239] Tạo mới danh mục thành công")
+    void shouldCreateCategorySuccessfully() {
+        CategoryRequest request = CategoryRequest.builder()
+                .name("Tablet")
+                .description("Máy tính bảng")
+                .imageUrl("https://example.com/tablet.jpg")
+                .build();
+
+        Category savedCategory = Category.builder()
+                .id(3L)
+                .name("Tablet")
+                .description("Máy tính bảng")
+                .imageUrl("https://example.com/tablet.jpg")
+                .build();
+
+        when(categoryRepository.existsByNameIgnoreCase("Tablet")).thenReturn(false);
+>>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
         when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
 
         CategoryResponse response = productService.createCategory(request);
 
         assertThat(response).isNotNull();
+<<<<<<< HEAD
         assertThat(response.getId()).isEqualTo(10L);
         assertThat(response.getName()).isEqualTo("Phụ Kiện");
         assertThat(response.getDescription()).isEqualTo("Cáp sạc, ốp lưng");
         verify(categoryRepository, times(1)).existsByNameIgnoreCase("Phụ Kiện");
+=======
+        assertThat(response.getId()).isEqualTo(3L);
+        assertThat(response.getName()).isEqualTo("Tablet");
+>>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
         verify(categoryRepository, times(1)).save(any(Category.class));
     }
 
     @Test
+<<<<<<< HEAD
     @DisplayName("Ném DuplicateResourceException khi tạo danh mục trùng tên [ECOM-239]")
     void shouldThrowExceptionWhenCreateCategoryWithExistingName() {
         CategoryRequest request = CategoryRequest.builder()
@@ -270,8 +416,59 @@ class ProductServiceTest {
 
         assertThatThrownBy(() -> productService.createCategory(request))
                 .isInstanceOf(DuplicateResourceException.class)
+=======
+    @DisplayName("[ECOM-239] Ném IllegalStateException khi tạo danh mục bị trùng tên")
+    void shouldThrowIllegalStateExceptionWhenCreateDuplicateCategory() {
+        CategoryRequest request = CategoryRequest.builder()
+                .name("Laptops")
+                .description("Laptop trùng tên")
+                .build();
+
+        when(categoryRepository.existsByNameIgnoreCase("Laptops")).thenReturn(true);
+
+        assertThatThrownBy(() -> productService.createCategory(request))
+                .isInstanceOf(IllegalStateException.class)
+>>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
                 .hasMessageContaining("đã tồn tại");
 
         verify(categoryRepository, never()).save(any(Category.class));
     }
+<<<<<<< HEAD
+=======
+
+    @Test
+    @DisplayName("[ECOM-132 / ECOM-238] Cập nhật danh mục thành công")
+    void shouldUpdateCategorySuccessfully() {
+        Category existingCategory = Category.builder().id(1L).name("Laptops").description("Mô tả cũ").build();
+        CategoryRequest request = CategoryRequest.builder()
+                .name("Laptops & Ultrabooks")
+                .description("Mô tả mới")
+                .imageUrl("https://example.com/new.jpg")
+                .build();
+
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(existingCategory));
+        when(categoryRepository.existsByNameIgnoreCase("Laptops & Ultrabooks")).thenReturn(false);
+        when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CategoryResponse response = productService.updateCategory(1L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getName()).isEqualTo("Laptops & Ultrabooks");
+        assertThat(response.getDescription()).isEqualTo("Mô tả mới");
+        verify(categoryRepository, times(1)).save(existingCategory);
+    }
+
+    @Test
+    @DisplayName("[ECOM-132 / ECOM-238] Xóa danh mục thành công")
+    void shouldDeleteCategorySuccessfully() {
+        Category existingCategory = Category.builder().id(1L).name("Laptops").build();
+
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(existingCategory));
+        doNothing().when(categoryRepository).delete(existingCategory);
+
+        productService.deleteCategory(1L);
+
+        verify(categoryRepository, times(1)).delete(existingCategory);
+    }
+>>>>>>> 58ff1f12609c544a2c06cd43c570b344daacfc8a
 }

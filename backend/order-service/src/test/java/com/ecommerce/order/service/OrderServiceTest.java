@@ -7,6 +7,8 @@ import com.ecommerce.order.dto.request.CheckoutItemRequest;
 import com.ecommerce.order.dto.request.CheckoutRequest;
 import com.ecommerce.order.dto.response.ApiResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
+import com.ecommerce.order.entity.Cart;
+import com.ecommerce.order.entity.CartItem;
 import com.ecommerce.order.entity.Order;
 import com.ecommerce.order.entity.OrderItem;
 import com.ecommerce.order.enums.OrderStatus;
@@ -17,6 +19,7 @@ import com.ecommerce.order.exception.NotEnoughStockException;
 import com.ecommerce.order.exception.ProductNotFoundException;
 import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.producer.KafkaOrderProducer;
+import com.ecommerce.order.repository.CartRepository;
 import com.ecommerce.order.repository.OrderRepository;
 import com.ecommerce.order.service.impl.OrderServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +53,9 @@ class OrderServiceTest {
 
     @Mock
     private KafkaOrderProducer kafkaOrderProducer;
+
+    @Mock
+    private CartRepository cartRepository;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -418,5 +424,101 @@ class OrderServiceTest {
         assertThat(restoredItems).hasSize(1);
         assertThat(restoredItems.get(0).getProductId()).isEqualTo(101L);
         assertThat(restoredItems.get(0).getQuantity()).isEqualTo(2);
+    }
+
+    // =========================================================================
+    // [Task ECOM-267] Unit Tests cho tạo đơn hàng từ giỏ (createOrderFromCart)
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-267] Tạo đơn hàng từ giỏ thành công và làm trống giỏ hàng")
+    void createOrderFromCart_Success() {
+        // GIVEN
+        Long userId = 1L;
+        Cart cart = Cart.builder()
+                .id(1L)
+                .userId(userId)
+                .items(new ArrayList<>())
+                .build();
+
+        CartItem item1 = CartItem.builder()
+                .id(10L)
+                .cart(cart)
+                .productId(101L)
+                .quantity(1)
+                .build();
+        cart.getItems().add(item1);
+
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(userId)
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội, Việt Nam")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        when(cartRepository.findByUserIdWithItems(userId)).thenReturn(Optional.of(cart));
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success("Success", sampleProduct1));
+        when(productClient.reserveStock(any())).thenReturn(ApiResponse.success("Reserved", null));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order o = invocation.getArgument(0);
+            o.setId(1001L);
+            return o;
+        });
+
+        // WHEN
+        OrderResponse response = orderService.createOrderFromCart(userId, request);
+
+        // THEN
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(1001L);
+        assertThat(response.getReceiverName()).isEqualTo("Đoàn Mạnh Duy");
+        // Giỏ hàng phải được làm trống sau khi tạo đơn
+        assertThat(cart.getItems()).isEmpty();
+        verify(cartRepository, times(1)).save(cart);
+        verify(productClient, times(1)).reserveStock(any());
+        verify(kafkaOrderProducer, times(1)).sendOrderCreatedEvent(any(OrderEvent.class));
+    }
+
+    @Test
+    @DisplayName("[ECOM-267] Ném IllegalStateException khi tạo đơn hàng từ giỏ hàng rỗng")
+    void createOrderFromCart_EmptyCart_ShouldThrowIllegalStateException() {
+        Long userId = 1L;
+        Cart emptyCart = Cart.builder()
+                .id(1L)
+                .userId(userId)
+                .items(new ArrayList<>())
+                .build();
+
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(userId)
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội, Việt Nam")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        when(cartRepository.findByUserIdWithItems(userId)).thenReturn(Optional.of(emptyCart));
+
+        assertThrows(IllegalStateException.class, () -> orderService.createOrderFromCart(userId, request));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[ECOM-267] Ném ResourceNotFoundException khi không tìm thấy giỏ hàng của user")
+    void createOrderFromCart_CartNotFound_ShouldThrowResourceNotFoundException() {
+        Long userId = 999L;
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(userId)
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội, Việt Nam")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        when(cartRepository.findByUserIdWithItems(userId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> orderService.createOrderFromCart(userId, request));
+        verify(orderRepository, never()).save(any());
     }
 }

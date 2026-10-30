@@ -1,9 +1,11 @@
 package com.ecommerce.auth.service.impl;
 
 import com.ecommerce.auth.dto.request.AddressRequest;
+import com.ecommerce.auth.dto.request.UpdateProfileRequest;
 import com.ecommerce.auth.dto.request.UpdateUserStatusRequest;
 import com.ecommerce.auth.dto.response.AddressResponse;
 import com.ecommerce.auth.dto.response.PagedResponse;
+import com.ecommerce.auth.dto.response.UserProfileResponse;
 import com.ecommerce.auth.dto.response.UserSummaryResponse;
 import com.ecommerce.auth.entity.User;
 import com.ecommerce.auth.entity.UserAddress;
@@ -17,8 +19,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -27,6 +32,91 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final UserAddressRepository addressRepository;
+
+    // =========================================================================
+    // [Task ECOM-128] User Profile Operations
+    // =========================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserProfileResponse getProfile(Long userId) {
+        log.info("[Task ECOM-128] Fetching profile for userId={}", userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        List<AddressResponse> addresses = getAddressesByUser(userId);
+        AddressResponse defaultAddress = addresses.stream()
+                .filter(a -> Boolean.TRUE.equals(a.getIsDefault()))
+                .findFirst()
+                .orElse(addresses.isEmpty() ? null : addresses.get(0));
+
+        Set<String> roles = user.getRoles() != null
+                ? user.getRoles().stream().map(r -> r.getName().name()).collect(Collectors.toSet())
+                : Set.of();
+
+        return UserProfileResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .status(user.getStatus())
+                .roles(roles)
+                .defaultAddress(defaultAddress)
+                .addresses(addresses)
+                .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public UserProfileResponse updateProfile(Long userId, UpdateProfileRequest request) {
+        log.info("[Task ECOM-128] Updating profile for userId={}", userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        if (StringUtils.hasText(request.getFullName())) {
+            user.setFullName(request.getFullName().trim());
+        }
+        if (StringUtils.hasText(request.getPhone())) {
+            user.setPhone(request.getPhone().trim());
+        }
+
+        userRepository.save(user);
+
+        // Cập nhật địa chỉ nhận hàng nếu request có truyền thông tin địa chỉ
+        if (StringUtils.hasText(request.getAddressLine()) || StringUtils.hasText(request.getCity())) {
+            List<UserAddress> addresses = addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(userId);
+            UserAddress defaultAddr = addresses.stream()
+                    .filter(a -> Boolean.TRUE.equals(a.getIsDefault()))
+                    .findFirst()
+                    .orElse(addresses.isEmpty() ? null : addresses.get(0));
+
+            if (defaultAddr != null) {
+                if (StringUtils.hasText(request.getAddressLine())) defaultAddr.setAddressLine(request.getAddressLine().trim());
+                if (StringUtils.hasText(request.getCity())) defaultAddr.setCity(request.getCity().trim());
+                if (StringUtils.hasText(request.getDistrict())) defaultAddr.setDistrict(request.getDistrict().trim());
+                if (StringUtils.hasText(request.getWard())) defaultAddr.setWard(request.getWard().trim());
+                if (StringUtils.hasText(request.getPhone())) defaultAddr.setPhone(request.getPhone().trim());
+                if (StringUtils.hasText(request.getFullName())) defaultAddr.setReceiverName(request.getFullName().trim());
+                addressRepository.save(defaultAddr);
+            } else if (StringUtils.hasText(request.getAddressLine()) && StringUtils.hasText(request.getCity())) {
+                UserAddress newAddr = UserAddress.builder()
+                        .userId(userId)
+                        .receiverName(user.getFullName())
+                        .phone(user.getPhone() != null ? user.getPhone() : "")
+                        .addressLine(request.getAddressLine().trim())
+                        .city(request.getCity().trim())
+                        .district(request.getDistrict() != null ? request.getDistrict().trim() : "")
+                        .ward(request.getWard() != null ? request.getWard().trim() : "")
+                        .isDefault(true)
+                        .build();
+                addressRepository.save(newAddr);
+            }
+        }
+
+        return getProfile(userId);
+    }
 
     // Address CRUD
 

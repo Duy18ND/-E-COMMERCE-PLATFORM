@@ -1,111 +1,77 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ProductGrid from '../../components/product/ProductGrid';
+import Loading from '../../components/common/Loading';
+import productService from '../../services/productService';
+import categoryService from '../../services/categoryService';
+import { INITIAL_CATEGORIES, INITIAL_PRODUCTS } from '../../services/mockData';
+
+const CATEGORY_ICONS = {
+  phones: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+      <line x1="12" y1="18" x2="12.01" y2="18" />
+    </svg>
+  ),
+  laptops: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+      <line x1="2" y1="20" x2="22" y2="20" />
+    </svg>
+  ),
+  accessories: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+    </svg>
+  ),
+  smarthome: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
+    </svg>
+  )
+};
+
+const enrichCategoryWithIcon = (cat) => ({
+  ...cat,
+  desc: cat.desc || cat.description || '',
+  icon: cat.icon || CATEGORY_ICONS[cat.id] || CATEGORY_ICONS.phones
+});
 
 const Home = () => {
-  const categories = [
-    {
-      id: 'phones',
-      name: 'Điện thoại & Tablet',
-      desc: 'iPhone, Galaxy, iPad thế hệ mới',
-      count: '1.2k+ SP',
-      iconBg: '#eff6ff',
-      iconColor: '#2563eb',
-      badgeBg: '#eff6ff',
-      badgeColor: '#2563eb',
-      image: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-          <line x1="12" y1="18" x2="12.01" y2="18" />
-        </svg>
-      )
-    },
-    {
-      id: 'laptops',
-      name: 'Laptop & Workstation',
-      desc: 'MacBook, Dell XPS, ThinkPad',
-      count: '850+ SP',
-      iconBg: '#eef2ff',
-      iconColor: '#4f46e5',
-      badgeBg: '#eef2ff',
-      badgeColor: '#4f46e5',
-      image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-          <line x1="2" y1="20" x2="22" y2="20" />
-        </svg>
-      )
-    },
-    {
-      id: 'accessories',
-      name: 'Phụ Kiện & Âm Thanh',
-      desc: 'Tai nghe hi-res, bàn phím cơ, sạc',
-      count: '3.4k+ SP',
-      iconBg: '#fff7ed',
-      iconColor: '#ea580c',
-      badgeBg: '#fff7ed',
-      badgeColor: '#ea580c',
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-          <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-        </svg>
-      )
-    },
-    {
-      id: 'smarthome',
-      name: 'Nhà Thông Minh & Gia Dụng',
-      desc: 'Robot hút bụi, máy lọc không khí',
-      count: '920+ SP',
-      iconBg: '#fff1f2',
-      iconColor: '#e11d48',
-      badgeBg: '#fff1f2',
-      badgeColor: '#e11d48',
-      image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
-        </svg>
-      )
-    }
-  ];
+  const [categories, setCategories] = useState(() =>
+    INITIAL_CATEGORIES.map(enrichCategoryWithIcon)
+  );
+  const [featuredProducts, setFeaturedProducts] = useState(() =>
+    INITIAL_PRODUCTS.slice(0, 8)
+  );
+  const [loadingFeatured, setLoadingFeatured] = useState(false);
 
-  const featuredProducts = [
-    {
-      id: '1',
-      name: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-      price: 49990000,
-      category: 'Laptop & Workstation',
-      stock: 12,
-      imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80'
-    },
-    {
-      id: '2',
-      name: 'iPhone 15 Pro Max 256GB Titan Tự Nhiên',
-      price: 29990000,
-      category: 'Điện thoại & Tablet',
-      stock: 18,
-      imageUrl: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=600&q=80'
-    },
-    {
-      id: '3',
-      name: 'Tai nghe Sony WH-1000XM5 Chống Ồn Cao Cấp',
-      price: 7990000,
-      category: 'Phụ Kiện & Âm Thanh',
-      stock: 25,
-      imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80'
-    },
-    {
-      id: '4',
-      name: 'Robot Hút Bụi Lau Nhà Ecovacs Deebot X2 OMNI',
-      price: 18990000,
-      category: 'Nhà Thông Minh & Gia Dụng',
-      stock: 6,
-      imageUrl: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80'
-    }
-  ];
+  useEffect(() => {
+    let isMounted = true;
+    setLoadingFeatured(true);
+
+    Promise.all([
+      categoryService.getPublicCategories(),
+      productService.getAll({ page: 0, size: 8 })
+    ])
+      .then(([catList, prodList]) => {
+        if (!isMounted) return;
+        if (Array.isArray(catList) && catList.length > 0) {
+          setCategories(catList.slice(0, 4).map(enrichCategoryWithIcon));
+        }
+        if (Array.isArray(prodList) && prodList.length > 0) {
+          setFeaturedProducts(prodList.slice(0, 8));
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoadingFeatured(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div>
@@ -183,7 +149,7 @@ const Home = () => {
               </p>
 
               {/* Action Buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2.75rem', flexWrap: 'wrap' }}>
                 <Link
                   to="/products"
                   style={{
@@ -197,7 +163,8 @@ const Home = () => {
                     alignItems: 'center',
                     gap: '0.5rem',
                     boxShadow: '0 8px 20px -4px rgba(29, 78, 216, 0.45)',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    textDecoration: 'none'
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
                   onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
@@ -219,7 +186,8 @@ const Home = () => {
                     alignItems: 'center',
                     gap: '0.5rem',
                     boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    textDecoration: 'none'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#2563eb';
@@ -241,7 +209,7 @@ const Home = () => {
               </div>
 
               {/* Three Stat Counters */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
                     100%
@@ -514,16 +482,17 @@ const Home = () => {
         </div>
       </section>
 
-      {/* 2. CATEGORIES SECTION (EXACT DESIGN AS SCREENSHOT) */}
+      {/* 2. CATEGORIES SECTION */}
       <section style={{ padding: '3.5rem 0 4rem', backgroundColor: '#ffffff' }}>
         <div className="container">
-          {/* Header */}
           <div
             style={{
               display: 'flex',
               alignItems: 'flex-end',
               justifyContent: 'space-between',
-              marginBottom: '2rem'
+              marginBottom: '2rem',
+              flexWrap: 'wrap',
+              gap: '1rem'
             }}
           >
             <div>
@@ -560,7 +529,8 @@ const Home = () => {
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.25rem'
+                gap: '0.25rem',
+                textDecoration: 'none'
               }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
@@ -574,7 +544,7 @@ const Home = () => {
             {categories.map((cat) => (
               <Link
                 key={cat.id}
-                to={`/products?category=${cat.id}`}
+                to={`/products?category=${encodeURIComponent(cat.id)}`}
                 style={{
                   backgroundColor: '#ffffff',
                   borderRadius: '16px',
@@ -599,7 +569,6 @@ const Home = () => {
                   e.currentTarget.style.borderColor = '#f1f5f9';
                 }}
               >
-                {/* Top: Icon + Badge */}
                 <div>
                   <div
                     style={{
@@ -671,7 +640,7 @@ const Home = () => {
                   }}
                 >
                   <img
-                    src={cat.image}
+                    src={cat.image || cat.imageUrl}
                     alt={cat.name}
                     style={{
                       width: '100%',
@@ -963,7 +932,9 @@ const Home = () => {
               display: 'flex',
               alignItems: 'flex-end',
               justifyContent: 'space-between',
-              marginBottom: '2rem'
+              marginBottom: '2rem',
+              flexWrap: 'wrap',
+              gap: '1rem'
             }}
           >
             <div>
@@ -1000,7 +971,8 @@ const Home = () => {
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.25rem'
+                gap: '0.25rem',
+                textDecoration: 'none'
               }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
@@ -1009,7 +981,11 @@ const Home = () => {
             </Link>
           </div>
 
-          <ProductGrid products={featuredProducts} />
+          {loadingFeatured && featuredProducts.length === 0 ? (
+            <Loading message="Đang tải sản phẩm tiêu biểu..." />
+          ) : (
+            <ProductGrid products={featuredProducts} />
+          )}
         </div>
       </section>
     </div>

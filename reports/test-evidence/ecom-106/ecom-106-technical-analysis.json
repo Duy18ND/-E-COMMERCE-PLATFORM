@@ -1,0 +1,68 @@
+{
+  "packageScripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --experimental-default-type=module --test tests/auth.qa.test.mjs"
+  },
+  "hasLintScript": false,
+  "navbarReturnsNull": true,
+  "headerCategoryLinkToProducts": true,
+  "homeUsesHardcodedCategories": true,
+  "homeUsesHardcodedProducts": true,
+  "productsCallsProductService": true,
+  "productsCallsCategoryService": false,
+  "productsUsesSearchParams": false,
+  "productsHasPagination": false,
+  "productsHasErrorState": false,
+  "productsFilterLogicExists": false,
+  "productsSortLogicExists": false,
+  "productsSearchLogicExists": false,
+  "productsMockItemsHaveImageUrl": false,
+  "categoryServiceUsesAxios": false,
+  "productServiceHandlesPagedResponse": false,
+  "backendInvalidImports": [
+    {
+      "file": "backend/product-service/src/main/java/com/ecommerce/product/controller/ProductController.java",
+      "imports": [
+        "import main.java.com.ecommerce.product.dto.response.CategoryResponse"
+      ]
+    },
+    {
+      "file": "backend/product-service/src/main/java/com/ecommerce/product/service/ProductService.java",
+      "imports": [
+        "import main.java.com.ecommerce.product.dto.response.CategoryResponse"
+      ]
+    },
+    {
+      "file": "backend/product-service/src/main/java/com/ecommerce/product/service/impl/ProductServiceImpl.java",
+      "imports": [
+        "import main.java.com.ecommerce.product.dto.response.CategoryResponse",
+        "import main.java.com.ecommerce.product.repository.CategoryRepository"
+      ]
+    },
+    {
+      "file": "backend/product-service/src/main/java/com/ecommerce/product/config/DataInitializer.java",
+      "imports": [
+        "import main.java.com.ecommerce.product.entity.Category",
+        "import main.java.com.ecommerce.product.repository.CategoryRepository"
+      ]
+    },
+    {
+      "file": "backend/product-service/src/main/java/com/ecommerce/product/dto/response/CategoryResponse.java",
+      "imports": [
+        "import main.java.com.ecommerce.product.entity.Category"
+      ]
+    },
+    {
+      "file": "backend/product-service/src/main/java/com/ecommerce/product/repository/CategoryRepository.java",
+      "imports": [
+        "import main.java.com.ecommerce.product.entity.Category"
+      ]
+    }
+  ],
+  "backendCheckedAccessDeniedImport": true,
+  "backendGetProductsSupportsCategoryParam": false,
+  "gatewayCategoriesIsPublicGet": true,
+  "runtimeIntegrationCrash": "TypeError: apiGetResult.map is not a function\n    at file:///C:/Users/HP/.gemini/antigravity/brain/5be8a462-8ef9-49ca-a04e-5291e5d1a7e9/scratch/run_ecom106_qa.mjs:145:18\n    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:647:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)"
+}

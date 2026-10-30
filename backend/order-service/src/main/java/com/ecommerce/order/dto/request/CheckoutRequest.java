@@ -35,7 +35,10 @@ public class CheckoutRequest implements Serializable {
     @NotNull(message = "Phương thức thanh toán không được để trống")
     private PaymentMethod paymentMethod;
 
-    @NotEmpty(message = "Danh sách sản phẩm trong đơn hàng không được rỗng")
+    /**
+     * [Task ECOM-267] Danh sách sản phẩm mua hàng.
+     * Có thể để trống khi đặt hàng từ giỏ (hệ thống sẽ tự động lấy các sản phẩm từ giỏ hàng của user).
+     */
     @Valid
     private List<CheckoutItemRequest> items;
 }
