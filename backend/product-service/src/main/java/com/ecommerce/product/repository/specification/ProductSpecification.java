@@ -44,7 +44,8 @@ public class ProductSpecification {
                     : filter.getCategory();
 
             if (StringUtils.hasText(targetCategory)) {
-                predicates.add(cb.equal(cb.lower(root.get("category")), targetCategory.trim().toLowerCase()));
+                String catPattern = "%" + targetCategory.trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("category")), catPattern));
             }
 
             // 4. Lọc theo khoảng giá

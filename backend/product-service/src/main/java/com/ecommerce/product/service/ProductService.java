@@ -30,6 +30,13 @@ public interface ProductService {
     }
 
     /**
+     * Get paginated products, optionally filtered by keyword and category.
+     */
+    default PagedResponse<ProductResponse> getProducts(String keyword, String category, Pageable pageable) {
+        return getProducts(ProductFilterRequest.builder().keyword(keyword).category(category).build(), pageable);
+    }
+
+    /**
      * Get product details by ID.
      */
     ProductResponse getProductById(Long id);
