@@ -193,10 +193,17 @@ public class OrderServiceImpl implements OrderService {
         return checkout(request);
     }
 
+    /**
+     * Hủy đơn hàng ở luồng nội bộ (system/job) — không kiểm tra quyền sở hữu.
+     * KHÔNG expose qua Controller.
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponse cancelOrder(Long orderId) {
-        return cancelOrder(orderId, null);
+        log.info("Processing internal (system) cancelOrder for orderId: {}", orderId);
+        Order order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
+        return cancelPendingOrderAndRestoreStock(order);
     }
 
     @Override
@@ -204,12 +211,27 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse cancelOrder(Long orderId, Long userId) {
         log.info("Processing cancelOrder for orderId: {}, userId: {}", orderId, userId);
 
+        // Chống Authentication Bypass: bắt buộc phải xác định được người dùng
+        if (userId == null) {
+            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
+        }
+
         Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
 
-        if (userId != null && !order.getUserId().equals(userId)) {
+        // Chống IDOR: chỉ chủ sở hữu mới được hủy đơn
+        if (!userId.equals(order.getUserId())) {
             throw new AccessDeniedException("Bạn không có quyền hủy đơn hàng này");
         }
+
+        return cancelPendingOrderAndRestoreStock(order);
+    }
+
+    /**
+     * Logic hủy dùng chung: chỉ cho phép hủy khi PENDING, chuyển CANCELLED và hoàn tồn kho qua Feign.
+     */
+    private OrderResponse cancelPendingOrderAndRestoreStock(Order order) {
+        Long orderId = order.getId();
 
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new IllegalStateException("Chỉ có thể hủy đơn hàng ở trạng thái PENDING. Trạng thái hiện tại: " + order.getStatus());
@@ -232,6 +254,9 @@ public class OrderServiceImpl implements OrderService {
         return mapToOrderResponse(updatedOrder);
     }
 
+    /**
+     * Lấy chi tiết đơn hàng ở luồng nội bộ — KHÔNG kiểm tra quyền. KHÔNG expose qua Controller.
+     */
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(Long id) {
@@ -242,11 +267,60 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public OrderResponse getOrderById(Long id, Long authenticatedUserId, String roles) {
+        boolean isAdmin = hasAdminRole(roles);
+
+        // Chống Authentication Bypass: người dùng thường bắt buộc phải có danh tính
+        if (authenticatedUserId == null && !isAdmin) {
+            throw new AccessDeniedException("Bạn không có quyền xem chi tiết đơn hàng này");
+        }
+
+        Order order = orderRepository.findByIdWithItems(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + id));
+
+        // Chống IDOR: chỉ chủ sở hữu hoặc ADMIN mới được xem
+        if (!isAdmin && !authenticatedUserId.equals(order.getUserId())) {
+            log.warn("IDOR attempt blocked: userId={} tried to read orderId={} owned by userId={}",
+                    authenticatedUserId, id, order.getUserId());
+            throw new AccessDeniedException("Bạn không có quyền xem chi tiết đơn hàng này");
+        }
+
+        return mapToOrderResponse(order);
+    }
+
+    /**
+     * Lấy lịch sử đơn hàng ở luồng nội bộ — KHÔNG kiểm tra quyền. KHÔNG expose qua Controller.
+     */
+    @Override
+    @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersByUserId(Long userId) {
         List<Order> orders = orderRepository.findByUserIdWithItems(userId);
         return orders.stream()
                 .map(this::mapToOrderResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getOrdersByUserId(Long targetUserId, Long authenticatedUserId, String roles) {
+        boolean isAdmin = hasAdminRole(roles);
+
+        if (authenticatedUserId == null || (!authenticatedUserId.equals(targetUserId) && !isAdmin)) {
+            log.warn("Order history access blocked: authenticatedUserId={} targetUserId={}", authenticatedUserId, targetUserId);
+            throw new AccessDeniedException("Bạn không có quyền xem đơn hàng của người dùng khác");
+        }
+
+        return getOrdersByUserId(targetUserId);
+    }
+
+    /**
+     * So khớp chính xác ROLE_ADMIN trong chuỗi roles (phân tách bởi dấu phẩy) do API Gateway truyền xuống,
+     * tránh false-positive kiểu "ROLE_ADMIN_VIEWER".
+     */
+    private boolean hasAdminRole(String roles) {
+        return roles != null && Arrays.stream(roles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
     }
 
     @Override

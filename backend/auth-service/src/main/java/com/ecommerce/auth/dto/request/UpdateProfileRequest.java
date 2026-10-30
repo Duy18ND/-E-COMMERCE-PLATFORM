@@ -23,7 +23,7 @@ public class UpdateProfileRequest implements Serializable {
     @Size(max = 150, message = "Họ tên không được vượt quá 150 ký tự")
     private String fullName;
 
-    @Pattern(regexp = "^(0|\\+84)[3|5|7|8|9][0-9]{8}$", message = "Số điện thoại không đúng định dạng Việt Nam")
+    @Pattern(regexp = "^(0|\\+84)[35789][0-9]{8}$", message = "Số điện thoại không đúng định dạng Việt Nam")
     private String phone;
 
     // Các trường cập nhật địa chỉ mặc định (tùy chọn)
