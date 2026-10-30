@@ -13,6 +13,7 @@ import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.repository.ProductReviewRepository;
 import com.ecommerce.product.service.ReviewService;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -146,7 +147,12 @@ public class ReviewServiceImpl implements ReviewService {
     private OrderDetailResponse fetchAndValidateOrder(Long orderId, Long userId, Long productId) {
         ApiResponse<OrderDetailResponse> orderApiResponse;
         try {
-            orderApiResponse = orderClient.getOrderById(orderId);
+            orderApiResponse = orderClient.getOrderById(orderId, userId);
+        } catch (FeignException.Forbidden e) {
+            log.warn("Order-service denied access to order {} for userId {}", orderId, userId);
+            throw new AccessDeniedException("Đơn hàng không thuộc về tài khoản của bạn");
+        } catch (FeignException.NotFound e) {
+            throw new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId);
         } catch (Exception e) {
             log.error("Failed to fetch order {} from order-service: {}", orderId, e.getMessage());
             throw new IllegalStateException("Không thể xác minh đơn hàng. Vui lòng thử lại sau.");

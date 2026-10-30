@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import com.ecommerce.auth.enums.UserStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -31,6 +32,8 @@ public class User {
     @Column(nullable = false, unique = true, length = 120)
     private String email;
 
+    /** BCrypt hash — tuyệt đối không serialize ra JSON. */
+    @JsonIgnore
     @Column(nullable = false, length = 255)
     private String password;
 
