@@ -19,6 +19,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/admin/orders")
@@ -72,7 +74,10 @@ public class AdminOrderController {
     }
 
     private void requireAdminRole(String roles) {
-        if (roles == null || !roles.contains("ROLE_ADMIN")) {
+        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
+        if (!isAdmin) {
             throw new AccessDeniedException("Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
         }
     }

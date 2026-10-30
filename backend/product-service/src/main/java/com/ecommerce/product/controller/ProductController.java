@@ -1,5 +1,6 @@
 package com.ecommerce.product.controller;
 
+import java.util.Arrays;
 import java.util.List;
 
 import jakarta.validation.Valid;
@@ -112,7 +113,12 @@ public class ProductController {
      * @param roles chuỗi roles nhận từ API Gateway qua header X-User-Roles
      */
     private void requireAdminRole(String roles) {
-        if (roles == null || !roles.contains("ROLE_ADMIN")) {
+        // Tách chuỗi roles theo dấu phẩy và so khớp chính xác để tránh false-positive
+        // (ví dụ: "ROLE_ADMIN_VIEWER" không được coi là ROLE_ADMIN)
+        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
+        if (!isAdmin) {
             throw new AccessDeniedException("Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
         }
     }
@@ -185,11 +191,14 @@ public class ProductController {
     /**
      * [Task ECOM-132 / ECOM-238] API tìm kiếm danh mục sản phẩm theo từ khóa.
      * Endpoint: GET /api/v1/products/categories/search?keyword=...
+     * Yêu cầu quyền ROLE_ADMIN qua header X-User-Roles.
      */
     @GetMapping("/categories/search")
-    @Operation(summary = "Tìm kiếm danh mục sản phẩm", description = "Tìm kiếm danh mục theo tên hoặc mô tả")
+    @Operation(summary = "Tìm kiếm danh mục sản phẩm [ADMIN]", description = "Chỉ ADMIN được phép tìm kiếm danh mục theo tên hoặc mô tả")
     public ResponseEntity<ApiResponse<List<CategoryResponse>>> searchCategories(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestParam(value = "keyword", required = false) String keyword) {
+        requireAdminRole(roles);
         List<CategoryResponse> response = productService.searchCategories(keyword);
         return ResponseEntity.ok(ApiResponse.success("Tìm kiếm danh mục sản phẩm thành công", response));
     }

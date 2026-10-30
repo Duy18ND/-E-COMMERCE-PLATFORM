@@ -11,6 +11,7 @@ import com.ecommerce.product.dto.response.ProductResponse;
 import com.ecommerce.product.entity.Category;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
+import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.CategoryRepository;
@@ -157,6 +158,7 @@ class ProductServiceTest {
                 .version(0L)
                 .build();
 
+        when(categoryRepository.existsByNameIgnoreCase("Phones")).thenReturn(true);
         when(productRepository.save(any(Product.class))).thenReturn(createdProduct);
 
         ProductResponse response = productService.createProduct(request);
@@ -230,6 +232,33 @@ class ProductServiceTest {
         verify(productRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
+    @Test
+    @DisplayName("Tạo danh mục mới thành công [ECOM-238]")
+    void shouldCreateCategorySuccessfully() {
+        CategoryRequest request = CategoryRequest.builder()
+                .name("  Phụ Kiện  ")
+                .description("Cáp sạc, ốp lưng")
+                .imageUrl("https://example.com/accessories.jpg")
+                .build();
+        Category savedCategory = Category.builder()
+                .id(10L)
+                .name("Phụ Kiện")
+                .description("Cáp sạc, ốp lưng")
+                .imageUrl("https://example.com/accessories.jpg")
+                .build();
+
+        when(categoryRepository.existsByNameIgnoreCase("Phụ Kiện")).thenReturn(false);
+        when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
+        CategoryResponse response = productService.createCategory(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(10L);
+        assertThat(response.getName()).isEqualTo("Phụ Kiện");
+        assertThat(response.getDescription()).isEqualTo("Cáp sạc, ốp lưng");
+        verify(categoryRepository, times(1)).existsByNameIgnoreCase("Phụ Kiện");
+        verify(categoryRepository, times(1)).save(any(Category.class));
+    }
+
     // =========================================================================
     // [Task ECOM-247] Unit Test cho CRUD sản phẩm (Product CRUD)
     // =========================================================================
@@ -260,6 +289,7 @@ class ProductServiceTest {
                 .build();
 
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(categoryRepository.existsByNameIgnoreCase("Laptops")).thenReturn(true);
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ProductResponse response = productService.updateProduct(1L, updateRequest);
@@ -350,44 +380,16 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("[ECOM-132 / ECOM-238 / ECOM-239] Tạo mới danh mục thành công")
-    void shouldCreateCategorySuccessfully() {
+    @DisplayName("Ném DuplicateResourceException khi tạo danh mục trùng tên [ECOM-239]")
+    void shouldThrowExceptionWhenCreateCategoryWithExistingName() {
         CategoryRequest request = CategoryRequest.builder()
-                .name("Tablet")
-                .description("Máy tính bảng")
-                .imageUrl("https://example.com/tablet.jpg")
+                .name("Laptop")
                 .build();
 
-        Category savedCategory = Category.builder()
-                .id(3L)
-                .name("Tablet")
-                .description("Máy tính bảng")
-                .imageUrl("https://example.com/tablet.jpg")
-                .build();
-
-        when(categoryRepository.existsByNameIgnoreCase("Tablet")).thenReturn(false);
-        when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
-
-        CategoryResponse response = productService.createCategory(request);
-
-        assertThat(response).isNotNull();
-        assertThat(response.getId()).isEqualTo(3L);
-        assertThat(response.getName()).isEqualTo("Tablet");
-        verify(categoryRepository, times(1)).save(any(Category.class));
-    }
-
-    @Test
-    @DisplayName("[ECOM-239] Ném IllegalStateException khi tạo danh mục bị trùng tên")
-    void shouldThrowIllegalStateExceptionWhenCreateDuplicateCategory() {
-        CategoryRequest request = CategoryRequest.builder()
-                .name("Laptops")
-                .description("Laptop trùng tên")
-                .build();
-
-        when(categoryRepository.existsByNameIgnoreCase("Laptops")).thenReturn(true);
+        when(categoryRepository.existsByNameIgnoreCase("Laptop")).thenReturn(true);
 
         assertThatThrownBy(() -> productService.createCategory(request))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("đã tồn tại");
 
         verify(categoryRepository, never()).save(any(Category.class));

@@ -69,33 +69,65 @@ public class OrderController {
     }
 
     @PutMapping("/{id}/cancel")
-    @Operation(summary = "Hủy đơn hàng", description = "Hủy đơn hàng ở trạng thái PENDING và gọi hoàn kho qua Product Service (Feign). Kiểm tra quyền sở hữu của authenticatedUserId")
+    @Operation(summary = "Hủy đơn hàng", description = "Hủy đơn hàng ở trạng thái PENDING và gọi hoàn kho qua Product Service (Feign). Bắt buộc X-User-Id và kiểm tra quyền sở hữu (chống IDOR)")
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
             @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @PathVariable Long id) {
+
+        requireAuthenticated(authenticatedUserId);
 
         OrderResponse response = orderService.cancelOrder(id, authenticatedUserId);
         return ResponseEntity.ok(ApiResponse.success("Hủy đơn hàng thành công", response));
     }
 
+    /**
+     * Lấy lịch sử đơn hàng của chính người dùng đang đăng nhập (userId lấy từ X-User-Id do Gateway gắn).
+     * Khai báo literal path "/my-orders" nên được Spring ưu tiên hơn pattern "/{id}".
+     */
+    @GetMapping("/my-orders")
+    @Operation(summary = "Lấy lịch sử đơn hàng của tôi", description = "Trích xuất userId từ header X-User-Id, FE không cần truyền userId trên URL")
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> getMyOrders(
+            @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles) {
+
+        requireAuthenticated(authenticatedUserId);
+
+        List<OrderResponse> response = orderService.getOrdersByUserId(authenticatedUserId, authenticatedUserId, roles);
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử đơn hàng thành công", response));
+    }
+
     @GetMapping("/{id}")
-    @Operation(summary = "Xem chi tiết đơn hàng", description = "Lấy thông tin chi tiết đơn hàng và các item theo ID (chống N+1 query)")
-    public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
-        OrderResponse response = orderService.getOrderById(id);
+    @Operation(summary = "Xem chi tiết đơn hàng", description = "Lấy chi tiết đơn hàng và các item theo ID (chống N+1 query). Chỉ chủ sở hữu hoặc ROLE_ADMIN được xem (chống IDOR)")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(
+            @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long id) {
+
+        requireAuthenticated(authenticatedUserId);
+
+        OrderResponse response = orderService.getOrderById(id, authenticatedUserId, roles);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin đơn hàng thành công", response));
     }
 
     @GetMapping("/user/{userId}")
-    @Operation(summary = "Lấy lịch sử đơn hàng của người dùng", description = "Lấy toàn bộ đơn hàng của userId kèm danh sách sản phẩm, kiểm tra quyền sở hữu với authenticatedUserId")
+    @Operation(summary = "Lấy lịch sử đơn hàng của người dùng", description = "Lấy toàn bộ đơn hàng của userId kèm danh sách sản phẩm. Chỉ chính chủ hoặc ROLE_ADMIN được xem")
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrdersByUserId(
             @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @PathVariable Long userId) {
 
-        if (authenticatedUserId != null && !authenticatedUserId.equals(userId)) {
-            throw new AccessDeniedException("Bạn không có quyền xem đơn hàng của người dùng khác");
-        }
+        requireAuthenticated(authenticatedUserId);
 
-        List<OrderResponse> response = orderService.getOrdersByUserId(userId);
+        List<OrderResponse> response = orderService.getOrdersByUserId(userId, authenticatedUserId, roles);
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử đơn hàng thành công", response));
+    }
+
+    // ─── Helper ───────────────────────────────────────────────────────────────
+
+    private void requireAuthenticated(Long authenticatedUserId) {
+        if (authenticatedUserId == null) {
+            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
+        }
     }
 }
