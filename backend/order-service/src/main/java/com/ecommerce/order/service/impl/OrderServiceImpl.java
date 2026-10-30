@@ -10,6 +10,7 @@ import com.ecommerce.order.dto.response.DashboardResponse;
 import com.ecommerce.order.dto.response.OrderItemResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
 import com.ecommerce.order.dto.response.PagedResponse;
+import com.ecommerce.order.entity.Cart;
 import com.ecommerce.order.entity.Order;
 import com.ecommerce.order.entity.OrderItem;
 import com.ecommerce.order.enums.OrderStatus;
@@ -19,6 +20,7 @@ import com.ecommerce.order.event.PaymentSuccessEvent;
 import com.ecommerce.order.exception.AccessDeniedException;
 import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.producer.KafkaOrderProducer;
+import com.ecommerce.order.repository.CartRepository;
 import com.ecommerce.order.repository.OrderRepository;
 import com.ecommerce.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final ProductClient productClient;
     private final KafkaOrderProducer kafkaOrderProducer;
+    private final CartRepository cartRepository;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
             OrderStatus.PENDING, Set.of(OrderStatus.PAID, OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED),
@@ -63,6 +66,11 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponse checkout(CheckoutRequest request) {
+        // [Task ECOM-267] Nếu request không truyền kèm items (hoặc items rỗng), tự động lấy từ giỏ hàng hiện tại
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            return createOrderFromCart(request.getUserId(), request);
+        }
+
         log.info("Processing checkout for userId: {}, items count: {}", request.getUserId(), request.getItems().size());
 
         // 1. Chống Price Tampering: Lấy giá chính xác mới nhất và tên từ Product Service (DB)
@@ -124,6 +132,17 @@ public class OrderServiceImpl implements OrderService {
         Order savedOrder = orderRepository.save(order);
         log.info("Order created successfully with id: {}, totalAmount: {}", savedOrder.getId(), savedOrder.getTotalAmount());
 
+        // [Task ECOM-123 / ECOM-267] Làm trống giỏ hàng nếu user có giỏ hàng đang lưu
+        if (request.getUserId() != null && cartRepository != null) {
+            cartRepository.findByUserIdWithItems(request.getUserId()).ifPresent(c -> {
+                if (c.getItems() != null && !c.getItems().isEmpty()) {
+                    c.clearItems();
+                    cartRepository.save(c);
+                    log.info("[Task ECOM-267] Cleared active cart items for userId: {}", request.getUserId());
+                }
+            });
+        }
+
         // 4. Bắn sự kiện order-created qua Kafka cho payment-service
         OrderEvent orderEvent = OrderEvent.builder()
                 .orderId(savedOrder.getId())
@@ -137,6 +156,41 @@ public class OrderServiceImpl implements OrderService {
         kafkaOrderProducer.sendOrderCreatedEvent(orderEvent);
 
         return mapToOrderResponse(savedOrder);
+    }
+
+    /**
+     * [Task ECOM-267] API tạo đơn hàng từ giỏ (Create Order from Cart)
+     * Phụ trách bởi: Đoàn Mạnh Duy
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderResponse createOrderFromCart(Long userId, CheckoutRequest request) {
+        Long targetUserId = userId != null ? userId : request.getUserId();
+        if (targetUserId == null) {
+            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (userId)");
+        }
+        log.info("[Task ECOM-267] Creating order from cart for userId: {}", targetUserId);
+
+        Cart cart = cartRepository.findByUserIdWithItems(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng của người dùng ID: " + targetUserId));
+
+        if (cart.getItems() == null || cart.getItems().isEmpty()) {
+            throw new IllegalStateException("Giỏ hàng của bạn đang trống! Vui lòng thêm sản phẩm vào giỏ trước khi đặt hàng.");
+        }
+
+        // Chuyển CartItem sang CheckoutItemRequest (chỉ cần productId và quantity, giá và tên sẽ lấy trực tiếp từ Product Service)
+        List<CheckoutItemRequest> items = cart.getItems().stream()
+                .map(ci -> CheckoutItemRequest.builder()
+                        .productId(ci.getProductId())
+                        .quantity(ci.getQuantity())
+                        .build())
+                .toList();
+
+        request.setUserId(targetUserId);
+        request.setItems(items);
+
+        // Gọi logic checkout chuẩn (chống giá ảo, trừ tồn kho, lưu DB, bắn Kafka)
+        return checkout(request);
     }
 
     @Override

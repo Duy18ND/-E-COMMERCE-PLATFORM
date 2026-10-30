@@ -1,9 +1,11 @@
 package com.ecommerce.auth.service;
 
 import com.ecommerce.auth.dto.request.AddressRequest;
+import com.ecommerce.auth.dto.request.UpdateProfileRequest;
 import com.ecommerce.auth.dto.request.UpdateUserStatusRequest;
 import com.ecommerce.auth.dto.response.AddressResponse;
 import com.ecommerce.auth.dto.response.PagedResponse;
+import com.ecommerce.auth.dto.response.UserProfileResponse;
 import com.ecommerce.auth.dto.response.UserSummaryResponse;
 import com.ecommerce.auth.entity.Role;
 import com.ecommerce.auth.entity.User;
@@ -248,5 +250,58 @@ class UserServiceTest {
         );
 
         verify(userRepository, never()).save(any());
+    }
+
+    // =========================================================================
+    // [Task ECOM-128] Unit Tests cho Xem và Cập nhật hồ sơ cá nhân
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-128] Lấy thông tin cá nhân (Profile) thành công")
+    void getProfile_Success() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+        when(addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(1L)).thenReturn(List.of(sampleAddress));
+
+        UserProfileResponse response = userService.getProfile(1L);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getEmail()).isEqualTo("user@example.com");
+        assertThat(response.getFullName()).isEqualTo("Nguyen Van A");
+        assertThat(response.getAddresses()).hasSize(1);
+        assertThat(response.getDefaultAddress()).isNotNull();
+        assertThat(response.getDefaultAddress().getCity()).isEqualTo("Ha Noi");
+        verify(userRepository, times(1)).findById(1L);
+    }
+
+    @Test
+    @DisplayName("[ECOM-128] Ném ResourceNotFoundException khi lấy profile người dùng không tồn tại")
+    void getProfile_UserNotFound_ShouldThrowResourceNotFoundException() {
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> userService.getProfile(999L));
+    }
+
+    @Test
+    @DisplayName("[ECOM-128] Cập nhật thông tin cá nhân và địa chỉ thành công")
+    void updateProfile_Success() {
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .fullName("Đoàn Mạnh Duy")
+                .phone("0912345678")
+                .addressLine("789 Cầu Giấy")
+                .city("Hà Nội")
+                .build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(addressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc(1L)).thenReturn(List.of(sampleAddress));
+        when(addressRepository.save(any(UserAddress.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserProfileResponse response = userService.updateProfile(1L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(sampleUser.getFullName()).isEqualTo("Đoàn Mạnh Duy");
+        assertThat(sampleUser.getPhone()).isEqualTo("0912345678");
+        verify(userRepository, times(1)).save(sampleUser);
     }
 }

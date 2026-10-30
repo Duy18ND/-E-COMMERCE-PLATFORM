@@ -14,8 +14,20 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * [Task ECOM-122] Entity mapping bảng 'orders' trong MySQL.
+ * Phụ trách bởi: Đoàn Mạnh Duy
+ * Thiết kế schema lưu trữ thông tin đơn hàng của khách hàng, tích hợp các Index tối ưu hóa truy vấn:
+ * - idx_orders_user_id: Tăng tốc độ truy vấn lịch sử đơn hàng của khách hàng (ECOM-127, ECOM-276).
+ * - idx_orders_status: Tăng tốc độ lọc danh sách đơn hàng theo trạng thái cho Admin (ECOM-142, ECOM-294).
+ * - idx_orders_created_at: Hỗ trợ sắp xếp đơn hàng mới nhất và thống kê doanh thu (ECOM-145, ECOM-326).
+ */
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", indexes = {
+        @Index(name = "idx_orders_user_id", columnList = "user_id"),
+        @Index(name = "idx_orders_status", columnList = "status"),
+        @Index(name = "idx_orders_created_at", columnList = "created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor
