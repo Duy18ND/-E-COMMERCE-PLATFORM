@@ -4,6 +4,8 @@ import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
+import com.ecommerce.product.dto.request.StockAdjustmentRequest;
+import com.ecommerce.product.dto.request.StockInboundRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
@@ -34,6 +36,12 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -123,7 +131,7 @@ class ProductServiceTest {
     @DisplayName("Khôi phục tồn kho thành công khi đơn hàng bị hủy")
     void shouldRestoreStockSuccessfully() {
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
-        when(productRepository.save(any(Product.class))).thenReturn(sampleProduct);
+        when(productRepository.saveAndFlush(any(Product.class))).thenReturn(sampleProduct);
 
         StockReservationItem item = StockReservationItem.builder()
                 .productId(1L)
@@ -133,7 +141,7 @@ class ProductServiceTest {
         productService.restoreStock(List.of(item));
 
         assertThat(sampleProduct.getStockQuantity()).isEqualTo(14);
-        verify(productRepository, times(1)).save(sampleProduct);
+        verify(productRepository, times(1)).saveAndFlush(sampleProduct);
     }
 
     @Test
@@ -428,5 +436,161 @@ class ProductServiceTest {
         productService.deleteCategory(1L);
 
         verify(categoryRepository, times(1)).delete(existingCategory);
+    }
+
+    @Test
+    @DisplayName("Nhập kho thành công: Cộng dồn số lượng và tự động chuyển từ OUT_OF_STOCK sang ACTIVE")
+    void shouldInboundStockSuccessfully() {
+        Product outOfStockProduct = Product.builder()
+                .id(10L)
+                .name("AirPods Pro 2")
+                .price(BigDecimal.valueOf(249.00))
+                .stockQuantity(0)
+                .category("Audio")
+                .status(ProductStatus.OUT_OF_STOCK)
+                .version(1L)
+                .build();
+
+        when(productRepository.findById(10L)).thenReturn(Optional.of(outOfStockProduct));
+        when(productRepository.saveAndFlush(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockInboundRequest request = StockInboundRequest.builder()
+                .quantity(25)
+                .note("Nhập lô hàng chính hãng đợt 1")
+                .build();
+
+        ProductResponse response = productService.inboundStock(10L, request);
+
+        assertThat(response.getStockQuantity()).isEqualTo(25);
+        assertThat(response.getStatus()).isEqualTo(ProductStatus.ACTIVE);
+        verify(productRepository, times(1)).saveAndFlush(outOfStockProduct);
+    }
+
+    @Test
+    @DisplayName("Điều chỉnh tồn kho thành công: Về 0 tự động chuyển trạng thái sang OUT_OF_STOCK")
+    void shouldAdjustStockSuccessfully_AndSetOutOfStockWhenZero() {
+        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(productRepository.saveAndFlush(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockAdjustmentRequest request = StockAdjustmentRequest.builder()
+                .actualStock(0)
+                .reason("Kiểm kê cuối tháng phát hiện hết hàng khả dụng")
+                .build();
+
+        ProductResponse response = productService.adjustStock(1L, request);
+
+        assertThat(response.getStockQuantity()).isEqualTo(0);
+        assertThat(response.getStatus()).isEqualTo(ProductStatus.OUT_OF_STOCK);
+        verify(productRepository, times(1)).saveAndFlush(sampleProduct);
+    }
+
+    @Test
+    @DisplayName("Điều chỉnh tồn kho thất bại: Chặn số lượng tồn kho âm (< 0)")
+    void shouldThrowExceptionWhenAdjustStockNegative() {
+        StockAdjustmentRequest negativeAdjust = StockAdjustmentRequest.builder()
+                .actualStock(-5)
+                .reason("Nhập nhầm số liệu kiểm kê")
+                .build();
+
+        assertThatThrownBy(() -> productService.adjustStock(1L, negativeAdjust))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("không được nhỏ hơn 0");
+
+        verify(productRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Kiểm thử đồng thời (Concurrency): 20 luồng cùng reserveStock cho kho 10 SP - Không bao giờ âm kho")
+    void shouldPreventNegativeStockUnderConcurrentReservations() throws InterruptedException {
+        final Object dbLock = new Object();
+        final AtomicInteger dbStock = new AtomicInteger(10);
+        final AtomicLong dbVersion = new AtomicLong(0L);
+
+        when(productRepository.findById(99L)).thenAnswer(invocation -> {
+            synchronized (dbLock) {
+                return Optional.of(Product.builder()
+                        .id(99L)
+                        .name("PS5 Pro Limited Edition")
+                        .price(BigDecimal.valueOf(699.99))
+                        .stockQuantity(dbStock.get())
+                        .status(ProductStatus.ACTIVE)
+                        .version(dbVersion.get())
+                        .build());
+            }
+        });
+
+        when(productRepository.saveAndFlush(any(Product.class))).thenAnswer(invocation -> {
+            Product entity = invocation.getArgument(0);
+            synchronized (dbLock) {
+                if (!entity.getVersion().equals(dbVersion.get())) {
+                    throw new ObjectOptimisticLockingFailureException(Product.class, 99L);
+                }
+                if (entity.getStockQuantity() < 0) {
+                    throw new IllegalStateException("Vi phạm ràng buộc không âm: stock_quantity < 0");
+                }
+                dbStock.set(entity.getStockQuantity());
+                long nextVersion = dbVersion.incrementAndGet();
+                entity.setVersion(nextVersion);
+                return entity;
+            }
+        });
+
+        int threadCount = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        CountDownLatch startGate = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger blockedByNotEnoughStockCount = new AtomicInteger(0);
+        AtomicInteger unexpectedErrorCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startGate.await();
+                    StockReservationItem item = StockReservationItem.builder()
+                            .productId(99L)
+                            .quantity(1)
+                            .build();
+
+                    boolean completed = false;
+                    for (int attempt = 0; attempt < 50 && !completed; attempt++) {
+                        try {
+                            productService.reserveStock(List.of(item));
+                            successCount.incrementAndGet();
+                            completed = true;
+                        } catch (NotEnoughStockException ex) {
+                            if (ex.getMessage() != null && ex.getMessage().contains("Optimistic Lock")) {
+                                // Xung đột phiên bản @Version -> thử lại CAS như cơ chế thực tế
+                                Thread.yield();
+                            } else {
+                                blockedByNotEnoughStockCount.incrementAndGet();
+                                completed = true;
+                            }
+                        }
+                    }
+                    if (!completed) {
+                        blockedByNotEnoughStockCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    unexpectedErrorCount.incrementAndGet();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        readyLatch.await(5, TimeUnit.SECONDS);
+        startGate.countDown();
+        boolean finished = doneLatch.await(10, TimeUnit.SECONDS);
+        executor.shutdownNow();
+
+        assertThat(finished).isTrue();
+        assertThat(unexpectedErrorCount.get()).isZero();
+        assertThat(dbStock.get()).isZero();
+        assertThat(successCount.get()).isEqualTo(10);
+        assertThat(blockedByNotEnoughStockCount.get()).isEqualTo(10);
     }
 }
