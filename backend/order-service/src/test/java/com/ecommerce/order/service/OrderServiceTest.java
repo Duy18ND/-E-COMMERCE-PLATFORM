@@ -59,6 +59,9 @@ class OrderServiceTest {
     @Mock
     private CartRepository cartRepository;
 
+    @Mock
+    private com.ecommerce.order.repository.OrderStatusHistoryRepository orderStatusHistoryRepository;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 
