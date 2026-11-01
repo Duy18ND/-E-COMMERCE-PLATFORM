@@ -105,6 +105,18 @@ public interface OrderService {
     OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus);
 
     /**
+     * [Task ECOM-187 / ECOM-317] Admin cập nhật trạng thái đơn hàng kèm người thực hiện, vai trò và ghi chú.
+     * Ghi nhận đồng bộ vào nhật ký trạng thái order_status_history trong cùng một transaction.
+     */
+    OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus, String updatedBy, String actorRole, String note);
+
+    /**
+     * [Task ECOM-315 / ECOM-171] Lấy danh sách lịch sử trạng thái theo đơn hàng (Timeline).
+     * Kiểm tra quyền sở hữu người dùng (chống IDOR) hoặc yêu cầu quyền ROLE_ADMIN.
+     */
+    List<com.ecommerce.order.dto.response.OrderStatusHistoryResponse> getOrderStatusHistory(Long orderId, Long authenticatedUserId, String roles);
+
+    /**
      * Lấy thống kê tổng quan (Dashboard) cho Admin:
      * - Tổng số đơn hàng.
      * - Tổng doanh thu (chỉ tính đơn có trạng thái PAID, DELIVERED hoặc hoàn thành).

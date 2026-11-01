@@ -29,4 +29,8 @@ public class OrderResponse implements Serializable {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<OrderItemResponse> items;
+    /**
+     * [Task ECOM-171 / ECOM-315] Lịch sử tiến trình trạng thái đơn hàng (Timeline).
+     */
+    private List<OrderStatusHistoryResponse> statusHistories;
 }

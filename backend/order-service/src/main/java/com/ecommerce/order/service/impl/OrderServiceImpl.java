@@ -9,10 +9,12 @@ import com.ecommerce.order.dto.response.ApiResponse;
 import com.ecommerce.order.dto.response.DashboardResponse;
 import com.ecommerce.order.dto.response.OrderItemResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
+import com.ecommerce.order.dto.response.OrderStatusHistoryResponse;
 import com.ecommerce.order.dto.response.PagedResponse;
 import com.ecommerce.order.entity.Cart;
 import com.ecommerce.order.entity.Order;
 import com.ecommerce.order.entity.OrderItem;
+import com.ecommerce.order.entity.OrderStatusHistory;
 import com.ecommerce.order.enums.OrderStatus;
 import com.ecommerce.order.event.OrderEvent;
 import com.ecommerce.order.event.PaymentFailedEvent;
@@ -22,6 +24,7 @@ import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.producer.KafkaOrderProducer;
 import com.ecommerce.order.repository.CartRepository;
 import com.ecommerce.order.repository.OrderRepository;
+import com.ecommerce.order.repository.OrderStatusHistoryRepository;
 import com.ecommerce.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +45,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductClient productClient;
     private final KafkaOrderProducer kafkaOrderProducer;
     private final CartRepository cartRepository;
+    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
             OrderStatus.PENDING, Set.of(OrderStatus.PAID, OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED),
@@ -131,6 +135,10 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
         log.info("Order created successfully with id: {}, totalAmount: {}", savedOrder.getId(), savedOrder.getTotalAmount());
+
+        // [Task ECOM-171 / ECOM-187] Ghi nhận mốc lịch sử đầu tiên khi đơn hàng vừa được khởi tạo
+        recordStatusHistory(savedOrder, OrderStatus.PENDING, null, "ORDER_CREATED",
+                "CUSTOMER:" + savedOrder.getUserId(), "ROLE_CUSTOMER", "Đơn hàng đã được đặt thành công");
 
         // [Task ECOM-123 / ECOM-267] Làm trống giỏ hàng nếu user có giỏ hàng đang lưu
         if (request.getUserId() != null && cartRepository != null) {
@@ -241,6 +249,11 @@ public class OrderServiceImpl implements OrderService {
         Order updatedOrder = orderRepository.save(order);
         log.info("Order status updated to CANCELLED for orderId: {}", orderId);
 
+        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử trạng thái khi khách hàng hủy đơn hàng
+        recordStatusHistory(updatedOrder, OrderStatus.CANCELLED, OrderStatus.PENDING, "ORDER_CANCELLED",
+                order.getUserId() != null ? "CUSTOMER:" + order.getUserId() : "CUSTOMER",
+                "ROLE_CUSTOMER", "Khách hàng hủy đơn hàng");
+
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -338,8 +351,12 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(OrderStatus.PAID);
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
         log.info("[Saga Step] Order status successfully updated to PAID for orderId: {}", event.getOrderId());
+
+        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thành công
+        recordStatusHistory(savedOrder, OrderStatus.PAID, OrderStatus.PENDING, "PAYMENT_SUCCESS",
+                "PAYMENT_SERVICE", "SYSTEM", "Đã thanh toán thành công qua cổng thanh toán");
     }
 
     @Override
@@ -357,9 +374,14 @@ public class OrderServiceImpl implements OrderService {
             return;
         }
 
+        OrderStatus previousStatus = order.getStatus();
         order.setStatus(OrderStatus.FAILED);
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
         log.info("[Saga Step] Order status updated to FAILED for orderId: {}", event.getOrderId());
+
+        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thất bại
+        recordStatusHistory(savedOrder, OrderStatus.FAILED, previousStatus, "PAYMENT_FAILED",
+                "PAYMENT_SERVICE", "SYSTEM", "Thanh toán thất bại: " + event.getReason());
 
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
@@ -398,7 +420,21 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus) {
-        log.info("Admin updating order status for orderId: {} to {}", orderId, newStatus);
+        return updateOrderStatus(orderId, newStatus, "ADMIN", "ROLE_ADMIN", null);
+    }
+
+    /**
+     * [Task ECOM-186 / ECOM-187 / ECOM-317] Admin cập nhật trạng thái đơn hàng:
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     * - Task ECOM-186: Ràng buộc chuyển trạng thái theo State Machine (PENDING -> CONFIRMED -> SHIPPING -> DELIVERED),
+     *   chặn mọi hành vi chuyển trạng thái trái phép hoặc quay lùi trạng thái.
+     * - Task ECOM-187: Ghi lại actor, thời điểm và ghi chú vào bảng order_status_history.
+     * - Task ECOM-317: Đồng bộ trạng thái đơn hàng giữa Admin và Customer trong cùng transaction.
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus, String updatedBy, String actorRole, String note) {
+        log.info("Admin updating order status for orderId: {} to {}, updatedBy: {}, note: {}", orderId, newStatus, updatedBy, note);
 
         Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
@@ -432,7 +468,85 @@ public class OrderServiceImpl implements OrderService {
         Order savedOrder = orderRepository.save(order);
         log.info("Order status updated successfully from {} to {} for orderId: {}", currentStatus, newStatus, orderId);
 
+        // [Task ECOM-187 / ECOM-317] Ghi nhận lịch sử trạng thái kèm người cập nhật và ghi chú
+        String logNote = (note != null && !note.trim().isEmpty())
+                ? note.trim()
+                : String.format("Admin cập nhật trạng thái đơn hàng từ %s sang %s", currentStatus, newStatus);
+
+        recordStatusHistory(savedOrder, newStatus, currentStatus, "ADMIN_STATUS_UPDATE",
+                updatedBy != null ? updatedBy : "ADMIN",
+                actorRole != null ? actorRole : "ROLE_ADMIN",
+                logNote);
+
         return mapToOrderResponse(savedOrder);
+    }
+
+    /**
+     * [Task ECOM-315 / ECOM-171] Lấy dòng thời gian lịch sử trạng thái đơn hàng:
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     * - Trả về danh sách OrderStatusHistoryResponse sắp xếp theo thời gian tăng dần.
+     * - Kiểm tra quyền sở hữu đối với người dùng thông thường (chống IDOR). Admin được xem mọi đơn hàng.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderStatusHistoryResponse> getOrderStatusHistory(Long orderId, Long authenticatedUserId, String roles) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
+
+        boolean isAdmin = hasAdminRole(roles);
+
+        if (!isAdmin && authenticatedUserId != null && !order.getUserId().equals(authenticatedUserId)) {
+            throw new AccessDeniedException("Bạn không có quyền xem lịch sử đơn hàng của người dùng khác");
+        }
+
+        if (orderStatusHistoryRepository == null) {
+            return List.of();
+        }
+
+        List<OrderStatusHistory> histories = orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
+        return histories.stream()
+                .map(this::mapToStatusHistoryResponse)
+                .toList();
+    }
+
+    /**
+     * [Task ECOM-171 / ECOM-187] Helper ghi nhận bản ghi vào bảng order_status_history.
+     */
+    private OrderStatusHistory recordStatusHistory(Order order,
+                                                   OrderStatus newStatus,
+                                                   OrderStatus previousStatus,
+                                                   String action,
+                                                   String updatedBy,
+                                                   String actorRole,
+                                                   String note) {
+        if (orderStatusHistoryRepository == null) {
+            return null;
+        }
+        OrderStatusHistory history = OrderStatusHistory.builder()
+                .order(order)
+                .status(newStatus)
+                .previousStatus(previousStatus)
+                .action(action)
+                .updatedBy(updatedBy != null ? updatedBy : "SYSTEM")
+                .actorRole(actorRole != null ? actorRole : "SYSTEM")
+                .note(note)
+                .build();
+        return orderStatusHistoryRepository.save(history);
+    }
+
+    private OrderStatusHistoryResponse mapToStatusHistoryResponse(OrderStatusHistory history) {
+        return OrderStatusHistoryResponse.builder()
+                .id(history.getId())
+                .orderId(history.getOrder() != null ? history.getOrder().getId() : null)
+                .status(history.getStatus())
+                .statusDescription(OrderStatusHistoryResponse.getStatusDescription(history.getStatus()))
+                .previousStatus(history.getPreviousStatus())
+                .action(history.getAction())
+                .updatedBy(history.getUpdatedBy())
+                .actorRole(history.getActorRole())
+                .note(history.getNote())
+                .createdAt(history.getCreatedAt())
+                .build();
     }
 
     @Override
@@ -474,6 +588,10 @@ public class OrderServiceImpl implements OrderService {
                 ? order.getOrderItems().stream().map(this::mapToOrderItemResponse).toList()
                 : List.of();
 
+        List<OrderStatusHistoryResponse> historyResponses = (order.getStatusHistories() != null && !order.getStatusHistories().isEmpty())
+                ? order.getStatusHistories().stream().map(this::mapToStatusHistoryResponse).toList()
+                : List.of();
+
         return OrderResponse.builder()
                 .id(order.getId())
                 .userId(order.getUserId())
@@ -486,6 +604,7 @@ public class OrderServiceImpl implements OrderService {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .items(itemResponses)
+                .statusHistories(historyResponses)
                 .build();
     }
 

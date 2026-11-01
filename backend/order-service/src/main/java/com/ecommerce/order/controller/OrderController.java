@@ -3,6 +3,7 @@ package com.ecommerce.order.controller;
 import com.ecommerce.order.dto.request.CheckoutRequest;
 import com.ecommerce.order.dto.response.ApiResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
+import com.ecommerce.order.dto.response.OrderStatusHistoryResponse;
 import com.ecommerce.order.exception.AccessDeniedException;
 import com.ecommerce.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -108,6 +109,26 @@ public class OrderController {
 
         OrderResponse response = orderService.getOrderById(id, authenticatedUserId, roles);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin đơn hàng thành công", response));
+    }
+
+    /**
+     * [Task ECOM-315 / ECOM-171 / ECOM-317] API lấy lịch sử dòng thời gian trạng thái đơn hàng (Timeline).
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     * - Trích xuất userId từ header X-User-Id.
+     * - Kiểm tra quyền sở hữu với authenticatedUserId (chống IDOR).
+     * - Trả về các mốc trạng thái với thời gian thực tế, không suy diễn trạng thái chưa cập nhật.
+     */
+    @GetMapping("/{id}/history")
+    @Operation(summary = "Xem lịch sử trạng thái đơn hàng (Timeline)", description = "Lấy dòng thời gian các mốc thay đổi trạng thái của đơn hàng theo thời gian thực tế. Kiểm tra quyền sở hữu của authenticatedUserId")
+    public ResponseEntity<ApiResponse<List<OrderStatusHistoryResponse>>> getOrderStatusHistory(
+            @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long id) {
+
+        requireAuthenticated(authenticatedUserId);
+
+        List<OrderStatusHistoryResponse> response = orderService.getOrderStatusHistory(id, authenticatedUserId, roles);
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử trạng thái đơn hàng thành công", response));
     }
 
     @GetMapping("/user/{userId}")

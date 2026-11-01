@@ -78,6 +78,15 @@ public class Order implements Serializable {
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
 
+    /**
+     * [Task ECOM-171] Danh sách lịch sử các mốc trạng thái của đơn hàng.
+     */
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("createdAt ASC")
+    @JsonManagedReference
+    @Builder.Default
+    private List<OrderStatusHistory> statusHistories = new ArrayList<>();
+
     public void addOrderItem(OrderItem item) {
         if (orderItems == null) {
             orderItems = new ArrayList<>();
@@ -91,5 +100,13 @@ public class Order implements Serializable {
             orderItems.remove(item);
             item.setOrder(null);
         }
+    }
+
+    public void addStatusHistory(OrderStatusHistory history) {
+        if (statusHistories == null) {
+            statusHistories = new ArrayList<>();
+        }
+        statusHistories.add(history);
+        history.setOrder(this);
     }
 }
