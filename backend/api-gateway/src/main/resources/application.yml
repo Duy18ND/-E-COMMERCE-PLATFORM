@@ -59,7 +59,7 @@ spring:
         - id: product-service-admin
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/admin,/api/v1/products/admin/**
+            - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**
             - Method=GET
           filters:
             - StripPrefix=0
@@ -73,7 +73,7 @@ spring:
         - id: product-service-public
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/**
+            - Path=/api/v1/products/**,/api/v1/flash-sales,/api/v1/flash-sales/**
             - Method=GET
           filters:
             - StripPrefix=0

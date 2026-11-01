@@ -1,6 +1,8 @@
 package com.ecommerce.order.service;
 
 import com.ecommerce.order.client.ProductClient;
+import com.ecommerce.order.client.dto.ActiveFlashSaleDto;
+import com.ecommerce.order.client.dto.FlashSaleReserveRequest;
 import com.ecommerce.order.client.dto.ProductResponse;
 import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.request.CheckoutItemRequest;
@@ -618,5 +620,107 @@ class OrderServiceTest {
 
         assertThrows(ResourceNotFoundException.class, () -> orderService.createOrderFromCart(userId, request));
         verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[Flash Sale] Checkout tự động áp dụng giá Flash Sale và gọi trừ tồn kho Flash Sale khi sản phẩm có activeFlashSale")
+    void checkout_WithActiveFlashSale_ShouldApplyFlashSalePriceAndReserveFlashSaleStock() {
+        ActiveFlashSaleDto activeFs = ActiveFlashSaleDto.builder()
+                .campaignId(10L)
+                .flashSalePrice(new BigDecimal("750.00"))
+                .quantity(20)
+                .soldQuantity(3)
+                .remainingStock(17)
+                .userLimit(2)
+                .endTime(LocalDateTime.now().plusHours(2))
+                .build();
+
+        ProductResponse flashSaleProduct = ProductResponse.builder()
+                .id(101L)
+                .name("iPhone 15 Pro")
+                .price(new BigDecimal("1000.00"))
+                .stockQuantity(30)
+                .activeFlashSale(activeFs)
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(flashSaleProduct));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(sampleProduct2));
+        when(productClient.reserveFlashSaleStock(any(FlashSaleReserveRequest.class)))
+                .thenReturn(ApiResponse.success(null));
+        when(productClient.reserveStock(any())).thenReturn(ApiResponse.success(null));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order o = invocation.getArgument(0);
+            o.setId(88L);
+            o.setCreatedAt(LocalDateTime.now());
+            return o;
+        });
+
+        OrderResponse response = orderService.checkout(sampleCheckoutRequest);
+
+        // Tổng tiền = 750.00 * 2 (Flash Sale) + 50.00 * 1 (giá thường) = 1550.00
+        assertThat(response).isNotNull();
+        assertThat(response.getTotalAmount()).isEqualByComparingTo(new BigDecimal("1550.00"));
+        assertThat(response.getItems()).hasSize(2);
+        assertThat(response.getItems().get(0).getPriceAtPurchase()).isEqualByComparingTo(new BigDecimal("750.00"));
+        assertThat(response.getItems().get(1).getPriceAtPurchase()).isEqualByComparingTo(new BigDecimal("50.00"));
+
+        ArgumentCaptor<FlashSaleReserveRequest> fsCaptor = ArgumentCaptor.forClass(FlashSaleReserveRequest.class);
+        verify(productClient, times(1)).reserveFlashSaleStock(fsCaptor.capture());
+        assertThat(fsCaptor.getValue().getProductId()).isEqualTo(101L);
+        assertThat(fsCaptor.getValue().getQuantity()).isEqualTo(2);
+
+        verify(productClient, times(1)).reserveStock(any());
+        verify(orderRepository, times(1)).save(any(Order.class));
+    }
+
+    @Test
+    @DisplayName("[Flash Sale] Checkout ném IllegalArgumentException khi khách mua vượt userLimit của chương trình Flash Sale")
+    void checkout_WhenExceedingFlashSaleUserLimit_ShouldThrowIllegalArgumentException() {
+        ActiveFlashSaleDto activeFs = ActiveFlashSaleDto.builder()
+                .campaignId(10L)
+                .flashSalePrice(new BigDecimal("750.00"))
+                .quantity(20)
+                .soldQuantity(0)
+                .remainingStock(20)
+                .userLimit(2)
+                .endTime(LocalDateTime.now().plusHours(2))
+                .build();
+
+        ProductResponse flashSaleProduct = ProductResponse.builder()
+                .id(101L)
+                .name("iPhone 15 Pro")
+                .price(new BigDecimal("1000.00"))
+                .stockQuantity(30)
+                .activeFlashSale(activeFs)
+                .build();
+
+        CheckoutItemRequest overLimitItem = CheckoutItemRequest.builder()
+                .productId(101L)
+                .productName("iPhone 15 Pro")
+                .quantity(3) // Vượt quá userLimit = 2
+                .priceAtPurchase(new BigDecimal("750.00"))
+                .build();
+
+        CheckoutRequest overLimitRequest = CheckoutRequest.builder()
+                .userId(1L)
+                .receiverName("Nguyễn Văn A")
+                .receiverPhone("0987654321")
+                .shippingAddress("123 Cầu Giấy, Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .items(List.of(overLimitItem))
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(flashSaleProduct));
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> orderService.checkout(overLimitRequest)
+        );
+
+        assertThat(ex.getMessage()).contains("chỉ cho phép mua tối đa 2 sản phẩm với giá Flash Sale");
+        verify(productClient, never()).reserveFlashSaleStock(any());
+        verify(productClient, never()).reserveStock(any());
+        verify(orderRepository, never()).save(any());
+        verify(kafkaOrderProducer, never()).sendOrderCreatedEvent(any());
     }
 }

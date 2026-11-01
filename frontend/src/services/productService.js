@@ -49,6 +49,13 @@ export const normalizeProduct = (product) => {
 
   const stockValue = Number(product.stockQuantity ?? product.stock ?? 0);
   const priceValue = Number(product.price ?? 0);
+  const activeFs = product.activeFlashSale;
+  const hasActiveFs = Boolean(activeFs && activeFs.flashSalePrice != null);
+  const fsPrice = hasActiveFs ? Number(activeFs.flashSalePrice) : null;
+  const fsDiscount =
+    hasActiveFs && priceValue > 0 && priceValue > fsPrice
+      ? Math.round(((priceValue - fsPrice) / priceValue) * 100)
+      : product.discountPercent;
 
   return {
     ...product,
@@ -57,6 +64,16 @@ export const normalizeProduct = (product) => {
     category: categoryName,
     categoryId: resolveCategorySlug(categoryName, product.categoryId),
     price: priceValue,
+    ...(hasActiveFs
+      ? {
+          isFlashSale: true,
+          salePrice: fsPrice,
+          discountPercent: fsDiscount,
+          userLimit: Number(activeFs.userLimit ?? 2),
+          sold: Number(activeFs.soldQuantity ?? product.sold ?? 0),
+          endTime: activeFs.endTime ?? product.endTime
+        }
+      : {}),
     stock: stockValue,
     stockQuantity: stockValue,
     imageUrl: product.imageUrl || product.image || DEFAULT_PRODUCT_IMAGE,

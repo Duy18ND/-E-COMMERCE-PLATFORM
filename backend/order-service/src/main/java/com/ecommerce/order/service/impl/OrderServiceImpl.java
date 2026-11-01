@@ -1,6 +1,8 @@
 package com.ecommerce.order.service.impl;
 
 import com.ecommerce.order.client.ProductClient;
+import com.ecommerce.order.client.dto.ActiveFlashSaleDto;
+import com.ecommerce.order.client.dto.FlashSaleReserveRequest;
 import com.ecommerce.order.client.dto.ProductResponse;
 import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.request.CheckoutItemRequest;
@@ -73,8 +75,11 @@ public class OrderServiceImpl implements OrderService {
 
         log.info("Processing checkout for userId: {}, items count: {}", request.getUserId(), request.getItems().size());
 
-        // 1. Chống Price Tampering: Lấy giá chính xác mới nhất và tên từ Product Service (DB)
+        // 1. Chống Price Tampering & Kiểm tra Flash Sale (giá ưu đãi + giới hạn mua userLimit)
         BigDecimal totalAmount = BigDecimal.ZERO;
+        List<FlashSaleReserveRequest> flashSaleReservations = new ArrayList<>();
+        Map<Long, Integer> flashSaleQtyByProduct = new HashMap<>();
+
         for (CheckoutItemRequest itemReq : request.getItems()) {
             ApiResponse<ProductResponse> productApiResponse = productClient.getProductById(itemReq.getProductId());
             if (productApiResponse == null || productApiResponse.getData() == null) {
@@ -83,6 +88,27 @@ public class OrderServiceImpl implements OrderService {
             ProductResponse product = productApiResponse.getData();
 
             BigDecimal actualPrice = product.getPrice();
+            if (product.getActiveFlashSale() != null) {
+                ActiveFlashSaleDto activeFlashSale = product.getActiveFlashSale();
+                int cumulativeQty = flashSaleQtyByProduct.merge(
+                        itemReq.getProductId(), itemReq.getQuantity(), Integer::sum);
+
+                if (activeFlashSale.getUserLimit() != null && cumulativeQty > activeFlashSale.getUserLimit()) {
+                    throw new IllegalArgumentException(
+                            "Sản phẩm '" + product.getName() + "' chỉ cho phép mua tối đa "
+                                    + activeFlashSale.getUserLimit() + " sản phẩm với giá Flash Sale!");
+                }
+
+                if (activeFlashSale.getFlashSalePrice() != null) {
+                    actualPrice = activeFlashSale.getFlashSalePrice();
+                }
+
+                flashSaleReservations.add(FlashSaleReserveRequest.builder()
+                        .productId(itemReq.getProductId())
+                        .quantity(itemReq.getQuantity())
+                        .build());
+            }
+
             if (actualPrice == null) {
                 throw new IllegalStateException("Sản phẩm ID: " + itemReq.getProductId() + " chưa có giá hợp lệ");
             }
@@ -97,7 +123,14 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(itemTotal);
         }
 
-        // 2. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
+        // 2a. Trừ tồn kho Flash Sale nguyên tử trên Redis Lua (và cập nhật soldQuantity) nếu sản phẩm đang chạy Flash Sale
+        for (FlashSaleReserveRequest fsReservation : flashSaleReservations) {
+            log.info("Calling ProductClient reserveFlashSaleStock for productId={}, quantity={}",
+                    fsReservation.getProductId(), fsReservation.getQuantity());
+            productClient.reserveFlashSaleStock(fsReservation);
+        }
+
+        // 2b. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
         List<StockReservationItem> reservationItems = request.getItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())

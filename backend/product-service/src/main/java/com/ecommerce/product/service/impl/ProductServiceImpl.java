@@ -34,6 +34,7 @@ import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.CategoryRepository;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.repository.specification.ProductSpecification;
+import com.ecommerce.product.service.FlashSaleService;
 import com.ecommerce.product.service.ProductService;
 
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,7 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final FlashSaleService flashSaleService;
 
     /**
      * [Task ECOM-108 / ECOM-212] Xử lý nghiệp vụ lấy danh sách sản phẩm phân trang
@@ -100,7 +102,11 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
 
-        return ProductResponse.fromEntity(product);
+        ProductResponse response = ProductResponse.fromEntity(product);
+        if (flashSaleService != null) {
+            response.setActiveFlashSale(flashSaleService.getActiveFlashSaleForProduct(id));
+        }
+        return response;
     }
 
     /**
