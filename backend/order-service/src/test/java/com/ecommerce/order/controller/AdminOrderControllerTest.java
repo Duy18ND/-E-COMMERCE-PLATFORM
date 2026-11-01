@@ -129,7 +129,7 @@ class AdminOrderControllerTest {
                 .totalAmount(new BigDecimal("500000"))
                 .build();
 
-        when(orderService.updateOrderStatus(eq(1L), eq(OrderStatus.CONFIRMED))).thenReturn(orderResponse);
+        when(orderService.updateOrderStatus(eq(1L), eq(OrderStatus.CONFIRMED), any(), any(), any())).thenReturn(orderResponse);
 
         mockMvc.perform(put("/api/v1/admin/orders/1/status")
                         .header("X-User-Roles", "ROLE_ADMIN")
@@ -138,6 +138,28 @@ class AdminOrderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("CONFIRMED"));
+    }
+
+    @Test
+    @DisplayName("[ECOM-315] GET /api/v1/admin/orders/{id}/history: Lấy lịch sử trạng thái thành công với ROLE_ADMIN")
+    void getOrderStatusHistory_AdminRole_Success() throws Exception {
+        com.ecommerce.order.dto.response.OrderStatusHistoryResponse history = com.ecommerce.order.dto.response.OrderStatusHistoryResponse.builder()
+                .id(1L)
+                .orderId(1L)
+                .status(OrderStatus.CONFIRMED)
+                .statusDescription("Đơn hàng đã được xác nhận")
+                .updatedBy("ADMIN:1")
+                .actorRole("ROLE_ADMIN")
+                .build();
+
+        when(orderService.getOrderStatusHistory(eq(1L), any(), eq("ROLE_ADMIN"))).thenReturn(List.of(history));
+
+        mockMvc.perform(get("/api/v1/admin/orders/1/history")
+                        .header("X-User-Roles", "ROLE_ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data[0].updatedBy").value("ADMIN:1"));
     }
 
     @Test

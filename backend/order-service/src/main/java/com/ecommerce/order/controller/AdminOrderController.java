@@ -4,6 +4,7 @@ import com.ecommerce.order.dto.request.UpdateOrderStatusRequest;
 import com.ecommerce.order.dto.response.ApiResponse;
 import com.ecommerce.order.dto.response.DashboardResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
+import com.ecommerce.order.dto.response.OrderStatusHistoryResponse;
 import com.ecommerce.order.dto.response.PagedResponse;
 import com.ecommerce.order.enums.OrderStatus;
 import com.ecommerce.order.exception.AccessDeniedException;
@@ -20,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -50,16 +52,30 @@ public class AdminOrderController {
     }
 
     @PutMapping("/{id}/status")
-    @Operation(summary = "Cập nhật trạng thái đơn hàng [ADMIN]", description = "Kiểm tra State Machine và hoàn lại tồn kho qua ProductClient nếu trạng thái mới là CANCELLED. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
+    @Operation(summary = "Cập nhật trạng thái đơn hàng [ADMIN]", description = "Kiểm tra State Machine và hoàn lại tồn kho qua ProductClient nếu trạng thái mới là CANCELLED. Ghi nhận người cập nhật và thời điểm vào order_status_history. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(
+            @RequestHeader(value = "X-User-Id", required = false) Long adminId,
             @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @PathVariable Long id,
             @Valid @RequestBody UpdateOrderStatusRequest request) {
 
         requireAdminRole(roles);
 
-        OrderResponse response = orderService.updateOrderStatus(id, request.getStatus());
+        String updatedBy = adminId != null ? "ADMIN:" + adminId : "ADMIN";
+        OrderResponse response = orderService.updateOrderStatus(id, request.getStatus(), updatedBy, "ROLE_ADMIN", request.getNote());
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái đơn hàng thành công", response));
+    }
+
+    @GetMapping("/{id}/history")
+    @Operation(summary = "Xem lịch sử trạng thái đơn hàng [ADMIN]", description = "Lấy toàn bộ dòng thời gian (Timeline) các mốc thay đổi trạng thái, người cập nhật và ghi chú. Yêu cầu ROLE_ADMIN")
+    public ResponseEntity<ApiResponse<List<OrderStatusHistoryResponse>>> getOrderStatusHistory(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long id) {
+
+        requireAdminRole(roles);
+
+        List<OrderStatusHistoryResponse> response = orderService.getOrderStatusHistory(id, null, roles);
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử trạng thái đơn hàng thành công", response));
     }
 
     @GetMapping("/statistics")
