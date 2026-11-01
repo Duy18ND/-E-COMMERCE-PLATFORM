@@ -4,6 +4,7 @@ import com.ecommerce.auth.dto.request.AddressRequest;
 import com.ecommerce.auth.dto.request.UpdateProfileRequest;
 import com.ecommerce.auth.dto.response.AddressResponse;
 import com.ecommerce.auth.dto.response.UserProfileResponse;
+import com.ecommerce.auth.entity.User;
 import com.ecommerce.auth.enums.UserStatus;
 import com.ecommerce.auth.exception.GlobalExceptionHandler;
 import com.ecommerce.auth.service.UserService;
@@ -21,6 +22,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -188,5 +190,39 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.fullName").value("Đoàn Mạnh Duy Updated"))
                 .andExpect(jsonPath("$.data.phone").value("0912345678"));
+    }
+
+    @Test
+    @DisplayName("Regex Fix: PUT /api/v1/users/profile từ chối SĐT chứa ký tự '|' (lỗi [3|5|7|8|9] cũ) -> 400")
+    void updateProfile_WhenPhoneContainsPipeChar_ShouldReturn400() throws Exception {
+        UpdateProfileRequest invalidRequest = UpdateProfileRequest.builder()
+                .fullName("Test User")
+                .phone("0|12345678")
+                .build();
+
+        mockMvc.perform(put("/api/v1/users/profile")
+                        .header("X-User-Id", 100L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.phone").exists());
+    }
+
+    @Test
+    @DisplayName("Password Hash Protection: Serialize Entity User không làm lộ trường password (@JsonIgnore)")
+    void serializeUserEntity_ShouldNotExposePasswordHash() throws Exception {
+        User user = User.builder()
+                .id(100L)
+                .email("duy@example.com")
+                .password("$2a$10$secretBcryptHashValueShouldNeverLeak")
+                .fullName("Đoàn Mạnh Duy")
+                .status(UserStatus.ACTIVE)
+                .build();
+
+        String json = objectMapper.writeValueAsString(user);
+
+        assertThat(json).contains("duy@example.com");
+        assertThat(json).doesNotContain("password");
+        assertThat(json).doesNotContain("$2a$10$secretBcryptHashValueShouldNeverLeak");
     }
 }

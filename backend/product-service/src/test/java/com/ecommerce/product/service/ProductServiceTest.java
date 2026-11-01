@@ -289,6 +289,7 @@ class ProductServiceTest {
                 .build();
 
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(categoryRepository.existsByNameIgnoreCase("Laptops")).thenReturn(true);
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ProductResponse response = productService.updateProduct(1L, updateRequest);

@@ -12,10 +12,16 @@ import ErrorMessage from '../components/common/ErrorMessage';
  * ├── CategoryNav
  * ├── UserContent (<Outlet /> hoặc children)
  * └── Footer
+ *
+ * Riêng trang /login và /register sử dụng Auth Header & Auth Footer tối giản
+ * theo chuẩn E-Commerce Auth Layout.
  */
 const UserLayout = ({ children }) => {
   const location = useLocation();
   const [accessDeniedMsg, setAccessDeniedMsg] = useState('');
+
+  const isAuthRoute =
+    location.pathname === '/login' || location.pathname === '/register';
 
   useEffect(() => {
     if (location.state?.accessDenied) {
@@ -27,6 +33,21 @@ const UserLayout = ({ children }) => {
       setAccessDeniedMsg('');
     }
   }, [location]);
+
+  if (isAuthRoute) {
+    return (
+      <div className="user-layout-shell auth-layout-shell">
+        {accessDeniedMsg && (
+          <div className="container" style={{ paddingTop: '0.75rem' }}>
+            <ErrorMessage message={accessDeniedMsg} onClose={() => setAccessDeniedMsg('')} />
+          </div>
+        )}
+        <main className="main-content user-main-content auth-main-content">
+          {children ? children : <Outlet />}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="user-layout-shell">
@@ -48,4 +69,3 @@ const UserLayout = ({ children }) => {
 };
 
 export default UserLayout;
-

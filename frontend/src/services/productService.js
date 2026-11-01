@@ -513,16 +513,128 @@ export const productService = {
     }
   },
 
-  create: async (productData) => {
+  /**
+   * Kiểm tra tồn kho sản phẩm theo ID và số lượng yêu cầu (ECOM-111 / ECOM-219 / ECOM-221)
+   * Gọi API: GET /api/v1/products/{id}/stock?quantity=1
+   */
+  checkStock: async (id, quantity = 1) => {
+    const requestedQty = Math.max(1, Number(quantity) || 1);
     try {
-      const created = await api.post('/products', productData);
-      return normalizeProduct(created);
+      const stockData = await api.get(`/products/${id}/stock`, {
+        params: { quantity: requestedQty }
+      });
+      if (stockData && typeof stockData === 'object') {
+        const stockQuantity = Number(stockData.stockQuantity ?? 0);
+        const isActive = (stockData.status || 'ACTIVE') === 'ACTIVE';
+        const inStock = Boolean(stockData.inStock ?? (isActive && stockQuantity > 0));
+        const sufficientStock = Boolean(
+          stockData.sufficientStock ?? (inStock && stockQuantity >= requestedQty)
+        );
+        return {
+          productId: stockData.productId ?? id,
+          productName: stockData.productName ?? '',
+          stockQuantity,
+          requestedQuantity: Number(stockData.requestedQuantity ?? requestedQty),
+          status: stockData.status || 'ACTIVE',
+          inStock,
+          sufficientStock,
+          stockStatusMessage:
+            stockData.stockStatusMessage ||
+            (inStock
+              ? sufficientStock
+                ? `Còn hàng (${stockQuantity} sản phẩm có sẵn)`
+                : `Không đủ số lượng tồn kho (Chỉ còn ${stockQuantity} sản phẩm)`
+              : 'Hết hàng')
+        };
+      }
+    } catch {
+      // Fallback tính toán từ dữ liệu sản phẩm hiện có khi offline
+    }
+
+    const found = localProducts.find(
+      (p) => String(p.id) === String(id) || (p.sku && String(p.sku) === String(id))
+    );
+    if (!found) {
+      throw new Error('Không tìm thấy sản phẩm để kiểm tra tồn kho!');
+    }
+    const stockQuantity = Math.max(0, Number(found.stockQuantity ?? found.stock ?? 0));
+    const isActive = (found.status || 'ACTIVE') === 'ACTIVE';
+    const inStock = isActive && stockQuantity > 0;
+    const sufficientStock = inStock && stockQuantity >= requestedQty;
+
+    return {
+      productId: found.id,
+      productName: found.name,
+      stockQuantity,
+      requestedQuantity: requestedQty,
+      status: found.status || 'ACTIVE',
+      inStock,
+      sufficientStock,
+      stockStatusMessage: !isActive
+        ? 'Sản phẩm đã ngừng kinh doanh'
+        : !inStock
+        ? 'Hết hàng'
+        : !sufficientStock
+        ? `Không đủ số lượng tồn kho (Chỉ còn ${stockQuantity} sản phẩm)`
+        : `Còn hàng (${stockQuantity} sản phẩm có sẵn)`
+    };
+  },
+
+  /**
+   * Lấy danh sách sản phẩm phân trang dành cho Admin (ECOM-133 / ECOM-246)
+   * Gọi API: GET /api/v1/products/admin
+   */
+  getAdminProducts: async (params = {}) => {
+    const queryParams = {};
+    if (params?.keyword) queryParams.keyword = normalizeKeyword(params.keyword);
+    if (params?.status && params.status !== 'ALL') queryParams.status = params.status;
+    if (params?.page !== undefined) queryParams.page = Math.max(0, Number(params.page) || 0);
+    if (params?.size !== undefined) queryParams.size = Number(params.size) || 20;
+
+    try {
+      const response = await api.get('/products/admin', { params: queryParams });
+      const extracted = extractPagedProducts(response, params);
+      return extracted.content;
+    } catch {
+      return [...localProducts];
+    }
+  },
+
+  create: async (productData) => {
+    const name = String(productData?.name ?? '').trim();
+    const price = Number(productData?.price);
+    const stockQuantity = Number(productData?.stockQuantity ?? productData?.stock ?? 0);
+
+    if (!name) {
+      throw new Error('Tên sản phẩm không được để trống');
+    }
+    if (Number.isNaN(price) || price <= 0) {
+      throw new Error('Giá sản phẩm phải lớn hơn 0');
+    }
+    if (Number.isNaN(stockQuantity) || stockQuantity < 0) {
+      throw new Error('Số lượng tồn kho không được nhỏ hơn 0');
+    }
+
+    const payload = {
+      name,
+      category: String(productData?.category ?? 'Chưa phân loại').trim(),
+      price,
+      stockQuantity,
+      description: String(productData?.description ?? '').trim(),
+      imageUrl: String(productData?.imageUrl ?? productData?.image ?? '').trim() || DEFAULT_PRODUCT_IMAGE
+    };
+
+    try {
+      const created = await api.post('/products', payload);
+      const normalized = normalizeProduct(created);
+      localProducts = [normalized, ...localProducts.filter((p) => String(p.id) !== String(normalized.id))];
+      return normalized;
     } catch {
       const newProd = normalizeProduct({
         id: Date.now(),
-        ...productData,
-        price: Number(productData.price) || 0,
-        stock: Number(productData.stock ?? productData.stockQuantity) || 0
+        ...payload,
+        stock: stockQuantity,
+        status: 'ACTIVE'
       });
       localProducts.unshift(newProd);
       return newProd;
@@ -530,29 +642,61 @@ export const productService = {
   },
 
   update: async (id, productData) => {
+    const existing = localProducts.find((p) => String(p.id) === String(id)) || {};
+    const name = String(productData?.name ?? existing.name ?? '').trim();
+    const price = Number(productData?.price ?? existing.price ?? 0);
+    const stockQuantity = Number(
+      productData?.stockQuantity ?? productData?.stock ?? existing.stockQuantity ?? existing.stock ?? 0
+    );
+
+    if (!name) {
+      throw new Error('Tên sản phẩm không được để trống');
+    }
+    if (Number.isNaN(price) || price <= 0) {
+      throw new Error('Giá sản phẩm phải lớn hơn 0');
+    }
+    if (Number.isNaN(stockQuantity) || stockQuantity < 0) {
+      throw new Error('Số lượng tồn kho không được nhỏ hơn 0');
+    }
+
+    const payload = {
+      name,
+      category: String(productData?.category ?? existing.category ?? 'Chưa phân loại').trim(),
+      price,
+      stockQuantity,
+      description: String(productData?.description ?? existing.description ?? '').trim(),
+      imageUrl:
+        String(productData?.imageUrl ?? productData?.image ?? existing.imageUrl ?? '').trim() ||
+        DEFAULT_PRODUCT_IMAGE,
+      status: productData?.status || existing.status || 'ACTIVE'
+    };
+
     try {
-      const updated = await api.put(`/products/${id}`, productData);
-      return normalizeProduct(updated);
+      const updated = await api.put(`/products/${id}`, payload);
+      const normalized = normalizeProduct(updated);
+      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
+      return normalized;
     } catch {
       let updatedItem = null;
       localProducts = localProducts.map((p) => {
         if (String(p.id) === String(id)) {
-          updatedItem = normalizeProduct({ ...p, ...productData });
+          updatedItem = normalizeProduct({ ...p, ...payload, stock: stockQuantity });
           return updatedItem;
         }
         return p;
       });
-      return updatedItem || normalizeProduct({ id, ...productData });
+      return updatedItem || normalizeProduct({ id, ...payload, stock: stockQuantity });
     }
   },
 
   delete: async (id) => {
     try {
-      return await api.delete(`/products/${id}`);
+      await api.delete(`/products/${id}`);
     } catch {
-      localProducts = localProducts.filter((p) => String(p.id) !== String(id));
-      return { success: true, id };
+      // Fallback xóa mềm / xóa khỏi danh sách cục bộ khi offline
     }
+    localProducts = localProducts.filter((p) => String(p.id) !== String(id));
+    return { success: true, id };
   }
 };
 

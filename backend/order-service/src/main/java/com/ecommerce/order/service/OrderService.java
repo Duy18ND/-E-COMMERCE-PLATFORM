@@ -32,24 +32,48 @@ public interface OrderService {
      * Hủy đơn hàng:
      * Chỉ cho phép hủy khi trạng thái là PENDING.
      * Chuyển trạng thái sang CANCELLED và gọi ProductClient restore-stock để hoàn kho.
+     * <p>
+     * ⚠️ CHỈ DÙNG NỘI BỘ (system/job) — KHÔNG kiểm tra quyền sở hữu, KHÔNG được expose qua Controller.
+     * API của khách hàng phải dùng {@link #cancelOrder(Long, Long)}.
      */
     OrderResponse cancelOrder(Long orderId);
 
     /**
      * Hủy đơn hàng kèm xác thực người dùng sở hữu:
-     * Kiểm tra quyền sở hữu đơn hàng (chống IDOR).
+     * - Bắt buộc có userId (chống Authentication Bypass khi thiếu X-User-Id).
+     * - Kiểm tra quyền sở hữu đơn hàng (chống IDOR).
      */
     OrderResponse cancelOrder(Long orderId, Long userId);
 
     /**
      * Lấy chi tiết đơn hàng theo ID (sử dụng fetch join để chống N+1).
+     * <p>
+     * ⚠️ CHỈ DÙNG NỘI BỘ — KHÔNG kiểm tra quyền. API của khách hàng phải dùng
+     * {@link #getOrderById(Long, Long, String)}.
      */
     OrderResponse getOrderById(Long id);
 
     /**
+     * Lấy chi tiết đơn hàng kèm kiểm tra quyền (chống IDOR):
+     * - ROLE_ADMIN được xem mọi đơn hàng.
+     * - Người dùng thường chỉ được xem đơn hàng của chính mình.
+     */
+    OrderResponse getOrderById(Long id, Long authenticatedUserId, String roles);
+
+    /**
      * Lấy danh sách lịch sử đơn hàng của người dùng.
+     * <p>
+     * ⚠️ CHỈ DÙNG NỘI BỘ — KHÔNG kiểm tra quyền. API của khách hàng phải dùng
+     * {@link #getOrdersByUserId(Long, Long, String)}.
      */
     List<OrderResponse> getOrdersByUserId(Long userId);
+
+    /**
+     * Lấy danh sách lịch sử đơn hàng của targetUserId kèm kiểm tra quyền:
+     * - ROLE_ADMIN được xem lịch sử của bất kỳ người dùng nào.
+     * - Người dùng thường chỉ được xem lịch sử của chính mình.
+     */
+    List<OrderResponse> getOrdersByUserId(Long targetUserId, Long authenticatedUserId, String roles);
 
     /**
      * Saga Step: Xử lý sự kiện thanh toán thành công từ payment-service.

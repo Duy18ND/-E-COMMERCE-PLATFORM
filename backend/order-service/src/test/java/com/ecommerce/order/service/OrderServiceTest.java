@@ -374,6 +374,104 @@ class OrderServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> orderService.getOrderById(999L));
     }
 
+    // =========================================================================
+    // Security Fix: Chống IDOR / Auth Bypass / Phân quyền ADMIN
+    // =========================================================================
+
+    @Test
+    @DisplayName("Chống Auth Bypass: cancelOrder với userId = null -> AccessDeniedException, không đụng DB/kho")
+    void cancelOrder_WhenMissingUserId_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class, () -> orderService.cancelOrder(1L, null));
+
+        verifyNoInteractions(orderRepository);
+        verify(productClient, never()).restoreStock(any());
+    }
+
+    @Test
+    @DisplayName("getOrderById: Chủ sở hữu xem được đơn của mình")
+    void getOrderById_WhenOwner_ShouldReturnOrder() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        OrderResponse response = orderService.getOrderById(1L, 1L, "ROLE_USER");
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getUserId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Chống IDOR: getOrderById bởi user khác và không phải Admin -> AccessDeniedException")
+    void getOrderById_WhenDifferentUserAndNotAdmin_ShouldThrowAccessDenied() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrderById(1L, 999L, "ROLE_USER"));
+
+        assertThat(ex.getMessage()).isEqualTo("Bạn không có quyền xem chi tiết đơn hàng này");
+    }
+
+    @Test
+    @DisplayName("Chống false-positive: role 'ROLE_ADMIN_VIEWER' KHÔNG được coi là ADMIN")
+    void getOrderById_WhenRoleLooksLikeAdmin_ShouldThrowAccessDenied() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrderById(1L, 999L, "ROLE_USER,ROLE_ADMIN_VIEWER"));
+    }
+
+    @Test
+    @DisplayName("Admin: ROLE_ADMIN xem được chi tiết đơn của khách")
+    void getOrderById_WhenAdmin_ShouldReturnOrder() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        OrderResponse response = orderService.getOrderById(1L, 999L, "ROLE_USER, ROLE_ADMIN");
+
+        assertThat(response.getUserId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Chống Auth Bypass: getOrderById không có userId và không phải Admin -> AccessDeniedException")
+    void getOrderById_WhenMissingUserId_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class, () -> orderService.getOrderById(1L, null, null));
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    @DisplayName("getOrdersByUserId: chính chủ xem lịch sử đơn của mình")
+    void getOrdersByUserId_WhenOwner_ShouldReturnOrders() {
+        when(orderRepository.findByUserIdWithItems(1L)).thenReturn(List.of(samplePendingOrder));
+
+        List<OrderResponse> result = orderService.getOrdersByUserId(1L, 1L, "ROLE_USER");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getUserId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Chống IDOR: getOrdersByUserId của người khác (không phải Admin) -> AccessDeniedException")
+    void getOrdersByUserId_WhenDifferentUserAndNotAdmin_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrdersByUserId(1L, 999L, "ROLE_USER"));
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    @DisplayName("Chống Auth Bypass: getOrdersByUserId với authenticatedUserId = null -> AccessDeniedException")
+    void getOrdersByUserId_WhenMissingUserId_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrdersByUserId(1L, null, "ROLE_ADMIN"));
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    @DisplayName("Admin: ROLE_ADMIN xem lịch sử đơn của khách")
+    void getOrdersByUserId_WhenAdmin_ShouldReturnOrders() {
+        when(orderRepository.findByUserIdWithItems(1L)).thenReturn(List.of(samplePendingOrder));
+
+        List<OrderResponse> result = orderService.getOrdersByUserId(1L, 999L, "ROLE_ADMIN");
+
+        assertThat(result).hasSize(1);
+    }
+
     @Test
     @DisplayName("Saga Step: Xử lý payment-success -> Cập nhật Order.status = PAID")
     void handlePaymentSuccess_Success() {

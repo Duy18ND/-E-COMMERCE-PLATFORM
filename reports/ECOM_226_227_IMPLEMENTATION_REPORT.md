@@ -8,7 +8,6 @@
 - **Nhánh Git thực tế:** `devops-phuong`
 - **Người phụ trách:** Ngô Phương
 - **Đối tượng sử dụng:** GUEST (Khách vãng lai chưa đăng nhập)
-- **Ngày thực hiện:** 30/10/2026
 
 > **Lưu ý kiểm tra trạng thái Git (`git status`):**
 > - Nhánh hiện tại (`git branch --show-current`): `devops-phuong`.

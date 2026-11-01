@@ -106,6 +106,24 @@
   .admin-link-icon {
     display: none;
   }
+
+  /* Auth Tablet Landscape (1024px): thu gọn gap và kích thước chữ vừa phải */
+  .auth-split-grid {
+    gap: 1.75rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .auth-showcase-heading {
+    font-size: 1.85rem;
+  }
+
+  .auth-feature-grid {
+    gap: 0.65rem;
+  }
+
+  .auth-feature-card {
+    padding: 0.75rem 0.8rem;
+  }
 }
 
 /* 4. TABLET LAYOUT (<= 991px — 768px..991px)
@@ -188,6 +206,22 @@
 
   .admin-toolbar-grid > :first-child {
     grid-column: 1 / -1;
+  }
+
+  /* Auth Tablet Portrait (<= 900px): chuyển sang 1 cột gọn gàng */
+  .auth-split-grid {
+    grid-template-columns: 1fr !important;
+    gap: 2rem !important;
+  }
+
+  .auth-showcase-col {
+    padding-right: 0;
+    max-width: 540px;
+    margin: 0 auto;
+  }
+
+  .auth-card {
+    max-width: 520px;
   }
 }
 
@@ -292,6 +326,41 @@
     grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr));
     gap: 1rem;
   }
+
+  /* Auth Mobile Layout (<= 768px):
+     Logo (Auth Topbar) -> Login/Register Card (ẩn phần illustration bên trái để form hiển thị rõ ràng) */
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  .auth-showcase-col {
+    display: none !important;
+  }
+
+  .auth-body {
+    padding: 1.5rem 0 2.25rem !important;
+  }
+
+  .auth-split-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
+  .auth-card {
+    max-width: 480px;
+    padding: 1.65rem 1.35rem;
+    border-radius: 16px;
+  }
+
+  .auth-footer-bar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .auth-footer-bar-right {
+    justify-content: center;
+  }
 }
 
 /* 7. MOBILE PORTRAIT (<= 640px)
@@ -320,13 +389,22 @@
     grid-template-columns: 1fr !important;
   }
 
-  .auth-page-wrapper {
-    padding: 1rem 0.75rem 2rem !important;
+  .auth-form-row-2 {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
   }
 
   .auth-card {
-    padding: 1.25rem 1rem !important;
-    border-radius: 12px !important;
+    padding: 1.4rem 1.15rem !important;
+    border-radius: 14px !important;
+  }
+
+  .auth-demo-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .auth-footer-tagline {
+    display: none;
   }
 
   /* Admin Pagination Mobile Mode */
@@ -423,11 +501,33 @@
   .flash-timeslots-grid {
     grid-template-columns: 1fr !important;
   }
+
+  .auth-topbar-inner {
+    min-height: 58px;
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+  }
+
+  .auth-help-link span {
+    font-size: 0.8rem;
+  }
+
+  .auth-card {
+    padding: 1.25rem 1rem !important;
+  }
 }
 
-/* 10. ULTRA-SMALL MOBILE (<= 350px) */
+/* 10. ULTRA-SMALL MOBILE (<= 350px — bao gồm 320px) */
 @media (max-width: 350px) {
   .product-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .auth-social-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .auth-help-link span {
+    display: none;
   }
 }
