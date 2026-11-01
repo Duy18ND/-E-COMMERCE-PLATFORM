@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import productService from '../../services/productService';
+import categoryService from '../../services/categoryService';
+import useToast from '../../hooks/useToast';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 
@@ -7,9 +10,33 @@ import Button from '../../components/common/Button';
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_IMAGE_SIZE_MB = 5;
 
+export const validateAdminProductForm = (data = {}) => {
+  const errors = {};
+  const trimmedName = String(data.name ?? '').trim();
+  const trimmedCategory = String(data.category ?? '').trim();
+  const priceNum = Number(data.price);
+  const stockNum = Number(data.stock ?? data.stockQuantity);
+
+  if (!trimmedName) {
+    errors.name = 'Tên sản phẩm không được để trống';
+  }
+  if (!trimmedCategory) {
+    errors.category = 'Danh mục sản phẩm không được để trống';
+  }
+  if (data.price === '' || data.price === null || data.price === undefined || Number.isNaN(priceNum) || priceNum <= 0) {
+    errors.price = 'Giá sản phẩm phải lớn hơn 0';
+  }
+  if (data.stock === '' || data.stock === null || data.stock === undefined || Number.isNaN(stockNum) || stockNum < 0) {
+    errors.stock = 'Số lượng tồn kho không được nhỏ hơn 0';
+  }
+
+  return errors;
+};
+
 const ProductForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const isEditMode = Boolean(id);
 
   const [formData, setFormData] = useState({
@@ -18,8 +45,11 @@ const ProductForm = () => {
     price: '',
     stock: '',
     description: '',
-    imageUrl: ''   // keeps existing field name – will hold blob URL or server URL
+    imageUrl: '' // keeps existing field name – will hold blob URL or server URL
   });
+  const [formErrors, setFormErrors] = useState({});
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
 
   // ─── Image upload state ───────────────────────────────────────────────────
   const [imageFile, setImageFile] = useState(null);
@@ -35,19 +65,45 @@ const ProductForm = () => {
   };
 
   useEffect(() => {
+    categoryService
+      .getAll()
+      .then((cats) => {
+        if (Array.isArray(cats)) {
+          setAvailableCategories(cats);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (isEditMode) {
-      // Sẵn sàng kết nối productService.getById(id)
-      const existingImageUrl = '';  // replace with API response.imageUrl when ready
-      setFormData({
-        name: `Sản phẩm #${id}`,
-        category: 'Laptop',
-        price: '25000000',
-        stock: '15',
-        description: 'Mô tả chi tiết sản phẩm mẫu khi ở chế độ chỉnh sửa.',
-        imageUrl: existingImageUrl
-      });
-      setImagePreview(existingImageUrl);
-      setImageFile(null);
+      productService
+        .getById(id)
+        .then((prod) => {
+          if (prod) {
+            const existingImageUrl = prod.imageUrl || prod.image || '';
+            setFormData({
+              name: prod.name || `Sản phẩm #${id}`,
+              category: prod.category || 'Laptop & Workstation',
+              price: String(prod.price ?? 25000000),
+              stock: String(prod.stockQuantity ?? prod.stock ?? 15),
+              description: prod.description || 'Mô tả chi tiết sản phẩm.',
+              imageUrl: existingImageUrl
+            });
+            setImagePreview(existingImageUrl);
+            setImageFile(null);
+          }
+        })
+        .catch(() => {
+          setFormData({
+            name: `Sản phẩm #${id}`,
+            category: 'Laptop & Workstation',
+            price: '25000000',
+            stock: '15',
+            description: 'Mô tả chi tiết sản phẩm mẫu khi ở chế độ chỉnh sửa.',
+            imageUrl: ''
+          });
+        });
     }
   }, [id, isEditMode]);
 
@@ -63,6 +119,9 @@ const ProductForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: '' }));
+    }
   };
 
   // ─── Image handlers ───────────────────────────────────────────────────────
@@ -107,12 +166,47 @@ const ProductForm = () => {
     setFormData((prev) => ({ ...prev, imageUrl: '' }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // formData.imageUrl holds blob URL (local preview) or original server URL.
-    // When connecting real API: upload imageFile first, then use returned URL.
-    console.log(isEditMode ? 'Cập nhật sản phẩm:' : 'Tạo sản phẩm mới:', formData);
-    navigate('/admin/products');
+    const validationErrors = validateAdminProductForm(formData);
+    if (Object.keys(validationErrors).length > 0) {
+      setFormErrors(validationErrors);
+      const firstErr = Object.values(validationErrors)[0];
+      showInlineToast(firstErr);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: formData.name.trim(),
+        category: formData.category.trim(),
+        price: Number(formData.price),
+        stock: Number(formData.stock),
+        stockQuantity: Number(formData.stock),
+        description: formData.description.trim(),
+        imageUrl: formData.imageUrl
+      };
+
+      if (isEditMode) {
+        await productService.update(id, payload);
+      } else {
+        await productService.create(payload);
+      }
+
+      if (showToast) {
+        showToast({
+          type: 'success',
+          title: isEditMode ? 'Cập nhật thành công' : 'Tạo sản phẩm thành công',
+          message: `Sản phẩm "${payload.name}" đã được lưu.`
+        });
+      }
+      navigate('/admin/products');
+    } catch (err) {
+      showInlineToast(err.message || 'Không thể lưu thông tin sản phẩm');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ─── Styles helpers ───────────────────────────────────────────────────────
@@ -163,33 +257,47 @@ const ProductForm = () => {
       )}
 
       <div className="card">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <Input
             label="Tên sản phẩm"
             name="name"
             required
             value={formData.name}
             onChange={handleChange}
+            error={formErrors.name}
             placeholder="Nhập tên sản phẩm..."
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <Input
-              label="Danh mục"
-              name="category"
-              required
-              value={formData.category}
-              onChange={handleChange}
-              placeholder="Laptop, Điện thoại..."
-            />
+            <div>
+              <Input
+                label="Danh mục"
+                name="category"
+                list="admin-category-options"
+                required
+                value={formData.category}
+                onChange={handleChange}
+                error={formErrors.category}
+                placeholder="Laptop, Điện thoại..."
+              />
+              {availableCategories.length > 0 && (
+                <datalist id="admin-category-options">
+                  {availableCategories.map((c) => (
+                    <option key={c.id} value={c.name} />
+                  ))}
+                </datalist>
+              )}
+            </div>
 
             <Input
               label="Đơn giá (VNĐ)"
               name="price"
               type="number"
+              min="1"
               required
               value={formData.price}
               onChange={handleChange}
+              error={formErrors.price}
               placeholder="Ví dụ: 15000000"
             />
           </div>
@@ -199,9 +307,11 @@ const ProductForm = () => {
               label="Số lượng tồn kho"
               name="stock"
               type="number"
+              min="0"
               required
               value={formData.stock}
               onChange={handleChange}
+              error={formErrors.stock}
               placeholder="Ví dụ: 20"
             />
           </div>
@@ -255,7 +365,9 @@ const ProductForm = () => {
                     src={imagePreview}
                     alt="Preview sản phẩm"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}
+                    onError={(e) => {
+                      e.currentTarget.style.opacity = '0.3';
+                    }}
                   />
                 </div>
 
@@ -354,8 +466,8 @@ const ProductForm = () => {
             <Link to="/admin/products">
               <Button variant="secondary">Hủy bỏ</Button>
             </Link>
-            <Button type="submit" variant="primary">
-              {isEditMode ? 'Lưu thay đổi' : 'Tạo sản phẩm'}
+            <Button type="submit" variant="primary" disabled={submitting}>
+              {submitting ? 'Đang lưu...' : isEditMode ? 'Lưu thay đổi' : 'Tạo sản phẩm'}
             </Button>
           </div>
         </form>

@@ -1,0 +1,7 @@
+# ═══════════════════════════════════════════════════════════════
+#  API Gateway — Development Profile (dev)
+# ═══════════════════════════════════════════════════════════════
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    com.ecommerce.gateway: DEBUG

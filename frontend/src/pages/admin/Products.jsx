@@ -1,38 +1,29 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
+import productService from '../../services/productService';
+import useToast from '../../hooks/useToast';
 import Button from '../../components/common/Button';
+import Loading from '../../components/common/Loading';
 import Pagination from '../../components/admin/Pagination';
 
 const INITIAL_MOCK_ADMIN_PRODUCTS = [
-  { id: '1', name: 'Laptop Dell XPS 13', category: 'Laptop & Workstation', price: 28990000, stock: 10 },
-  { id: '2', name: 'Điện thoại iPhone 15 Pro', category: 'Điện thoại thông minh', price: 27990000, stock: 15 },
-  { id: '3', name: 'Bàn phím cơ không dây', category: 'Bàn phím cơ & Chuột', price: 1850000, stock: 25 },
-  { id: '4', name: 'Tai nghe Bluetooth chống ồn', category: 'Tai nghe & Âm thanh Hi-Fi', price: 3490000, stock: 8 },
-  { id: '5', name: 'MacBook Air M2 13 inch', category: 'Laptop & Workstation', price: 24500000, stock: 3 },
-  { id: '6', name: 'Điện thoại Samsung Galaxy S24', category: 'Điện thoại thông minh', price: 21990000, stock: 0 },
-  { id: '7', name: 'iPad Pro 11 M2 Wi-Fi 128GB', category: 'Máy tính bảng & iPad', price: 19990000, stock: 12 },
-  { id: '8', name: 'Đồng hồ thông minh Apple Watch Series 9', category: 'Đồng hồ thông minh & Smartwatch', price: 9890000, stock: 18 },
-  { id: '9', name: 'Robot hút bụi Deebot X2 OMNI', category: 'Đồ gia dụng thông minh', price: 18990000, stock: 6 },
-  { id: '10', name: 'Màn hình Dell UltraSharp 27 4K U2723QE', category: 'Màn hình máy tính', price: 13490000, stock: 14 },
-  { id: '11', name: 'Tai nghe Sony WH-1000XM5', category: 'Tai nghe & Âm thanh Hi-Fi', price: 7490000, stock: 20 },
-  { id: '12', name: 'Ghế công thái học Herman Miller Aeron', category: 'Thiết bị Gaming', price: 29500000, stock: 4 },
-  { id: '13', name: 'Card đồ họa ASUS ROG Strix RTX 4080', category: 'Linh kiện máy tính (PC Parts)', price: 36990000, stock: 5 },
-  { id: '14', name: 'Chuột không dây Logitech MX Master 3S', category: 'Bàn phím cơ & Chuột', price: 2490000, stock: 30 },
-  { id: '15', name: 'Router Wi-Fi 7 ASUS ROG Rapture', category: 'Thiết bị mạng & Wifi 7', price: 11990000, stock: 9 },
-  { id: '16', name: 'Máy ảnh Sony Alpha A7 IV Body', category: 'Thời trang nam', price: 54990000, stock: 2 },
-  { id: '17', name: 'Ổ cứng SSD Samsung 990 Pro 2TB PCIe 4.0', category: 'Linh kiện máy tính (PC Parts)', price: 4690000, stock: 45 },
-  { id: '18', name: 'Loa Marshall Stanmore III Bluetooth', category: 'Tai nghe & Âm thanh Hi-Fi', price: 8990000, stock: 11 },
-  { id: '19', name: 'Máy lọc không khí Xiaomi Smart Air Purifier 4', category: 'Đồ gia dụng thông minh', price: 3290000, stock: 22 },
-  { id: '20', name: 'Pin sạc dự phòng Anker 737 PowerCore 24K', category: 'Phụ kiện di động', price: 2890000, stock: 16 },
-  { id: '21', name: 'Balo chống nước Tomtoc Premium Laptop', category: 'Thời trang nam', price: 1650000, stock: 28 },
-  { id: '22', name: 'Áo khoác gió thể thao nam cao cấp', category: 'Thời trang nam', price: 650000, stock: 35 },
-  { id: '23', name: 'Giày chạy bộ Nike Air Zoom Pegasus 40', category: 'Giày dép & Sneaker', price: 3190000, stock: 19 },
-  { id: '24', name: 'Củ sạc nhanh Baseus GaN5 Pro 100W', category: 'Phụ kiện di động', price: 890000, stock: 50 }
+  { id: '1', name: 'Laptop Dell XPS 13', category: 'Laptop & Workstation', price: 28990000, stock: 10, stockQuantity: 10 },
+  { id: '2', name: 'Điện thoại iPhone 15 Pro', category: 'Điện thoại thông minh', price: 27990000, stock: 15, stockQuantity: 15 },
+  { id: '3', name: 'Bàn phím cơ không dây', category: 'Bàn phím cơ & Chuột', price: 1850000, stock: 25, stockQuantity: 25 },
+  { id: '4', name: 'Tai nghe Bluetooth chống ồn', category: 'Tai nghe & Âm thanh Hi-Fi', price: 3490000, stock: 8, stockQuantity: 8 },
+  { id: '5', name: 'MacBook Air M2 13 inch', category: 'Laptop & Workstation', price: 24500000, stock: 3, stockQuantity: 3 },
+  { id: '6', name: 'Điện thoại Samsung Galaxy S24', category: 'Điện thoại thông minh', price: 21990000, stock: 0, stockQuantity: 0 },
+  { id: '7', name: 'iPad Pro 11 M2 Wi-Fi 128GB', category: 'Máy tính bảng & iPad', price: 19990000, stock: 12, stockQuantity: 12 },
+  { id: '8', name: 'Đồng hồ thông minh Apple Watch Series 9', category: 'Đồng hồ thông minh & Smartwatch', price: 9890000, stock: 18, stockQuantity: 18 },
+  { id: '9', name: 'Robot hút bụi Deebot X2 OMNI', category: 'Đồ gia dụng thông minh', price: 18990000, stock: 6, stockQuantity: 6 },
+  { id: '10', name: 'Màn hình Dell UltraSharp 27 4K U2723QE', category: 'Màn hình máy tính', price: 13490000, stock: 14, stockQuantity: 14 }
 ];
 
 const AdminProducts = () => {
+  const { showToast } = useToast();
   const [products, setProducts] = useState(INITIAL_MOCK_ADMIN_PRODUCTS);
+  const [loading, setLoading] = useState(true);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,31 +35,58 @@ const AdminProducts = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await productService.getAdminProducts();
+      if (Array.isArray(data) && data.length > 0) {
+        setProducts(
+          data.map((p) => ({
+            ...p,
+            id: String(p.id),
+            stock: Number(p.stockQuantity ?? p.stock ?? 0),
+            stockQuantity: Number(p.stockQuantity ?? p.stock ?? 0)
+          }))
+        );
+      }
+    } catch {
+      // Fallback sang danh sách hiện tại
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
   // Extract unique categories
   const categories = useMemo(() => {
-    return Array.from(new Set(products.map((p) => p.category)));
+    return Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
   }, [products]);
 
   // Filtered & Sorted products
   const filteredProducts = useMemo(() => {
     return products
       .filter((p) => {
+        const q = searchTerm.toLowerCase().trim();
         // Search by name or ID
         const matchSearch =
-          p.name.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
-          p.id.toLowerCase().includes(searchTerm.toLowerCase().trim());
+          String(p.name || '').toLowerCase().includes(q) ||
+          String(p.id || '').toLowerCase().includes(q);
 
         // Filter by category
         const matchCategory = selectedCategory ? p.category === selectedCategory : true;
 
         // Filter by stock status
+        const currentStock = Number(p.stockQuantity ?? p.stock ?? 0);
         let matchStock = true;
         if (stockStatus === 'IN_STOCK') {
-          matchStock = p.stock > 5;
+          matchStock = currentStock > 5;
         } else if (stockStatus === 'LOW_STOCK') {
-          matchStock = p.stock > 0 && p.stock <= 5;
+          matchStock = currentStock > 0 && currentStock <= 5;
         } else if (stockStatus === 'OUT_OF_STOCK') {
-          matchStock = p.stock === 0;
+          matchStock = currentStock === 0;
         }
 
         return matchSearch && matchCategory && matchStock;
@@ -76,8 +94,10 @@ const AdminProducts = () => {
       .sort((a, b) => {
         if (sortBy === 'price_asc') return a.price - b.price;
         if (sortBy === 'price_desc') return b.price - a.price;
-        if (sortBy === 'stock_desc') return b.stock - a.stock;
-        if (sortBy === 'name_asc') return a.name.localeCompare(b.name, 'vi');
+        if (sortBy === 'stock_desc') {
+          return Number(b.stockQuantity ?? b.stock ?? 0) - Number(a.stockQuantity ?? a.stock ?? 0);
+        }
+        if (sortBy === 'name_asc') return String(a.name).localeCompare(String(b.name), 'vi');
         return 0;
       });
   }, [products, searchTerm, selectedCategory, stockStatus, sortBy]);
@@ -121,11 +141,29 @@ const AdminProducts = () => {
     setCurrentPage(1);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-      setProducts(products.filter((p) => p.id !== id));
-      if (paginatedProducts.length === 1 && currentPage > 1) {
-        setCurrentPage((prev) => prev - 1);
+      try {
+        await productService.delete(id);
+        setProducts((prev) => prev.filter((p) => String(p.id) !== String(id)));
+        if (paginatedProducts.length === 1 && currentPage > 1) {
+          setCurrentPage((prev) => prev - 1);
+        }
+        if (showToast) {
+          showToast({
+            type: 'success',
+            title: 'Đã xóa sản phẩm',
+            message: `Sản phẩm #${id} đã được xóa thành công.`
+          });
+        }
+      } catch (err) {
+        if (showToast) {
+          showToast({
+            type: 'error',
+            title: 'Lỗi xóa sản phẩm',
+            message: err.message || 'Không thể xóa sản phẩm.'
+          });
+        }
       }
     }
   };
@@ -273,7 +311,11 @@ const AdminProducts = () => {
 
       {/* PRODUCTS TABLE */}
       <div className="card" style={{ padding: 0, borderRadius: '14px', overflow: 'hidden' }}>
-        {filteredProducts.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: '2.5rem', textAlign: 'center' }}>
+            <Loading message="Đang tải danh sách sản phẩm quản trị..." />
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
             <p style={{ fontWeight: 600 }}>Không tìm thấy sản phẩm nào phù hợp</p>
@@ -294,37 +336,40 @@ const AdminProducts = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedProducts.map((item) => (
-                    <tr key={item.id}>
-                      <td>#{item.id}</td>
-                      <td style={{ fontWeight: 600 }}>{item.name}</td>
-                      <td>
-                        <span className="badge badge-secondary">{item.category}</span>
-                      </td>
-                      <td style={{ fontWeight: 700, color: '#2563eb' }}>{formatCurrency(item.price)}</td>
-                      <td>
-                        {item.stock === 0 ? (
-                          <span className="badge badge-danger">Hết hàng</span>
-                        ) : item.stock <= 5 ? (
-                          <span className="badge badge-warning">Còn {item.stock}</span>
-                        ) : (
-                          <span className="badge badge-success">{item.stock}</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                          <Link to={`/admin/products/${item.id}/edit`}>
-                            <Button variant="outline" size="sm">
-                              Sửa
+                  {paginatedProducts.map((item) => {
+                    const currentStock = Number(item.stockQuantity ?? item.stock ?? 0);
+                    return (
+                      <tr key={item.id}>
+                        <td>#{item.id}</td>
+                        <td style={{ fontWeight: 600 }}>{item.name}</td>
+                        <td>
+                          <span className="badge badge-secondary">{item.category}</span>
+                        </td>
+                        <td style={{ fontWeight: 700, color: '#2563eb' }}>{formatCurrency(item.price)}</td>
+                        <td>
+                          {currentStock === 0 ? (
+                            <span className="badge badge-danger">Hết hàng</span>
+                          ) : currentStock <= 5 ? (
+                            <span className="badge badge-warning">Còn {currentStock}</span>
+                          ) : (
+                            <span className="badge badge-success">{currentStock}</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+                            <Link to={`/admin/products/${item.id}/edit`}>
+                              <Button variant="outline" size="sm">
+                                Sửa
+                              </Button>
+                            </Link>
+                            <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>
+                              Xóa
                             </Button>
-                          </Link>
-                          <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>
-                            Xóa
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
