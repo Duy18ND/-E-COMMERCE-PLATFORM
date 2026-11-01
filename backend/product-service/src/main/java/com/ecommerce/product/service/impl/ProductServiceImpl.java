@@ -18,6 +18,8 @@ import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
+import com.ecommerce.product.dto.request.StockAdjustmentRequest;
+import com.ecommerce.product.dto.request.StockInboundRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
@@ -190,6 +192,10 @@ public class ProductServiceImpl implements ProductService {
 
         try {
             for (StockReservationItem item : items) {
+                if (item.getQuantity() == null || item.getQuantity() <= 0) {
+                    throw new IllegalArgumentException("Số lượng đặt trước tồn kho phải lớn hơn 0");
+                }
+
                 Product product = productRepository.findById(item.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
@@ -211,12 +217,8 @@ public class ProductServiceImpl implements ProductService {
                 log.info("Reserved stock for product ID: {}, reserved: {}, remaining: {}",
                         product.getId(), item.getQuantity(), product.getStockQuantity());
             }
-        } catch (ObjectOptimisticLockingFailureException ex) {
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
             log.error("Optimistic locking conflict during stock reservation: {}", ex.getMessage());
-            throw new NotEnoughStockException(
-                    "Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
-        } catch (OptimisticLockException ex) {
-            log.error("JPA Optimistic locking conflict during stock reservation: {}", ex.getMessage());
             throw new NotEnoughStockException(
                     "Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
         }
@@ -230,15 +232,91 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
 
-        for (StockReservationItem item : items) {
-            Product product = productRepository.findById(item.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+        try {
+            for (StockReservationItem item : items) {
+                if (item.getQuantity() == null || item.getQuantity() <= 0) {
+                    throw new IllegalArgumentException("Số lượng hoàn kho phải lớn hơn 0");
+                }
 
-            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-            productRepository.save(product);
-            log.info("Restored stock for product ID: {}, added: {}, new total: {}",
-                    product.getId(), item.getQuantity(), product.getStockQuantity());
+                Product product = productRepository.findById(item.getProductId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+
+                int newStock = product.getStockQuantity() + item.getQuantity();
+                product.setStockQuantity(newStock);
+
+                if (product.getStatus() == ProductStatus.OUT_OF_STOCK && newStock > 0) {
+                    product.setStatus(ProductStatus.ACTIVE);
+                }
+
+                productRepository.saveAndFlush(product);
+                log.info("Restored stock for product ID: {}, added: {}, new total: {}",
+                        product.getId(), item.getQuantity(), product.getStockQuantity());
+            }
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+            log.error("Optimistic locking conflict during stock restoration: {}", ex.getMessage());
+            throw new NotEnoughStockException(
+                    "Xảy ra xung đột cập nhật tồn kho đồng thời khi hoàn kho (Optimistic Lock). Vui lòng thử lại!");
+        }
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "products", allEntries = true)
+    public ProductResponse inboundStock(Long id, StockInboundRequest request) {
+        if (request == null || request.getQuantity() == null || request.getQuantity() <= 0) {
+            throw new IllegalArgumentException("Số lượng nhập kho phải lớn hơn 0");
+        }
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+
+        int newStock = product.getStockQuantity() + request.getQuantity();
+        product.setStockQuantity(newStock);
+
+        if (product.getStatus() == ProductStatus.OUT_OF_STOCK && newStock > 0) {
+            product.setStatus(ProductStatus.ACTIVE);
+        }
+
+        try {
+            Product savedProduct = productRepository.saveAndFlush(product);
+            log.info("Inbound stock successful for product ID: {}. Added: {}, New stock: {}, Note: {}",
+                    id, request.getQuantity(), newStock, request.getNote());
+            return ProductResponse.fromEntity(savedProduct);
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+            log.error("Optimistic locking conflict during stock inbound for product ID {}: {}", id, ex.getMessage());
+            throw new NotEnoughStockException("Xung đột đồng thời khi nhập kho. Vui lòng thử lại!");
+        }
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "products", allEntries = true)
+    public ProductResponse adjustStock(Long id, StockAdjustmentRequest request) {
+        if (request == null || request.getActualStock() == null || request.getActualStock() < 0) {
+            throw new IllegalArgumentException("Số lượng tồn kho sau điều chỉnh không được nhỏ hơn 0");
+        }
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+
+        int oldStock = product.getStockQuantity();
+        product.setStockQuantity(request.getActualStock());
+
+        if (request.getActualStock() == 0 && product.getStatus() == ProductStatus.ACTIVE) {
+            product.setStatus(ProductStatus.OUT_OF_STOCK);
+        } else if (request.getActualStock() > 0 && product.getStatus() == ProductStatus.OUT_OF_STOCK) {
+            product.setStatus(ProductStatus.ACTIVE);
+        }
+
+        try {
+            Product savedProduct = productRepository.saveAndFlush(product);
+            log.info("Stock adjusted for product ID: {}. Old stock: {}, New stock: {}, Reason: {}",
+                    id, oldStock, request.getActualStock(), request.getReason());
+            return ProductResponse.fromEntity(savedProduct);
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+            log.error("Optimistic locking conflict during stock adjustment for product ID {}: {}", id, ex.getMessage());
+            throw new NotEnoughStockException("Xung đột đồng thời khi điều chỉnh kho. Vui lòng thử lại!");
         }
     }
 

@@ -24,6 +24,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
+import com.ecommerce.product.dto.request.StockAdjustmentRequest;
+import com.ecommerce.product.dto.request.StockInboundRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
@@ -51,7 +53,16 @@ class ProductControllerTest {
 
         @BeforeEach
         void setUp() {
-                mockMvc = MockMvcBuilders.standaloneSetup(productController)
+                jakarta.validation.Validator validator = jakarta.validation.Validation.buildDefaultValidatorFactory()
+                                .getValidator();
+                org.springframework.aop.framework.ProxyFactory proxyFactory = new org.springframework.aop.framework.ProxyFactory(
+                                productController);
+                proxyFactory.setProxyTargetClass(true);
+                proxyFactory.addAdvice(new org.springframework.validation.beanvalidation.MethodValidationInterceptor(
+                                validator));
+                ProductController proxiedController = (ProductController) proxyFactory.getProxy();
+
+                mockMvc = MockMvcBuilders.standaloneSetup(proxiedController)
                                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                                 .setControllerAdvice(new GlobalExceptionHandler())
                                 .build();
@@ -502,5 +513,144 @@ class ProductControllerTest {
                                 .content(objectMapper.writeValueAsString(validRequest)))
                                 .andExpect(status().isForbidden())
                                 .andExpect(jsonPath("$.error").value("Forbidden"));
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/products/{id}/inbound - Nhập kho thành công với quyền ADMIN")
+        void shouldInboundStockSuccessfullyForAdmin() throws Exception {
+                StockInboundRequest request = StockInboundRequest.builder()
+                                .quantity(30)
+                                .note("Nhập lô hàng tháng 11")
+                                .build();
+
+                ProductResponse response = ProductResponse.builder()
+                                .id(1L)
+                                .name("iPad Air")
+                                .price(BigDecimal.valueOf(599.99))
+                                .stockQuantity(50)
+                                .status(ProductStatus.ACTIVE)
+                                .build();
+
+                when(productService.inboundStock(eq(1L), any(StockInboundRequest.class))).thenReturn(response);
+
+                mockMvc.perform(post("/api/v1/products/1/inbound")
+                                .header("X-User-Roles", "ROLE_ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.message").value("Nhập kho thành công"))
+                                .andExpect(jsonPath("$.data.stockQuantity").value(50));
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/products/{id}/inbound - Trả về 403 Forbidden khi User thường gọi")
+        void shouldReturn403WhenInboundStockWithoutAdminRole() throws Exception {
+                StockInboundRequest request = StockInboundRequest.builder()
+                                .quantity(10)
+                                .note("User thử nhập kho")
+                                .build();
+
+                mockMvc.perform(post("/api/v1/products/1/inbound")
+                                .header("X-User-Roles", "ROLE_USER")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.error").value("Forbidden"));
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/products/{id}/inbound - Trả về 400 Bad Request khi số lượng nhập âm")
+        void shouldReturn400WhenInboundStockQuantityNegative() throws Exception {
+                StockInboundRequest invalidRequest = StockInboundRequest.builder()
+                                .quantity(-10)
+                                .note("Số lượng âm không hợp lệ")
+                                .build();
+
+                mockMvc.perform(post("/api/v1/products/1/inbound")
+                                .header("X-User-Roles", "ROLE_ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidRequest)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                                .andExpect(jsonPath("$.errors.quantity")
+                                                .value("Số lượng nhập kho phải lớn hơn hoặc bằng 1"));
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/products/{id}/adjust-stock - Điều chỉnh tồn kho thành công với quyền ADMIN")
+        void shouldAdjustStockSuccessfullyForAdmin() throws Exception {
+                StockAdjustmentRequest request = StockAdjustmentRequest.builder()
+                                .actualStock(15)
+                                .reason("Kiểm kê định kỳ kho Hà Nội")
+                                .build();
+
+                ProductResponse response = ProductResponse.builder()
+                                .id(1L)
+                                .name("iPad Air")
+                                .price(BigDecimal.valueOf(599.99))
+                                .stockQuantity(15)
+                                .status(ProductStatus.ACTIVE)
+                                .build();
+
+                when(productService.adjustStock(eq(1L), any(StockAdjustmentRequest.class))).thenReturn(response);
+
+                mockMvc.perform(post("/api/v1/products/1/adjust-stock")
+                                .header("X-User-Roles", "ROLE_ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.message").value("Điều chỉnh tồn kho thành công"))
+                                .andExpect(jsonPath("$.data.stockQuantity").value(15));
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/products/{id}/adjust-stock - Trả về 403 Forbidden khi User thường gọi")
+        void shouldReturn403WhenAdjustStockWithoutAdminRole() throws Exception {
+                StockAdjustmentRequest request = StockAdjustmentRequest.builder()
+                                .actualStock(15)
+                                .reason("User thử điều chỉnh")
+                                .build();
+
+                mockMvc.perform(post("/api/v1/products/1/adjust-stock")
+                                .header("X-User-Roles", "ROLE_USER")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.error").value("Forbidden"));
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/products/{id}/adjust-stock - Trả về 400 Bad Request khi thiếu reason hoặc actualStock âm")
+        void shouldReturn400WhenAdjustStockInvalid() throws Exception {
+                StockAdjustmentRequest invalidRequest = StockAdjustmentRequest.builder()
+                                .actualStock(-3)
+                                .reason("   ")
+                                .build();
+
+                mockMvc.perform(post("/api/v1/products/1/adjust-stock")
+                                .header("X-User-Roles", "ROLE_ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidRequest)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                                .andExpect(jsonPath("$.errors.actualStock")
+                                                .value("Số lượng tồn kho sau điều chỉnh không được nhỏ hơn 0"))
+                                .andExpect(jsonPath("$.errors.reason")
+                                                .value("Lý do điều chỉnh kho không được để trống"));
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/products/reserve-stock - Trả về 400 Bad Request khi phần tử trong List có quantity <= 0")
+        void shouldReturn400WhenReserveStockListContainsNegativeQuantity() throws Exception {
+                List<StockReservationItem> invalidItems = List.of(
+                                StockReservationItem.builder().productId(1L).quantity(-2).build());
+
+                mockMvc.perform(post("/api/v1/products/reserve-stock")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidItems)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("Validation Failed"));
         }
 }

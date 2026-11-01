@@ -422,9 +422,270 @@
 						"description": "Lấy chi tiết sản phẩm {{productId}}. Xác nhận thông tin sản phẩm đã sẵn sàng và được cache trên Redis."
 					},
 					"response": []
+				},
+				{
+					"name": "3.3 Inbound Stock (ADMIN) (POST /api/v1/products/{{productId}}/inbound)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('3.3 Inbound Stock: Trả về HTTP 200 OK', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('3.3 Inbound Stock: Cộng dồn tồn kho thành công (10 + 20 = 30)', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    var product = jsonData.data || jsonData;",
+									"    pm.expect(product.stockQuantity).to.equal(30);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Roles",
+								"value": "ROLE_ADMIN"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quantity\": 20,\n    \"note\": \"Nhập thêm lô hàng đợt 1 phục vụ kiểm thử kho\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/{{productId}}/inbound",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"{{productId}}",
+								"inbound"
+							]
+						},
+						"description": "Nhập thêm 20 sản phẩm vào kho cho {{productId}}. Tồn kho tăng từ 10 lên 30."
+					},
+					"response": []
+				},
+				{
+					"name": "3.4 Adjust Stock (ADMIN) (POST /api/v1/products/{{productId}}/adjust-stock)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('3.4 Adjust Stock: Trả về HTTP 200 OK', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('3.4 Adjust Stock: Điều chỉnh tồn kho thực tế về 10 thành công', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    var product = jsonData.data || jsonData;",
+									"    pm.expect(product.stockQuantity).to.equal(10);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Roles",
+								"value": "ROLE_ADMIN"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"actualStock\": 10,\n    \"reason\": \"Điều chỉnh kiểm kê thực tế về 10 sản phẩm chuẩn bị luồng Saga E2E\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/{{productId}}/adjust-stock",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"{{productId}}",
+								"adjust-stock"
+							]
+						},
+						"description": "Điều chỉnh số lượng tồn kho thực tế về 10 kèm lý do kiểm kê."
+					},
+					"response": []
+				},
+				{
+					"name": "3.5 Inbound Stock - Negative Quantity (400 Bad Request)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('3.5 Negative Stock Constraint: Trả về HTTP 400 Bad Request', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test('3.5 Negative Stock Constraint: Thông báo lỗi Validation Failed cho quantity âm', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.error).to.equal('Validation Failed');",
+									"    pm.expect(jsonData.errors).to.have.property('quantity');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Roles",
+								"value": "ROLE_ADMIN"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quantity\": -10,\n    \"note\": \"Kiểm thử chặn số lượng nhập âm\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/{{productId}}/inbound",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"{{productId}}",
+								"inbound"
+							]
+						},
+						"description": "Kiểm thử ràng buộc không âm: gửi quantity = -10 phải bị từ chối với HTTP 400 Bad Request."
+					},
+					"response": []
+				},
+				{
+					"name": "3.6 Check Product Stock (Public) (GET /api/v1/products/{{productId}}/stock?quantity=5)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('3.6 Check Stock Public: Trả về HTTP 200 OK', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('3.6 Check Stock Public: Tồn kho = 10, còn hàng và đủ đáp ứng số lượng 5', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    var stockInfo = jsonData.data || jsonData;",
+									"    pm.expect(stockInfo.stockQuantity).to.equal(10);",
+									"    pm.expect(stockInfo.inStock).to.be.true;",
+									"    pm.expect(stockInfo.sufficientStock).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/{{productId}}/stock?quantity=5",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"{{productId}}",
+								"stock"
+							],
+							"query": [
+								{
+									"key": "quantity",
+									"value": "5"
+								}
+							]
+						},
+						"description": "Public API kiểm tra nhanh số lượng tồn kho hiện tại và khả năng đáp ứng số lượng yêu cầu (quantity=5)."
+					},
+					"response": []
 				}
 			],
-			"description": "Quản lý sản phẩm và xác thực cơ chế Redis Cache."
+			"description": "Quản lý sản phẩm, nhập kho, điều chỉnh tồn kho, kiểm tra tồn kho và xác thực cơ chế Redis Cache."
 		},
 		{
 			"name": "04. Saga Pattern - Happy Path",
