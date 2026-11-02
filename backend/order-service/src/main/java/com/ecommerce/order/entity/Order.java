@@ -103,10 +103,18 @@ public class Order implements Serializable {
     }
 
     public void addStatusHistory(OrderStatusHistory history) {
+        if (history == null) {
+            return;
+        }
         if (statusHistories == null) {
             statusHistories = new ArrayList<>();
         }
-        statusHistories.add(history);
+        boolean alreadyExists = statusHistories.stream().anyMatch(existing ->
+                existing == history || (existing != null && existing.getId() != null && existing.getId().equals(history.getId()))
+        );
+        if (!alreadyExists) {
+            statusHistories.add(history);
+        }
         history.setOrder(this);
     }
 }

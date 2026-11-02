@@ -528,7 +528,9 @@ public class OrderServiceImpl implements OrderService {
 
         boolean isAdmin = hasAdminRole(roles);
 
-        if (!isAdmin && authenticatedUserId != null && !order.getUserId().equals(authenticatedUserId)) {
+        if (!isAdmin && (authenticatedUserId == null || !order.getUserId().equals(authenticatedUserId))) {
+            log.warn("Access denied: User {} attempted to view order history of orderId {} owned by {}",
+                    authenticatedUserId, orderId, order.getUserId());
             throw new AccessDeniedException("Bạn không có quyền xem lịch sử đơn hàng của người dùng khác");
         }
 
@@ -564,7 +566,12 @@ public class OrderServiceImpl implements OrderService {
                 .actorRole(actorRole != null ? actorRole : "SYSTEM")
                 .note(note)
                 .build();
-        return orderStatusHistoryRepository.save(history);
+        OrderStatusHistory savedHistory = orderStatusHistoryRepository.save(history);
+        OrderStatusHistory syncedHistory = savedHistory != null ? savedHistory : history;
+        if (order != null) {
+            order.addStatusHistory(syncedHistory);
+        }
+        return syncedHistory;
     }
 
     private OrderStatusHistoryResponse mapToStatusHistoryResponse(OrderStatusHistory history) {
@@ -622,7 +629,7 @@ public class OrderServiceImpl implements OrderService {
                 : List.of();
 
         List<OrderStatusHistoryResponse> historyResponses = (order.getStatusHistories() != null && !order.getStatusHistories().isEmpty())
-                ? order.getStatusHistories().stream().map(this::mapToStatusHistoryResponse).toList()
+                ? order.getStatusHistories().stream().filter(Objects::nonNull).map(this::mapToStatusHistoryResponse).toList()
                 : List.of();
 
         return OrderResponse.builder()

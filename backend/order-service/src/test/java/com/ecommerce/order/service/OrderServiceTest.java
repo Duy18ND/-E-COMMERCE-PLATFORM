@@ -726,4 +726,54 @@ class OrderServiceTest {
         verify(orderRepository, never()).save(any());
         verify(kafkaOrderProducer, never()).sendOrderCreatedEvent(any());
     }
+
+    // =========================================================================
+    // [Task ECOM-187] Unit Tests cho Defense-in-Depth & Bidirectional Sync
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-187] Defense-in-Depth: getOrderStatusHistory với authenticatedUserId = null và roles = ROLE_USER -> Ném AccessDeniedException")
+    void getOrderStatusHistory_WhenMissingUserIdAndRoleUser_ShouldThrowAccessDeniedException() {
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        AccessDeniedException ex = assertThrows(
+                AccessDeniedException.class,
+                () -> orderService.getOrderStatusHistory(1L, null, "ROLE_USER")
+        );
+
+        assertThat(ex.getMessage()).isEqualTo("Bạn không có quyền xem lịch sử đơn hàng của người dùng khác");
+        verify(orderStatusHistoryRepository, never()).findByOrderIdOrderByCreatedAtAsc(any());
+    }
+
+    @Test
+    @DisplayName("[ECOM-187] Bidirectional Sync: Sau khi updateOrderStatus, OrderResponse trả về phải chứa ngay bản ghi OrderStatusHistory mới nhất")
+    void updateOrderStatus_ShouldIncludeLatestStatusHistoryInReturnedOrderResponse() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderStatusHistoryRepository.save(any(com.ecommerce.order.entity.OrderStatusHistory.class)))
+                .thenAnswer(invocation -> {
+                    com.ecommerce.order.entity.OrderStatusHistory h = invocation.getArgument(0);
+                    h.setId(501L);
+                    h.setCreatedAt(LocalDateTime.now());
+                    return h;
+                });
+
+        OrderResponse response = orderService.updateOrderStatus(
+                1L, OrderStatus.CONFIRMED, "ADMIN:1", "ROLE_ADMIN", "Admin duyệt đơn hàng #1"
+        );
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(response.getStatusHistories()).isNotEmpty();
+
+        com.ecommerce.order.dto.response.OrderStatusHistoryResponse latest =
+                response.getStatusHistories().get(response.getStatusHistories().size() - 1);
+        assertThat(latest.getId()).isEqualTo(501L);
+        assertThat(latest.getOrderId()).isEqualTo(1L);
+        assertThat(latest.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(latest.getPreviousStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(latest.getUpdatedBy()).isEqualTo("ADMIN:1");
+        assertThat(latest.getActorRole()).isEqualTo("ROLE_ADMIN");
+        assertThat(latest.getNote()).isEqualTo("Admin duyệt đơn hàng #1");
+    }
 }
