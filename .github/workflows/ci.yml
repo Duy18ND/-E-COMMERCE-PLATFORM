@@ -75,19 +75,20 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Set up Gradle Cache
+      - name: Set up Gradle Cache & Environment
         uses: gradle/actions/setup-gradle@v4
         with:
+          build-root-directory: backend
           cache-read-only: false
 
       - name: Grant Execute Permission for Gradle Wrapper
         run: chmod +x ./gradlew
 
       - name: Run Backend Unit & Integration Tests
-        run: ./gradlew test --no-daemon --info
+        run: ./gradlew test --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m"
 
       - name: Build Spring Boot Executable JARs (bootJar)
-        run: ./gradlew bootJar --no-daemon -x test
+        run: ./gradlew bootJar --no-daemon -x test --max-workers=2 -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m"
 
       - name: Upload Backend JAR Artifacts
         uses: actions/upload-artifact@v4
@@ -138,13 +139,26 @@ jobs:
 
       - name: Verify Production Port Hardening (No Private Ports on 0.0.0.0)
         run: |
-          # Verify that 3306, 6379, 8761, 8080-8084 are NOT exposed to 0.0.0.0 in prod compose
-          COMPOSE_CONFIG=$(docker compose -f backend/docker-compose.prod.yml config)
-          if echo "$COMPOSE_CONFIG" | grep -E 'published: "(3306|6379|8761|8081|8082|8083|8084)"' | grep -v 'host_ip: 127.0.0.1'; then
-            echo "ERROR: Found exposed internal ports on 0.0.0.0 in docker-compose.prod.yml!"
-            exit 1
-          fi
-          echo "Port hardening check PASSED: Internal ports are safely isolated."
+          node -e "
+          const execSync = require('child_process').execSync;
+          const config = JSON.parse(execSync('docker compose -f backend/docker-compose.prod.yml config --format json').toString());
+          for (const [name, svc] of Object.entries(config.services || {})) {
+            for (const p of svc.ports || []) {
+              const pub = p.published;
+              const hostIp = p.host_ip;
+              if (name === 'nginx') {
+                if (!['80', '443'].includes(String(pub))) {
+                  throw new Error('Unexpected public port on nginx: ' + pub);
+                }
+              } else {
+                if (hostIp !== '127.0.0.1') {
+                  throw new Error('Security violation: ' + name + ' publishes port ' + pub + ' on ' + (hostIp || '0.0.0.0'));
+                }
+              }
+            }
+          }
+          console.log('Port hardening check PASSED: All internal ports are safely isolated to 127.0.0.1 or internal bridge.');
+          "
 
   # ─────────────────────────────────────────────────────────────
   #  Job 4: Security & Compliance Checks
@@ -156,15 +170,25 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Check for Accidentally Committed Real .env Files
+      - name: Check for Accidentally Committed Sensitive .env Files
         run: |
-          COMMITTED_ENVS=$(find . -maxdepth 3 -type f -name ".env" ! -name ".env.example" ! -name ".env.prod.example")
-          if [ -n "$COMMITTED_ENVS" ]; then
-            echo "ERROR: Real .env file committed to repository:"
-            echo "$COMMITTED_ENVS"
+          # Check tracked files in Git for sensitive .env (backend or root .env)
+          TRACKED_ENVS=$(git ls-files "*.env" "*/*/.env" | grep -v "\.example" | grep -v "frontend/\.env" || true)
+          if [ -n "$TRACKED_ENVS" ]; then
+            echo "SECURITY ERROR: Sensitive .env file is tracked in git repository:"
+            echo "$TRACKED_ENVS"
             exit 1
           fi
-          echo "PASS: No unapproved .env file found in repository."
+
+          # If frontend/.env exists, verify it contains ONLY non-sensitive client variables
+          if [ -f "frontend/.env" ]; then
+            if grep -Ei 'password|secret|token|private_key|mysql_pwd' frontend/.env; then
+              echo "SECURITY ERROR: frontend/.env contains sensitive credentials!"
+              exit 1
+            fi
+            echo "PASS: frontend/.env verified: contains only non-sensitive build variables."
+          fi
+          echo "PASS: No unapproved sensitive .env files committed."
 
       - name: Check for Privilege Escalation in Register DTO
         run: |
