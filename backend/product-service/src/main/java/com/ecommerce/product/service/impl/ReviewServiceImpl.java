@@ -3,12 +3,14 @@ package com.ecommerce.product.service.impl;
 import com.ecommerce.product.client.OrderClient;
 import com.ecommerce.product.client.dto.OrderDetailResponse;
 import com.ecommerce.product.dto.request.CreateReviewRequest;
+import com.ecommerce.product.dto.request.UpdateReviewRequest;
 import com.ecommerce.product.dto.response.ApiResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ReviewResponse;
 import com.ecommerce.product.dto.response.ReviewSummaryResponse;
 import com.ecommerce.product.entity.ProductReview;
 import com.ecommerce.product.exception.AccessDeniedException;
+import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.repository.ProductReviewRepository;
@@ -21,12 +23,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
+
 /**
- * Triển khai nghiệp vụ đánh giá sản phẩm với 3 lớp bảo vệ:
+ * Triển khai nghiệp vụ đánh giá sản phẩm với các lớp bảo vệ:
  * 1. Sản phẩm phải tồn tại.
  * 2. Đơn hàng phải ở trạng thái DELIVERED và thuộc về userId.
  * 3. Đơn hàng phải chứa productId.
- * 4. Mỗi user chỉ được đánh giá 1 lần cho 1 sản phẩm (unique constraint).
+ * 4. Mỗi user chỉ được đánh giá 1 lần cho 1 sản phẩm (unique constraint, chống review lặp).
+ * 5. Xác thực tính toàn vẹn quan hệ cha-con (reviewId phải thuộc đúng productId).
  */
 @Slf4j
 @Service
@@ -47,9 +52,9 @@ public class ReviewServiceImpl implements ReviewService {
             throw new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + productId);
         }
 
-        // 2. Kiểm tra user chưa đánh giá sản phẩm này
+        // 2. Kiểm tra user chưa đánh giá sản phẩm này (trả về 409 Conflict)
         if (reviewRepository.existsByProductIdAndUserId(productId, userId)) {
-            throw new IllegalStateException("Bạn đã đánh giá sản phẩm này rồi. Vui lòng chỉnh sửa đánh giá hiện có.");
+            throw new DuplicateResourceException("Bạn đã đánh giá sản phẩm này rồi. Vui lòng chỉnh sửa đánh giá hiện có.");
         }
 
         // 3. Xác minh đơn hàng qua Feign Client
@@ -72,11 +77,16 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional
-    public ReviewResponse updateReview(Long reviewId, Long userId, CreateReviewRequest request) {
-        log.info("Updating review id={} by userId={}", reviewId, userId);
+    public ReviewResponse updateReview(Long productId, Long reviewId, Long userId, UpdateReviewRequest request) {
+        log.info("Updating review id={} on productId={} by userId={}", reviewId, productId, userId);
 
         ProductReview review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID: " + reviewId));
+
+        // Kiểm tra tính toàn vẹn tài nguyên cha-con: review phải thuộc đúng productId
+        if (!review.getProductId().equals(productId)) {
+            throw new IllegalArgumentException("Đánh giá này không thuộc về sản phẩm có ID: " + productId);
+        }
 
         // Chỉ owner mới được cập nhật
         if (!review.getUserId().equals(userId)) {
@@ -94,13 +104,20 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional
-    public void deleteReview(Long reviewId, Long userId, String userRoles) {
-        log.info("Deleting review id={} by userId={}, roles={}", reviewId, userId, userRoles);
+    public void deleteReview(Long productId, Long reviewId, Long userId, String userRoles) {
+        log.info("Deleting review id={} on productId={} by userId={}, roles={}", reviewId, productId, userId, userRoles);
 
         ProductReview review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID: " + reviewId));
 
-        boolean isAdmin = userRoles != null && userRoles.contains("ROLE_ADMIN");
+        // Kiểm tra tính toàn vẹn tài nguyên cha-con: review phải thuộc đúng productId
+        if (!review.getProductId().equals(productId)) {
+            throw new IllegalArgumentException("Đánh giá này không thuộc về sản phẩm có ID: " + productId);
+        }
+
+        boolean isAdmin = userRoles != null && Arrays.stream(userRoles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
         boolean isOwner = review.getUserId().equals(userId);
 
         if (!isAdmin && !isOwner) {
@@ -133,6 +150,16 @@ public class ReviewServiceImpl implements ReviewService {
                 .totalReviews(totalReviews)
                 .reviews(pagedResponse)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReviewResponse getMyReviewForProduct(Long productId, Long userId) {
+        log.info("Fetching my review for productId={}, userId={}", productId, userId);
+
+        return reviewRepository.findByProductIdAndUserId(productId, userId)
+                .map(this::mapToReviewResponse)
+                .orElse(null);
     }
 
     // --- Private Helpers -----------------------------------------------------
