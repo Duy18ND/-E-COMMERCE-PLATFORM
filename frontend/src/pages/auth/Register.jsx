@@ -48,15 +48,18 @@ export const validateRegisterForm = ({ fullName, email, phone, password, confirm
   };
 };
 
-const getPasswordStrength = (password) => {
+export const getPasswordStrength = (password) => {
   if (!password) {
     return { score: 0, label: 'Chưa nhập', color: '#94a3b8' };
   }
-  let score = 0;
-  if (password.length >= 6) score += 1;
-  if (password.length >= 8 && /[A-Z]/.test(password)) score += 1;
-  if (/[0-9]/.test(password)) score += 1;
-  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+  // Mật khẩu dưới 6 ký tự bắt buộc -> luôn luôn là Yếu
+  if (password.length < 6) {
+    return { score: 1, label: 'Yếu (Tối thiểu 6 ký tự)', color: '#ef4444' };
+  }
+  let score = 1; // Đạt độ dài tối thiểu 6 ký tự
+  if (password.length >= 8) score += 1;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+  if (/[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password)) score += 1;
 
   if (score <= 1) return { score: 1, label: 'Yếu', color: '#ef4444' };
   if (score === 2) return { score: 2, label: 'Trung bình', color: '#f59e0b' };
@@ -396,7 +399,7 @@ const Register = () => {
                     onChange={handleChange}
                     error={fieldErrors.password}
                     placeholder="Tối thiểu 6 ký tự"
-                    style={{ marginBottom: '0.5rem' }}
+                    containerStyle={{ marginBottom: '0.5rem' }}
                     leftIcon={
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -409,6 +412,7 @@ const Register = () => {
                         onClick={() => setShowPassword((prev) => !prev)}
                         className="auth-eye-btn"
                         aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                        title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                       >
                         {showPassword ? (
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -474,6 +478,7 @@ const Register = () => {
                         onClick={() => setShowConfirmPassword((prev) => !prev)}
                         className="auth-eye-btn"
                         aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
+                        title={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
                       >
                         {showConfirmPassword ? (
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -11,10 +11,10 @@ COPY settings.gradle .
 COPY build.gradle .
 COPY auth-service/build.gradle auth-service/
 
-RUN chmod +x gradlew && ./gradlew :auth-service:dependencies --no-daemon 2>/dev/null || true
+RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew :auth-service:dependencies --no-daemon 2>/dev/null || true
 
 COPY auth-service/src auth-service/src
-RUN ./gradlew :auth-service:bootJar --no-daemon -x test
+RUN --mount=type=cache,target=/root/.gradle ./gradlew :auth-service:bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app

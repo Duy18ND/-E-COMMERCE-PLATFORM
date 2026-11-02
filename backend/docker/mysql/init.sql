@@ -38,6 +38,17 @@ FLUSH PRIVILEGES;
 -- ─────────────────────────────────────────────────────────────────────────────
 USE product_db;
 
+CREATE TABLE IF NOT EXISTS categories (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE COMMENT 'Tên danh mục sản phẩm',
+    description VARCHAR(255)                 COMMENT 'Mô tả danh mục',
+    image_url   VARCHAR(500)                 COMMENT 'Đường dẫn ảnh danh mục',
+    created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at  DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_categories_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Danh mục phân loại sản phẩm';
+
 CREATE TABLE IF NOT EXISTS products (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
     name           VARCHAR(200)   NOT NULL COMMENT 'Tên sản phẩm',
