@@ -52,29 +52,13 @@ public class AuthServiceImpl implements AuthService {
             throw new UserAlreadyExistsException("Email '" + email + "' đã tồn tại trong hệ thống");
         }
 
+        // [SECURITY FIX - ANTI PRIVILEGE ESCALATION]
+        // Đăng ký công khai luôn luôn chỉ gán quyền ROLE_USER.
+        // Tuyệt đối không cho phép client truyền roles để tự cấp quyền ROLE_ADMIN.
+        Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
+                .orElseGet(() -> roleRepository.save(new Role(RoleName.ROLE_USER)));
         Set<Role> roles = new HashSet<>();
-        if (request.getRoles() == null || request.getRoles().isEmpty()) {
-            Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
-                    .orElseGet(() -> roleRepository.save(new Role(RoleName.ROLE_USER)));
-            roles.add(userRole);
-        } else {
-            for (String roleStr : request.getRoles()) {
-                String normalized = roleStr.toUpperCase().trim();
-                if (!normalized.startsWith("ROLE_")) {
-                    normalized = "ROLE_" + normalized;
-                }
-                RoleName roleName;
-                try {
-                    roleName = RoleName.valueOf(normalized);
-                } catch (IllegalArgumentException e) {
-                    roleName = RoleName.ROLE_USER;
-                }
-                final RoleName targetRoleName = roleName;
-                Role role = roleRepository.findByName(targetRoleName)
-                        .orElseGet(() -> roleRepository.save(new Role(targetRoleName)));
-                roles.add(role);
-            }
-        }
+        roles.add(userRole);
 
         User user = User.builder()
                 .email(email)
