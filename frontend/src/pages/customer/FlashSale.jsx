@@ -8,9 +8,9 @@ const FlashSale = () => {
   const productsRef = useRef(null);
 
   // Lấy dữ liệu chiến dịch và sản phẩm
-  const [activeCampaign, setActiveCampaign] = useState(() => saleService.getActiveCampaign());
+  const [activeCampaign, setActiveCampaign] = useState(() => saleService.getActiveCampaignSync());
   const [allProducts, setAllProducts] = useState(() => {
-    const prods = saleService.getAllProducts();
+    const prods = saleService.getAllProductsSync();
     return Array.isArray(prods) ? prods : [];
   });
   const timeSlots = useMemo(() => {
@@ -19,9 +19,23 @@ const FlashSale = () => {
   }, []);
 
   useEffect(() => {
-    setActiveCampaign(saleService.getActiveCampaign());
-    const prods = saleService.getAllProducts();
-    setAllProducts(Array.isArray(prods) ? prods : []);
+    let active = true;
+    const fetchActiveSaleData = async () => {
+      const [camp, prods] = await Promise.all([
+        saleService.getActiveCampaign(),
+        saleService.getActiveFlashProducts()
+      ]);
+      if (active) {
+        if (camp) setActiveCampaign(camp);
+        if (Array.isArray(prods) && prods.length > 0) {
+          setAllProducts(prods);
+        }
+      }
+    };
+    fetchActiveSaleData();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Filter states
@@ -507,8 +521,8 @@ const FlashSale = () => {
               <button
                 onClick={() => {
                   saleService.resetMockData();
-                  setActiveCampaign(saleService.getActiveCampaign());
-                  setAllProducts(saleService.getAllProducts());
+                  setActiveCampaign(saleService.getActiveCampaignSync());
+                  setAllProducts(saleService.getAllProductsSync());
                 }}
                 style={{
                   backgroundColor: '#f1f5f9',

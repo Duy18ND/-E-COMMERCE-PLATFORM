@@ -15,7 +15,34 @@ const AdminSaleForm = () => {
   const navigate = useNavigate();
   const isEditing = Boolean(id);
 
-  const allAvailableProducts = useMemo(() => saleService.getAllProducts(), []);
+  const [allAvailableProducts, setAllAvailableProducts] = useState(() =>
+    saleService.getAllProductsSync()
+  );
+
+  useEffect(() => {
+    let active = true;
+    saleService.getCatalogProductsForAdmin().then((list) => {
+      if (active && Array.isArray(list) && list.length > 0) {
+        setAllAvailableProducts(list);
+        if (!isEditing) {
+          setSelectedProducts(
+            list.slice(0, 3).map((prod) => ({
+              productId: prod.id,
+              name: prod.shortName || prod.name,
+              sku: prod.sku || `SKU-${prod.id}`,
+              originalPrice: prod.price,
+              salePrice: prod.salePrice || Math.max(1, Math.round(prod.price * 0.75)),
+              quota: Math.max(1, Math.min(20, prod.stock || 10)),
+              imageUrl: prod.imageUrl
+            }))
+          );
+        }
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isEditing]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -70,22 +97,30 @@ const AdminSaleForm = () => {
 
   // Load existing campaign if editing
   useEffect(() => {
+    let active = true;
     if (isEditing) {
-      const existing = saleService.getCampaignById(id);
-      if (existing) {
-        setFormData({
-          name: existing.name || '',
-          description: existing.description || '',
-          bannerUrl: existing.bannerUrl || SAMPLE_BANNERS[0],
-          startTime: existing.startTime ? new Date(existing.startTime).toISOString().slice(0, 16) : '',
-          endTime: existing.endTime ? new Date(existing.endTime).toISOString().slice(0, 16) : '',
-          userLimit: existing.userLimit || 2,
-          status: existing.status || 'ACTIVE',
-          badgeText: existing.badgeText || '-35%',
-          categoryTag: existing.categoryTag || 'Công nghệ'
-        });
-      }
+      saleService.getCampaignById(id).then((existing) => {
+        if (active && existing) {
+          setFormData({
+            name: existing.name || '',
+            description: existing.description || '',
+            bannerUrl: existing.bannerUrl || SAMPLE_BANNERS[0],
+            startTime: existing.startTime ? String(existing.startTime).slice(0, 16) : '',
+            endTime: existing.endTime ? String(existing.endTime).slice(0, 16) : '',
+            userLimit: existing.userLimit || 2,
+            status: existing.status || 'ACTIVE',
+            badgeText: existing.badgeText || '-35%',
+            categoryTag: existing.categoryTag || 'Công nghệ'
+          });
+          if (Array.isArray(existing.customProducts) && existing.customProducts.length > 0) {
+            setSelectedProducts(existing.customProducts);
+          }
+        }
+      });
     }
+    return () => {
+      active = false;
+    };
   }, [id, isEditing]);
 
   // Calculate estimated discount budget
@@ -132,7 +167,7 @@ const AdminSaleForm = () => {
   };
 
   // Save campaign
-  const handleSave = (publishStatus) => {
+  const handleSave = async (publishStatus) => {
     if (!formData.name.trim()) {
       alert('Vui lòng nhập tên chiến dịch Flash Sale!');
       return;
@@ -151,15 +186,23 @@ const AdminSaleForm = () => {
       customProducts: selectedProducts
     };
 
-    if (isEditing) {
-      saleService.updateCampaign(id, payload);
-      alert(`Đã cập nhật chiến dịch Flash Sale "${formData.name}" thành công!`);
-    } else {
-      saleService.createCampaign(payload);
-      alert(`Đã tạo mới và kích hoạt chiến dịch "${formData.name}" thành công!`);
+    try {
+      if (isEditing) {
+        await saleService.updateCampaign(id, payload);
+        alert(`Đã cập nhật chiến dịch Flash Sale "${formData.name}" thành công!`);
+      } else {
+        await saleService.createCampaign(payload);
+        alert(`Đã tạo mới và kích hoạt chiến dịch "${formData.name}" thành công!`);
+      }
+      navigate('/admin/sales');
+    } catch (err) {
+      const errMsg =
+        err?.response?.data?.message ||
+        (err?.response?.data?.errors && Object.values(err.response.data.errors).join('; ')) ||
+        err?.message ||
+        'Không thể lưu chiến dịch Flash Sale';
+      alert(`Lỗi: ${errMsg}`);
     }
-
-    navigate('/admin/sales');
   };
 
   // Filter products in selection table

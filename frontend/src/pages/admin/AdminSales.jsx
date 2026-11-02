@@ -25,9 +25,9 @@ const AdminSales = () => {
   const [previewCampaign, setPreviewCampaign] = useState(null);
 
   // Load campaigns from service
-  const loadCampaigns = () => {
-    const list = saleService.getAllCampaigns();
-    setCampaigns(list);
+  const loadCampaigns = async () => {
+    const list = await saleService.getAllCampaigns();
+    setCampaigns(Array.isArray(list) ? list : []);
   };
 
   useEffect(() => {
@@ -90,15 +90,24 @@ const AdminSales = () => {
     }
   };
 
-  const handleToggleStatus = (id) => {
-    saleService.toggleCampaignStatus(id);
-    loadCampaigns();
+  const handleToggleStatus = async (id) => {
+    try {
+      const target = campaigns.find((c) => String(c.id) === String(id));
+      await saleService.toggleCampaignStatus(id, target?.status);
+      await loadCampaigns();
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.message || 'Không thể cập nhật trạng thái chiến dịch');
+    }
   };
 
-  const handleDelete = (id, name) => {
+  const handleDelete = async (id, name) => {
     if (window.confirm(`Bạn có chắc chắn muốn xóa chiến dịch "${name}"? Thao tác này không thể hoàn tác.`)) {
-      saleService.deleteCampaign(id);
-      loadCampaigns();
+      try {
+        await saleService.deleteCampaign(id);
+        await loadCampaigns();
+      } catch (err) {
+        alert(err?.response?.data?.message || err?.message || 'Không thể xóa chiến dịch');
+      }
     }
   };
 
@@ -106,10 +115,10 @@ const AdminSales = () => {
     alert(`Đã xuất báo cáo chiến dịch Flash Sale (${filteredCampaigns.length} bản ghi). File CSV đã được tạo.`);
   };
 
-  const handleResetData = () => {
+  const handleResetData = async () => {
     if (window.confirm('Khôi phục dữ liệu mẫu ban đầu cho toàn bộ chiến dịch Flash Sale?')) {
       saleService.resetMockData();
-      loadCampaigns();
+      await loadCampaigns();
     }
   };
 

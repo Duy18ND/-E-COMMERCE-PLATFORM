@@ -1,6 +1,7 @@
 package com.ecommerce.order.client;
 
 import com.ecommerce.order.client.config.FeignConfig;
+import com.ecommerce.order.client.dto.FlashSaleReserveRequest;
 import com.ecommerce.order.client.dto.ProductResponse;
 import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.response.ApiResponse;
@@ -12,15 +13,18 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
-@FeignClient(name = "product-service", path = "/api/v1/products", configuration = FeignConfig.class)
+@FeignClient(name = "product-service", configuration = FeignConfig.class)
 public interface ProductClient {
 
-    @GetMapping("/{id}")
+    @GetMapping("/api/v1/products/{id}")
     ApiResponse<ProductResponse> getProductById(@PathVariable("id") Long id);
 
-    @PostMapping("/reserve-stock")
+    @PostMapping("/api/v1/products/reserve-stock")
     ApiResponse<Void> reserveStock(@RequestBody List<StockReservationItem> items);
 
-    @PostMapping("/restore-stock")
+    @PostMapping("/api/v1/products/restore-stock")
     ApiResponse<Void> restoreStock(@RequestBody List<StockReservationItem> items);
+
+    @PostMapping("/api/v1/flash-sales/reserve")
+    ApiResponse<Void> reserveFlashSaleStock(@RequestBody FlashSaleReserveRequest request);
 }

@@ -57,6 +57,9 @@ class ProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private FlashSaleService flashSaleService;
+
     @InjectMocks
     private ProductServiceImpl productService;
 
@@ -592,5 +595,30 @@ class ProductServiceTest {
         assertThat(dbStock.get()).isZero();
         assertThat(successCount.get()).isEqualTo(10);
         assertThat(blockedByNotEnoughStockCount.get()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("getProductById trả kèm thông tin activeFlashSale khi sản phẩm đang tham gia Flash Sale hiệu lực")
+    void shouldAttachActiveFlashSaleWhenGettingProductById() {
+        com.ecommerce.product.dto.response.ActiveFlashSaleDto activeFs =
+                com.ecommerce.product.dto.response.ActiveFlashSaleDto.builder()
+                        .campaignId(100L)
+                        .flashSalePrice(BigDecimal.valueOf(1499.99))
+                        .quantity(20)
+                        .soldQuantity(5)
+                        .remainingStock(15)
+                        .userLimit(2)
+                        .build();
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(flashSaleService.getActiveFlashSaleForProduct(1L)).thenReturn(activeFs);
+
+        ProductResponse response = productService.getProductById(1L);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getPrice()).isEqualByComparingTo("1999.99");
+        assertThat(response.getActiveFlashSale()).isNotNull();
+        assertThat(response.getActiveFlashSale().getFlashSalePrice()).isEqualByComparingTo("1499.99");
+        assertThat(response.getActiveFlashSale().getUserLimit()).isEqualTo(2);
     }
 }
