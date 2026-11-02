@@ -273,7 +273,7 @@ const AdminUsers = () => {
             className="page-title"
             style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#0f172a' }}
           >
-            Quản lý tài khoản
+            Quản lý Tài khoản
           </h1>
           <p style={{ margin: '0.35rem 0 0', color: '#64748b', fontSize: '0.95rem' }}>
             Tra cứu thông tin thành viên, phân quyền vai trò và kiểm soát trạng thái hoạt động

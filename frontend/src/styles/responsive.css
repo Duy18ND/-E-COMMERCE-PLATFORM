@@ -3,6 +3,14 @@
    (1920 -> 1728 -> 1600 -> 1440 -> 1366 -> 1280 -> 1200 -> 1150 -> 1024 -> 900 -> 768 -> 600 -> 480 -> 390)
    ========================================================= */
 
+/* 1A. WIDESCREEN LAPTOP (<= 1620px)
+   Khi thanh điều hướng Admin có 8 mục, ẩn tiền tố "Quản lý " sớm hơn để giữ trọn 1 dòng không bao giờ tràn */
+@media (max-width: 1620px) {
+  .admin-nav-prefix {
+    display: none;
+  }
+}
+
 /* 1. MEDIUM-LARGE DESKTOP (<= 1440px) */
 @media (max-width: 1440px) {
   .admin-nav-prefix {
