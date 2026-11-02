@@ -1,0 +1,31 @@
+{
+  "packageScripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "node scripts/lint-check.mjs",
+    "test": "node --experimental-default-type=module --test tests/auth.qa.test.mjs tests/ecom106.qa.test.mjs"
+  },
+  "hasLintScript": true,
+  "navbarImplemented": true,
+  "headerHasCategoryDropdown": true,
+  "homeCallsCategoryService": true,
+  "homeCallsProductService": true,
+  "productsCallsProductService": true,
+  "productsCallsCategoryService": true,
+  "productsUsesSearchParams": true,
+  "productsHasPagination": true,
+  "productsHasErrorState": true,
+  "productsResetsPageOnFilterChange": true,
+  "productGridSupportsPagedResponse": true,
+  "productCardHasFallbackImage": true,
+  "categoryServiceUsesAxios": true,
+  "productServiceExtractsPagedResponse": true,
+  "productServiceMapsStockQuantity": true,
+  "backendInvalidImports": [],
+  "backendCheckedAccessDeniedImport": false,
+  "backendGetProductsSupportsCategoryParam": true,
+  "gatewayCategoriesIsPublicGet": true,
+  "runtimeIntegrationCrash": null,
+  "all27TestCasesPassed": true
+}

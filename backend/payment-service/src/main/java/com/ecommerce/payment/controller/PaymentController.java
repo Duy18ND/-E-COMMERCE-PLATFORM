@@ -1,11 +1,13 @@
 package com.ecommerce.payment.controller;
 
+import com.ecommerce.payment.dto.request.MockPaymentRequest;
 import com.ecommerce.payment.dto.response.ApiResponse;
 import com.ecommerce.payment.dto.response.PaymentResponse;
 import com.ecommerce.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -38,5 +40,24 @@ public class PaymentController {
         log.info("REST request to get payment by id: {}", id);
         PaymentResponse response = paymentService.getPaymentById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết giao dịch thành công", response));
+    }
+
+    @Operation(
+            summary = "Giả lập / Xác nhận thanh toán đơn hàng",
+            description = "Mô phỏng xác nhận thanh toán thành công (success = true) hoặc thất bại (success = false) cho đơn hàng theo orderId"
+    )
+    @PostMapping("/mock-pay/{orderId}")
+    public ResponseEntity<ApiResponse<PaymentResponse>> mockPay(
+            @Parameter(description = "ID của đơn hàng cần thanh toán", example = "101")
+            @PathVariable Long orderId,
+            @Valid @RequestBody MockPaymentRequest request) {
+        boolean isSuccess = Boolean.TRUE.equals(request.getSuccess());
+        log.info("REST request to mock pay for orderId: {}, success: {}, note: {}",
+                orderId, isSuccess, request.getNote());
+        PaymentResponse response = paymentService.mockPay(orderId, isSuccess);
+        String message = isSuccess
+                ? "Xác nhận thanh toán mô phỏng thành công"
+                : "Thanh toán mô phỏng thất bại — đã kích hoạt hoàn kho (Saga Rollback)";
+        return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 }

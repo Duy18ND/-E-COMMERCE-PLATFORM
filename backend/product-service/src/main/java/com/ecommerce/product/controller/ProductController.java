@@ -1,8 +1,10 @@
 package com.ecommerce.product.controller;
 
+import java.util.Arrays;
 import java.util.List;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Pageable;
@@ -21,26 +23,30 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
+import com.ecommerce.product.dto.request.StockAdjustmentRequest;
+import com.ecommerce.product.dto.request.StockInboundRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.ApiResponse;
-import com.ecommerce.product.dto.response.CategoryResponse; //  Đúng package chuẩn
+import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
 import com.ecommerce.product.dto.response.ProductStockResponse;
 import com.ecommerce.product.enums.ProductStatus;
-import com.ecommerce.product.exception.AccessDeniedException; //  Đúng: exception 403 Forbidden của dự án
+import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+@Validated
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
@@ -50,7 +56,7 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có tìm kiếm, lọc theo danh mục, khoảng giá, tồn kho, phân trang và sắp xếp")
+    @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có tìm kiếm, lọc theo danh mục (category/categoryId), khoảng giá, tồn kho, phân trang và sắp xếp")
     public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> getProducts(
             @Valid @ModelAttribute ProductFilterRequest filterRequest,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -112,7 +118,12 @@ public class ProductController {
      * @param roles chuỗi roles nhận từ API Gateway qua header X-User-Roles
      */
     private void requireAdminRole(String roles) {
-        if (roles == null || !roles.contains("ROLE_ADMIN")) {
+        // Tách chuỗi roles theo dấu phẩy và so khớp chính xác để tránh false-positive
+        // (ví dụ: "ROLE_ADMIN_VIEWER" không được coi là ROLE_ADMIN)
+        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
+        if (!isAdmin) {
             throw new AccessDeniedException("Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
         }
     }
@@ -120,7 +131,7 @@ public class ProductController {
     @PostMapping("/reserve-stock")
     @Operation(summary = "Đặt trước tồn kho", description = "API nội bộ cho Order Service để giữ và trừ số lượng kho với Optimistic Lock")
     public ResponseEntity<ApiResponse<Void>> reserveStock(
-            @Valid @RequestBody List<StockReservationItem> items) {
+            @RequestBody @NotEmpty(message = "Danh sách sản phẩm đặt trước không được để trống") List<@Valid StockReservationItem> items) {
 
         productService.reserveStock(items);
         return ResponseEntity.ok(ApiResponse.success("Đặt trước tồn kho thành công", null));
@@ -129,10 +140,36 @@ public class ProductController {
     @PostMapping("/restore-stock")
     @Operation(summary = "Khôi phục tồn kho", description = "API nội bộ cho Order Service để hoàn lại tồn kho khi đơn hàng bị hủy")
     public ResponseEntity<ApiResponse<Void>> restoreStock(
-            @Valid @RequestBody List<StockReservationItem> items) {
+            @RequestBody @NotEmpty(message = "Danh sách sản phẩm hoàn kho không được để trống") List<@Valid StockReservationItem> items) {
 
         productService.restoreStock(items);
         return ResponseEntity.ok(ApiResponse.success("Khôi phục tồn kho thành công", null));
+    }
+
+    @PostMapping("/{id}/inbound")
+    @CacheEvict(value = "products", allEntries = true)
+    @Operation(summary = "Nhập thêm hàng vào kho [ADMIN]", description = "Chỉ ADMIN được phép nhập kho. Cộng dồn số lượng hàng nhập thêm vào tồn kho hiện tại.")
+    public ResponseEntity<ApiResponse<ProductResponse>> inboundStock(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long id,
+            @Valid @RequestBody StockInboundRequest request) {
+
+        requireAdminRole(roles);
+        ProductResponse response = productService.inboundStock(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Nhập kho thành công", response));
+    }
+
+    @PostMapping("/{id}/adjust-stock")
+    @CacheEvict(value = "products", allEntries = true)
+    @Operation(summary = "Điều chỉnh số lượng tồn kho kiểm kê [ADMIN]", description = "Chỉ ADMIN được phép điều chỉnh số lượng tồn kho thực tế và ghi nhận lý do điều chỉnh.")
+    public ResponseEntity<ApiResponse<ProductResponse>> adjustStock(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long id,
+            @Valid @RequestBody StockAdjustmentRequest request) {
+
+        requireAdminRole(roles);
+        ProductResponse response = productService.adjustStock(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Điều chỉnh tồn kho thành công", response));
     }
 
     /**
@@ -185,11 +222,14 @@ public class ProductController {
     /**
      * [Task ECOM-132 / ECOM-238] API tìm kiếm danh mục sản phẩm theo từ khóa.
      * Endpoint: GET /api/v1/products/categories/search?keyword=...
+     * Yêu cầu quyền ROLE_ADMIN qua header X-User-Roles.
      */
     @GetMapping("/categories/search")
-    @Operation(summary = "Tìm kiếm danh mục sản phẩm", description = "Tìm kiếm danh mục theo tên hoặc mô tả")
+    @Operation(summary = "Tìm kiếm danh mục sản phẩm [ADMIN]", description = "Chỉ ADMIN được phép tìm kiếm danh mục theo tên hoặc mô tả")
     public ResponseEntity<ApiResponse<List<CategoryResponse>>> searchCategories(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestParam(value = "keyword", required = false) String keyword) {
+        requireAdminRole(roles);
         List<CategoryResponse> response = productService.searchCategories(keyword);
         return ResponseEntity.ok(ApiResponse.success("Tìm kiếm danh mục sản phẩm thành công", response));
     }

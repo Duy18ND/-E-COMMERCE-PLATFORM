@@ -1,8 +1,10 @@
 package com.ecommerce.auth.controller;
 
 import com.ecommerce.auth.dto.request.AddressRequest;
+import com.ecommerce.auth.dto.request.UpdateProfileRequest;
 import com.ecommerce.auth.dto.response.AddressResponse;
 import com.ecommerce.auth.dto.response.ApiResponse;
+import com.ecommerce.auth.dto.response.UserProfileResponse;
 import com.ecommerce.auth.exception.AccessDeniedException;
 import com.ecommerce.auth.security.UserPrincipal;
 import com.ecommerce.auth.service.UserService;
@@ -27,6 +29,37 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+
+    /**
+     * [Task ECOM-128] Xây dựng API Xem thông tin cá nhân của khách hàng.
+     * Endpoint: GET /api/v1/users/profile
+     * Phụ trách bởi: Đoàn Mạnh Duy
+     * Cho phép khách hàng xem họ tên, email, sđt, vai trò và địa chỉ nhận hàng.
+     */
+    @GetMapping("/profile")
+    @Operation(summary = "Xem thông tin cá nhân (User Profile)", description = "Xem họ tên, số điện thoại, vai trò và địa chỉ nhận hàng của khách")
+    public ResponseEntity<ApiResponse<UserProfileResponse>> getProfile(
+            @RequestHeader(value = "X-User-Id", required = false) Long headerUserId) {
+        Long userId = resolveUserId(headerUserId);
+        UserProfileResponse response = userService.getProfile(userId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin cá nhân thành công", response));
+    }
+
+    /**
+     * [Task ECOM-128] Xây dựng API Cập nhật thông tin cá nhân và địa chỉ nhận hàng của khách.
+     * Endpoint: PUT /api/v1/users/profile
+     * Phụ trách bởi: Đoàn Mạnh Duy
+     * Cho phép khách cập nhật họ tên, sđt, địa chỉ nhận hàng.
+     */
+    @PutMapping("/profile")
+    @Operation(summary = "Cập nhật thông tin cá nhân", description = "Cập nhật họ tên, số điện thoại, địa chỉ nhận hàng của khách")
+    public ResponseEntity<ApiResponse<UserProfileResponse>> updateProfile(
+            @RequestHeader(value = "X-User-Id", required = false) Long headerUserId,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        Long userId = resolveUserId(headerUserId);
+        UserProfileResponse response = userService.updateProfile(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin cá nhân thành công", response));
+    }
 
     @GetMapping("/me/addresses")
     @Operation(summary = "Lấy danh sách địa chỉ giao hàng của User", description = "Trích xuất userId từ header X-User-Id hoặc SecurityContext")

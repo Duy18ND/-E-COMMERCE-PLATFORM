@@ -8,6 +8,8 @@ import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
+import com.ecommerce.product.dto.request.StockAdjustmentRequest;
+import com.ecommerce.product.dto.request.StockInboundRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
@@ -27,6 +29,13 @@ public interface ProductService {
      */
     default PagedResponse<ProductResponse> getProducts(String keyword, Pageable pageable) {
         return getProducts(ProductFilterRequest.builder().keyword(keyword).build(), pageable);
+    }
+
+    /**
+     * Get paginated products, optionally filtered by keyword and category.
+     */
+    default PagedResponse<ProductResponse> getProducts(String keyword, String category, Pageable pageable) {
+        return getProducts(ProductFilterRequest.builder().keyword(keyword).category(category).build(), pageable);
     }
 
     /**
@@ -58,6 +67,16 @@ public interface ProductService {
      * Restore inventory when an order is cancelled.
      */
     void restoreStock(List<StockReservationItem> items);
+
+    /**
+     * Nhập thêm hàng vào kho cho một sản phẩm (cộng dồn tồn kho với Optimistic Locking).
+     */
+    ProductResponse inboundStock(Long id, StockInboundRequest request);
+
+    /**
+     * Điều chỉnh số lượng tồn kho thực tế sau kiểm kê (với Optimistic Locking).
+     */
+    ProductResponse adjustStock(Long id, StockAdjustmentRequest request);
 
     /**
      * Lấy danh sách tất cả các danh mục sản phẩm công khai.

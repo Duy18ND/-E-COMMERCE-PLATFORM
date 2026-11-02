@@ -1,24 +1,26 @@
 server:
-  port: 8761
+  port: ${SERVER_PORT:8761}
 
 spring:
   application:
     name: discovery-server
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   # Disable Spring Security auto-generated password (use fixed credentials below)
   security:
     user:
-      name: eureka
-      password: eurekapassword
+      name: ${EUREKA_USER:eureka}
+      password: ${EUREKA_PASSWORD:eurekapassword}
 
 eureka:
   instance:
-    hostname: localhost
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
   client:
     # This is the Eureka Server itself — it should NOT register with itself
     register-with-eureka: false
     fetch-registry: false
     service-url:
-      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+      defaultZone: http://${spring.security.user.name}:${spring.security.user.password}@${eureka.instance.hostname}:${server.port}/eureka/
   server:
     # Wait time in ms after the last heartbeat is received before evicting the instance
     eviction-interval-timer-in-ms: 5000

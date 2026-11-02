@@ -25,9 +25,9 @@ const AdminSales = () => {
   const [previewCampaign, setPreviewCampaign] = useState(null);
 
   // Load campaigns from service
-  const loadCampaigns = () => {
-    const list = saleService.getAllCampaigns();
-    setCampaigns(list);
+  const loadCampaigns = async () => {
+    const list = await saleService.getAllCampaigns();
+    setCampaigns(Array.isArray(list) ? list : []);
   };
 
   useEffect(() => {
@@ -90,15 +90,24 @@ const AdminSales = () => {
     }
   };
 
-  const handleToggleStatus = (id) => {
-    saleService.toggleCampaignStatus(id);
-    loadCampaigns();
+  const handleToggleStatus = async (id) => {
+    try {
+      const target = campaigns.find((c) => String(c.id) === String(id));
+      await saleService.toggleCampaignStatus(id, target?.status);
+      await loadCampaigns();
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.message || 'Không thể cập nhật trạng thái chiến dịch');
+    }
   };
 
-  const handleDelete = (id, name) => {
+  const handleDelete = async (id, name) => {
     if (window.confirm(`Bạn có chắc chắn muốn xóa chiến dịch "${name}"? Thao tác này không thể hoàn tác.`)) {
-      saleService.deleteCampaign(id);
-      loadCampaigns();
+      try {
+        await saleService.deleteCampaign(id);
+        await loadCampaigns();
+      } catch (err) {
+        alert(err?.response?.data?.message || err?.message || 'Không thể xóa chiến dịch');
+      }
     }
   };
 
@@ -106,10 +115,10 @@ const AdminSales = () => {
     alert(`Đã xuất báo cáo chiến dịch Flash Sale (${filteredCampaigns.length} bản ghi). File CSV đã được tạo.`);
   };
 
-  const handleResetData = () => {
+  const handleResetData = async () => {
     if (window.confirm('Khôi phục dữ liệu mẫu ban đầu cho toàn bộ chiến dịch Flash Sale?')) {
       saleService.resetMockData();
-      loadCampaigns();
+      await loadCampaigns();
     }
   };
 
@@ -212,10 +221,8 @@ const AdminSales = () => {
 
       {/* 2. SIX METRIC KPI CARDS (THEO ĐÚNG ẢNH MẪU 4) */}
       <div
+        className="admin-kpi-6"
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(6, 1fr)',
-          gap: '1rem',
           marginBottom: '1.5rem'
         }}
       >
@@ -457,7 +464,7 @@ const AdminSales = () => {
           </div>
 
           {/* Sort & Date Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -508,7 +515,7 @@ const AdminSales = () => {
         </div>
 
         {/* Filter tags below */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span>Đang áp dụng:</span>
             <span style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
@@ -860,7 +867,7 @@ const AdminSales = () => {
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '10px' }}>
               <div>
                 <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Trạng thái:</span>
                 <div style={{ fontWeight: 700, color: '#2563eb' }}>{previewCampaign.status}</div>

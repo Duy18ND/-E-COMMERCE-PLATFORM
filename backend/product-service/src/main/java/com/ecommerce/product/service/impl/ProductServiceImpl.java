@@ -18,6 +18,8 @@ import com.ecommerce.product.dto.request.CategoryRequest;
 import com.ecommerce.product.dto.request.ProductCreateRequest;
 import com.ecommerce.product.dto.request.ProductFilterRequest;
 import com.ecommerce.product.dto.request.ProductUpdateRequest;
+import com.ecommerce.product.dto.request.StockAdjustmentRequest;
+import com.ecommerce.product.dto.request.StockInboundRequest;
 import com.ecommerce.product.dto.request.StockReservationItem;
 import com.ecommerce.product.dto.response.CategoryResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
@@ -26,11 +28,13 @@ import com.ecommerce.product.dto.response.ProductStockResponse;
 import com.ecommerce.product.entity.Category;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
+import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.NotEnoughStockException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
 import com.ecommerce.product.repository.CategoryRepository;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.repository.specification.ProductSpecification;
+import com.ecommerce.product.service.FlashSaleService;
 import com.ecommerce.product.service.ProductService;
 
 import lombok.RequiredArgsConstructor;
@@ -43,6 +47,7 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final FlashSaleService flashSaleService;
 
     /**
      * [Task ECOM-108 / ECOM-212] Xử lý nghiệp vụ lấy danh sách sản phẩm phân trang
@@ -87,11 +92,21 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public PagedResponse<ProductResponse> getProducts(String keyword, String category, Pageable pageable) {
+        return getProducts(ProductFilterRequest.builder().keyword(keyword).category(category).build(), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
 
-        return ProductResponse.fromEntity(product);
+        ProductResponse response = ProductResponse.fromEntity(product);
+        if (flashSaleService != null) {
+            response.setActiveFlashSale(flashSaleService.getActiveFlashSaleForProduct(id));
+        }
+        return response;
     }
 
     /**
@@ -106,12 +121,16 @@ public class ProductServiceImpl implements ProductService {
     @CacheEvict(value = "products", allEntries = true)
     public ProductResponse createProduct(ProductCreateRequest request) {
         validatePriceAndStock(request.getPrice(), request.getStockQuantity());
+        validateCategoryExists(request.getCategory());
+        String normalizedCategory = StringUtils.hasText(request.getCategory())
+                ? request.getCategory().trim()
+                : request.getCategory();
         Product product = Product.builder()
                 .name(request.getName().trim())
                 .description(request.getDescription())
                 .price(request.getPrice())
                 .stockQuantity(request.getStockQuantity())
-                .category(request.getCategory())
+                .category(normalizedCategory)
                 .imageUrl(request.getImageUrl())
                 .status(ProductStatus.ACTIVE)
                 .build();
@@ -135,11 +154,15 @@ public class ProductServiceImpl implements ProductService {
         validatePriceAndStock(request.getPrice(), request.getStockQuantity());
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+        validateCategoryExists(request.getCategory());
+        String normalizedCategory = StringUtils.hasText(request.getCategory())
+                ? request.getCategory().trim()
+                : request.getCategory();
         product.setName(request.getName().trim());
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
         product.setStockQuantity(request.getStockQuantity());
-        product.setCategory(request.getCategory());
+        product.setCategory(normalizedCategory);
         product.setImageUrl(request.getImageUrl());
         if (request.getStatus() != null) {
             product.setStatus(request.getStatus());
@@ -175,6 +198,10 @@ public class ProductServiceImpl implements ProductService {
 
         try {
             for (StockReservationItem item : items) {
+                if (item.getQuantity() == null || item.getQuantity() <= 0) {
+                    throw new IllegalArgumentException("Số lượng đặt trước tồn kho phải lớn hơn 0");
+                }
+
                 Product product = productRepository.findById(item.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
@@ -196,12 +223,8 @@ public class ProductServiceImpl implements ProductService {
                 log.info("Reserved stock for product ID: {}, reserved: {}, remaining: {}",
                         product.getId(), item.getQuantity(), product.getStockQuantity());
             }
-        } catch (ObjectOptimisticLockingFailureException ex) {
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
             log.error("Optimistic locking conflict during stock reservation: {}", ex.getMessage());
-            throw new NotEnoughStockException(
-                    "Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
-        } catch (OptimisticLockException ex) {
-            log.error("JPA Optimistic locking conflict during stock reservation: {}", ex.getMessage());
             throw new NotEnoughStockException(
                     "Xảy ra xung đột cập nhật tồn kho đồng thời (Optimistic Lock). Vui lòng thử lại!");
         }
@@ -215,15 +238,91 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
 
-        for (StockReservationItem item : items) {
-            Product product = productRepository.findById(item.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+        try {
+            for (StockReservationItem item : items) {
+                if (item.getQuantity() == null || item.getQuantity() <= 0) {
+                    throw new IllegalArgumentException("Số lượng hoàn kho phải lớn hơn 0");
+                }
 
-            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-            productRepository.save(product);
-            log.info("Restored stock for product ID: {}, added: {}, new total: {}",
-                    product.getId(), item.getQuantity(), product.getStockQuantity());
+                Product product = productRepository.findById(item.getProductId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+
+                int newStock = product.getStockQuantity() + item.getQuantity();
+                product.setStockQuantity(newStock);
+
+                if (product.getStatus() == ProductStatus.OUT_OF_STOCK && newStock > 0) {
+                    product.setStatus(ProductStatus.ACTIVE);
+                }
+
+                productRepository.saveAndFlush(product);
+                log.info("Restored stock for product ID: {}, added: {}, new total: {}",
+                        product.getId(), item.getQuantity(), product.getStockQuantity());
+            }
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+            log.error("Optimistic locking conflict during stock restoration: {}", ex.getMessage());
+            throw new NotEnoughStockException(
+                    "Xảy ra xung đột cập nhật tồn kho đồng thời khi hoàn kho (Optimistic Lock). Vui lòng thử lại!");
+        }
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "products", allEntries = true)
+    public ProductResponse inboundStock(Long id, StockInboundRequest request) {
+        if (request == null || request.getQuantity() == null || request.getQuantity() <= 0) {
+            throw new IllegalArgumentException("Số lượng nhập kho phải lớn hơn 0");
+        }
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+
+        int newStock = product.getStockQuantity() + request.getQuantity();
+        product.setStockQuantity(newStock);
+
+        if (product.getStatus() == ProductStatus.OUT_OF_STOCK && newStock > 0) {
+            product.setStatus(ProductStatus.ACTIVE);
+        }
+
+        try {
+            Product savedProduct = productRepository.saveAndFlush(product);
+            log.info("Inbound stock successful for product ID: {}. Added: {}, New stock: {}, Note: {}",
+                    id, request.getQuantity(), newStock, request.getNote());
+            return ProductResponse.fromEntity(savedProduct);
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+            log.error("Optimistic locking conflict during stock inbound for product ID {}: {}", id, ex.getMessage());
+            throw new NotEnoughStockException("Xung đột đồng thời khi nhập kho. Vui lòng thử lại!");
+        }
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "products", allEntries = true)
+    public ProductResponse adjustStock(Long id, StockAdjustmentRequest request) {
+        if (request == null || request.getActualStock() == null || request.getActualStock() < 0) {
+            throw new IllegalArgumentException("Số lượng tồn kho sau điều chỉnh không được nhỏ hơn 0");
+        }
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+
+        int oldStock = product.getStockQuantity();
+        product.setStockQuantity(request.getActualStock());
+
+        if (request.getActualStock() == 0 && product.getStatus() == ProductStatus.ACTIVE) {
+            product.setStatus(ProductStatus.OUT_OF_STOCK);
+        } else if (request.getActualStock() > 0 && product.getStatus() == ProductStatus.OUT_OF_STOCK) {
+            product.setStatus(ProductStatus.ACTIVE);
+        }
+
+        try {
+            Product savedProduct = productRepository.saveAndFlush(product);
+            log.info("Stock adjusted for product ID: {}. Old stock: {}, New stock: {}, Reason: {}",
+                    id, oldStock, request.getActualStock(), request.getReason());
+            return ProductResponse.fromEntity(savedProduct);
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+            log.error("Optimistic locking conflict during stock adjustment for product ID {}: {}", id, ex.getMessage());
+            throw new NotEnoughStockException("Xung đột đồng thời khi điều chỉnh kho. Vui lòng thử lại!");
         }
     }
 
@@ -313,14 +412,14 @@ public class ProductServiceImpl implements ProductService {
     /**
      * [Task ECOM-132 / ECOM-238 / ECOM-239] Thêm mới một danh mục sản phẩm.
      * Kiểm tra trùng tên danh mục (không phân biệt hoa thường); nếu trùng sẽ ném
-     * IllegalStateException (HTTP 422).
+     * DuplicateResourceException (HTTP 409).
      */
     @Override
     @Transactional
     public CategoryResponse createCategory(CategoryRequest request) {
         String trimmedName = request.getName().trim();
         if (categoryRepository.existsByNameIgnoreCase(trimmedName)) {
-            throw new IllegalStateException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
+            throw new DuplicateResourceException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
         }
         Category category = Category.builder()
                 .name(trimmedName)
@@ -335,7 +434,7 @@ public class ProductServiceImpl implements ProductService {
     /**
      * [Task ECOM-132 / ECOM-238 / ECOM-239] Cập nhật thông tin danh mục theo ID.
      * Kiểm tra danh mục tồn tại (404) và kiểm tra tên mới không trùng với danh mục
-     * khác (422).
+     * khác (409).
      */
     @Override
     @Transactional
@@ -346,7 +445,7 @@ public class ProductServiceImpl implements ProductService {
         // Nếu đổi sang tên mới thì kiểm tra xem tên mới đã tồn tại ở danh mục khác chưa
         if (!category.getName().equalsIgnoreCase(trimmedName)
                 && categoryRepository.existsByNameIgnoreCase(trimmedName)) {
-            throw new IllegalStateException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
+            throw new DuplicateResourceException("Tên danh mục '" + trimmedName + "' đã tồn tại trong hệ thống");
         }
         category.setName(trimmedName);
         category.setDescription(request.getDescription());
@@ -360,12 +459,19 @@ public class ProductServiceImpl implements ProductService {
      * [Task ECOM-132 / ECOM-238] Xóa danh mục sản phẩm theo ID.
      * Kiểm tra danh mục tồn tại trước khi xóa; nếu không có ném
      * ResourceNotFoundException (HTTP 404).
+     * Ràng buộc toàn vẹn: nếu vẫn còn sản phẩm thuộc danh mục thì ném
+     * IllegalStateException (HTTP 422) và không cho phép xóa.
      */
     @Override
     @Transactional
     public void deleteCategory(Long id) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục với ID: " + id));
+        if (productRepository.existsByCategoryIgnoreCase(category.getName())) {
+            long productCount = productRepository.countByCategoryIgnoreCase(category.getName());
+            throw new IllegalStateException("Không thể xóa danh mục '" + category.getName()
+                    + "' vì vẫn còn " + productCount + " sản phẩm thuộc danh mục này");
+        }
         categoryRepository.delete(category);
         log.info("Deleted category ID: {}", id);
     }
@@ -396,6 +502,19 @@ public class ProductServiceImpl implements ProductService {
         }
         if (stockQuantity == null || stockQuantity < 0) {
             throw new IllegalArgumentException("Số lượng tồn kho không được nhỏ hơn 0");
+        }
+    }
+
+    /**
+     * Kiểm tra danh mục sản phẩm có tồn tại trong hệ thống hay không (nếu chuỗi không rỗng).
+     * Nếu danh mục không tồn tại sẽ ném ResourceNotFoundException (HTTP 404).
+     */
+    private void validateCategoryExists(String categoryName) {
+        if (StringUtils.hasText(categoryName)) {
+            String trimmedCategory = categoryName.trim();
+            if (!categoryRepository.existsByNameIgnoreCase(trimmedCategory)) {
+                throw new ResourceNotFoundException("Danh mục '" + trimmedCategory + "' không tồn tại trong hệ thống");
+            }
         }
     }
 }

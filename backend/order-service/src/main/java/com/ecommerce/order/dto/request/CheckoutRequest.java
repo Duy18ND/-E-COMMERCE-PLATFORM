@@ -26,7 +26,7 @@ public class CheckoutRequest implements Serializable {
     private String receiverName;
 
     @NotBlank(message = "Số điện thoại nhận hàng không được để trống")
-    @Pattern(regexp = "^(0|\\+84)[3|5|7|8|9][0-9]{8}$", message = "Số điện thoại không đúng định dạng Việt Nam")
+    @Pattern(regexp = "^(0|\\+84)[35789][0-9]{8}$", message = "Số điện thoại không đúng định dạng Việt Nam")
     private String receiverPhone;
 
     @NotBlank(message = "Địa chỉ nhận hàng không được để trống")
@@ -35,7 +35,10 @@ public class CheckoutRequest implements Serializable {
     @NotNull(message = "Phương thức thanh toán không được để trống")
     private PaymentMethod paymentMethod;
 
-    @NotEmpty(message = "Danh sách sản phẩm trong đơn hàng không được rỗng")
+    /**
+     * [Task ECOM-267] Danh sách sản phẩm mua hàng.
+     * Có thể để trống khi đặt hàng từ giỏ (hệ thống sẽ tự động lấy các sản phẩm từ giỏ hàng của user).
+     */
     @Valid
     private List<CheckoutItemRequest> items;
 }

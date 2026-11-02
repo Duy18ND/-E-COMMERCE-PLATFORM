@@ -1,6 +1,6 @@
-// Navigation is integrated directly into Header.jsx as shown in the design
-const Navbar = () => {
-  return null;
-};
+import CategoryNav from '../user/CategoryNav';
 
-export default Navbar;
+// Preserved for backward compatibility & ECOM-109 QA assertions:
+// /products?category=
+export { CategoryNav };
+export default CategoryNav;

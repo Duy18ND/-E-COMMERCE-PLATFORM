@@ -69,9 +69,9 @@ public class ProductStockResponse implements Serializable {
         boolean isSufficient = hasStock && currentStock >= requestedQty;
 
         String message;
-        if (!isActive) {
+        if (product.getStatus() == ProductStatus.INACTIVE) {
             message = "Sản phẩm đã ngừng kinh doanh";
-        } else if (currentStock <= 0) {
+        } else if (product.getStatus() == ProductStatus.OUT_OF_STOCK || currentStock <= 0) {
             message = "Hết hàng";
         } else if (!isSufficient) {
             message = "Không đủ số lượng tồn kho (Chỉ còn " + currentStock + " sản phẩm)";

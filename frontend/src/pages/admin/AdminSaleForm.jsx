@@ -15,7 +15,34 @@ const AdminSaleForm = () => {
   const navigate = useNavigate();
   const isEditing = Boolean(id);
 
-  const allAvailableProducts = useMemo(() => saleService.getAllProducts(), []);
+  const [allAvailableProducts, setAllAvailableProducts] = useState(() =>
+    saleService.getAllProductsSync()
+  );
+
+  useEffect(() => {
+    let active = true;
+    saleService.getCatalogProductsForAdmin().then((list) => {
+      if (active && Array.isArray(list) && list.length > 0) {
+        setAllAvailableProducts(list);
+        if (!isEditing) {
+          setSelectedProducts(
+            list.slice(0, 3).map((prod) => ({
+              productId: prod.id,
+              name: prod.shortName || prod.name,
+              sku: prod.sku || `SKU-${prod.id}`,
+              originalPrice: prod.price,
+              salePrice: prod.salePrice || Math.max(1, Math.round(prod.price * 0.75)),
+              quota: Math.max(1, Math.min(20, prod.stock || 10)),
+              imageUrl: prod.imageUrl
+            }))
+          );
+        }
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isEditing]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -70,22 +97,30 @@ const AdminSaleForm = () => {
 
   // Load existing campaign if editing
   useEffect(() => {
+    let active = true;
     if (isEditing) {
-      const existing = saleService.getCampaignById(id);
-      if (existing) {
-        setFormData({
-          name: existing.name || '',
-          description: existing.description || '',
-          bannerUrl: existing.bannerUrl || SAMPLE_BANNERS[0],
-          startTime: existing.startTime ? new Date(existing.startTime).toISOString().slice(0, 16) : '',
-          endTime: existing.endTime ? new Date(existing.endTime).toISOString().slice(0, 16) : '',
-          userLimit: existing.userLimit || 2,
-          status: existing.status || 'ACTIVE',
-          badgeText: existing.badgeText || '-35%',
-          categoryTag: existing.categoryTag || 'Công nghệ'
-        });
-      }
+      saleService.getCampaignById(id).then((existing) => {
+        if (active && existing) {
+          setFormData({
+            name: existing.name || '',
+            description: existing.description || '',
+            bannerUrl: existing.bannerUrl || SAMPLE_BANNERS[0],
+            startTime: existing.startTime ? String(existing.startTime).slice(0, 16) : '',
+            endTime: existing.endTime ? String(existing.endTime).slice(0, 16) : '',
+            userLimit: existing.userLimit || 2,
+            status: existing.status || 'ACTIVE',
+            badgeText: existing.badgeText || '-35%',
+            categoryTag: existing.categoryTag || 'Công nghệ'
+          });
+          if (Array.isArray(existing.customProducts) && existing.customProducts.length > 0) {
+            setSelectedProducts(existing.customProducts);
+          }
+        }
+      });
     }
+    return () => {
+      active = false;
+    };
   }, [id, isEditing]);
 
   // Calculate estimated discount budget
@@ -132,7 +167,7 @@ const AdminSaleForm = () => {
   };
 
   // Save campaign
-  const handleSave = (publishStatus) => {
+  const handleSave = async (publishStatus) => {
     if (!formData.name.trim()) {
       alert('Vui lòng nhập tên chiến dịch Flash Sale!');
       return;
@@ -151,15 +186,23 @@ const AdminSaleForm = () => {
       customProducts: selectedProducts
     };
 
-    if (isEditing) {
-      saleService.updateCampaign(id, payload);
-      alert(`Đã cập nhật chiến dịch Flash Sale "${formData.name}" thành công!`);
-    } else {
-      saleService.createCampaign(payload);
-      alert(`Đã tạo mới và kích hoạt chiến dịch "${formData.name}" thành công!`);
+    try {
+      if (isEditing) {
+        await saleService.updateCampaign(id, payload);
+        alert(`Đã cập nhật chiến dịch Flash Sale "${formData.name}" thành công!`);
+      } else {
+        await saleService.createCampaign(payload);
+        alert(`Đã tạo mới và kích hoạt chiến dịch "${formData.name}" thành công!`);
+      }
+      navigate('/admin/sales');
+    } catch (err) {
+      const errMsg =
+        err?.response?.data?.message ||
+        (err?.response?.data?.errors && Object.values(err.response.data.errors).join('; ')) ||
+        err?.message ||
+        'Không thể lưu chiến dịch Flash Sale';
+      alert(`Lỗi: ${errMsg}`);
     }
-
-    navigate('/admin/sales');
   };
 
   // Filter products in selection table
@@ -240,21 +283,18 @@ const AdminSaleForm = () => {
 
       {/* 2-COLUMN SPLIT LAYOUT (FORM TRÊN TRÁI, LIVE PREVIEW BÊN PHẢI NHƯ ẢNH MẪU 5) */}
       <div
+        className="layout-split"
         style={{
-          display: 'grid',
-          gridTemplateColumns: '1.45fr 1fr',
-          gap: '2rem',
           alignItems: 'start'
         }}
-        className="grid-cols-2"
       >
         {/* ========================================================
             LEFT COLUMN: THE CONFIGURATION FORM
            ======================================================== */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* SECTION 1: Thông tin chung & Thời gian áp dụng */}
-          <div className="card" style={{ padding: '1.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+          <div className="card" style={{ padding: 'clamp(1rem, 2.5vw, 1.75rem)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div
                   style={{
@@ -320,7 +360,7 @@ const AdminSaleForm = () => {
                 Banner quảng bá chiến dịch (Tỷ lệ 16:9 hoặc 21:9)
               </label>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem', alignItems: 'center' }}>
+              <div className="form-grid-2" style={{ alignItems: 'center' }}>
                 {/* Drag / preset box */}
                 <div
                   style={{
@@ -403,7 +443,7 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Start and End Times */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div className="form-grid-2" style={{ marginBottom: '1.25rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
                   🕒 Thời điểm bắt đầu
@@ -444,7 +484,7 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Giới hạn mua & Trạng thái công bố */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.25fr', gap: '1rem', alignItems: 'center' }}>
+            <div className="form-grid-2" style={{ alignItems: 'center' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
                   👥 Giới hạn mua / khách hàng
@@ -474,7 +514,7 @@ const AdminSaleForm = () => {
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
                   Trạng thái công bố
                 </label>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                   {['ACTIVE', 'UPCOMING', 'DRAFT'].map((st) => (
                     <button
                       key={st}
@@ -500,8 +540,8 @@ const AdminSaleForm = () => {
           </div>
 
           {/* SECTION 2: Danh sách sản phẩm & Phân bổ suất Flash Sale */}
-          <div className="card" style={{ padding: '1.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+          <div className="card" style={{ padding: 'clamp(1rem, 2.5vw, 1.75rem)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div
                   style={{
@@ -535,7 +575,7 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Table Search & Filter Toolbar */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div className="form-grid-2" style={{ marginBottom: '1rem' }}>
               <input
                 type="text"
                 placeholder="Tìm tên thiết bị, mã SKU hoặc Barcode..."
@@ -668,7 +708,9 @@ const AdminSaleForm = () => {
                 paddingTop: '1rem',
                 marginTop: '1rem',
                 borderTop: '1px solid #f1f5f9',
-                fontSize: '0.85rem'
+                fontSize: '0.85rem',
+                flexWrap: 'wrap',
+                gap: '0.5rem'
               }}
             >
               <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -699,7 +741,7 @@ const AdminSaleForm = () => {
           </div>
 
           {/* FORM FOOTER ACTIONS */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => navigate('/admin/sales')}
@@ -764,7 +806,7 @@ const AdminSaleForm = () => {
            ======================================================== */}
         <div style={{ position: 'sticky', top: '85px' }}>
           {/* Preview Header & Device Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.925rem', fontWeight: 800, color: '#0f172a' }}>
               <span>👁️</span>
               <span>Xem trước hiển thị Khách Hàng</span>

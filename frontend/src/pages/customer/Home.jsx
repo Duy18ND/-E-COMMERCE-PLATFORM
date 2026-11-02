@@ -1,139 +1,101 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ProductGrid from '../../components/product/ProductGrid';
+import Loading from '../../components/common/Loading';
+import productService from '../../services/productService';
+import categoryService from '../../services/categoryService';
+import { INITIAL_CATEGORIES, INITIAL_PRODUCTS } from '../../services/mockData';
+
+const CATEGORY_ICONS = {
+  phones: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+      <line x1="12" y1="18" x2="12.01" y2="18" />
+    </svg>
+  ),
+  laptops: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+      <line x1="2" y1="20" x2="22" y2="20" />
+    </svg>
+  ),
+  accessories: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+    </svg>
+  ),
+  smarthome: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
+    </svg>
+  )
+};
+
+const enrichCategoryWithIcon = (cat) => ({
+  ...cat,
+  desc: cat.desc || cat.description || '',
+  icon: cat.icon || CATEGORY_ICONS[cat.id] || CATEGORY_ICONS.phones
+});
 
 const Home = () => {
-  const categories = [
-    {
-      id: 'phones',
-      name: 'Điện thoại & Tablet',
-      desc: 'iPhone, Galaxy, iPad thế hệ mới',
-      count: '1.2k+ SP',
-      iconBg: '#eff6ff',
-      iconColor: '#2563eb',
-      badgeBg: '#eff6ff',
-      badgeColor: '#2563eb',
-      image: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-          <line x1="12" y1="18" x2="12.01" y2="18" />
-        </svg>
-      )
-    },
-    {
-      id: 'laptops',
-      name: 'Laptop & Workstation',
-      desc: 'MacBook, Dell XPS, ThinkPad',
-      count: '850+ SP',
-      iconBg: '#eef2ff',
-      iconColor: '#4f46e5',
-      badgeBg: '#eef2ff',
-      badgeColor: '#4f46e5',
-      image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-          <line x1="2" y1="20" x2="22" y2="20" />
-        </svg>
-      )
-    },
-    {
-      id: 'accessories',
-      name: 'Phụ Kiện & Âm Thanh',
-      desc: 'Tai nghe hi-res, bàn phím cơ, sạc',
-      count: '3.4k+ SP',
-      iconBg: '#fff7ed',
-      iconColor: '#ea580c',
-      badgeBg: '#fff7ed',
-      badgeColor: '#ea580c',
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-          <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-        </svg>
-      )
-    },
-    {
-      id: 'smarthome',
-      name: 'Nhà Thông Minh & Gia Dụng',
-      desc: 'Robot hút bụi, máy lọc không khí',
-      count: '920+ SP',
-      iconBg: '#fff1f2',
-      iconColor: '#e11d48',
-      badgeBg: '#fff1f2',
-      badgeColor: '#e11d48',
-      image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=400&q=80',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
-        </svg>
-      )
-    }
-  ];
+  const [categories, setCategories] = useState(() =>
+    INITIAL_CATEGORIES.map(enrichCategoryWithIcon)
+  );
+  const [featuredProducts, setFeaturedProducts] = useState(() =>
+    INITIAL_PRODUCTS.slice(0, 8)
+  );
+  const [loadingFeatured, setLoadingFeatured] = useState(false);
 
-  const featuredProducts = [
-    {
-      id: '1',
-      name: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-      price: 49990000,
-      category: 'Laptop & Workstation',
-      stock: 12,
-      imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80'
-    },
-    {
-      id: '2',
-      name: 'iPhone 15 Pro Max 256GB Titan Tự Nhiên',
-      price: 29990000,
-      category: 'Điện thoại & Tablet',
-      stock: 18,
-      imageUrl: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=600&q=80'
-    },
-    {
-      id: '3',
-      name: 'Tai nghe Sony WH-1000XM5 Chống Ồn Cao Cấp',
-      price: 7990000,
-      category: 'Phụ Kiện & Âm Thanh',
-      stock: 25,
-      imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80'
-    },
-    {
-      id: '4',
-      name: 'Robot Hút Bụi Lau Nhà Ecovacs Deebot X2 OMNI',
-      price: 18990000,
-      category: 'Nhà Thông Minh & Gia Dụng',
-      stock: 6,
-      imageUrl: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80'
-    }
-  ];
+  useEffect(() => {
+    let isMounted = true;
+    setLoadingFeatured(true);
+
+    Promise.all([
+      categoryService.getPublicCategories(),
+      productService.getAll({ page: 0, size: 8 })
+    ])
+      .then(([catList, prodList]) => {
+        if (!isMounted) return;
+        if (Array.isArray(catList) && catList.length > 0) {
+          setCategories(catList.slice(0, 4).map(enrichCategoryWithIcon));
+        }
+        if (Array.isArray(prodList) && prodList.length > 0) {
+          setFeaturedProducts(prodList.slice(0, 8));
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoadingFeatured(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div>
       {/* 1. HERO SECTION WITH EXACT STYLE */}
       <section
+        className="hero-section"
         style={{
           background: 'linear-gradient(180deg, #f0f6ff 0%, #ffffff 100%)',
-          padding: '3rem 0 4rem',
+          padding: 'clamp(1.75rem, 4vw, 3rem) 0 clamp(2.5rem, 5vw, 4rem)',
           borderBottom: '1px solid #f1f5f9'
         }}
       >
         <div className="container">
-          <div
-            className="hero-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.15fr 0.85fr',
-              alignItems: 'center',
-              gap: '3.5rem'
-            }}
-          >
+          <div className="hero-grid">
             {/* Left Content */}
-            <div>
+            <div className="hero-content" style={{ minWidth: 0 }}>
               {/* Pill Badge */}
               <div
+                className="hero-pill"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  maxWidth: '100%',
                   gap: '0.4rem',
                   padding: '0.45rem 1rem',
                   backgroundColor: '#eff6ff',
@@ -144,7 +106,7 @@ const Home = () => {
                   fontWeight: 700,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  marginBottom: '1.5rem',
+                  marginBottom: '1.25rem',
                   boxShadow: '0 2px 6px rgba(37, 99, 235, 0.08)'
                 }}
               >
@@ -156,13 +118,14 @@ const Home = () => {
 
               {/* Main Heading */}
               <h1
+                className="hero-title"
                 style={{
-                  fontSize: '3.25rem',
+                  fontSize: 'clamp(1.75rem, 1.1rem + 2.5vw, 3.25rem)',
                   fontWeight: 800,
                   color: '#0f172a',
                   lineHeight: 1.15,
                   letterSpacing: '-0.025em',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.15rem'
                 }}
               >
                 Khám Phá Thế Giới{' '}
@@ -172,32 +135,33 @@ const Home = () => {
               {/* Description */}
               <p
                 style={{
-                  fontSize: '1.05rem',
+                  fontSize: 'clamp(0.95rem, 1.2vw, 1.05rem)',
                   color: '#475569',
                   lineHeight: 1.65,
-                  marginBottom: '2rem',
-                  maxWidth: '520px'
+                  marginBottom: '1.75rem',
+                  maxWidth: '540px'
                 }}
               >
                 Trải nghiệm mua sắm hiện đại cùng các thiết bị điện tử, laptop và tiện ích gia dụng thông minh thế hệ mới từ các thương hiệu dẫn đầu toàn cầu.
               </p>
 
               {/* Action Buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '2.25rem', flexWrap: 'wrap' }}>
                 <Link
                   to="/products"
                   style={{
                     backgroundColor: '#1d4ed8',
                     color: '#ffffff',
-                    padding: '0.85rem 1.75rem',
+                    padding: '0.8rem 1.5rem',
                     borderRadius: '9999px',
                     fontWeight: 700,
-                    fontSize: '0.95rem',
+                    fontSize: '0.925rem',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.5rem',
                     boxShadow: '0 8px 20px -4px rgba(29, 78, 216, 0.45)',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    textDecoration: 'none'
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
                   onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
@@ -211,15 +175,16 @@ const Home = () => {
                     backgroundColor: '#ffffff',
                     color: '#0f172a',
                     border: '1.5px solid #cbd5e1',
-                    padding: '0.85rem 1.5rem',
+                    padding: '0.8rem 1.35rem',
                     borderRadius: '9999px',
                     fontWeight: 600,
-                    fontSize: '0.95rem',
+                    fontSize: '0.925rem',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.5rem',
                     boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    textDecoration: 'none'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#2563eb';
@@ -241,12 +206,12 @@ const Home = () => {
               </div>
 
               {/* Three Stat Counters */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(1rem, 2.5vw, 2.25rem)', flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                  <div style={{ fontSize: 'clamp(1.4rem, 2vw, 1.75rem)', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
                     100%
                   </div>
-                  <div style={{ fontSize: '0.825rem', color: '#64748b', marginTop: '0.2rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
                     Sản phẩm chính hãng
                   </div>
                 </div>
@@ -254,10 +219,10 @@ const Home = () => {
                 <div style={{ width: '1px', height: '36px', backgroundColor: '#e2e8f0' }} />
 
                 <div>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#2563eb', lineHeight: 1.2 }}>
+                  <div style={{ fontSize: 'clamp(1.4rem, 2vw, 1.75rem)', fontWeight: 800, color: '#2563eb', lineHeight: 1.2 }}>
                     24/7
                   </div>
-                  <div style={{ fontSize: '0.825rem', color: '#64748b', marginTop: '0.2rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
                     Hỗ trợ kỹ thuật chuyên sâu
                   </div>
                 </div>
@@ -265,10 +230,10 @@ const Home = () => {
                 <div style={{ width: '1px', height: '36px', backgroundColor: '#e2e8f0' }} />
 
                 <div>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ea580c', lineHeight: 1.2 }}>
+                  <div style={{ fontSize: 'clamp(1.4rem, 2vw, 1.75rem)', fontWeight: 800, color: '#ea580c', lineHeight: 1.2 }}>
                     Toàn Quốc
                   </div>
-                  <div style={{ fontSize: '0.825rem', color: '#64748b', marginTop: '0.2rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
                     Giao hàng & bảo hành tận nơi
                   </div>
                 </div>
@@ -276,45 +241,48 @@ const Home = () => {
             </div>
 
             {/* Right Showcase Card with Floating Glassmorphic Badges */}
-            <div style={{ position: 'relative' }}>
-              {/* Top-Left Floating Badge */}
+            <div className="hero-showcase" style={{ position: 'relative', minWidth: 0, padding: '14px 0' }}>
+              {/* Top-Left Floating Badge (inset horizontally so it never overflows viewport) */}
               <div
+                className="hero-badge hero-badge-top"
                 style={{
                   position: 'absolute',
-                  top: '-18px',
-                  left: '-20px',
+                  top: 0,
+                  left: '12px',
+                  maxWidth: 'calc(100% - 24px)',
                   zIndex: 2,
                   backgroundColor: '#ffffff',
                   borderRadius: '16px',
-                  padding: '10px 16px',
+                  padding: '8px 14px',
                   boxShadow: '0 12px 30px rgba(0, 0, 0, 0.08)',
                   border: '1px solid #f1f5f9',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.75rem'
+                  gap: '0.65rem'
                 }}
               >
                 <div
                   style={{
-                    width: '38px',
-                    height: '38px',
+                    width: '36px',
+                    height: '36px',
                     borderRadius: '10px',
                     backgroundColor: '#eff6ff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#2563eb'
+                    color: '#2563eb',
+                    flexShrink: 0
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
                 </div>
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
                     Cam Kết Chất Lượng
                   </div>
-                  <div style={{ fontSize: '0.725rem', color: '#64748b' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
                     Tiêu chuẩn phân phối toàn cầu
                   </div>
                 </div>
@@ -336,7 +304,9 @@ const Home = () => {
                   alt="Tech Master Ecosystem"
                   style={{
                     width: '100%',
-                    height: '380px',
+                    maxWidth: '100%',
+                    height: 'auto',
+                    aspectRatio: '16 / 10',
                     objectFit: 'cover',
                     display: 'block',
                     opacity: 0.95
@@ -348,28 +318,28 @@ const Home = () => {
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0) 50%)',
+                    background: 'linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0) 55%)',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'flex-end',
-                    padding: '1.5rem'
+                    padding: 'clamp(1rem, 2.5vw, 1.5rem) clamp(1rem, 2.5vw, 1.5rem) 2.25rem'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <div>
                       <div
                         style={{
-                          fontSize: '0.725rem',
+                          fontSize: '0.7rem',
                           fontWeight: 700,
                           letterSpacing: '0.06em',
                           color: '#fdba74',
                           textTransform: 'uppercase',
-                          marginBottom: '0.2rem'
+                          marginBottom: '0.15rem'
                         }}
                       >
                         FLAGSHIP SERIES
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>
+                      <div style={{ fontSize: 'clamp(1.05rem, 1.8vw, 1.25rem)', fontWeight: 800, color: '#ffffff' }}>
                         Tech Master Ecosystem
                       </div>
                     </div>
@@ -378,9 +348,9 @@ const Home = () => {
                       style={{
                         backgroundColor: '#2563eb',
                         color: '#ffffff',
-                        fontSize: '0.75rem',
+                        fontSize: '0.72rem',
                         fontWeight: 700,
-                        padding: '0.35rem 0.85rem',
+                        padding: '0.3rem 0.75rem',
                         borderRadius: '9999px',
                         boxShadow: '0 2px 8px rgba(37, 99, 235, 0.5)'
                       }}
@@ -391,45 +361,48 @@ const Home = () => {
                 </div>
               </div>
 
-              {/* Bottom-Right Floating Badge */}
+              {/* Bottom-Right Floating Badge (inset horizontally so it never overflows viewport) */}
               <div
+                className="hero-badge hero-badge-bottom"
                 style={{
                   position: 'absolute',
-                  bottom: '-18px',
-                  right: '-15px',
+                  bottom: 0,
+                  right: '12px',
+                  maxWidth: 'calc(100% - 24px)',
                   zIndex: 2,
                   backgroundColor: '#ffffff',
                   borderRadius: '16px',
-                  padding: '10px 16px',
+                  padding: '8px 14px',
                   boxShadow: '0 12px 30px rgba(0, 0, 0, 0.08)',
                   border: '1px solid #f1f5f9',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.75rem'
+                  gap: '0.65rem'
                 }}
               >
                 <div
                   style={{
-                    width: '38px',
-                    height: '38px',
+                    width: '36px',
+                    height: '36px',
                     borderRadius: '50%',
                     backgroundColor: '#fee2e2',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#dc2626'
+                    color: '#dc2626',
+                    flexShrink: 0
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </div>
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
                     Bảo Hành Toàn Diện
                   </div>
-                  <div style={{ fontSize: '0.725rem', color: '#64748b' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
                     Hỗ trợ kỹ thuật chính hãng
                   </div>
                 </div>
@@ -460,7 +433,7 @@ const Home = () => {
             gap: '1rem'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap', minWidth: 0 }}>
             <div
               style={{
                 display: 'inline-flex',
@@ -470,7 +443,7 @@ const Home = () => {
                 padding: '0.35rem 0.85rem',
                 borderRadius: '9999px',
                 fontWeight: 800,
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase'
               }}
@@ -478,8 +451,8 @@ const Home = () => {
               <span>⚡</span>
               <span>FLASH SALE ĐỘC QUYỀN</span>
             </div>
-            <div>
-              <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: 'clamp(0.95rem, 1.5vw, 1.05rem)', fontWeight: 800 }}>
                 Giảm Sốc Đến 50% Toàn Bộ Thiết Bị Hot
               </span>
               <span style={{ fontSize: '0.825rem', opacity: 0.9, marginLeft: '0.5rem', display: 'inline-block' }}>
@@ -493,10 +466,10 @@ const Home = () => {
             style={{
               backgroundColor: '#ffffff',
               color: '#dc2626',
-              padding: '0.6rem 1.35rem',
+              padding: '0.6rem 1.25rem',
               borderRadius: '9999px',
               fontWeight: 800,
-              fontSize: '0.875rem',
+              fontSize: '0.85rem',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.4rem',
@@ -514,16 +487,17 @@ const Home = () => {
         </div>
       </section>
 
-      {/* 2. CATEGORIES SECTION (EXACT DESIGN AS SCREENSHOT) */}
-      <section style={{ padding: '3.5rem 0 4rem', backgroundColor: '#ffffff' }}>
+      {/* 2. CATEGORIES SECTION */}
+      <section style={{ padding: 'clamp(2.25rem, 4vw, 3.5rem) 0 clamp(2.5rem, 5vw, 4rem)', backgroundColor: '#ffffff' }}>
         <div className="container">
-          {/* Header */}
           <div
             style={{
               display: 'flex',
               alignItems: 'flex-end',
               justifyContent: 'space-between',
-              marginBottom: '2rem'
+              marginBottom: '1.75rem',
+              flexWrap: 'wrap',
+              gap: '1rem'
             }}
           >
             <div>
@@ -541,7 +515,7 @@ const Home = () => {
               </div>
               <h2
                 style={{
-                  fontSize: '1.85rem',
+                  fontSize: 'clamp(1.45rem, 2.5vw, 1.85rem)',
                   fontWeight: 800,
                   color: '#0f172a',
                   letterSpacing: '-0.02em',
@@ -560,7 +534,8 @@ const Home = () => {
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.25rem'
+                gap: '0.25rem',
+                textDecoration: 'none'
               }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
@@ -574,7 +549,7 @@ const Home = () => {
             {categories.map((cat) => (
               <Link
                 key={cat.id}
-                to={`/products?category=${cat.id}`}
+                to={`/products?category=${encodeURIComponent(cat.id)}`}
                 style={{
                   backgroundColor: '#ffffff',
                   borderRadius: '16px',
@@ -586,7 +561,8 @@ const Home = () => {
                   justifyContent: 'space-between',
                   textDecoration: 'none',
                   transition: 'all 0.25s ease',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  minWidth: 0
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-4px)';
@@ -599,7 +575,6 @@ const Home = () => {
                   e.currentTarget.style.borderColor = '#f1f5f9';
                 }}
               >
-                {/* Top: Icon + Badge */}
                 <div>
                   <div
                     style={{
@@ -671,7 +646,7 @@ const Home = () => {
                   }}
                 >
                   <img
-                    src={cat.image}
+                    src={cat.image || cat.imageUrl}
                     alt={cat.name}
                     style={{
                       width: '100%',
@@ -689,13 +664,14 @@ const Home = () => {
       </section>
 
       {/* VOUCHER SPOTLIGHT BANNER WIDGET */}
-      <section style={{ padding: '0 0 3.5rem', backgroundColor: '#ffffff' }}>
+      <section style={{ padding: '0 0 clamp(2.25rem, 4vw, 3.5rem)', backgroundColor: '#ffffff' }}>
         <div className="container">
           <div
+            className="voucher-spotlight-card"
             style={{
               background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #1e3a8a 100%)',
               borderRadius: '20px',
-              padding: '2.5rem 2.25rem',
+              padding: 'clamp(1.25rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.25rem)',
               color: '#ffffff',
               boxShadow: '0 16px 36px -10px rgba(30, 27, 75, 0.35)',
               position: 'relative',
@@ -716,18 +692,9 @@ const Home = () => {
               }}
             />
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.2fr 1.8fr',
-                gap: '2.5rem',
-                alignItems: 'center',
-                position: 'relative',
-                zIndex: 1
-              }}
-            >
+            <div className="voucher-spotlight-grid">
               {/* Left headline */}
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div
                   style={{
                     display: 'inline-flex',
@@ -751,7 +718,7 @@ const Home = () => {
 
                 <h2
                   style={{
-                    fontSize: '2rem',
+                    fontSize: 'clamp(1.45rem, 1rem + 1.5vw, 2rem)',
                     fontWeight: 900,
                     lineHeight: 1.2,
                     letterSpacing: '-0.02em',
@@ -820,8 +787,9 @@ const Home = () => {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                  gap: '1rem'
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(170px, 100%), 1fr))',
+                  gap: '1rem',
+                  minWidth: 0
                 }}
               >
                 {/* Voucher 1 */}
@@ -835,7 +803,8 @@ const Home = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    borderLeft: '5px solid #dc2626'
+                    borderLeft: '5px solid #dc2626',
+                    minWidth: 0
                   }}
                 >
                   <div>
@@ -845,7 +814,7 @@ const Home = () => {
                       </span>
                       <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700 }}>HOT</span>
                     </div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#dc2626', lineHeight: 1.1, marginBottom: '0.35rem' }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#dc2626', lineHeight: 1.1, marginBottom: '0.35rem' }}>
                       GIẢM 50K
                     </div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
@@ -877,7 +846,8 @@ const Home = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    borderLeft: '5px solid #2563eb'
+                    borderLeft: '5px solid #2563eb',
+                    minWidth: 0
                   }}
                 >
                   <div>
@@ -887,7 +857,7 @@ const Home = () => {
                       </span>
                       <span style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 700 }}>VIP</span>
                     </div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#2563eb', lineHeight: 1.1, marginBottom: '0.35rem' }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#2563eb', lineHeight: 1.1, marginBottom: '0.35rem' }}>
                       GIẢM 15%
                     </div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
@@ -919,7 +889,8 @@ const Home = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    borderLeft: '5px solid #16a34a'
+                    borderLeft: '5px solid #16a34a',
+                    minWidth: 0
                   }}
                 >
                   <div>
@@ -929,7 +900,7 @@ const Home = () => {
                       </span>
                       <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700 }}>SHIP</span>
                     </div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#16a34a', lineHeight: 1.1, marginBottom: '0.35rem' }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#16a34a', lineHeight: 1.1, marginBottom: '0.35rem' }}>
                       GIẢM 30K
                     </div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
@@ -956,14 +927,16 @@ const Home = () => {
       </section>
 
       {/* 3. FEATURED PRODUCTS SECTION */}
-      <section style={{ padding: '3.5rem 0 5rem', backgroundColor: '#f8fafc' }}>
+      <section style={{ padding: 'clamp(2.25rem, 4vw, 3.5rem) 0 clamp(3rem, 5vw, 5rem)', backgroundColor: '#f8fafc' }}>
         <div className="container">
           <div
             style={{
               display: 'flex',
               alignItems: 'flex-end',
               justifyContent: 'space-between',
-              marginBottom: '2rem'
+              marginBottom: '1.75rem',
+              flexWrap: 'wrap',
+              gap: '1rem'
             }}
           >
             <div>
@@ -981,7 +954,7 @@ const Home = () => {
               </div>
               <h2
                 style={{
-                  fontSize: '1.85rem',
+                  fontSize: 'clamp(1.45rem, 2.5vw, 1.85rem)',
                   fontWeight: 800,
                   color: '#0f172a',
                   letterSpacing: '-0.02em',
@@ -1000,7 +973,8 @@ const Home = () => {
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.25rem'
+                gap: '0.25rem',
+                textDecoration: 'none'
               }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
@@ -1009,7 +983,11 @@ const Home = () => {
             </Link>
           </div>
 
-          <ProductGrid products={featuredProducts} />
+          {loadingFeatured && featuredProducts.length === 0 ? (
+            <Loading message="Đang tải sản phẩm tiêu biểu..." />
+          ) : (
+            <ProductGrid products={featuredProducts} />
+          )}
         </div>
       </section>
     </div>

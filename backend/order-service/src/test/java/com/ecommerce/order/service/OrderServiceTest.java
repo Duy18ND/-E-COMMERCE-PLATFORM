@@ -1,12 +1,16 @@
 package com.ecommerce.order.service;
 
 import com.ecommerce.order.client.ProductClient;
+import com.ecommerce.order.client.dto.ActiveFlashSaleDto;
+import com.ecommerce.order.client.dto.FlashSaleReserveRequest;
 import com.ecommerce.order.client.dto.ProductResponse;
 import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.request.CheckoutItemRequest;
 import com.ecommerce.order.dto.request.CheckoutRequest;
 import com.ecommerce.order.dto.response.ApiResponse;
 import com.ecommerce.order.dto.response.OrderResponse;
+import com.ecommerce.order.entity.Cart;
+import com.ecommerce.order.entity.CartItem;
 import com.ecommerce.order.entity.Order;
 import com.ecommerce.order.entity.OrderItem;
 import com.ecommerce.order.enums.OrderStatus;
@@ -17,6 +21,7 @@ import com.ecommerce.order.exception.NotEnoughStockException;
 import com.ecommerce.order.exception.ProductNotFoundException;
 import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.producer.KafkaOrderProducer;
+import com.ecommerce.order.repository.CartRepository;
 import com.ecommerce.order.repository.OrderRepository;
 import com.ecommerce.order.service.impl.OrderServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +55,12 @@ class OrderServiceTest {
 
     @Mock
     private KafkaOrderProducer kafkaOrderProducer;
+
+    @Mock
+    private CartRepository cartRepository;
+
+    @Mock
+    private com.ecommerce.order.repository.OrderStatusHistoryRepository orderStatusHistoryRepository;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -368,6 +379,104 @@ class OrderServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> orderService.getOrderById(999L));
     }
 
+    // =========================================================================
+    // Security Fix: Chống IDOR / Auth Bypass / Phân quyền ADMIN
+    // =========================================================================
+
+    @Test
+    @DisplayName("Chống Auth Bypass: cancelOrder với userId = null -> AccessDeniedException, không đụng DB/kho")
+    void cancelOrder_WhenMissingUserId_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class, () -> orderService.cancelOrder(1L, null));
+
+        verifyNoInteractions(orderRepository);
+        verify(productClient, never()).restoreStock(any());
+    }
+
+    @Test
+    @DisplayName("getOrderById: Chủ sở hữu xem được đơn của mình")
+    void getOrderById_WhenOwner_ShouldReturnOrder() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        OrderResponse response = orderService.getOrderById(1L, 1L, "ROLE_USER");
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getUserId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Chống IDOR: getOrderById bởi user khác và không phải Admin -> AccessDeniedException")
+    void getOrderById_WhenDifferentUserAndNotAdmin_ShouldThrowAccessDenied() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrderById(1L, 999L, "ROLE_USER"));
+
+        assertThat(ex.getMessage()).isEqualTo("Bạn không có quyền xem chi tiết đơn hàng này");
+    }
+
+    @Test
+    @DisplayName("Chống false-positive: role 'ROLE_ADMIN_VIEWER' KHÔNG được coi là ADMIN")
+    void getOrderById_WhenRoleLooksLikeAdmin_ShouldThrowAccessDenied() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrderById(1L, 999L, "ROLE_USER,ROLE_ADMIN_VIEWER"));
+    }
+
+    @Test
+    @DisplayName("Admin: ROLE_ADMIN xem được chi tiết đơn của khách")
+    void getOrderById_WhenAdmin_ShouldReturnOrder() {
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        OrderResponse response = orderService.getOrderById(1L, 999L, "ROLE_USER, ROLE_ADMIN");
+
+        assertThat(response.getUserId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Chống Auth Bypass: getOrderById không có userId và không phải Admin -> AccessDeniedException")
+    void getOrderById_WhenMissingUserId_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class, () -> orderService.getOrderById(1L, null, null));
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    @DisplayName("getOrdersByUserId: chính chủ xem lịch sử đơn của mình")
+    void getOrdersByUserId_WhenOwner_ShouldReturnOrders() {
+        when(orderRepository.findByUserIdWithItems(1L)).thenReturn(List.of(samplePendingOrder));
+
+        List<OrderResponse> result = orderService.getOrdersByUserId(1L, 1L, "ROLE_USER");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getUserId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Chống IDOR: getOrdersByUserId của người khác (không phải Admin) -> AccessDeniedException")
+    void getOrdersByUserId_WhenDifferentUserAndNotAdmin_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrdersByUserId(1L, 999L, "ROLE_USER"));
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    @DisplayName("Chống Auth Bypass: getOrdersByUserId với authenticatedUserId = null -> AccessDeniedException")
+    void getOrdersByUserId_WhenMissingUserId_ShouldThrowAccessDenied() {
+        assertThrows(AccessDeniedException.class,
+                () -> orderService.getOrdersByUserId(1L, null, "ROLE_ADMIN"));
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    @DisplayName("Admin: ROLE_ADMIN xem lịch sử đơn của khách")
+    void getOrdersByUserId_WhenAdmin_ShouldReturnOrders() {
+        when(orderRepository.findByUserIdWithItems(1L)).thenReturn(List.of(samplePendingOrder));
+
+        List<OrderResponse> result = orderService.getOrdersByUserId(1L, 999L, "ROLE_ADMIN");
+
+        assertThat(result).hasSize(1);
+    }
+
     @Test
     @DisplayName("Saga Step: Xử lý payment-success -> Cập nhật Order.status = PAID")
     void handlePaymentSuccess_Success() {
@@ -418,5 +527,203 @@ class OrderServiceTest {
         assertThat(restoredItems).hasSize(1);
         assertThat(restoredItems.get(0).getProductId()).isEqualTo(101L);
         assertThat(restoredItems.get(0).getQuantity()).isEqualTo(2);
+    }
+
+    // =========================================================================
+    // [Task ECOM-267] Unit Tests cho tạo đơn hàng từ giỏ (createOrderFromCart)
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-267] Tạo đơn hàng từ giỏ thành công và làm trống giỏ hàng")
+    void createOrderFromCart_Success() {
+        // GIVEN
+        Long userId = 1L;
+        Cart cart = Cart.builder()
+                .id(1L)
+                .userId(userId)
+                .items(new ArrayList<>())
+                .build();
+
+        CartItem item1 = CartItem.builder()
+                .id(10L)
+                .cart(cart)
+                .productId(101L)
+                .quantity(1)
+                .build();
+        cart.getItems().add(item1);
+
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(userId)
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội, Việt Nam")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        when(cartRepository.findByUserIdWithItems(userId)).thenReturn(Optional.of(cart));
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success("Success", sampleProduct1));
+        when(productClient.reserveStock(any())).thenReturn(ApiResponse.success("Reserved", null));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order o = invocation.getArgument(0);
+            o.setId(1001L);
+            return o;
+        });
+
+        // WHEN
+        OrderResponse response = orderService.createOrderFromCart(userId, request);
+
+        // THEN
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(1001L);
+        assertThat(response.getReceiverName()).isEqualTo("Đoàn Mạnh Duy");
+        // Giỏ hàng phải được làm trống sau khi tạo đơn
+        assertThat(cart.getItems()).isEmpty();
+        verify(cartRepository, times(1)).save(cart);
+        verify(productClient, times(1)).reserveStock(any());
+        verify(kafkaOrderProducer, times(1)).sendOrderCreatedEvent(any(OrderEvent.class));
+    }
+
+    @Test
+    @DisplayName("[ECOM-267] Ném IllegalStateException khi tạo đơn hàng từ giỏ hàng rỗng")
+    void createOrderFromCart_EmptyCart_ShouldThrowIllegalStateException() {
+        Long userId = 1L;
+        Cart emptyCart = Cart.builder()
+                .id(1L)
+                .userId(userId)
+                .items(new ArrayList<>())
+                .build();
+
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(userId)
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội, Việt Nam")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        when(cartRepository.findByUserIdWithItems(userId)).thenReturn(Optional.of(emptyCart));
+
+        assertThrows(IllegalStateException.class, () -> orderService.createOrderFromCart(userId, request));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[ECOM-267] Ném ResourceNotFoundException khi không tìm thấy giỏ hàng của user")
+    void createOrderFromCart_CartNotFound_ShouldThrowResourceNotFoundException() {
+        Long userId = 999L;
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(userId)
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội, Việt Nam")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        when(cartRepository.findByUserIdWithItems(userId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> orderService.createOrderFromCart(userId, request));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[Flash Sale] Checkout tự động áp dụng giá Flash Sale và gọi trừ tồn kho Flash Sale khi sản phẩm có activeFlashSale")
+    void checkout_WithActiveFlashSale_ShouldApplyFlashSalePriceAndReserveFlashSaleStock() {
+        ActiveFlashSaleDto activeFs = ActiveFlashSaleDto.builder()
+                .campaignId(10L)
+                .flashSalePrice(new BigDecimal("750.00"))
+                .quantity(20)
+                .soldQuantity(3)
+                .remainingStock(17)
+                .userLimit(2)
+                .endTime(LocalDateTime.now().plusHours(2))
+                .build();
+
+        ProductResponse flashSaleProduct = ProductResponse.builder()
+                .id(101L)
+                .name("iPhone 15 Pro")
+                .price(new BigDecimal("1000.00"))
+                .stockQuantity(30)
+                .activeFlashSale(activeFs)
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(flashSaleProduct));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(sampleProduct2));
+        when(productClient.reserveFlashSaleStock(any(FlashSaleReserveRequest.class)))
+                .thenReturn(ApiResponse.success(null));
+        when(productClient.reserveStock(any())).thenReturn(ApiResponse.success(null));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order o = invocation.getArgument(0);
+            o.setId(88L);
+            o.setCreatedAt(LocalDateTime.now());
+            return o;
+        });
+
+        OrderResponse response = orderService.checkout(sampleCheckoutRequest);
+
+        // Tổng tiền = 750.00 * 2 (Flash Sale) + 50.00 * 1 (giá thường) = 1550.00
+        assertThat(response).isNotNull();
+        assertThat(response.getTotalAmount()).isEqualByComparingTo(new BigDecimal("1550.00"));
+        assertThat(response.getItems()).hasSize(2);
+        assertThat(response.getItems().get(0).getPriceAtPurchase()).isEqualByComparingTo(new BigDecimal("750.00"));
+        assertThat(response.getItems().get(1).getPriceAtPurchase()).isEqualByComparingTo(new BigDecimal("50.00"));
+
+        ArgumentCaptor<FlashSaleReserveRequest> fsCaptor = ArgumentCaptor.forClass(FlashSaleReserveRequest.class);
+        verify(productClient, times(1)).reserveFlashSaleStock(fsCaptor.capture());
+        assertThat(fsCaptor.getValue().getProductId()).isEqualTo(101L);
+        assertThat(fsCaptor.getValue().getQuantity()).isEqualTo(2);
+
+        verify(productClient, times(1)).reserveStock(any());
+        verify(orderRepository, times(1)).save(any(Order.class));
+    }
+
+    @Test
+    @DisplayName("[Flash Sale] Checkout ném IllegalArgumentException khi khách mua vượt userLimit của chương trình Flash Sale")
+    void checkout_WhenExceedingFlashSaleUserLimit_ShouldThrowIllegalArgumentException() {
+        ActiveFlashSaleDto activeFs = ActiveFlashSaleDto.builder()
+                .campaignId(10L)
+                .flashSalePrice(new BigDecimal("750.00"))
+                .quantity(20)
+                .soldQuantity(0)
+                .remainingStock(20)
+                .userLimit(2)
+                .endTime(LocalDateTime.now().plusHours(2))
+                .build();
+
+        ProductResponse flashSaleProduct = ProductResponse.builder()
+                .id(101L)
+                .name("iPhone 15 Pro")
+                .price(new BigDecimal("1000.00"))
+                .stockQuantity(30)
+                .activeFlashSale(activeFs)
+                .build();
+
+        CheckoutItemRequest overLimitItem = CheckoutItemRequest.builder()
+                .productId(101L)
+                .productName("iPhone 15 Pro")
+                .quantity(3) // Vượt quá userLimit = 2
+                .priceAtPurchase(new BigDecimal("750.00"))
+                .build();
+
+        CheckoutRequest overLimitRequest = CheckoutRequest.builder()
+                .userId(1L)
+                .receiverName("Nguyễn Văn A")
+                .receiverPhone("0987654321")
+                .shippingAddress("123 Cầu Giấy, Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .items(List.of(overLimitItem))
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(flashSaleProduct));
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> orderService.checkout(overLimitRequest)
+        );
+
+        assertThat(ex.getMessage()).contains("chỉ cho phép mua tối đa 2 sản phẩm với giá Flash Sale");
+        verify(productClient, never()).reserveFlashSaleStock(any());
+        verify(productClient, never()).reserveStock(any());
+        verify(orderRepository, never()).save(any());
+        verify(kafkaOrderProducer, never()).sendOrderCreatedEvent(any());
     }
 }

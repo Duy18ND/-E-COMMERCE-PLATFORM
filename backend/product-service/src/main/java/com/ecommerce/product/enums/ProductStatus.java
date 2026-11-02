@@ -5,5 +5,6 @@ package com.ecommerce.product.enums;
  */
 public enum ProductStatus {
     ACTIVE,
-    INACTIVE
+    INACTIVE,
+    OUT_OF_STOCK
 }

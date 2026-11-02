@@ -20,27 +20,60 @@ public interface OrderService {
     OrderResponse checkout(CheckoutRequest request);
 
     /**
+     * [Task ECOM-267] Xây dựng API tạo đơn hàng từ giỏ (Checkout from Cart):
+     * 1. Đọc danh sách sản phẩm trong giỏ hàng hiện tại của khách hàng.
+     * 2. Kiểm tra và bảo lưu tồn kho tự động qua ProductClient (@Transactional).
+     * 3. Tạo Order PENDING và xóa sạch giỏ hàng (clear cart).
+     * 4. Bắn sự kiện order-created qua Kafka sang payment-service.
+     */
+    OrderResponse createOrderFromCart(Long userId, CheckoutRequest request);
+
+    /**
      * Hủy đơn hàng:
      * Chỉ cho phép hủy khi trạng thái là PENDING.
      * Chuyển trạng thái sang CANCELLED và gọi ProductClient restore-stock để hoàn kho.
+     * <p>
+     * ⚠️ CHỈ DÙNG NỘI BỘ (system/job) — KHÔNG kiểm tra quyền sở hữu, KHÔNG được expose qua Controller.
+     * API của khách hàng phải dùng {@link #cancelOrder(Long, Long)}.
      */
     OrderResponse cancelOrder(Long orderId);
 
     /**
      * Hủy đơn hàng kèm xác thực người dùng sở hữu:
-     * Kiểm tra quyền sở hữu đơn hàng (chống IDOR).
+     * - Bắt buộc có userId (chống Authentication Bypass khi thiếu X-User-Id).
+     * - Kiểm tra quyền sở hữu đơn hàng (chống IDOR).
      */
     OrderResponse cancelOrder(Long orderId, Long userId);
 
     /**
      * Lấy chi tiết đơn hàng theo ID (sử dụng fetch join để chống N+1).
+     * <p>
+     * ⚠️ CHỈ DÙNG NỘI BỘ — KHÔNG kiểm tra quyền. API của khách hàng phải dùng
+     * {@link #getOrderById(Long, Long, String)}.
      */
     OrderResponse getOrderById(Long id);
 
     /**
+     * Lấy chi tiết đơn hàng kèm kiểm tra quyền (chống IDOR):
+     * - ROLE_ADMIN được xem mọi đơn hàng.
+     * - Người dùng thường chỉ được xem đơn hàng của chính mình.
+     */
+    OrderResponse getOrderById(Long id, Long authenticatedUserId, String roles);
+
+    /**
      * Lấy danh sách lịch sử đơn hàng của người dùng.
+     * <p>
+     * ⚠️ CHỈ DÙNG NỘI BỘ — KHÔNG kiểm tra quyền. API của khách hàng phải dùng
+     * {@link #getOrdersByUserId(Long, Long, String)}.
      */
     List<OrderResponse> getOrdersByUserId(Long userId);
+
+    /**
+     * Lấy danh sách lịch sử đơn hàng của targetUserId kèm kiểm tra quyền:
+     * - ROLE_ADMIN được xem lịch sử của bất kỳ người dùng nào.
+     * - Người dùng thường chỉ được xem lịch sử của chính mình.
+     */
+    List<OrderResponse> getOrdersByUserId(Long targetUserId, Long authenticatedUserId, String roles);
 
     /**
      * Saga Step: Xử lý sự kiện thanh toán thành công từ payment-service.
@@ -70,6 +103,18 @@ public interface OrderService {
      * - Nếu chuyển sang CANCELLED, bắt buộc gọi FeignClient ProductClient.restoreStock để hoàn lại tồn kho.
      */
     OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus);
+
+    /**
+     * [Task ECOM-187 / ECOM-317] Admin cập nhật trạng thái đơn hàng kèm người thực hiện, vai trò và ghi chú.
+     * Ghi nhận đồng bộ vào nhật ký trạng thái order_status_history trong cùng một transaction.
+     */
+    OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus, String updatedBy, String actorRole, String note);
+
+    /**
+     * [Task ECOM-315 / ECOM-171] Lấy danh sách lịch sử trạng thái theo đơn hàng (Timeline).
+     * Kiểm tra quyền sở hữu người dùng (chống IDOR) hoặc yêu cầu quyền ROLE_ADMIN.
+     */
+    List<com.ecommerce.order.dto.response.OrderStatusHistoryResponse> getOrderStatusHistory(Long orderId, Long authenticatedUserId, String roles);
 
     /**
      * Lấy thống kê tổng quan (Dashboard) cho Admin:
