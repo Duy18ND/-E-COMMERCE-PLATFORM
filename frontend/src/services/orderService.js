@@ -300,15 +300,57 @@ const setStoredOrders = (orders) => {
 
 export const orderService = {
   // Tạo đơn hàng từ giỏ hàng hiện tại (POST /api/orders/checkout)
-  checkout: async ({ receiverName, receiverPhone, shippingAddress, note, paymentMethod }) => {
+  checkout: async ({
+    receiverName,
+    receiverPhone,
+    shippingAddress,
+    note,
+    paymentMethod,
+    couponCode = null,
+    voucherCode = null,
+    voucherId = null,
+    subtotal,
+    discountAmount = 0,
+    shippingFee = 0,
+    totalAmount
+  } = {}) => {
+    const resolvedCouponCode = couponCode || voucherCode || null;
+
     try {
-      return await api.post('/orders/checkout', {
+      const apiOrder = await api.post('/orders/checkout', {
         receiverName,
         receiverPhone,
         shippingAddress,
         note: note || '',
-        paymentMethod
+        paymentMethod,
+        couponCode: resolvedCouponCode,
+        voucherCode: resolvedCouponCode,
+        voucherId,
+        subtotal,
+        discountAmount,
+        shippingFee,
+        totalAmount
       });
+
+      // Nếu Backend chưa lưu thông tin giảm giá thì chuẩn hóa theo giá trị tại thời điểm checkout
+      if (apiOrder && typeof apiOrder === 'object') {
+        const orderSubtotal = Number(subtotal ?? apiOrder.subtotal ?? apiOrder.totalAmount ?? 0);
+        const orderDiscount = Math.max(0, Number(discountAmount ?? apiOrder.discountAmount ?? 0) || 0);
+        const orderShipping = Math.max(0, Number(shippingFee ?? apiOrder.shippingFee ?? 0) || 0);
+        const orderTotal = Math.max(0, orderSubtotal - orderDiscount) + orderShipping;
+
+        return {
+          ...apiOrder,
+          couponCode: apiOrder.couponCode ?? resolvedCouponCode,
+          voucherCode: apiOrder.voucherCode ?? resolvedCouponCode,
+          voucherId: apiOrder.voucherId ?? voucherId,
+          subtotal: orderSubtotal,
+          discountAmount: orderDiscount,
+          shippingFee: orderShipping,
+          totalAmount: orderTotal
+        };
+      }
+      return apiOrder;
     } catch (err) {
       // Fallback Mock Order Creation: Cho phép test xác nhận đơn hàng 100% không bị lỗi
       const cartData = await cartService.getCart();
@@ -317,18 +359,8 @@ export const orderService = {
       const newId = Math.floor(1004 + Math.random() * 8990);
       const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
 
-      const createdOrder = {
-        id: newId,
-        receiverName: receiverName || 'Khách hàng ShopMart',
-        receiverPhone: receiverPhone || '0912 345 678',
-        userEmail: 'user@test.com',
-        shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
-        note: note || '',
-        paymentMethod: paymentMethod || 'COD',
-        status: isOnlinePay ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING,
-        totalAmount: cartData.totalPrice || 32490000,
-        createdAt: new Date().toISOString(),
-        items: (cartData.items && cartData.items.length > 0)
+      const orderItems =
+        cartData.items && cartData.items.length > 0
           ? cartData.items.map((i) => ({
               id: i.id || i.itemId,
               productId: i.productId,
@@ -337,7 +369,7 @@ export const orderService = {
               priceAtPurchase: i.price,
               price: i.price,
               quantity: i.quantity,
-              subTotal: i.subTotal,
+              subTotal: i.subTotal ?? Number(i.price || 0) * Number(i.quantity || 1),
               imageUrl: i.imageUrl
             }))
           : [
@@ -352,10 +384,43 @@ export const orderService = {
                 subTotal: 32490000,
                 imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80'
               }
-            ]
+            ];
+
+      const itemsSubtotal = orderItems.reduce(
+        (sum, item) => sum + Number(item.subTotal ?? Number(item.price || 0) * Number(item.quantity || 1)),
+        0
+      );
+
+      // Tính đúng công thức: totalAmount = subtotal - discountAmount + shippingFee
+      const resolvedSubtotal =
+        subtotal !== undefined && subtotal !== null
+          ? Math.max(0, Number(subtotal) || 0)
+          : Math.max(0, Number(cartData.totalPrice || itemsSubtotal || 0));
+      const resolvedDiscountAmount = Math.max(0, Number(discountAmount ?? 0) || 0);
+      const resolvedShippingFee = Math.max(0, Number(shippingFee ?? 0) || 0);
+      const resolvedTotalAmount = Math.max(0, resolvedSubtotal - resolvedDiscountAmount) + resolvedShippingFee;
+
+      const createdOrder = {
+        id: newId,
+        receiverName: receiverName || 'Khách hàng ShopMart',
+        receiverPhone: receiverPhone || '0912 345 678',
+        userEmail: 'user@test.com',
+        shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
+        note: note || '',
+        paymentMethod: paymentMethod || 'COD',
+        status: isOnlinePay ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING,
+        couponCode: resolvedCouponCode,
+        voucherCode: resolvedCouponCode,
+        voucherId: voucherId ?? null,
+        subtotal: resolvedSubtotal,
+        discountAmount: resolvedDiscountAmount,
+        shippingFee: resolvedShippingFee,
+        totalAmount: resolvedTotalAmount,
+        createdAt: new Date().toISOString(),
+        items: orderItems
       };
 
-      // Lưu vào danh sách đơn
+      // Lưu vào danh sách đơn (localStorage key: shopmart_orders_mock)
       orders.unshift(createdOrder);
       setStoredOrders(orders);
 

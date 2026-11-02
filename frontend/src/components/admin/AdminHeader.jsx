@@ -189,6 +189,16 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
                 <span className="admin-nav-prefix">Quản lý </span>Voucher
               </span>
             </NavLink>
+
+            <NavLink
+              to="/admin/users"
+              className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="admin-link-icon">👥</span>
+              <span>
+                <span className="admin-nav-prefix">Quản lý </span>Tài khoản
+              </span>
+            </NavLink>
           </nav>
 
           {/* Right: Admin Account Profile */}

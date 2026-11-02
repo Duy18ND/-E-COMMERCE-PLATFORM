@@ -89,12 +89,32 @@ const OrderSuccess = () => {
             </div>
           </div>
 
-          {order?.totalAmount && (
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem', marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>Tổng thanh toán:</span>
-              <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#dc2626' }}>
-                {formatCurrency(order.totalAmount)}
-              </span>
+          {order && (
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem', marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {order.subtotal !== undefined && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#475569' }}>
+                  <span>Tiền hàng:</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(order.subtotal)}</span>
+                </div>
+              )}
+              {Number(order.discountAmount) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#16a34a', fontWeight: 700 }}>
+                  <span>Giảm giá{order.couponCode || order.voucherCode ? ` (${order.couponCode || order.voucherCode})` : ''}:</span>
+                  <span>-{formatCurrency(order.discountAmount)}</span>
+                </div>
+              )}
+              {order.shippingFee !== undefined && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#475569' }}>
+                  <span>Phí vận chuyển:</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(order.shippingFee)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingTop: '0.35rem' }}>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>Tổng thanh toán:</span>
+                <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#dc2626' }}>
+                  {formatCurrency(order.totalAmount ?? 0)}
+                </span>
+              </div>
             </div>
           )}
         </div>

@@ -312,8 +312,19 @@ const Checkout = () => {
       setPickerOpen(false);
       return;
     }
-    const discountAmount = calcDiscount(v, totalPrice);
-    setAppliedVoucher({ voucher: v, discountAmount });
+    const currentSubtotal = Number(totalPrice) || 0;
+    const currentShippingFee = 0;
+    const currentDiscount = calcDiscount(v, currentSubtotal);
+    const currentTotal = Math.max(0, currentSubtotal - currentDiscount) + currentShippingFee;
+
+    setAppliedVoucher({
+      voucher: v,
+      couponCode: v.code,
+      subtotal: currentSubtotal,
+      discountAmount: currentDiscount,
+      shippingFee: currentShippingFee,
+      totalAmount: currentTotal
+    });
     setPickerOpen(false);
   };
 
@@ -321,11 +332,36 @@ const Checkout = () => {
 
   // Recalculate if cart total changes
   useEffect(() => {
-    if (appliedVoucher) {
-      const newDiscount = calcDiscount(appliedVoucher.voucher, totalPrice);
-      setAppliedVoucher((prev) => prev ? { ...prev, discountAmount: newDiscount } : null);
+    if (appliedVoucher?.voucher) {
+      const currentSubtotal = Number(totalPrice) || 0;
+      const currentShippingFee = 0;
+      const newDiscount = calcDiscount(appliedVoucher.voucher, currentSubtotal);
+      const newTotal = Math.max(0, currentSubtotal - newDiscount) + currentShippingFee;
+
+      setAppliedVoucher((prev) =>
+        prev
+          ? {
+              ...prev,
+              couponCode: prev.voucher.code,
+              subtotal: currentSubtotal,
+              discountAmount: newDiscount,
+              shippingFee: currentShippingFee,
+              totalAmount: newTotal
+            }
+          : null
+      );
     }
   }, [totalPrice]);
+
+  // Derived totals (Công thức: totalAmount = subtotal - discountAmount + shippingFee)
+  const subtotal          = Number(totalPrice) || 0;
+  const shippingFee       = Number(appliedVoucher?.shippingFee ?? 0);
+  const couponCode        = appliedVoucher?.couponCode ?? appliedVoucher?.voucher?.code ?? null;
+  const voucherDiscount   = Number(appliedVoucher?.discountAmount ?? 0);
+  const discountAmount    = appliedVoucher ? voucherDiscount : 0;
+  const totalAmount       = Math.max(0, subtotal - discountAmount) + shippingFee;
+  const finalTotal        = totalAmount;
+  const savedVoucherCount = savedVouchers.length;
 
   const handleAddSampleItem = () => {
     addToCart(
@@ -361,17 +397,20 @@ const Checkout = () => {
 
     setLoading(true);
     try {
-      // Tạo đơn hàng – kèm thông tin voucher để sẵn sàng tích hợp Backend
+      // Tạo đơn hàng – lưu đầy đủ thông tin giá & mã giảm giá tại thời điểm checkout
       const createdOrder = await orderService.checkout({
         receiverName:    formData.receiverName.trim(),
         receiverPhone:   formData.receiverPhone.trim(),
         shippingAddress: fullShippingAddress,
         note:            formData.note ? formData.note.trim() : '',
         paymentMethod:   formData.paymentMethod,
-        // Voucher info – Backend có thể đọc trường này sau
-        voucherId:       appliedVoucher?.voucher?.id     ?? null,
-        voucherCode:     appliedVoucher?.voucher?.code   ?? null,
-        discountAmount:  appliedVoucher?.discountAmount  ?? 0
+        couponCode,
+        voucherId:       appliedVoucher?.voucher?.id ?? null,
+        voucherCode:     couponCode,
+        subtotal,
+        discountAmount,
+        shippingFee,
+        totalAmount
       });
 
       if (formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE && createdOrder?.id) {
@@ -387,11 +426,6 @@ const Checkout = () => {
       setLoading(false);
     }
   };
-
-  // Derived totals
-  const voucherDiscount  = appliedVoucher?.discountAmount ?? 0;
-  const finalTotal       = Math.max(0, totalPrice - voucherDiscount);
-  const savedVoucherCount = savedVouchers.length;
 
   return (
     <div className="container page-container" style={{ paddingBottom: '3rem' }}>
@@ -619,6 +653,10 @@ const Checkout = () => {
                   totalPrice={totalPrice}
                   totalOriginalPrice={totalOriginalPrice}
                   totalDiscount={totalDiscount}
+                  couponCode={couponCode}
+                  couponDiscount={discountAmount}
+                  shippingFee={shippingFee}
+                  finalTotal={totalAmount}
                   showCheckoutButton={false}
                 />
 

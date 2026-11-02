@@ -1,25 +1,204 @@
 /**
- * Mock Users phục vụ kiểm thử giao diện và phân quyền trên Frontend
- * Hỗ trợ 2 vai trò: ROLE_USER và ROLE_ADMIN
+ * Mock Users phục vụ kiểm thử giao diện, phân quyền và chức năng Quản lý tài khoản (Admin)
+ * Hỗ trợ 2 vai trò: USER (ROLE_USER) và ADMIN (ROLE_ADMIN)
+ * Trạng thái: ACTIVE (Đang hoạt động) | LOCKED (Đã khóa)
  */
 export const MOCK_USERS = [
   {
     id: 1,
+    name: 'Nguyễn Văn A (Test User)',
+    fullName: 'Nguyễn Văn A (Test User)',
     email: 'user@test.com',
     password: '123456',
-    fullName: 'Test User',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
     phone: '0912345678',
-    address: '123 Đường Cầu Giấy, Hà Nội',
-    roles: ['ROLE_USER']
+    address: '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-09-10T08:30:00.000Z'
   },
   {
     id: 2,
+    name: 'Quản Trị Viên Hệ Thống',
+    fullName: 'Quản Trị Viên Hệ Thống',
     email: 'admin@test.com',
     password: '123456',
-    fullName: 'Test Admin',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80',
     phone: '0987654321',
-    address: 'Tòa nhà Quản trị, Ba Đình, Hà Nội',
-    roles: ['ROLE_ADMIN']
+    address: 'Tòa nhà Quản trị ShopMart Tower, Ba Đình, Hà Nội',
+    role: 'ADMIN',
+    roles: ['ROLE_ADMIN'],
+    status: 'ACTIVE',
+    createdAt: '2026-08-01T09:00:00.000Z'
+  },
+  {
+    id: 3,
+    name: 'Trần Thị B',
+    fullName: 'Trần Thị B',
+    email: 'tranthib@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=160&q=80',
+    phone: '0987654321',
+    address: 'Tòa nhà Landmark 81, Phường 22, Bình Thạnh, TP.HCM',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-09-15T10:15:00.000Z'
+  },
+  {
+    id: 4,
+    name: 'Lê Hoàng Nam',
+    fullName: 'Lê Hoàng Nam',
+    email: 'lehoangnam@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80',
+    phone: '0909123456',
+    address: '45 Lê Duẩn, Bến Nghé, Quận 1, TP.HCM',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-09-18T14:20:00.000Z'
+  },
+  {
+    id: 5,
+    name: 'Phạm Minh Tuấn',
+    fullName: 'Phạm Minh Tuấn',
+    email: 'minhtuan@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80',
+    phone: '0934567890',
+    address: '78 Nguyễn Trãi, Thanh Xuân, Hà Nội',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-09-22T11:05:00.000Z'
+  },
+  {
+    id: 6,
+    name: 'Đỗ Thị Hương',
+    fullName: 'Đỗ Thị Hương',
+    email: 'dohuong@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=80',
+    phone: '0945678901',
+    address: '12 Kim Mã, Ba Đình, Hà Nội',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'LOCKED',
+    createdAt: '2026-09-25T16:40:00.000Z'
+  },
+  {
+    id: 7,
+    name: 'Vũ Quốc Bảo',
+    fullName: 'Vũ Quốc Bảo',
+    email: 'quocbao@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=160&q=80',
+    phone: '0956789012',
+    address: '88 Hai Bà Trưng, Quận 3, TP.HCM',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-10-01T09:12:00.000Z'
+  },
+  {
+    id: 8,
+    name: 'Bùi Thị Lan',
+    fullName: 'Bùi Thị Lan',
+    email: 'lanbui@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=160&q=80',
+    phone: '0967890123',
+    address: '15 Trần Phú, Hải Châu, Đà Nẵng',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-10-04T15:30:00.000Z'
+  },
+  {
+    id: 9,
+    name: 'Hoàng Văn Dũng',
+    fullName: 'Hoàng Văn Dũng',
+    email: 'dung.hoang@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=160&q=80',
+    phone: '0978901234',
+    address: '99 Hùng Vương, Nha Trang, Khánh Hòa',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'LOCKED',
+    createdAt: '2026-10-08T13:50:00.000Z'
+  },
+  {
+    id: 10,
+    name: 'Ngô Mỹ Linh',
+    fullName: 'Ngô Mỹ Linh',
+    email: 'mylinh@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=160&q=80',
+    phone: '0989012345',
+    address: '56 Hoàng Diệu, Hồng Bàng, Hải Phòng',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-10-12T10:00:00.000Z'
+  },
+  {
+    id: 11,
+    name: 'Lý Quốc Huy',
+    fullName: 'Lý Quốc Huy',
+    email: 'huy.ly@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=160&q=80',
+    phone: '0990123456',
+    address: '23 Quang Trung, TP.Vinh, Nghệ An',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-10-16T08:45:00.000Z'
+  },
+  {
+    id: 12,
+    name: 'Nguyễn Hoàng Bảo Trân (Admin Vận Hành)',
+    fullName: 'Nguyễn Hoàng Bảo Trân (Admin Vận Hành)',
+    email: 'baotran.admin@shopmart.vn',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80',
+    phone: '0901122334',
+    address: 'Tòa nhà ShopMart Tower, Khu Công Nghệ Cao, TP.HCM',
+    role: 'ADMIN',
+    roles: ['ROLE_ADMIN'],
+    status: 'ACTIVE',
+    createdAt: '2026-08-15T08:00:00.000Z'
+  },
+  {
+    id: 13,
+    name: 'Đinh Tiến Dũng',
+    fullName: 'Đinh Tiến Dũng',
+    email: 'tiendung@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=160&q=80',
+    phone: '0911223344',
+    address: '34 Lê Lợi, TP.Huế, Thừa Thiên Huế',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-10-20T17:10:00.000Z'
+  },
+  {
+    id: 14,
+    name: 'Phan Tuyết Mai',
+    fullName: 'Phan Tuyết Mai',
+    email: 'tuyetmai@gmail.com',
+    password: '123456',
+    avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=160&q=80',
+    phone: '0922334455',
+    address: '89 Hùng Vương, Long Xuyên, An Giang',
+    role: 'USER',
+    roles: ['ROLE_USER'],
+    status: 'ACTIVE',
+    createdAt: '2026-10-24T12:00:00.000Z'
   }
 ];
 

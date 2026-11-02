@@ -105,6 +105,26 @@ const OrderDetail = () => {
 
   const isPending = order.status === ORDER_STATUS.PENDING;
 
+  // Tính toán chi tiết tiền hàng, giảm giá, phí vận chuyển và tổng thanh toán
+  // Công thức: totalAmount = subtotal - discountAmount + shippingFee
+  const computedItemsSubtotal = items.reduce((sum, item) => {
+    const price = Number(item.priceAtPurchase ?? item.price ?? 0);
+    const qty = Number(item.quantity ?? 1);
+    return sum + Number(item.subTotal ?? price * qty);
+  }, 0);
+
+  const subtotal =
+    order.subtotal !== undefined && order.subtotal !== null
+      ? Number(order.subtotal)
+      : computedItemsSubtotal || Number(order.totalAmount || 0);
+  const discountAmount = Math.max(0, Number(order.discountAmount ?? 0) || 0);
+  const shippingFee = Math.max(0, Number(order.shippingFee ?? 0) || 0);
+  const couponCode = order.couponCode || order.voucherCode || null;
+  const totalAmount =
+    order.subtotal !== undefined || order.discountAmount !== undefined || order.shippingFee !== undefined
+      ? Math.max(0, subtotal - discountAmount) + shippingFee
+      : Number(order.totalAmount ?? Math.max(0, subtotal - discountAmount) + shippingFee);
+
   return (
     <div className="container page-container">
       <Link to="/orders" style={{ display: 'inline-block', marginBottom: '1rem', color: '#64748b' }}>
@@ -227,11 +247,47 @@ const OrderDetail = () => {
             </p>
           )}
 
-          <h3 style={{ fontSize: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginBottom: '0.5rem' }}>
+          <h3 style={{ fontSize: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginBottom: '0.75rem' }}>
             Tổng kết thanh toán
           </h3>
-          <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#2563eb', marginTop: '0.5rem' }}>
-            Tổng cộng: {formatCurrency(order.totalAmount || 0)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', fontSize: '0.925rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+              <span>Tiền hàng:</span>
+              <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(subtotal)}</span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: discountAmount > 0 ? '#16a34a' : '#64748b' }}>
+              <span>
+                Giảm giá{couponCode ? ` (${couponCode})` : ''}:
+              </span>
+              <span style={{ fontWeight: 700 }}>
+                -{formatCurrency(discountAmount)}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+              <span>Phí vận chuyển:</span>
+              <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(shippingFee)}</span>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '1.15rem',
+                fontWeight: 'bold',
+                color: '#2563eb',
+                borderTop: '1px dashed #cbd5e1',
+                paddingTop: '0.65rem',
+                marginTop: '0.25rem'
+              }}
+            >
+              <span>Tổng thanh toán:</span>
+              <span style={{ color: '#dc2626', fontSize: '1.25rem', fontWeight: 800 }}>
+                {formatCurrency(totalAmount)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
