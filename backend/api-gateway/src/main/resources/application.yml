@@ -115,11 +115,24 @@ spring:
                 name: order-cb
                 fallbackUri: forward:/fallback/order
 
-        # ── 5. Order Service — General Orders & Cart ───────────────────
+        # ── 4b. Order Service — Public Vouchers Read API (GET) ─────────
+        - id: order-service-public-vouchers
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/vouchers/active
+            - Method=GET
+          filters:
+            - StripPrefix=0
+            - name: CircuitBreaker
+              args:
+                name: order-cb
+                fallbackUri: forward:/fallback/order
+
+        # ── 5. Order Service — General Orders, Cart & Vouchers ─────────
         - id: order-service
           uri: lb://order-service
           predicates:
-            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**
+            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**,/api/v1/vouchers/**,/api/v1/admin/vouchers/**
           filters:
             - StripPrefix=0
             - AuthenticationFilter

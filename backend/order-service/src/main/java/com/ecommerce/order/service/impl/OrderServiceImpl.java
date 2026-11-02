@@ -48,6 +48,7 @@ public class OrderServiceImpl implements OrderService {
     private final KafkaOrderProducer kafkaOrderProducer;
     private final CartRepository cartRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final com.ecommerce.order.service.VoucherService voucherService;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
             OrderStatus.PENDING, Set.of(OrderStatus.PAID, OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED),
@@ -127,6 +128,20 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(itemTotal);
         }
 
+        // 1b. Áp mã giảm giá Voucher (nếu có) trước khi bảo lưu tồn kho
+        BigDecimal subtotalAmount = totalAmount;
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        String appliedVoucherCode = null;
+
+        if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
+            appliedVoucherCode = request.getVoucherCode().trim().toUpperCase();
+            if (voucherService != null) {
+                discountAmount = voucherService.redeemVoucherForOrder(appliedVoucherCode, subtotalAmount);
+            }
+        }
+
+        BigDecimal finalTotalAmount = subtotalAmount.subtract(discountAmount).max(BigDecimal.ZERO);
+
         // 2a. Trừ tồn kho Flash Sale nguyên tử trên Redis Lua (và cập nhật soldQuantity) nếu sản phẩm đang chạy Flash Sale
         for (FlashSaleReserveRequest fsReservation : flashSaleReservations) {
             log.info("Calling ProductClient reserveFlashSaleStock for productId={}, quantity={}",
@@ -151,7 +166,10 @@ public class OrderServiceImpl implements OrderService {
                 .receiverName(request.getReceiverName())
                 .receiverPhone(request.getReceiverPhone())
                 .shippingAddress(request.getShippingAddress())
-                .totalAmount(totalAmount)
+                .subtotalAmount(subtotalAmount)
+                .voucherCode(appliedVoucherCode)
+                .discountAmount(discountAmount)
+                .totalAmount(finalTotalAmount)
                 .status(OrderStatus.PENDING)
                 .paymentMethod(request.getPaymentMethod())
                 .build();
@@ -287,6 +305,11 @@ public class OrderServiceImpl implements OrderService {
                 order.getUserId() != null ? "CUSTOMER:" + order.getUserId() : "CUSTOMER",
                 "ROLE_CUSTOMER", "Khách hàng hủy đơn hàng");
 
+        // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
+        if (order.getVoucherCode() != null && voucherService != null) {
+            voucherService.restoreVoucherUsage(order.getVoucherCode());
+        }
+
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -416,6 +439,11 @@ public class OrderServiceImpl implements OrderService {
         recordStatusHistory(savedOrder, OrderStatus.FAILED, previousStatus, "PAYMENT_FAILED",
                 "PAYMENT_SERVICE", "SYSTEM", "Thanh toán thất bại: " + event.getReason());
 
+        // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
+        if (order.getVoucherCode() != null && voucherService != null) {
+            voucherService.restoreVoucherUsage(order.getVoucherCode());
+        }
+
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -486,7 +514,12 @@ public class OrderServiceImpl implements OrderService {
 
         // Nếu chuyển sang CANCELLED, bắt buộc phải gọi FeignClient ProductClient.restoreStock để hoàn lại kho
         if (newStatus == OrderStatus.CANCELLED) {
-            List<StockReservationItem> restoreItems = order.getOrderItems().stream()
+            // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
+        if (order.getVoucherCode() != null && voucherService != null) {
+            voucherService.restoreVoucherUsage(order.getVoucherCode());
+        }
+
+        List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                     .map(item -> StockReservationItem.builder()
                             .productId(item.getProductId())
                             .quantity(item.getQuantity())
@@ -638,6 +671,9 @@ public class OrderServiceImpl implements OrderService {
                 .receiverName(order.getReceiverName())
                 .receiverPhone(order.getReceiverPhone())
                 .shippingAddress(order.getShippingAddress())
+                .subtotalAmount(order.getSubtotalAmount() != null ? order.getSubtotalAmount() : order.getTotalAmount())
+                .voucherCode(order.getVoucherCode())
+                .discountAmount(order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO)
                 .totalAmount(order.getTotalAmount())
                 .status(order.getStatus())
                 .paymentMethod(order.getPaymentMethod())

@@ -62,6 +62,9 @@ class OrderServiceTest {
     @Mock
     private com.ecommerce.order.repository.OrderStatusHistoryRepository orderStatusHistoryRepository;
 
+    @Mock
+    private com.ecommerce.order.service.VoucherService voucherService;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 
@@ -775,5 +778,66 @@ class OrderServiceTest {
         assertThat(latest.getUpdatedBy()).isEqualTo("ADMIN:1");
         assertThat(latest.getActorRole()).isEqualTo("ROLE_ADMIN");
         assertThat(latest.getNote()).isEqualTo("Admin duyệt đơn hàng #1");
+    }
+
+    // =========================================================================
+    // Voucher Integration Tests
+    // =========================================================================
+
+    @Test
+    @DisplayName("[VOUCHER] Checkout kèm mã giảm giá: Tính đúng subtotal, discount, final total và lưu vào Order")
+    void checkout_WithVoucherCode_ShouldRedeemAndDeductDiscountAmount() {
+        sampleCheckoutRequest.setVoucherCode("GIAM50K");
+        when(productClient.getProductById(101L)).thenReturn(com.ecommerce.order.dto.response.ApiResponse.success("OK", sampleProduct1));
+        when(productClient.getProductById(102L)).thenReturn(com.ecommerce.order.dto.response.ApiResponse.success("OK", sampleProduct2));
+        when(voucherService.redeemVoucherForOrder(eq("GIAM50K"), any(BigDecimal.class)))
+                .thenReturn(new BigDecimal("50.00"));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order o = invocation.getArgument(0);
+            o.setId(99L);
+            return o;
+        });
+
+        OrderResponse response = orderService.checkout(sampleCheckoutRequest);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getSubtotalAmount()).isEqualByComparingTo(new BigDecimal("2050.00"));
+        assertThat(response.getVoucherCode()).isEqualTo("GIAM50K");
+        assertThat(response.getDiscountAmount()).isEqualByComparingTo(new BigDecimal("50.00"));
+        assertThat(response.getTotalAmount()).isEqualByComparingTo(new BigDecimal("2000.00"));
+
+        verify(voucherService, times(1)).redeemVoucherForOrder(eq("GIAM50K"), eq(new BigDecimal("2050.00")));
+        verify(kafkaOrderProducer, times(1)).sendOrderCreatedEvent(argThat(event ->
+                event.getTotalAmount().compareTo(new BigDecimal("2000.00")) == 0
+        ));
+    }
+
+    @Test
+    @DisplayName("[VOUCHER] Hủy đơn hàng có áp mã voucher: Gọi restoreVoucherUsage để hoàn lại lượt dùng")
+    void cancelOrder_WithVoucherCode_ShouldRestoreVoucherUsage() {
+        samplePendingOrder.setVoucherCode("GIAM50K");
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderService.cancelOrder(1L, 1L);
+
+        verify(voucherService, times(1)).restoreVoucherUsage("GIAM50K");
+    }
+
+    @Test
+    @DisplayName("[VOUCHER] Thanh toán thất bại (Saga rollback): Gọi restoreVoucherUsage để hoàn lại lượt dùng")
+    void handlePaymentFailed_WithVoucherCode_ShouldRestoreVoucherUsage() {
+        samplePendingOrder.setVoucherCode("SALE10");
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        com.ecommerce.order.event.PaymentFailedEvent event = com.ecommerce.order.event.PaymentFailedEvent.builder()
+                .orderId(1L)
+                .reason("Số dư tài khoản không đủ")
+                .timestamp(LocalDateTime.now())
+                .build();
+        orderService.handlePaymentFailed(event);
+
+        verify(voucherService, times(1)).restoreVoucherUsage("SALE10");
     }
 }

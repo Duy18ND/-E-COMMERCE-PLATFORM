@@ -60,6 +60,9 @@ class AdminOrderServiceTest {
     @Mock
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
 
+    @Mock
+    private com.ecommerce.order.service.VoucherService voucherService;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 

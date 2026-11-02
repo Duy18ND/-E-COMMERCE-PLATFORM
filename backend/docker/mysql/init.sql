@@ -113,3 +113,35 @@ CREATE TABLE IF NOT EXISTS flash_sale_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Chi tiết sản phẩm và hạn mức trong chiến dịch Flash Sale';
 
+-- ─────────────────────────────────────────────────────────────────────────────
+--  Order Service: vouchers table
+--  Quản lý mã giảm giá (Voucher / Coupon), hạn sử dụng và giới hạn lượt dùng
+-- ─────────────────────────────────────────────────────────────────────────────
+USE order_db;
+
+CREATE TABLE IF NOT EXISTS vouchers (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(50)    NOT NULL COMMENT 'Mã voucher (duy nhất, không phân biệt hoa thường)',
+    name            VARCHAR(150)   NOT NULL COMMENT 'Tên chương trình khuyến mãi',
+    description     VARCHAR(500)            COMMENT 'Mô tả chi tiết voucher',
+    discount_type   VARCHAR(20)    NOT NULL COMMENT 'Loại giảm giá: FIXED (tiền cố định), PERCENT (%)',
+    discount_value  DECIMAL(12, 2) NOT NULL COMMENT 'Giá trị giảm (VNĐ hoặc %)',
+    max_discount    DECIMAL(12, 2)          COMMENT 'Mức giảm tối đa áp dụng cho PERCENT',
+    min_order_value DECIMAL(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Giá trị đơn hàng tối thiểu để áp dụng mã',
+    quantity        INT            NOT NULL COMMENT 'Tổng số lượt phát hành',
+    used_quantity   INT            NOT NULL DEFAULT 0 COMMENT 'Số lượt đã sử dụng',
+    start_date      DATE           NOT NULL COMMENT 'Ngày bắt đầu áp dụng',
+    end_date        DATE           NOT NULL COMMENT 'Ngày kết thúc áp dụng',
+    status          VARCHAR(20)    NOT NULL DEFAULT 'ACTIVE' COMMENT 'Trạng thái: ACTIVE, INACTIVE',
+    created_at      DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT uq_voucher_code UNIQUE (code),
+    CONSTRAINT chk_vouchers_discount_value CHECK (discount_value > 0),
+    CONSTRAINT chk_vouchers_quantity CHECK (quantity > 0 AND used_quantity >= 0 AND used_quantity <= quantity),
+    CONSTRAINT chk_vouchers_dates CHECK (end_date >= start_date),
+    INDEX idx_vouchers_code (code),
+    INDEX idx_vouchers_status_dates (status, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng mã giảm giá voucher cho đơn hàng';
+
+
