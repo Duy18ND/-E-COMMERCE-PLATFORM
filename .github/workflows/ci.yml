@@ -85,10 +85,10 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run Backend Unit & Integration Tests
-        run: ./gradlew test --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m"
+        run: ./gradlew test --no-daemon --max-workers=2
 
       - name: Build Spring Boot Executable JARs (bootJar)
-        run: ./gradlew bootJar --no-daemon -x test --max-workers=2 -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m"
+        run: ./gradlew bootJar --no-daemon -x test --max-workers=2
 
       - name: Upload Backend JAR Artifacts
         uses: actions/upload-artifact@v4
