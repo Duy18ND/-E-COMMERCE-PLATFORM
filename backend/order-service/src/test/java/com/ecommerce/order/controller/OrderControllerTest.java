@@ -260,4 +260,27 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.receiverName").value("Đoàn Mạnh Duy"))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
     }
+
+    @Test
+    @DisplayName("[ECOM-315] GET /api/v1/orders/{id}/history: Lấy lịch sử dòng thời gian đơn hàng thành công")
+    void getOrderStatusHistory_Success() throws Exception {
+        com.ecommerce.order.dto.response.OrderStatusHistoryResponse history = com.ecommerce.order.dto.response.OrderStatusHistoryResponse.builder()
+                .id(100L)
+                .orderId(1L)
+                .status(OrderStatus.PENDING)
+                .statusDescription("Đơn hàng đã được đặt thành công")
+                .updatedBy("CUSTOMER:10")
+                .actorRole("ROLE_CUSTOMER")
+                .build();
+
+        when(orderService.getOrderStatusHistory(eq(1L), eq(10L), eq("ROLE_USER"))).thenReturn(List.of(history));
+
+        mockMvc.perform(get("/api/v1/orders/1/history")
+                        .header("X-User-Id", 10L)
+                        .header("X-User-Roles", "ROLE_USER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].id").value(100L))
+                .andExpect(jsonPath("$.data[0].status").value("PENDING"));
+    }
 }
