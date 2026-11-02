@@ -36,6 +36,7 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
       ZOOKEEPER_INIT_LIMIT: 5
       ZOOKEEPER_SYNC_LIMIT: 2
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=*"
     ports:
       - "2181:2181"
     volumes:
@@ -43,9 +44,9 @@ services:
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "cub zk-ready localhost:2181 5 || bash -c 'echo > /dev/tcp/localhost/2181'"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
   # ─────────────────────────────────────────────

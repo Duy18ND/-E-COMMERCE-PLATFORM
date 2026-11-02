@@ -11,8 +11,9 @@ coverage/
 .vscode/
 
 # Environment local files
-.env.local
-.env.*.local
+.env
+.env.*
+!.env.example
 
 # Logs & Test artifacts
 *.log

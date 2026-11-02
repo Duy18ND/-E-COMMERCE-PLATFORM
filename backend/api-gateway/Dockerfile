@@ -11,10 +11,10 @@ COPY settings.gradle .
 COPY build.gradle .
 COPY api-gateway/build.gradle api-gateway/
 
-RUN chmod +x gradlew && ./gradlew :api-gateway:dependencies --no-daemon 2>/dev/null || true
+RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew :api-gateway:dependencies --no-daemon 2>/dev/null || true
 
 COPY api-gateway/src api-gateway/src
-RUN ./gradlew :api-gateway:bootJar --no-daemon -x test
+RUN --mount=type=cache,target=/root/.gradle ./gradlew :api-gateway:bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
