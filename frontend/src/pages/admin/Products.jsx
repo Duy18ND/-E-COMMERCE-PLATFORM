@@ -193,7 +193,7 @@ const AdminProducts = () => {
           gap: '1rem'
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
+        <div className="grid-cols-4" style={{ gap: '0.85rem' }}>
           {/* Search Input */}
           <div style={{ position: 'relative' }}>
             <span

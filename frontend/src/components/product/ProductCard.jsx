@@ -46,11 +46,12 @@ const ProductCard = ({ product }) => {
         borderRadius: '16px',
         border: isSale ? '1px solid #fed7aa' : '1px solid #f1f5f9',
         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)',
-        padding: '1.15rem',
+        padding: 'clamp(0.75rem, 1.8vw, 1.15rem)',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         height: '100%',
+        minWidth: 0,
         transition: 'all 0.25s ease',
         position: 'relative'
       }}
@@ -67,18 +68,19 @@ const ProductCard = ({ product }) => {
         e.currentTarget.style.borderColor = isSale ? '#fed7aa' : '#f1f5f9';
       }}
     >
-      <div>
+      <div style={{ minWidth: 0 }}>
         {/* Product Image Frame */}
         <div
+          className="product-card-img-wrap"
           style={{
-            height: '190px',
+            height: 'clamp(145px, 20vw, 190px)',
             backgroundColor: '#f8fafc',
             borderRadius: '12px',
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: '0.85rem',
+            marginBottom: '0.75rem',
             position: 'relative'
           }}
         >
@@ -110,15 +112,15 @@ const ProductCard = ({ product }) => {
                 left: '8px',
                 backgroundColor: '#dc2626',
                 color: '#ffffff',
-                padding: '3px 8px',
+                padding: '3px 7px',
                 borderRadius: '6px',
-                fontSize: '0.725rem',
+                fontSize: '0.7rem',
                 fontWeight: 800,
                 boxShadow: '0 2px 6px rgba(220, 38, 38, 0.4)',
                 zIndex: 2
               }}
             >
-              ⚡ GIẢM {discountPercent}%
+              ⚡ -{discountPercent}%
             </span>
           ) : (
             <span
@@ -128,9 +130,9 @@ const ProductCard = ({ product }) => {
                 left: '8px',
                 backgroundColor: 'rgba(255, 255, 255, 0.9)',
                 backdropFilter: 'blur(4px)',
-                padding: '2px 8px',
+                padding: '2px 7px',
                 borderRadius: '9999px',
-                fontSize: '0.7rem',
+                fontSize: '0.68rem',
                 fontWeight: 700,
                 color: '#1d4ed8'
               }}
@@ -147,7 +149,7 @@ const ProductCard = ({ product }) => {
                 right: '8px',
                 backgroundColor: 'rgba(15, 23, 42, 0.75)',
                 color: '#ffffff',
-                padding: '2px 8px',
+                padding: '2px 7px',
                 borderRadius: '9999px',
                 fontSize: '0.65rem',
                 fontWeight: 600
@@ -163,12 +165,12 @@ const ProductCard = ({ product }) => {
           <span
             style={{
               display: 'inline-block',
-              fontSize: '0.725rem',
+              fontSize: '0.7rem',
               fontWeight: 700,
               color: isSale ? '#dc2626' : '#2563eb',
               textTransform: 'uppercase',
               letterSpacing: '0.04em',
-              marginBottom: '0.25rem'
+              marginBottom: '0.2rem'
             }}
           >
             {typeof product.category === 'object' ? product.category.name : product.category}
@@ -178,10 +180,10 @@ const ProductCard = ({ product }) => {
         {/* Title */}
         <h3
           style={{
-            fontSize: '0.975rem',
+            fontSize: 'clamp(0.85rem, 1.5vw, 0.975rem)',
             fontWeight: 700,
             lineHeight: 1.4,
-            margin: '0.2rem 0 0.6rem',
+            margin: '0.15rem 0 0.5rem',
             color: '#0f172a',
             display: '-webkit-box',
             WebkitLineClamp: 2,
@@ -201,11 +203,11 @@ const ProductCard = ({ product }) => {
         </h3>
 
         {/* Price */}
-        <div style={{ marginBottom: '0.85rem' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', flexWrap: 'wrap' }}>
             <span
               style={{
-                fontSize: '1.25rem',
+                fontSize: 'clamp(1rem, 2vw, 1.25rem)',
                 fontWeight: 800,
                 color: isSale ? '#dc2626' : '#2563eb'
               }}
@@ -215,7 +217,7 @@ const ProductCard = ({ product }) => {
             {isSale && originalPrice > effectivePrice && (
               <span
                 style={{
-                  fontSize: '0.8rem',
+                  fontSize: '0.76rem',
                   color: '#94a3b8',
                   textDecoration: 'line-through'
                 }}
@@ -228,7 +230,7 @@ const ProductCard = ({ product }) => {
       </div>
 
       {/* Action buttons */}
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
         <button
           type="button"
           onClick={handleAddToCart}
@@ -241,7 +243,8 @@ const ProductCard = ({ product }) => {
               : ''
           }
           style={{
-            flex: 1,
+            flex: '1 1 90px',
+            minWidth: 0,
             backgroundColor:
               isAdmin || isOutOfStock
                 ? '#f1f5f9'
@@ -267,15 +270,16 @@ const ProductCard = ({ product }) => {
                 ? '#dc2626'
                 : '#2563eb',
             borderRadius: '9999px',
-            padding: '0.55rem 0.75rem',
-            fontSize: '0.85rem',
+            padding: '0.5rem 0.6rem',
+            fontSize: 'clamp(0.75rem, 1.5vw, 0.85rem)',
             fontWeight: 700,
             cursor: isAdmin || isOutOfStock ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px'
+            gap: '4px',
+            whiteSpace: 'nowrap'
           }}
           onMouseEnter={(e) => {
             if (!isAdded && !isAdmin && !isOutOfStock) {
@@ -291,9 +295,9 @@ const ProductCard = ({ product }) => {
           }}
         >
           {isAdmin ? (
-            'Admin (Khóa giỏ)'
+            'Khóa giỏ'
           ) : isOutOfStock ? (
-            'Tạm hết hàng'
+            'Hết hàng'
           ) : isAdded ? (
             <>
               <span>✓</span>
@@ -302,24 +306,25 @@ const ProductCard = ({ product }) => {
           ) : isSale ? (
             '+ Săn Sale'
           ) : (
-            '+ Thêm vào giỏ'
+            '+ Thêm giỏ'
           )}
         </button>
 
         <Link
           to={`/products/${product.id}`}
           style={{
-            padding: '0.55rem 0.85rem',
+            padding: '0.5rem 0.65rem',
             borderRadius: '9999px',
             border: '1px solid #e2e8f0',
             backgroundColor: '#ffffff',
             color: '#475569',
-            fontSize: '0.85rem',
+            fontSize: 'clamp(0.75rem, 1.5vw, 0.85rem)',
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            textDecoration: 'none'
+            textDecoration: 'none',
+            flexShrink: 0
           }}
         >
           Xem

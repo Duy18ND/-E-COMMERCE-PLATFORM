@@ -51,6 +51,7 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
       overflow: 'hidden',
       opacity: isExpired ? 0.65 : 1,
       display: 'flex',
+      minWidth: 0,
       boxShadow: isUsable ? '0 2px 10px rgba(37,99,235,0.07)' : 'none',
     }}>
       {/* Left accent strip */}
@@ -60,11 +61,11 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
       }} />
 
       {/* Main content */}
-      <div style={{ flex: 1, padding: '1rem 1.25rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ flex: 1, minWidth: 0, padding: '1rem 1.15rem', display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
 
         {/* Discount info (left) */}
-        <div style={{ flex: 1, minWidth: '180px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
+        <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.3rem' }}>
             <span style={{
               fontFamily: 'monospace', fontWeight: 800, fontSize: '0.9rem',
               backgroundColor: bgColor, color: isUsable ? '#1d4ed8' : '#64748b',
@@ -108,7 +109,7 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
         </div>
 
         {/* Right actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end', minWidth: '120px' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {isUsable && (
             <Link
               to="/checkout"
@@ -240,7 +241,7 @@ const MyVouchers = () => {
         </div>
       ) : mySavedVouchers.length === 0 ? (
         /* Empty state */
-        <div style={{ textAlign: 'center', padding: '5rem 1rem' }}>
+        <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
           <div style={{ fontSize: '4rem', marginBottom: '0.75rem' }}>🎒</div>
           <h3 style={{ color: '#0f172a', fontWeight: 700, marginBottom: '0.5rem' }}>Bạn chưa lưu mã giảm giá nào</h3>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
@@ -260,18 +261,18 @@ const MyVouchers = () => {
       ) : (
         <>
           {/* ── Tabs ── */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
             {TABS.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 style={{
-                  padding: '0.6rem 1.1rem', border: 'none',
+                  padding: '0.55rem 0.9rem', border: 'none',
                   borderBottom: tab === t.key ? '2px solid #dc2626' : '2px solid transparent',
                   backgroundColor: 'transparent',
                   color: tab === t.key ? '#dc2626' : '#64748b',
                   fontWeight: tab === t.key ? 700 : 500,
-                  fontSize: '0.875rem', cursor: 'pointer',
+                  fontSize: '0.85rem', cursor: 'pointer',
                   marginBottom: '-1px', transition: 'all 0.15s'
                 }}
               >
@@ -292,7 +293,7 @@ const MyVouchers = () => {
 
           {/* ── List ── */}
           {displayed.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
               <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📭</div>
               <p style={{ fontWeight: 600 }}>Không có mã nào trong mục này.</p>
             </div>

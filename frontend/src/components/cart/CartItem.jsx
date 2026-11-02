@@ -20,7 +20,7 @@ const CartItem = ({ item }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '1.25rem 1.5rem',
+        padding: '1.25rem clamp(0.85rem, 3vw, 1.5rem)',
         borderBottom: '1px solid #f1f5f9',
         gap: '1.25rem',
         flexWrap: 'wrap',
@@ -29,7 +29,7 @@ const CartItem = ({ item }) => {
       }}
     >
       {/* Product Image Frame with Sale Badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flex: '1 1 320px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.75rem, 2vw, 1.25rem)', flex: '1 1 260px', minWidth: 0 }}>
         <div
           style={{
             width: '84px',
@@ -76,7 +76,7 @@ const CartItem = ({ item }) => {
         </div>
 
         {/* Product Details */}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           {item.resellerTag && (
             <div
               style={{
@@ -143,7 +143,7 @@ const CartItem = ({ item }) => {
       </div>
 
       {/* Quantity & Subtotal Row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem 1.5rem', justifyContent: 'flex-end', marginLeft: 'auto', maxWidth: '100%' }}>
         {/* Quantity Controls */}
         <div
           style={{
@@ -189,7 +189,7 @@ const CartItem = ({ item }) => {
         </div>
 
         {/* Subtotal */}
-        <div style={{ minWidth: '120px', textAlign: 'right' }}>
+        <div style={{ minWidth: '96px', textAlign: 'right' }}>
           <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#0f172a' }}>
             {formatCurrency(lineTotal)}
           </div>

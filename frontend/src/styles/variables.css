@@ -28,7 +28,9 @@
 
   /* Neutrals & Surfaces */
   --bg-main: #f8fafc;
+  --bg-body: #f8fafc;
   --bg-card: #ffffff;
+  --bg-surface: #ffffff;
   --bg-input: #f1f5f9;
   --bg-hero: linear-gradient(180deg, #f0f5ff 0%, #ffffff 100%);
   --text-primary: #0f172a;
@@ -39,6 +41,7 @@
 
   /* Typography */
   --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
@@ -63,6 +66,7 @@
   --radius-xl: 1rem;
   --radius-2xl: 1.25rem;
   --radius-pill: 9999px;
+  --radius-full: 9999px;
 
   /* Modern Soft Shadows */
   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
@@ -74,4 +78,8 @@
   /* Transitions */
   --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layout container (responsive.css ghi đè theo breakpoint) */
+  --container-max: 1400px;
+  --container-padding: clamp(0.75rem, 2.2vw, 2rem);
 }

@@ -91,7 +91,7 @@ const Cart = () => {
               </span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
               <FlashCountdown targetEndTime={reservationEnd} variant="cart-alert" />
               <span style={{ opacity: 0.9, fontSize: '0.8rem' }}>(Hết hạn sẽ trở về giá niêm yết)</span>
             </div>
@@ -102,7 +102,7 @@ const Cart = () => {
       {/* 2. BREADCRUMBS & TRUST HEADER */}
       <div style={{ padding: '0.85rem 0', borderBottom: '1px solid #f1f5f9' }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.825rem', color: '#64748b' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
             <Link to="/" style={{ color: '#64748b' }}>Trang chủ</Link>
             <span>/</span>
             <Link to="/flash-sale" style={{ color: '#64748b' }}>Flash Sale</Link>
@@ -163,7 +163,7 @@ const Cart = () => {
               style={{
                 backgroundColor: '#ffffff',
                 borderRadius: '16px',
-                padding: '1.25rem 1.5rem',
+                padding: 'clamp(1rem, 2.5vw, 1.25rem) clamp(1rem, 2.5vw, 1.5rem)',
                 marginBottom: '1.5rem',
                 border: '1px solid #e2e8f0',
                 display: 'flex',
@@ -174,7 +174,7 @@ const Cart = () => {
               }}
             >
               <div>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h1 style={{ fontSize: 'clamp(1.15rem, 2vw, 1.4rem)', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span>🛒</span>
                   <span>Giỏ hàng của bạn ({totalItems} món)</span>
                 </h1>
@@ -204,17 +204,9 @@ const Cart = () => {
             </div>
 
             {/* Split layout: Items on Left, Summary on Right */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.75fr 1fr',
-                gap: '1.75rem',
-                alignItems: 'start'
-              }}
-              className="grid-cols-2"
-            >
+            <div className="layout-split">
               {/* Left Column: Cart Items List */}
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div
                   style={{
                     backgroundColor: '#ffffff',
@@ -228,7 +220,7 @@ const Cart = () => {
                     <CartItem key={item.id || item.itemId} item={item} />
                   ))}
 
-                  <div style={{ padding: '0.85rem 1.5rem', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ padding: '0.85rem 1.25rem', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end' }}>
                     <Button variant="outline" size="sm" onClick={clearCart}>
                       Xóa toàn bộ giỏ hàng
                     </Button>
@@ -264,7 +256,7 @@ const Cart = () => {
                   >
                     ⏱️
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#991b1b', marginBottom: '0.2rem' }}>
                       Chính sách giữ giá chớp nhoáng
                     </div>
@@ -275,14 +267,7 @@ const Cart = () => {
                 </div>
 
                 {/* Trust guarantee row below items */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '0.75rem',
-                    marginTop: '1.25rem'
-                  }}
-                >
+                <div className="trust-grid" style={{ marginTop: '1.25rem' }}>
                   <div className="card" style={{ padding: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '1.2rem' }}>🚚</span>
                     <div>
@@ -308,7 +293,7 @@ const Cart = () => {
               </div>
 
               {/* Right Column: Order Summary */}
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <CartSummary
                   totalItems={totalItems}
                   totalPrice={totalPrice}

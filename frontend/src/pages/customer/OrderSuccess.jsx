@@ -11,7 +11,7 @@ const OrderSuccess = () => {
       <div
         className="card"
         style={{
-          padding: '2.5rem 2rem',
+          padding: 'clamp(1.5rem, 4vw, 2.5rem) clamp(1rem, 3vw, 2rem)',
           borderRadius: '20px',
           boxShadow: '0 12px 36px rgba(0, 0, 0, 0.06)'
         }}
@@ -33,7 +33,7 @@ const OrderSuccess = () => {
           ✓
         </div>
 
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 900, marginBottom: '0.5rem', color: '#0f172a' }}>
+        <h1 style={{ fontSize: 'clamp(1.4rem, 3vw, 1.75rem)', fontWeight: 900, marginBottom: '0.5rem', color: '#0f172a' }}>
           Đặt Hàng Thành Công!
         </h1>
         <p style={{ color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5, fontSize: '0.925rem' }}>
@@ -46,17 +46,17 @@ const OrderSuccess = () => {
             backgroundColor: '#f8fafc',
             border: '1px solid #e2e8f0',
             borderRadius: '14px',
-            padding: '1.25rem',
+            padding: '1.15rem',
             textAlign: 'left',
             marginBottom: '1.75rem'
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
             <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Mã đơn hàng:</span>
             <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>#{orderId}</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', fontSize: '0.85rem' }}>
+          <div className="form-grid-2" style={{ gap: '0.75rem', fontSize: '0.85rem' }}>
             <div>
               <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Người nhận:</span>
               <div style={{ fontWeight: 700, color: '#0f172a' }}>
@@ -69,7 +69,7 @@ const OrderSuccess = () => {
                 {order?.receiverPhone || '0912 345 678'}
               </div>
             </div>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div className="col-span-full">
               <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Địa chỉ nhận hàng:</span>
               <div style={{ fontWeight: 600, color: '#0f172a' }}>
                 {order?.shippingAddress || '123 Đường Cầu Giấy, Hà Nội'}
@@ -90,7 +90,7 @@ const OrderSuccess = () => {
           </div>
 
           {order?.totalAmount && (
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem', marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem', marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <span style={{ fontWeight: 700, color: '#0f172a' }}>Tổng thanh toán:</span>
               <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#dc2626' }}>
                 {formatCurrency(order.totalAmount)}
