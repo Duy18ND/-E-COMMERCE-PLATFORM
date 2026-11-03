@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import orderService from '../../services/orderService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import OrderStatus from '../../components/order/OrderStatus';
+import OrderTimeline from '../../components/order/OrderTimeline';
 import { ORDER_STATUS, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '../../utils/constants';
 import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
@@ -904,37 +905,13 @@ const AdminOrders = () => {
                 </span>
               </div>
 
-              {/* Lịch sử trạng thái đơn hàng (Timeline) nếu Backend trả về */}
-              {Array.isArray(selectedOrder.statusHistories) && selectedOrder.statusHistories.length > 0 && (
-                <div>
-                  <h4 style={{ margin: '0 0 0.65rem', fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>
-                    Dòng thời gian thay đổi trạng thái (Timeline)
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {selectedOrder.statusHistories.map((hist, hIdx) => (
-                      <div
-                        key={hist.id || hIdx}
-                        style={{
-                          padding: '0.65rem 0.85rem',
-                          backgroundColor: '#f8fafc',
-                          borderLeft: '3px solid #2563eb',
-                          borderRadius: '4px',
-                          fontSize: '0.8rem'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <strong>{hist.toStatus || hist.action}</strong>
-                          <span style={{ color: '#64748b' }}>
-                            {hist.createdAt ? new Date(hist.createdAt).toLocaleString('vi-VN') : ''}
-                          </span>
-                        </div>
-                        {hist.note && <div style={{ color: '#475569', marginTop: '0.2rem' }}>{hist.note}</div>}
-                        {hist.updatedBy && <div style={{ color: '#94a3b8', fontSize: '0.725rem' }}>Bởi: {hist.updatedBy}</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-311 / ECOM-315) */}
+              <OrderTimeline
+                orderId={selectedOrder.id}
+                currentStatus={selectedOrder.status}
+                historyData={selectedOrder.statusHistories}
+                compact={true}
+              />
             </div>
 
             {/* Modal Footer */}

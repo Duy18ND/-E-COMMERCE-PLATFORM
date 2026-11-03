@@ -9,6 +9,7 @@ import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import { ORDER_STATUS } from '../../utils/constants';
 import useNotification from '../../hooks/useNotification';
+import OrderTimeline from '../../components/order/OrderTimeline';
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -177,6 +178,13 @@ const OrderDetail = () => {
           </div>
         )}
       </div>
+
+      {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-311 / ECOM-315) */}
+      <OrderTimeline
+        orderId={order.id}
+        currentStatus={order.status}
+        historyData={order.statusHistories}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
         {/* Thông tin giao nhận */}
