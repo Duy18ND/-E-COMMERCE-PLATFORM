@@ -46,7 +46,7 @@ spring:
         - id: auth-service-protected
           uri: lb://auth-service
           predicates:
-            - Path=/api/v1/users/**,/api/v1/admin/users/**
+            - Path=/api/v1/users/**,/api/v1/admin/users/**,/api/v1/admin/customers/**
           filters:
             - StripPrefix=0
             - AuthenticationFilter
@@ -146,7 +146,7 @@ spring:
         - id: order-service
           uri: lb://order-service
           predicates:
-            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**,/api/v1/vouchers/**,/api/v1/admin/vouchers/**
+            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**,/api/v1/vouchers/**,/api/v1/admin/vouchers/**,/api/v1/admin/statistics/**
           filters:
             - StripPrefix=0
             - AuthenticationFilter
