@@ -1,0 +1,789 @@
+{
+  "info": {
+    "_postman_id": "ecom-165-flashsale-collection",
+    "name": "ShopMart — ECOM-165 Flash Sale QA Test Suite",
+    "description": "Bộ sưu tập kiểm thử toàn diện API Flash Sale cho Task ECOM-165 ShopMart E-Commerce Platform.\nBao gồm 7 nhóm kiểm thử: Flash Sale chưa bắt đầu, đang hoạt động, hết hạn, kiểm soát số lượng, tính toàn vẹn của giá, phân quyền RBAC và kiểm tra dữ liệu không hợp lệ.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "type": "string"
+    },
+    {
+      "key": "userToken",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "campaignId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Flash Sale Chưa Bắt Đầu (UPCOMING)",
+      "item": [
+        {
+          "name": "TC-165-01: Tạo chiến dịch Flash Sale tương lai (UPCOMING)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_ADMIN"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Flash Sale Tương Lai Tuần Tới\",\n  \"startTime\": \"2026-11-10T10:00:00\",\n  \"endTime\": \"2026-11-10T14:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 18990000,\n      \"quantity\": 20,\n      \"userLimit\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns"]
+            },
+            "description": "Tạo một chiến dịch Flash Sale với startTime lớn hơn hiện tại. Hệ thống phải gán trạng thái UPCOMING và không kích hoạt bán sớm trên Redis."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Campaign status is UPCOMING\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.status).to.eql(\"UPCOMING\");",
+                  "    if (json.data.id) {",
+                  "        pm.collectionVariables.set(\"upcomingCampaignId\", json.data.id);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-01b: Tra cứu danh sách Active -> Không hiển thị chiến dịch UPCOMING",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "flash-sales", "active"]
+            },
+            "description": "API Public lấy danh sách Flash Sale đang hoạt động. Chỉ trả về các chiến dịch có status = ACTIVE và startTime <= now <= endTime."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Active campaigns do not include UPCOMING ones\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    var campaigns = json.data || [];",
+                  "    campaigns.forEach(function(c) {",
+                  "        pm.expect(c.status).to.eql(\"ACTIVE\");",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Flash Sale Đang Hoạt Động (ACTIVE)",
+      "item": [
+        {
+          "name": "TC-165-02: Lấy danh sách Flash Sale đang hiệu lực [PUBLIC]",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "flash-sales", "active"]
+            },
+            "description": "Lấy danh sách các chiến dịch Flash Sale đang diễn ra trong khung giờ hiện tại."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response contains active campaigns list\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(Array.isArray(json.data)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-03: Kích hoạt thủ công chiến dịch sang ACTIVE [ADMIN]",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_ADMIN"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns/{{campaignId}}/status?status=ACTIVE",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns", "{{campaignId}}", "status"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            },
+            "description": "Admin kích hoạt chiến dịch. Hệ thống nạp số lượng còn lại vào Redis key flash_sale_stock:{productId}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Campaign status transitioned to ACTIVE\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.status).to.eql(\"ACTIVE\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Flash Sale Hết Hạn (ENDED)",
+      "item": [
+        {
+          "name": "TC-165-04: Kết thúc chiến dịch Flash Sale sang ENDED [ADMIN]",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_ADMIN"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns/{{campaignId}}/status?status=ENDED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns", "{{campaignId}}", "status"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ENDED"
+                }
+              ]
+            },
+            "description": "Chuyển trạng thái chiến dịch sang ENDED. Hệ thống tự động xóa sạch Redis key để khóa đặt chỗ ngay lập tức."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Campaign status transitioned to ENDED\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.status).to.eql(\"ENDED\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-05: Chặn kích hoạt chiến dịch đã quá thời gian kết thúc",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_ADMIN"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns/999/status?status=ACTIVE",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns", "999", "status"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            },
+            "description": "Khi một chiến dịch có endTime < now, gọi kích hoạt ACTIVE phải bị từ chối với lỗi 400 Bad Request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 or 404\", function () {",
+                  "    pm.expect([400, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-07: Đặt chỗ sản phẩm Flash Sale đã kết thúc -> Trả về 404 không nằm trong Flash Sale",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 99999,\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/reserve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "flash-sales", "reserve"]
+            },
+            "description": "Sản phẩm không có Flash Sale hoặc Flash Sale đã hết hạn sẽ không tồn tại key trên Redis -> trả về 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"Error message indicates product not in flash sale\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message).to.include(\"Flash Sale\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Kiểm Tra Số Lượng (Quantity & Limits)",
+      "item": [
+        {
+          "name": "TC-165-09: Đặt chỗ số lượng hợp lệ (1 sản phẩm)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/reserve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "flash-sales", "reserve"]
+            },
+            "description": "Đặt chỗ trừ tồn kho nguyên tử qua Redis Lua với số lượng hợp lệ."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Reservation success message\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.message).to.include(\"thành công\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-11: Mua vượt số lượng Flash Sale còn lại (Cháy hàng)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 99999\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/reserve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "flash-sales", "reserve"]
+            },
+            "description": "Đặt chỗ với số lượng lớn hơn tồn kho Flash Sale còn lại trên Redis. Lua trả về 0 -> Backend ném 400 'Đã cháy hàng Flash Sale!'."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Error message indicates out of flash sale stock\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message).to.include(\"cháy hàng\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-12: Checkout vượt giới hạn mua mỗi khách (userLimit) -> Chặn tại OrderService",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"receiverName\": \"Khách Hàng Test\",\n  \"receiverPhone\": \"0912345678\",\n  \"shippingAddress\": \"123 Phố Huế, Hà Nội\",\n  \"paymentMethod\": \"COD\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"productName\": \"Sản phẩm Flash Sale\",\n      \"quantity\": 10,\n      \"priceAtPurchase\": 1000\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            },
+            "description": "Khách hàng cố tình gửi số lượng 10 sản phẩm (trong khi userLimit = 2). OrderService phải phát hiện và chặn với mã lỗi 400."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Message warns exceeding userLimit\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message).to.include(\"tối đa\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Kiểm Tra Giá (Price & Anti-Tampering)",
+      "item": [
+        {
+          "name": "TC-165-20: Tra cứu chi tiết sản phẩm kèm Flash Sale Price",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products", "1"]
+            },
+            "description": "Lấy chi tiết sản phẩm. Nếu đang trong Flash Sale hiệu lực, response phải kèm activeFlashSale với flashSalePrice và remainingStock."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Product has price and stock info\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.price).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-27: Chống sửa giá API (Price Tampering) tại Checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"receiverName\": \"Hacker Sửa Giá\",\n  \"receiverPhone\": \"0988776655\",\n  \"shippingAddress\": \"456 Lê Lợi, TP.HCM\",\n  \"paymentMethod\": \"COD\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"productName\": \"Sản phẩm bị can thiệp giá\",\n      \"quantity\": 1,\n      \"priceAtPurchase\": 1.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            },
+            "description": "Khách hàng gửi giá priceAtPurchase = 1.00 đ (cố tình hạ giá). Backend OrderService phải tự tra cứu DB và ghi đè giá thực tế, không chấp nhận 1.00 đ."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Checkout processes with DB verified price, not 1.00\", function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        var json = pm.response.json();",
+                  "        pm.expect(json.data.totalAmount).to.be.above(1000);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Kiểm Tra Phân Quyền (RBAC Security)",
+      "item": [
+        {
+          "name": "TC-165-AUTH-01: User thường cố tình tạo chiến dịch Flash Sale -> Bị chặn 403 Forbidden",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_CUSTOMER"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sale Bất Hợp Pháp\",\n  \"startTime\": \"2026-11-04T10:00:00\",\n  \"endTime\": \"2026-11-04T12:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 100000,\n      \"quantity\": 10,\n      \"userLimit\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns"]
+            },
+            "description": "API tạo chiến dịch yêu cầu quyền ROLE_ADMIN. Nếu gửi ROLE_CUSTOMER sẽ trả về 403 Forbidden."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-AUTH-02: Khách vãng lai gọi API Admin -> Bị chặn 401 hoặc 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns"]
+            },
+            "description": "Gọi API quản trị mà không có Header xác thực JWT."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized or 403 Forbidden\", function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Kiểm Tra Dữ Liệu Không Hợp Lệ (Validation)",
+      "item": [
+        {
+          "name": "TC-165-VAL-01: Chặn tạo chiến dịch có endTime trước startTime (Ngược giờ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_ADMIN"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Chiến dịch Ngược Giờ\",\n  \"startTime\": \"2026-11-05T14:00:00\",\n  \"endTime\": \"2026-11-05T10:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 500000,\n      \"quantity\": 5,\n      \"userLimit\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns"]
+            },
+            "description": "Thời gian kết thúc trước thời gian bắt đầu. Hệ thống phải ném IllegalArgumentException -> trả về 400 Bad Request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Error message clarifies invalid date range\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message).to.include(\"Thời gian kết thúc phải sau thời gian bắt đầu\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-VAL-02: Chặn đặt chỗ Flash Sale với số lượng = 0",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/reserve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "flash-sales", "reserve"]
+            },
+            "description": "Số lượng = 0 vi phạm @Min(1) trong FlashSaleReserveRequest -> trả về 400 Bad Request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-VAL-03: Chặn đặt chỗ Flash Sale với số lượng âm (-5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": -5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/reserve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "flash-sales", "reserve"]
+            },
+            "description": "Số lượng âm vi phạm ràng buộc @Min(1) -> trả về 400 Bad Request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-165-VAL-04: Chặn tạo Flash Sale có giá ưu đãi lớn hơn hoặc bằng giá gốc",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_ADMIN"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sale Bịp Giá Cao Hơn Gốc\",\n  \"startTime\": \"2026-11-04T10:00:00\",\n  \"endTime\": \"2026-11-04T12:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 999999999,\n      \"quantity\": 5,\n      \"userLimit\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "flash-sales", "campaigns"]
+            },
+            "description": "Giá Flash Sale phải nhỏ hơn giá niêm yết của sản phẩm. Nếu >= giá gốc sẽ ném 400."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Error message says flash sale price must be less than original\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message).to.include(\"nhỏ hơn giá gốc niêm yết\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

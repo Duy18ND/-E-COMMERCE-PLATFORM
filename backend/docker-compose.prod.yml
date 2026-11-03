@@ -106,7 +106,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-ecommerce_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "127.0.0.1:3306:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -141,6 +141,7 @@ services:
   #  4. Discovery Server (Eureka) — INTERNAL ONLY
   # ─────────────────────────────────────────────
   discovery-server:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/discovery-server:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: discovery-server/Dockerfile
@@ -173,6 +174,7 @@ services:
   #  5. Auth Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   auth-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/auth-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: auth-service/Dockerfile
@@ -211,6 +213,7 @@ services:
   #  5. Product Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   product-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/product-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: product-service/Dockerfile
@@ -248,6 +251,7 @@ services:
   #  5. Order Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   order-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/order-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: order-service/Dockerfile
@@ -280,6 +284,7 @@ services:
   #  5. Payment Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   payment-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/payment-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: payment-service/Dockerfile
@@ -312,6 +317,7 @@ services:
   #  6. API Gateway — INTERNAL ONLY
   # ─────────────────────────────────────────────
   api-gateway:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/api-gateway:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
@@ -353,6 +359,7 @@ services:
   #  7. Frontend — INTERNAL ONLY
   # ─────────────────────────────────────────────
   frontend:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/frontend:${IMAGE_TAG:-latest}
     build:
       context: ../frontend
       dockerfile: Dockerfile

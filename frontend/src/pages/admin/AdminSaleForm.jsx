@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import saleService from '../../services/saleService';
 import { formatCurrency } from '../../utils/formatCurrency';
+import useNotification from '../../hooks/useNotification';
 
 const SAMPLE_BANNERS = [
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=80',
@@ -169,12 +170,12 @@ const AdminSaleForm = () => {
   // Save campaign
   const handleSave = async (publishStatus) => {
     if (!formData.name.trim()) {
-      alert('Vui lòng nhập tên chiến dịch Flash Sale!');
+      notify.warning('Vui lòng nhập tên chiến dịch Flash Sale!');
       return;
     }
 
     if (selectedProducts.length === 0) {
-      alert('Vui lòng chọn ít nhất 1 sản phẩm tham gia chương trình Flash Sale!');
+      notify.warning('Vui lòng chọn ít nhất 1 sản phẩm tham gia chương trình Flash Sale!');
       return;
     }
 
@@ -189,10 +190,10 @@ const AdminSaleForm = () => {
     try {
       if (isEditing) {
         await saleService.updateCampaign(id, payload);
-        alert(`Đã cập nhật chiến dịch Flash Sale "${formData.name}" thành công!`);
+        notify.success(`Đã cập nhật chiến dịch Flash Sale "${formData.name}" thành công!`);
       } else {
         await saleService.createCampaign(payload);
-        alert(`Đã tạo mới và kích hoạt chiến dịch "${formData.name}" thành công!`);
+        notify.success(`Đã tạo mới và kích hoạt chiến dịch "${formData.name}" thành công!`);
       }
       navigate('/admin/sales');
     } catch (err) {
@@ -201,7 +202,7 @@ const AdminSaleForm = () => {
         (err?.response?.data?.errors && Object.values(err.response.data.errors).join('; ')) ||
         err?.message ||
         'Không thể lưu chiến dịch Flash Sale';
-      alert(`Lỗi: ${errMsg}`);
+      notify.error(`Lỗi: ${errMsg}`);
     }
   };
 
@@ -249,7 +250,7 @@ const AdminSaleForm = () => {
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               type="button"
-              onClick={() => alert('Nhật ký cấu hình: Phiên tạo bởi Quản trị viên lúc 09:00.')}
+              onClick={() => notify.info('Nhật ký cấu hình: Phiên tạo bởi Quản trị viên lúc 09:00.')}
               style={{
                 backgroundColor: '#ffffff',
                 border: '1px solid #cbd5e1',
@@ -264,7 +265,7 @@ const AdminSaleForm = () => {
             </button>
             <button
               type="button"
-              onClick={() => alert('Hướng dẫn định giá: Mức giảm từ 20% - 50% mang lại hiệu quả chuyển đổi cao nhất.')}
+              onClick={() => notify.info('Hướng dẫn định giá: Mức giảm từ 20% - 50% mang lại hiệu quả chuyển đổi cao nhất.')}
               style={{
                 backgroundColor: '#ffffff',
                 border: '1px solid #cbd5e1',
@@ -725,7 +726,7 @@ const AdminSaleForm = () => {
 
               <button
                 type="button"
-                onClick={() => alert('Đã đồng bộ toàn bộ kho sản phẩm ShopMart vào danh sách chọn!')}
+                onClick={() => notify.success('Đã đồng bộ toàn bộ kho sản phẩm ShopMart vào danh sách chọn!')}
                 style={{
                   background: 'none',
                   border: 'none',

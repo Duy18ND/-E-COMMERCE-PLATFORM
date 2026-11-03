@@ -1,0 +1,70 @@
+{
+  "project": "ShopMart E-Commerce Platform",
+  "task": "ECOM-165 [QA] Flash Sale Testing",
+  "anonymized_responses": {
+    "GET_active_flash_sales_200": {
+      "success": true,
+      "message": "Lấy danh sách Flash Sale đang diễn ra thành công",
+      "data": [
+        {
+          "id": 1,
+          "name": "⚡ Siêu Sale Giờ Vàng Công Nghệ",
+          "startTime": "2026-11-03T10:00:00",
+          "endTime": "2026-11-03T23:59:59",
+          "status": "ACTIVE",
+          "items": [
+            {
+              "id": 101,
+              "productId": 1,
+              "productName": "MacBook Pro 14 M3 Pro",
+              "originalPrice": 49990000.00,
+              "flashSalePrice": 32490000.00,
+              "quantity": 20,
+              "soldQuantity": 7,
+              "remainingStock": 13,
+              "userLimit": 2,
+              "imageUrl": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80"
+            }
+          ]
+        }
+      ],
+      "timestamp": "2026-11-03T12:00:00.000Z"
+    },
+    "POST_reserve_success_200": {
+      "success": true,
+      "message": "Đặt chỗ Flash Sale thành công! Sản phẩm 1 x1",
+      "data": null,
+      "timestamp": "2026-11-03T12:01:00.000Z"
+    },
+    "POST_reserve_out_of_stock_400": {
+      "success": false,
+      "message": "Đã cháy hàng Flash Sale!",
+      "data": null,
+      "timestamp": "2026-11-03T12:02:00.000Z"
+    },
+    "POST_reserve_not_in_flash_sale_404": {
+      "success": false,
+      "message": "Sản phẩm không nằm trong chương trình Flash Sale",
+      "data": null,
+      "timestamp": "2026-11-03T12:03:00.000Z"
+    },
+    "POST_admin_create_campaign_400_invalid_price": {
+      "success": false,
+      "message": "Giá Flash Sale phải nhỏ hơn giá gốc niêm yết",
+      "data": null,
+      "timestamp": "2026-11-03T12:04:00.000Z"
+    },
+    "POST_admin_create_campaign_400_inverted_dates": {
+      "success": false,
+      "message": "Thời gian kết thúc phải sau thời gian bắt đầu",
+      "data": null,
+      "timestamp": "2026-11-03T12:05:00.000Z"
+    },
+    "POST_checkout_exceeding_user_limit_400": {
+      "success": false,
+      "message": "Sản phẩm 'MacBook Pro 14 M3 Pro' chỉ cho phép mua tối đa 2 sản phẩm với giá Flash Sale!",
+      "data": null,
+      "timestamp": "2026-11-03T12:06:00.000Z"
+    }
+  }
+}
