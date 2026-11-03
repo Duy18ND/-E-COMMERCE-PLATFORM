@@ -69,6 +69,20 @@ spring:
                 name: product-cb
                 fallbackUri: forward:/fallback/product
 
+        # ── 2a2. Product Service — User Review Read API (requires JWT) ──
+        - id: product-service-user-reviews
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/*/reviews/me,/api/v1/products/**/reviews/me
+            - Method=GET
+          filters:
+            - StripPrefix=0
+            - AuthenticationFilter
+            - name: CircuitBreaker
+              args:
+                name: product-cb
+                fallbackUri: forward:/fallback/product
+
         # ── 2b. Product Service — Public Read APIs (GET) ───────────────
         - id: product-service-public
           uri: lb://product-service
@@ -115,11 +129,24 @@ spring:
                 name: order-cb
                 fallbackUri: forward:/fallback/order
 
-        # ── 5. Order Service — General Orders & Cart ───────────────────
+        # ── 4b. Order Service — Public Vouchers Read API (GET) ─────────
+        - id: order-service-public-vouchers
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/vouchers/active
+            - Method=GET
+          filters:
+            - StripPrefix=0
+            - name: CircuitBreaker
+              args:
+                name: order-cb
+                fallbackUri: forward:/fallback/order
+
+        # ── 5. Order Service — General Orders, Cart & Vouchers ─────────
         - id: order-service
           uri: lb://order-service
           predicates:
-            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**,/api/v1/admin/statistics/**
+            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**,/api/v1/vouchers/**,/api/v1/admin/vouchers/**,/api/v1/admin/statistics/**
           filters:
             - StripPrefix=0
             - AuthenticationFilter

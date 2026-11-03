@@ -16,11 +16,11 @@ COPY build.gradle .
 COPY discovery-server/build.gradle discovery-server/
 
 # Download dependencies (cached layer)
-RUN chmod +x gradlew && ./gradlew :discovery-server:dependencies --no-daemon 2>/dev/null || true
+RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew :discovery-server:dependencies --no-daemon 2>/dev/null || true
 
 # Copy source and build
 COPY discovery-server/src discovery-server/src
-RUN ./gradlew :discovery-server:bootJar --no-daemon -x test
+RUN --mount=type=cache,target=/root/.gradle ./gradlew :discovery-server:bootJar --no-daemon -x test
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine AS runtime

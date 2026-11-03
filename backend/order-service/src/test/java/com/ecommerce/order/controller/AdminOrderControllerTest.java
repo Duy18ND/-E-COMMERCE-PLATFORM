@@ -141,6 +141,23 @@ class AdminOrderControllerTest {
     }
 
     @Test
+    @DisplayName("[ECOM-187] PUT /api/v1/admin/orders/{id}/status: Ghi chú vượt quá 1000 ký tự -> Trả về 400 Bad Request")
+    void updateOrderStatus_WhenNoteExceeds1000Chars_ShouldReturn400() throws Exception {
+        UpdateOrderStatusRequest request = UpdateOrderStatusRequest.builder()
+                .status(OrderStatus.CONFIRMED)
+                .note("A".repeat(1001))
+                .build();
+
+        mockMvc.perform(put("/api/v1/admin/orders/1/status")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Ghi chú không được vượt quá 1000 ký tự")));
+    }
+
+    @Test
     @DisplayName("[ECOM-315] GET /api/v1/admin/orders/{id}/history: Lấy lịch sử trạng thái thành công với ROLE_ADMIN")
     void getOrderStatusHistory_AdminRole_Success() throws Exception {
         com.ecommerce.order.dto.response.OrderStatusHistoryResponse history = com.ecommerce.order.dto.response.OrderStatusHistoryResponse.builder()

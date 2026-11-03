@@ -1,8 +1,9 @@
 /**
  * voucherService.js
- * Quản lý Voucher / Mã giảm giá – LocalStorage sync + Mock API layer.
+ * Quản lý Voucher / Mã giảm giá – Kết nối REST API Backend qua API Gateway kèm LocalStorage Fallback.
  * Đồng bộ hai chiều giữa Admin và Customer.
  */
+import api from './api';
 import { INITIAL_VOUCHERS } from '../mock/mockVouchers';
 
 const STORAGE_VOUCHERS_KEY = 'app_vouchers';
@@ -37,7 +38,7 @@ const persistVouchers = (list) => {
   }
 };
 
-const delay = (ms = 120) => new Promise((res) => setTimeout(res, ms));
+const delay = (ms = 100) => new Promise((res) => setTimeout(res, ms));
 
 /** Tính trạng thái hiển thị của voucher */
 export const getVoucherStatus = (voucher) => {
@@ -63,11 +64,11 @@ export const calcDiscount = (voucher, orderTotal) => {
 
   let discount = 0;
   if (voucher.discountType === 'FIXED') {
-    discount = voucher.discountValue;
+    discount = Number(voucher.discountValue);
   } else {
-    discount = Math.round((orderTotal * voucher.discountValue) / 100);
+    discount = Math.round((orderTotal * Number(voucher.discountValue)) / 100);
     if (voucher.maxDiscount) {
-      discount = Math.min(discount, voucher.maxDiscount);
+      discount = Math.min(discount, Number(voucher.maxDiscount));
     }
   }
   return Math.min(discount, orderTotal);
@@ -77,12 +78,27 @@ export const calcDiscount = (voucher, orderTotal) => {
 const voucherService = {
   /** Lấy toàn bộ danh sách voucher hệ thống (Admin & Customer fallback) */
   async getAll() {
+    try {
+      const data = await api.get('/admin/vouchers');
+      if (Array.isArray(data)) {
+        persistVouchers(data);
+        return data;
+      }
+    } catch (err) {
+      console.warn('API /admin/vouchers unavailable, falling back to local storage:', err.message);
+    }
     await delay();
     return loadStoredVouchers();
   },
 
   /** Lấy voucher theo id */
   async getById(id) {
+    try {
+      const data = await api.get(`/admin/vouchers/${id}`);
+      if (data) return data;
+    } catch (err) {
+      console.warn(`API /admin/vouchers/${id} unavailable, falling back to local storage:`, err.message);
+    }
     await delay();
     const list = loadStoredVouchers();
     const v = list.find((x) => x.id === Number(id));
@@ -92,6 +108,34 @@ const voucherService = {
 
   /** Tạo voucher mới (Admin) */
   async create(data) {
+    try {
+      const created = await api.post('/admin/vouchers', {
+        code: data.code.toUpperCase().trim(),
+        name: data.name.trim(),
+        description: data.description || '',
+        discountType: data.discountType || 'FIXED',
+        discountValue: Number(data.discountValue),
+        maxDiscount: data.maxDiscount ? Number(data.maxDiscount) : null,
+        minOrderValue: Number(data.minOrderValue) || 0,
+        quantity: Number(data.quantity),
+        startDate: data.startDate,
+        endDate: data.endDate,
+        status: data.status || 'ACTIVE'
+      });
+      if (created) {
+        const list = loadStoredVouchers();
+        list.unshift(created);
+        persistVouchers(list);
+        return created;
+      }
+    } catch (err) {
+      // Nếu là lỗi nghiệp vụ từ backend (ví dụ 409 duplicate), ném thẳng lỗi
+      if (err.response?.status === 409 || err.message?.includes('đã tồn tại')) {
+        throw new Error(err.response?.data?.message || err.message);
+      }
+      console.warn('API create voucher error, falling back to local mock:', err.message);
+    }
+
     await delay();
     const list = loadStoredVouchers();
     const code = data.code.toUpperCase().trim();
@@ -120,6 +164,34 @@ const voucherService = {
 
   /** Cập nhật voucher (Admin) */
   async update(id, data) {
+    try {
+      const updated = await api.put(`/admin/vouchers/${id}`, {
+        code: data.code.toUpperCase().trim(),
+        name: data.name.trim(),
+        description: data.description || '',
+        discountType: data.discountType,
+        discountValue: Number(data.discountValue),
+        maxDiscount: data.maxDiscount ? Number(data.maxDiscount) : null,
+        minOrderValue: Number(data.minOrderValue) || 0,
+        quantity: Number(data.quantity),
+        startDate: data.startDate,
+        endDate: data.endDate,
+        status: data.status
+      });
+      if (updated) {
+        const list = loadStoredVouchers();
+        const idx = list.findIndex((v) => v.id === Number(id));
+        if (idx !== -1) list[idx] = updated;
+        persistVouchers(list);
+        return updated;
+      }
+    } catch (err) {
+      if (err.response?.status === 409 || err.message?.includes('đã tồn tại') || err.message?.includes('không được nhỏ hơn')) {
+        throw new Error(err.response?.data?.message || err.message);
+      }
+      console.warn('API update voucher error, falling back to local mock:', err.message);
+    }
+
     await delay();
     const list = loadStoredVouchers();
     const idx = list.findIndex((v) => v.id === Number(id));
@@ -148,13 +220,19 @@ const voucherService = {
 
   /** Xóa voucher (Admin) */
   async delete(id) {
+    try {
+      await api.delete(`/admin/vouchers/${id}`);
+    } catch (err) {
+      console.warn('API delete voucher error, falling back to local storage:', err.message);
+    }
+
     await delay();
     const list = loadStoredVouchers();
     const idx = list.findIndex((v) => v.id === Number(id));
-    if (idx === -1) throw new Error('Không tìm thấy voucher');
-
-    list.splice(idx, 1);
-    persistVouchers(list);
+    if (idx !== -1) {
+      list.splice(idx, 1);
+      persistVouchers(list);
+    }
 
     // Đồng thời xóa khỏi danh sách đã lưu của user nếu có
     this.unsaveVoucher(Number(id));
@@ -163,6 +241,19 @@ const voucherService = {
 
   /** Bật / Tắt trạng thái voucher (Admin) */
   async toggleStatus(id) {
+    try {
+      const toggled = await api.patch(`/admin/vouchers/${id}/toggle-status`);
+      if (toggled) {
+        const list = loadStoredVouchers();
+        const idx = list.findIndex((v) => v.id === Number(id));
+        if (idx !== -1) list[idx] = toggled;
+        persistVouchers(list);
+        return toggled;
+      }
+    } catch (err) {
+      console.warn('API toggleStatus error, falling back to local storage:', err.message);
+    }
+
     await delay();
     const list = loadStoredVouchers();
     const idx = list.findIndex((v) => v.id === Number(id));
@@ -177,6 +268,15 @@ const voucherService = {
 
   /** Lấy toàn bộ voucher đang mở cho User (public browsing) */
   async getPublicVouchers() {
+    try {
+      const data = await api.get('/vouchers/active');
+      if (Array.isArray(data)) {
+        return data;
+      }
+    } catch (err) {
+      console.warn('API /vouchers/active unavailable, falling back to local storage:', err.message);
+    }
+
     await delay();
     const list = loadStoredVouchers();
     return list.filter((v) => v.status === 'ACTIVE');
@@ -215,14 +315,41 @@ const voucherService = {
 
   /** Lấy danh sách voucher đã lưu đầy đủ thông tin */
   async getSavedVouchers() {
-    await delay(60);
-    const list = loadStoredVouchers();
+    let list = [];
+    try {
+      const activeFromApi = await api.get('/vouchers/active');
+      if (Array.isArray(activeFromApi) && activeFromApi.length > 0) {
+        list = activeFromApi;
+      } else {
+        list = loadStoredVouchers();
+      }
+    } catch {
+      list = loadStoredVouchers();
+    }
     const ids = this.getSavedIds();
-    return list.filter((v) => ids.includes(v.id));
+    return list.filter((v) => ids.includes(Number(v.id)));
   },
 
   /** Áp dụng voucher theo mã tại Checkout */
   async applyCode(code, orderTotal) {
+    try {
+      const res = await api.post('/vouchers/apply', {
+        code: code.trim().toUpperCase(),
+        orderTotal: Number(orderTotal)
+      });
+      if (res && res.voucher) {
+        return {
+          voucher: res.voucher,
+          discountAmount: Number(res.discountAmount) || 0
+        };
+      }
+    } catch (err) {
+      if (err.response?.status === 400 || err.response?.status === 404) {
+        throw new Error(err.response?.data?.message || err.message);
+      }
+      console.warn('API /vouchers/apply unavailable, falling back to local calculation:', err.message);
+    }
+
     await delay();
     const list = loadStoredVouchers();
     const v = list.find((x) => x.code.toUpperCase() === code.toUpperCase().trim());

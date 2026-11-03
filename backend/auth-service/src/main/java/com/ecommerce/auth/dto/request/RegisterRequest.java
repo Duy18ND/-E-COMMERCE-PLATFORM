@@ -1,18 +1,18 @@
 package com.ecommerce.auth.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 
-import java.util.Set;
-
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class RegisterRequest {
 
     @NotBlank(message = "Email không được để trống")
@@ -29,6 +29,4 @@ public class RegisterRequest {
 
     @Pattern(regexp = "(^$|[0-9]{10,11})", message = "Số điện thoại phải từ 10 đến 11 chữ số")
     private String phone;
-
-    private Set<String> roles;
 }

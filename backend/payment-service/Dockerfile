@@ -11,10 +11,10 @@ COPY settings.gradle .
 COPY build.gradle .
 COPY payment-service/build.gradle payment-service/
 
-RUN chmod +x gradlew && ./gradlew :payment-service:dependencies --no-daemon 2>/dev/null || true
+RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew :payment-service:dependencies --no-daemon 2>/dev/null || true
 
 COPY payment-service/src payment-service/src
-RUN ./gradlew :payment-service:bootJar --no-daemon -x test
+RUN --mount=type=cache,target=/root/.gradle ./gradlew :payment-service:bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app

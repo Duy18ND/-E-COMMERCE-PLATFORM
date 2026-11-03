@@ -23,6 +23,9 @@ public class OrderResponse implements Serializable {
     private String receiverName;
     private String receiverPhone;
     private String shippingAddress;
+    private BigDecimal subtotalAmount;
+    private String voucherCode;
+    private BigDecimal discountAmount;
     private BigDecimal totalAmount;
     private OrderStatus status;
     private PaymentMethod paymentMethod;
