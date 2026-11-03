@@ -86,13 +86,28 @@ export const AuthProvider = ({ children }) => {
         // Lấy thông tin tài khoản mới nhất (qua Backend GET /api/v1/auth/me hoặc session)
         const freshUser = await authService.getCurrentUser();
         if (freshUser) {
+          const avatarRemoved = Boolean(savedUser?.avatarRemoved ?? freshUser.avatarRemoved ?? false);
+          const resolvedAvatar = avatarRemoved
+            ? ''
+            : savedUser?.avatarUrl ||
+              savedUser?.avatar ||
+              freshUser.avatarUrl ||
+              freshUser.avatar ||
+              '';
+
           const mergedUser = {
             id: freshUser.userId ?? freshUser.id ?? savedUser?.id,
             userId: freshUser.userId ?? freshUser.id ?? savedUser?.userId ?? savedUser?.id,
-            email: freshUser.email || savedUser?.email || '',
-            fullName: freshUser.fullName || savedUser?.fullName || 'Người dùng',
-            phone: freshUser.phone || savedUser?.phone || '',
-            address: freshUser.address || savedUser?.address || '',
+            email: savedUser?.email || freshUser.email || '',
+            fullName: savedUser?.fullName || freshUser.fullName || 'Người dùng',
+            phone: savedUser?.phone || freshUser.phone || '0912345678',
+            address:
+              savedUser?.address ||
+              freshUser.address ||
+              '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
+            avatarUrl: resolvedAvatar,
+            avatar: resolvedAvatar,
+            avatarRemoved,
             roles: normalizeRoles(freshUser.roles || savedUser?.roles, freshUser.authorities)
           };
           setCurrentUser(mergedUser);
@@ -139,8 +154,11 @@ export const AuthProvider = ({ children }) => {
       userId: resolvedId,
       email: loginData.email,
       fullName: loginData.fullName,
-      phone: loginData.phone || '',
-      address: loginData.address || '',
+      phone: loginData.phone || '0912345678',
+      address: loginData.address || '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
+      avatarUrl: loginData.avatarUrl || loginData.avatar || '',
+      avatar: loginData.avatar || loginData.avatarUrl || '',
+      avatarRemoved: Boolean(loginData.avatarRemoved),
       roles: normalizeRoles(loginData.roles, loginData.authorities)
     };
 
@@ -170,12 +188,15 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   /**
-   * Cập nhật thông tin profile
+   * Cập nhật thông tin profile ở Frontend (State + localStorage Mock Data)
    */
   const updateUser = useCallback((updatedData) => {
     setCurrentUser((prevUser) => {
       const newUser = { ...(prevUser || {}), ...updatedData };
       setUser(newUser);
+      if (authService.updateMockUser) {
+        authService.updateMockUser(newUser);
+      }
       return newUser;
     });
   }, []);

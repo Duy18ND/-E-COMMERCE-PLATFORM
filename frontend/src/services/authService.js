@@ -68,7 +68,27 @@ export const normalizeAuthPayload = (data, fallbackInfo = {}) => {
   }
 
   const resolvedId = data.userId ?? data.id ?? fallbackInfo.userId ?? fallbackInfo.id ?? null;
+  const resolvedEmail = data.email || data.username || fallbackInfo.email || '';
   const roles = normalizeRoles(data.roles || fallbackInfo.roles, data.authorities);
+
+  // Tìm dữ liệu mock tương ứng để bổ sung phone, address, avatar nếu API không trả về
+  const mockMatch =
+    loadMockUsers().find(
+      (u) =>
+        (resolvedEmail && String(u.email || '').toLowerCase() === String(resolvedEmail).toLowerCase()) ||
+        (resolvedId !== null && String(u.id) === String(resolvedId))
+    ) || null;
+
+  const avatarRemoved = Boolean(data.avatarRemoved ?? fallbackInfo.avatarRemoved ?? false);
+  const resolvedAvatar = avatarRemoved
+    ? ''
+    : data.avatarUrl ??
+      data.avatar ??
+      fallbackInfo.avatarUrl ??
+      fallbackInfo.avatar ??
+      mockMatch?.avatarUrl ??
+      mockMatch?.avatar ??
+      '';
 
   return {
     accessToken: data.accessToken || fallbackInfo.accessToken || null,
@@ -77,10 +97,17 @@ export const normalizeAuthPayload = (data, fallbackInfo = {}) => {
     expiresIn: data.expiresIn || 86400000,
     id: resolvedId,
     userId: resolvedId,
-    email: data.email || data.username || fallbackInfo.email || '',
-    fullName: data.fullName || fallbackInfo.fullName || 'Người dùng',
-    phone: data.phone ?? fallbackInfo.phone ?? '',
-    address: data.address ?? fallbackInfo.address ?? '',
+    email: resolvedEmail,
+    fullName: data.fullName || fallbackInfo.fullName || mockMatch?.fullName || 'Người dùng',
+    phone: data.phone || fallbackInfo.phone || mockMatch?.phone || '0912345678',
+    address:
+      data.address ||
+      fallbackInfo.address ||
+      mockMatch?.address ||
+      '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
+    avatarUrl: resolvedAvatar,
+    avatar: resolvedAvatar,
+    avatarRemoved,
     roles
   };
 };
@@ -131,8 +158,10 @@ export const authService = {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
-      phone: user.phone || '',
-      address: user.address || '',
+      phone: user.phone || '0912345678',
+      address: user.address || '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
+      avatarUrl: user.avatarUrl || user.avatar || '',
+      avatar: user.avatar || user.avatarUrl || '',
       roles: Array.isArray(user.roles) ? [...user.roles] : ['ROLE_USER']
     });
   },
@@ -146,7 +175,7 @@ export const authService = {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanFullName = (fullName || '').trim();
     const cleanPhone = (phone || '').trim();
-    const cleanAddress = (address || '').trim();
+    const cleanAddress = (address || '').trim() || '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội';
 
     if (!USE_MOCK_AUTH) {
       try {
@@ -182,8 +211,11 @@ export const authService = {
       email: cleanEmail,
       password,
       fullName: cleanFullName,
+      name: cleanFullName,
       phone: cleanPhone,
       address: cleanAddress,
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
+      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
       roles: ['ROLE_USER']
     };
 
@@ -199,6 +231,8 @@ export const authService = {
       fullName: newUser.fullName,
       phone: newUser.phone,
       address: newUser.address,
+      avatarUrl: newUser.avatarUrl,
+      avatar: newUser.avatar,
       roles: newUser.roles
     });
   },
@@ -291,6 +325,46 @@ export const authService = {
     }
 
     return normalizeAuthPayload(saved);
+  },
+
+  /**
+   * Đồng bộ cập nhật thông tin tài khoản ở Frontend Mock Data (localStorage)
+   */
+  updateMockUser: (updatedProfile = {}) => {
+    try {
+      const list = loadMockUsers();
+      const targetId = updatedProfile.id ?? updatedProfile.userId;
+      const targetEmail = String(updatedProfile.email || '').trim().toLowerCase();
+
+      const updatedList = list.map((u) => {
+        const isMatch =
+          (targetId !== undefined && targetId !== null && String(u.id) === String(targetId)) ||
+          (targetEmail && String(u.email || '').toLowerCase() === targetEmail);
+
+        if (!isMatch) return u;
+
+        const nextAvatar = updatedProfile.avatarRemoved
+          ? ''
+          : updatedProfile.avatarUrl ?? updatedProfile.avatar ?? u.avatarUrl ?? u.avatar;
+
+        return {
+          ...u,
+          fullName: updatedProfile.fullName ?? u.fullName,
+          name: updatedProfile.fullName ?? u.name,
+          email: updatedProfile.email ?? u.email,
+          phone: updatedProfile.phone ?? u.phone,
+          address: updatedProfile.address ?? u.address,
+          avatar: nextAvatar,
+          avatarUrl: nextAvatar,
+          avatarRemoved: Boolean(updatedProfile.avatarRemoved)
+        };
+      });
+
+      mockUsersList = updatedList;
+      saveMockUsers(updatedList);
+    } catch (e) {
+      // Bỏ qua lỗi lưu trữ
+    }
   }
 };
 
