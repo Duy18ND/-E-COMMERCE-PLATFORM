@@ -609,10 +609,19 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
+        long pendingCount = ordersByStatus.getOrDefault(OrderStatus.PENDING, 0L);
+        long completedCount = ordersByStatus.getOrDefault(OrderStatus.DELIVERED, 0L);
+        long cancelledCount = ordersByStatus.getOrDefault(OrderStatus.CANCELLED, 0L);
+
         return DashboardResponse.builder()
                 .totalOrders(totalOrders != null ? totalOrders : 0L)
                 .totalRevenue(totalRevenue != null ? totalRevenue : BigDecimal.ZERO)
                 .ordersByStatus(ordersByStatus)
+                .pendingOrders(pendingCount)
+                .completedOrders(completedCount)
+                .cancelledOrders(cancelledCount)
+                .lowStockProductsCount(0L)
+                .totalUsers(0L)
                 .build();
     }
 

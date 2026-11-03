@@ -275,6 +275,11 @@ class AdminOrderServiceTest {
         assertThat(stats.getOrdersByStatus().get(OrderStatus.FAILED)).isEqualTo(0L);
         assertThat(stats.getOrdersByStatus().get(OrderStatus.REFUNDED)).isEqualTo(0L);
 
+        // [Task ECOM-145 / ECOM-326] Các chỉ số rút gọn cho Dashboard
+        assertThat(stats.getPendingOrders()).isEqualTo(5L);
+        assertThat(stats.getCompletedOrders()).isEqualTo(10L);
+        assertThat(stats.getCancelledOrders()).isEqualTo(2L);
+
         verify(orderRepository, times(1)).countTotalOrders();
         verify(orderRepository, times(1)).sumTotalAmountByStatusIn(any());
         verify(orderRepository, times(1)).countOrdersByStatusGroup();
