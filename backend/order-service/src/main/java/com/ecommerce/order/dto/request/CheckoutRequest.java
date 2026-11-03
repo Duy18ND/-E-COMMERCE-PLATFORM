@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.io.Serializable;
@@ -34,6 +35,13 @@ public class CheckoutRequest implements Serializable {
 
     @NotNull(message = "Phương thức thanh toán không được để trống")
     private PaymentMethod paymentMethod;
+
+    /**
+     * Mã giảm giá (Voucher) áp dụng cho đơn hàng (tuỳ chọn).
+     * Chỉ nhận voucherCode từ Client, Backend tự xác thực và tính số tiền giảm để chống giả mạo giá (Tampering).
+     */
+    @Size(max = 50, message = "Mã voucher không được vượt quá 50 ký tự")
+    private String voucherCode;
 
     /**
      * [Task ECOM-267] Danh sách sản phẩm mua hàng.

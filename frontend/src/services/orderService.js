@@ -300,14 +300,15 @@ const setStoredOrders = (orders) => {
 
 export const orderService = {
   // Tạo đơn hàng từ giỏ hàng hiện tại (POST /api/orders/checkout)
-  checkout: async ({ receiverName, receiverPhone, shippingAddress, note, paymentMethod }) => {
+  checkout: async ({ receiverName, receiverPhone, shippingAddress, note, paymentMethod, voucherCode }) => {
     try {
       return await api.post('/orders/checkout', {
         receiverName,
         receiverPhone,
         shippingAddress,
         note: note || '',
-        paymentMethod
+        paymentMethod,
+        voucherCode: voucherCode || null
       });
     } catch (err) {
       // Fallback Mock Order Creation: Cho phép test xác nhận đơn hàng 100% không bị lỗi
@@ -325,6 +326,7 @@ export const orderService = {
         shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
         note: note || '',
         paymentMethod: paymentMethod || 'COD',
+        voucherCode: voucherCode || null,
         status: isOnlinePay ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING,
         totalAmount: cartData.totalPrice || 32490000,
         createdAt: new Date().toISOString(),
