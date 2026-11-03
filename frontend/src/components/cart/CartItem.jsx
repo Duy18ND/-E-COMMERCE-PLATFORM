@@ -1,8 +1,24 @@
 import { formatCurrency } from '../../utils/formatCurrency';
 import useCart from '../../hooks/useCart';
+import useNotification from '../../hooks/useNotification';
 
 const CartItem = ({ item }) => {
   const { updateQuantity, removeFromCart } = useCart();
+  const { notify, confirmDialog } = useNotification();
+
+  const handleRemove = async () => {
+    const ok = await confirmDialog({
+      title: 'Xóa sản phẩm',
+      message: `Bạn có chắc muốn xóa "${item.name}" khỏi giỏ hàng?`,
+      variant: 'danger',
+      confirmText: 'Xóa',
+      cancelText: 'Giữ lại'
+    });
+    if (ok) {
+      removeFromCart(item.id || item.itemId);
+      notify.info(`Đã xóa "${item.name}" khỏi giỏ hàng.`);
+    }
+  };
 
   if (!item) return null;
 
@@ -197,7 +213,7 @@ const CartItem = ({ item }) => {
 
         {/* Remove button */}
         <button
-          onClick={() => removeFromCart(item.id)}
+          onClick={handleRemove}
           style={{
             background: 'none',
             border: 'none',

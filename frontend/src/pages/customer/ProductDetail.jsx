@@ -14,7 +14,7 @@ const ProductDetail = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { isAdmin } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, notify } = useToast();
 
   const [product, setProduct] = useState(null);
   const [stockInfo, setStockInfo] = useState(null);
@@ -402,7 +402,7 @@ const ProductDetail = () => {
                     fontWeight: 600,
                     textAlign: 'center'
                   }}
-                  onClick={() => alert('Chế độ xem 360° tương tác mô phỏng')}
+                  onClick={() => notify.info('Tính năng xem ảnh 360° tương tác đang được phát triển.')}
                 >
                   <span style={{ fontSize: '1.1rem' }}>🔄</span>
                   <span>360°</span>
@@ -488,7 +488,12 @@ const ProductDetail = () => {
                 </div>
                 <span>•</span>
                 <button
-                  onClick={() => alert('Đã sao chép liên kết sản phẩm!')}
+                  onClick={() => {
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(window.location.href);
+                    }
+                    notify.success('Đã sao chép liên kết sản phẩm vào bộ nhớ tạm!');
+                  }}
                   style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.82rem' }}
                 >
                   🔗 Chia sẻ
@@ -961,7 +966,7 @@ const ProductDetail = () => {
                 </div>
               </div>
               <button
-                onClick={() => alert('Đang kết nối tới tổng đài viên ShopMart: 1900 8888')}
+                onClick={() => notify.info('Đang kết nối tới tổng đài viên ShopMart: 1900 8888 (Miễn phí cước).')}
                 style={{
                   backgroundColor: '#2563eb',
                   color: '#ffffff',

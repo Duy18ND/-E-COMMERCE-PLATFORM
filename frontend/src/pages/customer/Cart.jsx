@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
+import useNotification from '../../hooks/useNotification';
 import CartItem from '../../components/cart/CartItem';
 import CartSummary from '../../components/cart/CartSummary';
 import EmptyState from '../../components/common/EmptyState';
@@ -13,6 +14,21 @@ import { formatCurrency } from '../../utils/formatCurrency';
 const Cart = () => {
   const { isAdmin } = useAuth();
   const { cartItems, totalItems, totalPrice, totalOriginalPrice, totalDiscount, clearCart, loading } = useCart();
+  const { notify, confirmDialog } = useNotification();
+
+  const handleClearCart = async () => {
+    const ok = await confirmDialog({
+      title: 'Xóa toàn bộ giỏ hàng',
+      message: 'Bạn có chắc chắn muốn xóa toàn bộ sản phẩm trong giỏ hàng không?',
+      variant: 'danger',
+      confirmText: 'Xóa tất cả',
+      cancelText: 'Giữ lại'
+    });
+    if (ok) {
+      clearCart();
+      notify.info('Đã làm trống giỏ hàng của bạn.');
+    }
+  };
   const [reservationEnd] = useState(() => Date.now() + 14 * 60 * 1000 + 49 * 1000); // 14:49 đếm ngược chuẩn ảnh
 
   const hasFlashSaleItems = cartItems.some((item) => item.isFlashSale || item.salePrice);
@@ -221,7 +237,7 @@ const Cart = () => {
                   ))}
 
                   <div style={{ padding: '0.85rem 1.25rem', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button variant="outline" size="sm" onClick={clearCart}>
+                    <Button variant="outline" size="sm" onClick={handleClearCart}>
                       Xóa toàn bộ giỏ hàng
                     </Button>
                   </div>

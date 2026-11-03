@@ -413,32 +413,89 @@ export const orderService = {
     }
   },
 
-  // Admin xem toàn bộ đơn hàng (GET /api/admin/orders)
+  // Admin xem toàn bộ đơn hàng có phân trang & lọc trạng thái (GET /api/v1/admin/orders)
   getAllOrders: async (params) => {
     try {
-      return await api.get('/admin/orders', { params });
+      const response = await api.get('/admin/orders', { params });
+
+      // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
+      if (response && Array.isArray(response.content)) {
+        return {
+          content: response.content,
+          totalElements: response.totalElements ?? response.content.length,
+          totalPages: response.totalPages ?? 1,
+          pageNumber: response.pageNumber ?? 0,
+          pageSize: response.pageSize ?? 10,
+          last: response.last ?? true
+        };
+      }
+
+      // Nếu Backend trả về mảng trực tiếp
+      if (Array.isArray(response)) {
+        const page = params?.page || 0;
+        const size = params?.size || 10;
+        return {
+          content: response,
+          totalElements: response.length,
+          totalPages: Math.max(1, Math.ceil(response.length / size)),
+          pageNumber: page,
+          pageSize: size,
+          last: true
+        };
+      }
+
+      return response;
     } catch (err) {
+      // Fallback lưu trữ cục bộ nếu không kết nối được máy chủ Backend
       let orders = getStoredOrders();
       if (params?.status) {
         orders = orders.filter((o) => o.status === params.status);
       }
-      return orders;
+
+      const page = params?.page || 0;
+      const size = params?.size || 10;
+      const totalElements = orders.length;
+      const totalPages = Math.max(1, Math.ceil(totalElements / size));
+      const startIndex = page * size;
+      const content = orders.slice(startIndex, startIndex + size);
+
+      return {
+        content,
+        totalElements,
+        totalPages,
+        pageNumber: page,
+        pageSize: size,
+        last: page >= totalPages - 1
+      };
     }
   },
 
-  // Admin xem chi tiết bất kỳ đơn hàng nào (GET /api/admin/orders/{orderId})
+  // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId} hoặc /api/v1/admin/orders/{orderId})
   getAdminOrderById: async (id) => {
     try {
-      return await api.get(`/admin/orders/${id}`);
+      return await api.get(`/orders/${id}`);
     } catch (err) {
-      return orderService.getOrderById(id);
+      try {
+        return await api.get(`/admin/orders/${id}`);
+      } catch (adminErr) {
+        return orderService.getOrderById(id);
+      }
     }
   },
 
-  // Admin cập nhật trạng thái đơn (PUT /api/admin/orders/{orderId}/status)
-  updateOrderStatus: async (id, status) => {
+  // Admin xem lịch sử trạng thái Timeline (GET /api/v1/admin/orders/{orderId}/history)
+  getOrderHistory: async (id) => {
     try {
-      return await api.put(`/admin/orders/${id}/status`, { status });
+      return await api.get(`/admin/orders/${id}/history`);
+    } catch (err) {
+      return [];
+    }
+  },
+
+  // Admin cập nhật trạng thái đơn (PUT /api/v1/admin/orders/{orderId}/status)
+  updateOrderStatus: async (id, status, note = '') => {
+    try {
+      return await api.put(`/admin/orders/${id}/status`, { status, note });
     } catch (err) {
       const orders = getStoredOrders();
       const updatedOrders = orders.map((o) => {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
+import useNotification from '../../hooks/useNotification';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
@@ -33,6 +34,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const { notify } = useNotification();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -111,6 +113,7 @@ const Login = () => {
       const isAdmin = userRoles.includes('ROLE_ADMIN') || userRoles.includes('ADMIN');
 
       setSuccess('Đăng nhập thành công! Đang chuyển hướng...');
+      notify.success(`Chào mừng ${user?.fullName || 'bạn'} đã đăng nhập thành công!`);
 
       // Điều hướng theo vai trò USER / ADMIN:
       // - Nếu Admin: ưu tiên trang đích /admin/* hoặc mặc định về /admin
@@ -125,7 +128,9 @@ const Login = () => {
       if (err.fieldErrors && typeof err.fieldErrors === 'object') {
         setFieldErrors(err.fieldErrors);
       }
-      setError(err.message || 'Email hoặc mật khẩu không chính xác.');
+      const errMsg = err.message || 'Email hoặc mật khẩu không chính xác.';
+      setError(errMsg);
+      notify.error(errMsg);
     } finally {
       setLoading(false);
     }

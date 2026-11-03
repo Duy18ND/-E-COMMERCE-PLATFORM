@@ -882,10 +882,10 @@ th {
 }
 
 .admin-sidebar {
-  width: 245px;
+  width: 236px;
   background-color: #0f172a;
   color: #ffffff;
-  padding: 1.25rem 0.85rem;
+  padding: 1.15rem 0.75rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1079,8 +1079,9 @@ th {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: clamp(1rem, 2.5vw, 2rem);
+  padding: clamp(1rem, 2vw, 1.75rem);
   background-color: #f8fafc;
+  overflow-x: hidden;
 }
 
 /* =========================================================
@@ -1284,11 +1285,34 @@ th {
   -webkit-overflow-scrolling: touch;
 }
 
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.925rem;
+}
+
+.orders-table {
+  min-width: 980px;
+  width: 100%;
 }
 
 .data-table th,
