@@ -1,0 +1,103 @@
+=============================================================================
+SHOPMART E-COMMERCE PLATFORM — ECOM-165 AUTOMATED TEST EXECUTION LOG
+=============================================================================
+Date: 2026-11-03
+Scope: ECOM-165 Flash Sale End-to-End Verification
+Framework: Node.js Test Runner (v20+), JUnit 5, MockMvc, AssertJ
+
+-----------------------------------------------------------------------------
+1. UNIT & SERVICE TESTS (BACKEND: product-service & order-service)
+-----------------------------------------------------------------------------
+
+[TEST SUITE] com.ecommerce.product.service.FlashSaleServiceTest$InitFlashSaleStockTests
+- shouldSetCorrectKeyAndValueInRedis() ............................. PASSED (0.008s)
+- shouldCallOpsForValueSetExactlyOnce() ............................ PASSED (0.004s)
+
+[TEST SUITE] com.ecommerce.product.service.FlashSaleServiceTest$ReserveFlashSaleStockTests
+- whenLuaReturns1_shouldCompleteWithoutException() ................. PASSED (1.335s)
+- whenLuaReturns0_shouldThrowNotEnoughStockException() ............. PASSED (0.005s)
+- whenLuaReturnsMinus1_shouldThrowResourceNotFoundException() ...... PASSED (0.006s)
+- whenRedisReturnsNull_shouldThrowResourceNotFoundException() ...... PASSED (0.006s)
+- whenLuaReturnsUnexpectedValue_shouldThrowIllegalStateException() .. PASSED (0.021s)
+
+[TEST SUITE] com.ecommerce.product.service.FlashSaleServiceTest$CampaignManagementTests
+- createCampaign_WhenCurrentlyActive_ShouldSetActiveAndSyncRedis() . PASSED
+- createCampaign_WhenInFuture_ShouldSetUpcomingWithoutSyncingRedis()  PASSED
+- createCampaign_WhenFlashSalePriceNotLessThanOriginal_ShouldThrow() PASSED
+- createCampaign_WhenQuantityExceedsProductStock_ShouldThrow() ...... PASSED
+- updateCampaignStatus_ShouldSyncOrCleanRedisKeys() ................ PASSED
+- getActiveFlashSaleForProduct_ShouldReturnDtoWhenActive() ......... PASSED
+
+[TEST SUITE] com.ecommerce.product.controller.FlashSaleControllerTest
+- getActiveFlashSales_ShouldReturn200() ............................. PASSED
+- createCampaign_AsAdmin_ShouldReturn201() ......................... PASSED
+- createCampaign_AsNonAdmin_ShouldReturn403() ...................... PASSED
+- createCampaign_InvalidTimeRange_ShouldReturn400() ................ PASSED
+
+[TEST SUITE] com.ecommerce.order.service.OrderServiceTest
+- checkout_WithActiveFlashSale_ShouldApplyFlashSalePriceAndReserve() PASSED
+- checkout_WhenExceedingFlashSaleUserLimit_ShouldThrow() ........... PASSED
+- antiPriceTampering_ShouldOverrideClientPriceWithDbVerifiedPrice()  PASSED
+
+-----------------------------------------------------------------------------
+2. END-TO-END QA AUTOMATION TEST SUITE (frontend/tests/ecom165.flashsale.qa.test.mjs)
+-----------------------------------------------------------------------------
+
+TAP version 13
+# Subtest: TC-165-01: Flash Sale chưa bắt đầu (startTime > now) -> Trạng thái UPCOMING và chưa kích hoạt Redis
+ok 1 - TC-165-01: Flash Sale chưa bắt đầu (startTime > now) -> Trạng thái UPCOMING và chưa kích hoạt Redis
+# Subtest: TC-165-02: Flash Sale đang hoạt động (startTime <= now < endTime) -> Trạng thái ACTIVE và nạp tồn kho lên Redis
+ok 2 - TC-165-02: Flash Sale đang hoạt động (startTime <= now < endTime) -> Trạng thái ACTIVE và nạp tồn kho lên Redis
+# Subtest: TC-165-03: Flash Sale vừa đến thời điểm bắt đầu -> Kích hoạt ACTIVE và nạp tồn kho còn lại
+ok 3 - TC-165-03: Flash Sale vừa đến thời điểm bắt đầu -> Kích hoạt ACTIVE và nạp tồn kho còn lại
+# Subtest: TC-165-04 & TC-165-05: Flash Sale hết hạn (endTime <= now) -> Chuyển ENDED, xóa key Redis và chặn kích hoạt
+ok 4 - TC-165-04 & TC-165-05: Flash Sale hết hạn (endTime <= now) -> Chuyển ENDED, xóa key Redis và chặn kích hoạt
+# Subtest: TC-165-06 & TC-165-07: Đặt hàng sau khi Flash Sale hết hạn -> Backend tự động loại bỏ giá ưu đãi, không cho áp dụng sale hết hạn
+ok 5 - TC-165-06 & TC-165-07: Đặt hàng sau khi Flash Sale hết hạn -> Backend tự động loại bỏ giá ưu đãi, không cho áp dụng sale hết hạn
+# Subtest: TC-165-08: Giao diện cập nhật trạng thái khi chương trình hết hạn / hết hàng
+ok 6 - TC-165-08: Giao diện cập nhật trạng thái khi chương trình hết hạn / hết hàng
+# Subtest: TC-165-09 & TC-165-10: Mua số lượng hợp lệ và đúng số lượng còn lại -> Đặt chỗ thành công qua Redis Lua
+ok 7 - TC-165-09 & TC-165-10: Mua số lượng hợp lệ và đúng số lượng còn lại -> Đặt chỗ thành công qua Redis Lua
+# Subtest: TC-165-11 & TC-165-13: Mua vượt số lượng Flash Sale còn lại hoặc hết hàng -> Bị chặn và ném NotEnoughStockException
+ok 8 - TC-165-11 & TC-165-13: Mua vượt số lượng Flash Sale còn lại hoặc hết hàng -> Bị chặn và ném NotEnoughStockException
+# Subtest: TC-165-12: Mua vượt giới hạn mỗi khách hàng (userLimit) -> Backend chặn ngay tại bước checkout
+ok 9 - TC-165-12: Mua vượt giới hạn mỗi khách hàng (userLimit) -> Backend chặn ngay tại bước checkout
+# Subtest: TC-165-14 & TC-165-15 & TC-165-16: Số lượng mua <= 0 hoặc không hợp lệ -> Validate chặn tại DTO / Service
+ok 10 - TC-165-14 & TC-165-15 & TC-165-16: Số lượng mua <= 0 hoặc không hợp lệ -> Validate chặn tại DTO / Service
+# Subtest: TC-165-17 & TC-165-18: Đảm bảo kiểm soát tranh chấp đồng thời (Concurrency) qua Redis Lua nguyên tử, không làm âm tồn kho
+ok 11 - TC-165-17 & TC-165-18: Đảm bảo kiểm soát tranh chấp đồng thời (Concurrency) qua Redis Lua nguyên tử, không làm âm tồn kho
+# Subtest: TC-165-19 & TC-165-20: Giá gốc và giá Flash Sale được cấu hình và lưu trữ chính xác
+ok 12 - TC-165-19 & TC-165-20: Giá gốc và giá Flash Sale được cấu hình và lưu trữ chính xác
+# Subtest: TC-165-21: Giá giảm và tỷ lệ % giảm giá được tính chính xác
+ok 13 - TC-165-21: Giá giảm và tỷ lệ % giảm giá được tính chính xác
+# Subtest: TC-165-22 & TC-165-23: Flash Sale chưa bắt đầu hoặc hết hạn -> Không được áp dụng giá giảm, trả về giá gốc
+ok 14 - TC-165-22 & TC-165-23: Flash Sale chưa bắt đầu hoặc hết hạn -> Không được áp dụng giá giảm, trả về giá gốc
+# Subtest: TC-165-24: Giá trong danh sách Flash Sale và trang chi tiết thống nhất từ Backend
+ok 15 - TC-165-24: Giá trong danh sách Flash Sale và trang chi tiết thống nhất từ Backend
+# Subtest: TC-165-25 & TC-165-26 & TC-165-27: Chống Price Tampering — Backend hoàn toàn quyết định giá thanh toán cuối cùng
+ok 16 - TC-165-25 & TC-165-26 & TC-165-27: Chống Price Tampering — Backend hoàn toàn quyết định giá thanh toán cuối cùng
+# Subtest: TC-165-28: Định dạng tiền tệ VNĐ chuẩn và làm tròn hợp lý
+ok 17 - TC-165-28: Định dạng tiền tệ VNĐ chuẩn và làm tròn hợp lý
+# Subtest: TC-165-29: Khi số lượng ưu đãi Flash Sale đã hết (remainingStock <= 0) -> Tự động chuyển về giá gốc
+ok 18 - TC-165-29: Khi số lượng ưu đãi Flash Sale đã hết (remainingStock <= 0) -> Tự động chuyển về giá gốc
+# Subtest: TC-165-30: Tổng tiền đơn hàng sau khi áp dụng Flash Sale và Voucher được tính toán chuẩn xác
+ok 19 - TC-165-30: Tổng tiền đơn hàng sau khi áp dụng Flash Sale và Voucher được tính toán chuẩn xác
+
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 192.572
+
+-----------------------------------------------------------------------------
+3. TOÀN BỘ SUITE REGRESSION TEST DỰ ÁN
+-----------------------------------------------------------------------------
+Commands: npm test (67/67 PASS)
+Lint: node scripts/lint-check.mjs (83 files checked, 0 errors)
+Build: vite build (170 modules transformed, build clean in 3.68s)
+Status: ALL TESTS PASSING
+=============================================================================
