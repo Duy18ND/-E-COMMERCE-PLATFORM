@@ -76,18 +76,21 @@ CREATE TABLE IF NOT EXISTS products (
 --  Ràng buộc UNIQUE (product_id, user_id): mỗi user chỉ đánh giá 1 lần.
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS product_reviews (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    product_id BIGINT       NOT NULL COMMENT 'ID sản phẩm được đánh giá',
-    user_id    BIGINT       NOT NULL COMMENT 'ID người dùng viết đánh giá',
-    order_id   BIGINT       NOT NULL COMMENT 'ID đơn hàng DELIVERED — xác minh điều kiện đánh giá',
-    rating     TINYINT      NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5',
-    comment    TEXT                  COMMENT 'Nội dung bình luận (tuỳ chọn)',
-    created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id    BIGINT       NOT NULL COMMENT 'ID sản phẩm được đánh giá',
+    user_id       BIGINT       NOT NULL COMMENT 'ID người dùng viết đánh giá',
+    order_id      BIGINT       NOT NULL COMMENT 'ID đơn hàng DELIVERED — xác minh điều kiện đánh giá',
+    rating        TINYINT      NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5',
+    comment       TEXT                  COMMENT 'Nội dung bình luận (tuỳ chọn)',
+    status        VARCHAR(20)  NOT NULL DEFAULT 'APPROVED' COMMENT 'Trạng thái: APPROVED (hiển thị), HIDDEN (ẩn do vi phạm)',
+    hidden_reason VARCHAR(255)          COMMENT 'Lý do ẩn đánh giá vi phạm',
+    created_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at    DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     CONSTRAINT chk_rating CHECK (rating BETWEEN 1 AND 5),
     CONSTRAINT uq_review_product_user UNIQUE (product_id, user_id),
     INDEX idx_reviews_product_id (product_id),
-    INDEX idx_reviews_user_id (user_id)
+    INDEX idx_reviews_user_id (user_id),
+    INDEX idx_reviews_product_status (product_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Đánh giá sản phẩm từ khách hàng đã mua hàng';
 

@@ -3,12 +3,14 @@ package com.ecommerce.product.service.impl;
 import com.ecommerce.product.client.OrderClient;
 import com.ecommerce.product.client.dto.OrderDetailResponse;
 import com.ecommerce.product.dto.request.CreateReviewRequest;
+import com.ecommerce.product.dto.request.ModerateReviewRequest;
 import com.ecommerce.product.dto.request.UpdateReviewRequest;
 import com.ecommerce.product.dto.response.ApiResponse;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ReviewResponse;
 import com.ecommerce.product.dto.response.ReviewSummaryResponse;
 import com.ecommerce.product.entity.ProductReview;
+import com.ecommerce.product.enums.ReviewStatus;
 import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
@@ -26,12 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
 
 /**
- * Triển khai nghiệp vụ đánh giá sản phẩm với các lớp bảo vệ:
+ * Triển khai nghiệp vụ đánh giá sản phẩm và kiểm duyệt:
  * 1. Sản phẩm phải tồn tại.
  * 2. Đơn hàng phải ở trạng thái DELIVERED và thuộc về userId.
  * 3. Đơn hàng phải chứa productId.
  * 4. Mỗi user chỉ được đánh giá 1 lần cho 1 sản phẩm (unique constraint, chống review lặp).
  * 5. Xác thực tính toàn vẹn quan hệ cha-con (reviewId phải thuộc đúng productId).
+ * 6. Lọc đánh giá công khai (chỉ hiển thị và tính rating cho trạng thái APPROVED).
+ * 7. Hỗ trợ Admin duyệt/ẩn đánh giá vi phạm quy chuẩn.
  */
 @Slf4j
 @Service
@@ -60,13 +64,14 @@ public class ReviewServiceImpl implements ReviewService {
         // 3. Xác minh đơn hàng qua Feign Client
         OrderDetailResponse order = fetchAndValidateOrder(request.getOrderId(), userId, productId);
 
-        // 4. Tạo và lưu đánh giá
+        // 4. Tạo và lưu đánh giá (mặc định APPROVED)
         ProductReview review = ProductReview.builder()
                 .productId(productId)
                 .userId(userId)
                 .orderId(order.getId())
                 .rating(request.getRating())
                 .comment(request.getComment())
+                .status(ReviewStatus.APPROVED)
                 .build();
 
         ProductReview saved = reviewRepository.save(review);
@@ -131,15 +136,16 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = true)
     public ReviewSummaryResponse getReviewsByProduct(Long productId, Pageable pageable) {
-        log.info("Fetching reviews for productId={}, page={}", productId, pageable.getPageNumber());
+        log.info("Fetching approved reviews for productId={}, page={}", productId, pageable.getPageNumber());
 
         if (!productRepository.existsById(productId)) {
             throw new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + productId);
         }
 
-        Page<ProductReview> reviewPage = reviewRepository.findByProductId(productId, pageable);
+        // CHỈ LẤY CÁC ĐÁNH GIÁ APPROVED (hiển thị công khai)
+        Page<ProductReview> reviewPage = reviewRepository.findByProductIdAndStatus(productId, ReviewStatus.APPROVED, pageable);
         Double avgRating = reviewRepository.calculateAverageRatingByProductId(productId);
-        long totalReviews = reviewRepository.countByProductId(productId);
+        long totalReviews = reviewRepository.countByProductIdAndStatus(productId, ReviewStatus.APPROVED);
 
         Page<ReviewResponse> responsePage = reviewPage.map(this::mapToReviewResponse);
         PagedResponse<ReviewResponse> pagedResponse = PagedResponse.fromPage(responsePage);
@@ -160,6 +166,40 @@ public class ReviewServiceImpl implements ReviewService {
         return reviewRepository.findByProductIdAndUserId(productId, userId)
                 .map(this::mapToReviewResponse)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse moderateReview(Long reviewId, ModerateReviewRequest request) {
+        log.info("Admin moderating review id={} to status={}, reason={}", reviewId, request.getStatus(), request.getReason());
+
+        ProductReview review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID: " + reviewId));
+
+        review.setStatus(request.getStatus());
+        if (request.getStatus() == ReviewStatus.HIDDEN) {
+            review.setHiddenReason(request.getReason());
+        } else {
+            review.setHiddenReason(null);
+        }
+
+        ProductReview updated = reviewRepository.save(review);
+        log.info("Review id={} moderated successfully: status={}", reviewId, updated.getStatus());
+
+        return mapToReviewResponse(updated);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<ReviewResponse> getAllReviewsForAdmin(ReviewStatus status, Pageable pageable) {
+        log.info("Admin fetching all reviews: status={}, page={}", status, pageable.getPageNumber());
+
+        Page<ProductReview> reviewPage = (status != null)
+                ? reviewRepository.findByStatus(status, pageable)
+                : reviewRepository.findAll(pageable);
+
+        Page<ReviewResponse> responsePage = reviewPage.map(this::mapToReviewResponse);
+        return PagedResponse.fromPage(responsePage);
     }
 
     // --- Private Helpers -----------------------------------------------------
@@ -224,6 +264,8 @@ public class ReviewServiceImpl implements ReviewService {
                 .orderId(review.getOrderId())
                 .rating(review.getRating())
                 .comment(review.getComment())
+                .status(review.getStatus())
+                .hiddenReason(review.getHiddenReason())
                 .createdAt(review.getCreatedAt())
                 .updatedAt(review.getUpdatedAt())
                 .build();

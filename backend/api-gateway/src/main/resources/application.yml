@@ -59,7 +59,7 @@ spring:
         - id: product-service-admin
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**
+            - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**,/api/v1/admin/reviews,/api/v1/admin/reviews/**
             - Method=GET
           filters:
             - StripPrefix=0
@@ -100,7 +100,7 @@ spring:
         - id: product-service-mutation
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/**,/api/v1/admin/flash-sales/**,/api/v1/flash-sales/**
+            - Path=/api/v1/products/**,/api/v1/admin/flash-sales/**,/api/v1/flash-sales/**,/api/v1/admin/reviews/**
             - Method=POST,PUT,DELETE,PATCH
           filters:
             - StripPrefix=0
