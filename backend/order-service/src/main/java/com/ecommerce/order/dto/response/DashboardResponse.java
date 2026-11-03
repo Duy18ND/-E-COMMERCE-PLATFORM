@@ -8,7 +8,8 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 /**
- * Thống kê doanh thu và đơn hàng cho Admin Dashboard.
+ * [Task ECOM-145 / ECOM-326] Thống kê doanh thu và đơn hàng cho Admin Dashboard.
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
  */
 @Getter
 @Setter
@@ -27,4 +28,19 @@ public class DashboardResponse implements Serializable {
 
     /** Số lượng đơn hàng phân bổ theo từng trạng thái (PENDING, PAID, CONFIRMED, PROCESSING, SHIPPING, DELIVERED, CANCELLED, FAILED, REFUNDED). */
     private Map<OrderStatus, Long> ordersByStatus;
+
+    /** Số lượng đơn hàng đang chờ xử lý (PENDING). */
+    private Long pendingOrders;
+
+    /** Số lượng đơn hàng đã giao thành công (DELIVERED). */
+    private Long completedOrders;
+
+    /** Số lượng đơn hàng đã bị hủy (CANCELLED). */
+    private Long cancelledOrders;
+
+    /** Số lượng sản phẩm có lượng tồn kho thấp (sắp hết hàng). */
+    private Long lowStockProductsCount;
+
+    /** Tổng số khách hàng (người dùng) trong hệ thống. */
+    private Long totalUsers;
 }

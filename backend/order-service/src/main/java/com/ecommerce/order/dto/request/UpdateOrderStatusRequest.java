@@ -2,6 +2,7 @@ package com.ecommerce.order.dto.request;
 
 import com.ecommerce.order.enums.OrderStatus;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.io.Serializable;
@@ -25,6 +26,7 @@ public class UpdateOrderStatusRequest implements Serializable {
     /**
      * [Task ECOM-187] Ghi chú lý do chuyển trạng thái hoặc mã vận đơn.
      */
+    @Size(max = 1000, message = "Ghi chú không được vượt quá 1000 ký tự")
     private String note;
 
     public UpdateOrderStatusRequest(OrderStatus status) {

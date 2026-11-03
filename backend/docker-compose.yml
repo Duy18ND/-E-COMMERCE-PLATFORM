@@ -36,6 +36,7 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
       ZOOKEEPER_INIT_LIMIT: 5
       ZOOKEEPER_SYNC_LIMIT: 2
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=*"
     ports:
       - "2181:2181"
     volumes:
@@ -43,9 +44,9 @@ services:
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "cub zk-ready localhost:2181 5 || bash -c 'echo > /dev/tcp/localhost/2181'"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
   # ─────────────────────────────────────────────
@@ -111,9 +112,9 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-product_db}
       MYSQL_USER: ${MYSQL_USER:-ecommerce_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce123}
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${MYSQL_PORT:-127.0.0.1:3307}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro

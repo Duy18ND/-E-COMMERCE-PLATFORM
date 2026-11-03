@@ -60,6 +60,9 @@ class AdminOrderServiceTest {
     @Mock
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
 
+    @Mock
+    private com.ecommerce.order.service.VoucherService voucherService;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 
@@ -275,6 +278,11 @@ class AdminOrderServiceTest {
         assertThat(stats.getOrdersByStatus().get(OrderStatus.FAILED)).isEqualTo(0L);
         assertThat(stats.getOrdersByStatus().get(OrderStatus.REFUNDED)).isEqualTo(0L);
 
+        // [Task ECOM-145 / ECOM-326] Các chỉ số rút gọn cho Dashboard
+        assertThat(stats.getPendingOrders()).isEqualTo(5L);
+        assertThat(stats.getCompletedOrders()).isEqualTo(10L);
+        assertThat(stats.getCancelledOrders()).isEqualTo(2L);
+
         verify(orderRepository, times(1)).countTotalOrders();
         verify(orderRepository, times(1)).sumTotalAmountByStatusIn(any());
         verify(orderRepository, times(1)).countOrdersByStatusGroup();
@@ -387,5 +395,62 @@ class AdminOrderServiceTest {
                 orderService.getOrderStatusHistory(1L, 999L, "ROLE_CUSTOMER"));
 
         verify(orderStatusHistoryRepository, never()).findByOrderIdOrderByCreatedAtAsc(any());
+    }
+
+    @Test
+    @DisplayName("[ECOM-187] Defense-in-Depth: getOrderStatusHistory với authenticatedUserId = null và roles = ROLE_USER -> Ném AccessDeniedException")
+    void getOrderStatusHistory_WhenUserIdIsNullAndRoleUser_ShouldThrowAccessDenied() {
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(sampleOrder));
+
+        com.ecommerce.order.exception.AccessDeniedException ex = assertThrows(
+                com.ecommerce.order.exception.AccessDeniedException.class,
+                () -> orderService.getOrderStatusHistory(1L, null, "ROLE_USER")
+        );
+
+        assertThat(ex.getMessage()).isEqualTo("Bạn không có quyền xem lịch sử đơn hàng của người dùng khác");
+        verify(orderStatusHistoryRepository, never()).findByOrderIdOrderByCreatedAtAsc(any());
+    }
+
+    @Test
+    @DisplayName("[ECOM-187] Bidirectional Sync: Sau khi updateOrderStatus, OrderResponse trả về chứa ngay bản ghi OrderStatusHistory mới nhất")
+    void updateOrderStatus_ShouldReturnOrderResponseContainingLatestStatusHistory() {
+        OrderStatusHistory initialHistory = OrderStatusHistory.builder()
+                .id(10L)
+                .order(sampleOrder)
+                .status(OrderStatus.PENDING)
+                .action("ORDER_CREATED")
+                .updatedBy("CUSTOMER:100")
+                .actorRole("ROLE_CUSTOMER")
+                .note("Đơn hàng đã được đặt thành công")
+                .createdAt(LocalDateTime.now().minusMinutes(30))
+                .build();
+        sampleOrder.addStatusHistory(initialHistory);
+
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(sampleOrder));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderStatusHistoryRepository.save(any(OrderStatusHistory.class))).thenAnswer(invocation -> {
+            OrderStatusHistory h = invocation.getArgument(0);
+            h.setId(20L);
+            h.setCreatedAt(LocalDateTime.now());
+            return h;
+        });
+
+        OrderResponse response = orderService.updateOrderStatus(
+                1L, OrderStatus.CONFIRMED, "ADMIN:1", "ROLE_ADMIN", "Đã xác nhận đơn hàng"
+        );
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(response.getStatusHistories()).hasSize(2);
+
+        OrderStatusHistoryResponse latestHistory = response.getStatusHistories().get(1);
+        assertThat(latestHistory.getId()).isEqualTo(20L);
+        assertThat(latestHistory.getOrderId()).isEqualTo(1L);
+        assertThat(latestHistory.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(latestHistory.getPreviousStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(latestHistory.getAction()).isEqualTo("ADMIN_STATUS_UPDATE");
+        assertThat(latestHistory.getUpdatedBy()).isEqualTo("ADMIN:1");
+        assertThat(latestHistory.getActorRole()).isEqualTo("ROLE_ADMIN");
+        assertThat(latestHistory.getNote()).isEqualTo("Đã xác nhận đơn hàng");
     }
 }
