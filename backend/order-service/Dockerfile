@@ -11,10 +11,10 @@ COPY settings.gradle .
 COPY build.gradle .
 COPY order-service/build.gradle order-service/
 
-RUN chmod +x gradlew && ./gradlew :order-service:dependencies --no-daemon 2>/dev/null || true
+RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew :order-service:dependencies --no-daemon 2>/dev/null || true
 
 COPY order-service/src order-service/src
-RUN ./gradlew :order-service:bootJar --no-daemon -x test
+RUN --mount=type=cache,target=/root/.gradle ./gradlew :order-service:bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app

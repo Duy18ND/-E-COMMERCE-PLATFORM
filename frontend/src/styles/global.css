@@ -1935,20 +1935,31 @@ th {
   background: transparent;
   border: none;
   color: #94a3b8;
-  padding: 0.25rem;
+  padding: 0.35rem;
   border-radius: 6px;
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  line-height: 1;
 }
 
 .auth-eye-btn:hover {
-  color: #475569;
+  color: #1e293b;
+  background-color: #f1f5f9;
+}
+
+.auth-eye-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }
 
 /* Password Strength Meter */
 .auth-strength-meter {
-  margin-top: -0.15rem;
+  margin-top: 0.15rem;
   margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  background-color: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
 }
 
 .auth-strength-header {
@@ -1981,7 +1992,7 @@ th {
 .auth-strength-hint {
   display: block;
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: #64748b;
   line-height: 1.35;
 }
 

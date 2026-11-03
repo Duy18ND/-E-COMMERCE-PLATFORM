@@ -1,6 +1,7 @@
 package com.ecommerce.product.controller;
 
 import com.ecommerce.product.dto.request.CreateReviewRequest;
+import com.ecommerce.product.dto.request.UpdateReviewRequest;
 import com.ecommerce.product.dto.response.ApiResponse;
 import com.ecommerce.product.dto.response.ReviewResponse;
 import com.ecommerce.product.dto.response.ReviewSummaryResponse;
@@ -19,8 +20,8 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Controller quản lý đánh giá sản phẩm.
- * Tất cả API yêu cầu user đã xác thực (X-User-Id từ API Gateway).
- * API xem đánh giá là public, API tạo/sửa/xoá yêu cầu userId.
+ * API xem danh sách đánh giá là public.
+ * API xem đánh giá cá nhân (/me), tạo, sửa, xoá yêu cầu user đã xác thực (X-User-Id từ API Gateway).
  */
 @RestController
 @RequestMapping("/api/v1/products/{productId}/reviews")
@@ -45,6 +46,24 @@ public class ReviewController {
 
         ReviewSummaryResponse response = reviewService.getReviewsByProduct(productId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đánh giá thành công", response));
+    }
+
+    /**
+     * GET /api/v1/products/{productId}/reviews/me
+     * Lấy đánh giá của chính người dùng hiện tại (nếu có). Yêu cầu đăng nhập.
+     */
+    @GetMapping("/me")
+    @Operation(
+        summary = "Lấy đánh giá của tôi [USER]",
+        description = "Trả về bài đánh giá của user hiện tại cho sản phẩm này (null nếu chưa đánh giá)."
+    )
+    public ResponseEntity<ApiResponse<ReviewResponse>> getMyReview(
+            @PathVariable Long productId,
+            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+
+        requireAuthenticated(userId);
+        ReviewResponse response = reviewService.getMyReviewForProduct(productId, userId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin đánh giá thành công", response));
     }
 
     /**
@@ -80,10 +99,10 @@ public class ReviewController {
             @PathVariable Long productId,
             @PathVariable Long reviewId,
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
-            @Valid @RequestBody CreateReviewRequest request) {
+            @Valid @RequestBody UpdateReviewRequest request) {
 
         requireAuthenticated(userId);
-        ReviewResponse response = reviewService.updateReview(reviewId, userId, request);
+        ReviewResponse response = reviewService.updateReview(productId, reviewId, userId, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật đánh giá thành công", response));
     }
 
@@ -103,7 +122,7 @@ public class ReviewController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles) {
 
         requireAuthenticated(userId);
-        reviewService.deleteReview(reviewId, userId, userRoles);
+        reviewService.deleteReview(productId, reviewId, userId, userRoles);
         return ResponseEntity.ok(ApiResponse.success("Xoá đánh giá thành công", null));
     }
 

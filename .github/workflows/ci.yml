@@ -1,0 +1,211 @@
+name: Continuous Integration (CI)
+
+on:
+  pull_request:
+    branches: [ master ]
+  push:
+    branches: [ devops-phuong ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  #  Job 1: Frontend CI (Node 20, Lint, Test, Vite Build)
+  # ─────────────────────────────────────────────────────────────
+  frontend-ci:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Linter
+        run: npm run lint
+
+      - name: Run Automated Tests
+        run: npm run test
+
+      - name: Build Production Assets (Vite)
+        run: npm run build
+        env:
+          VITE_API_URL: /api/v1
+          VITE_USE_MOCK_AUTH: 'false'
+
+      - name: Upload Frontend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────
+  #  Job 2: Backend CI (Java 21, Gradle Multi-Project, Test, bootJar)
+  # ─────────────────────────────────────────────────────────────
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 21 (Eclipse Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle Cache & Environment
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: backend
+          cache-read-only: false
+
+      - name: Grant Execute Permission for Gradle Wrapper
+        run: chmod +x ./gradlew
+
+      - name: Run Backend Unit & Integration Tests
+        run: ./gradlew test --no-daemon --max-workers=2
+
+      - name: Build Spring Boot Executable JARs (bootJar)
+        run: ./gradlew bootJar --no-daemon -x test --max-workers=2
+
+      - name: Upload Backend JAR Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jars
+          path: |
+            backend/*/build/libs/*.jar
+            !backend/*/build/libs/*-plain.jar
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────
+  #  Job 3: Docker Configuration & Context Validation
+  # ─────────────────────────────────────────────────────────────
+  docker-validation:
+    name: Docker & Compose Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Verify Dockerfiles Existence
+        run: |
+          echo "Verifying Dockerfile locations..."
+          test -f frontend/Dockerfile
+          test -f backend/auth-service/Dockerfile
+          test -f backend/product-service/Dockerfile
+          test -f backend/order-service/Dockerfile
+          test -f backend/payment-service/Dockerfile
+          test -f backend/discovery-server/Dockerfile
+          test -f backend/api-gateway/Dockerfile
+          echo "All 7 Dockerfiles are present."
+
+      - name: Verify Bind Mount Files Exist
+        run: |
+          test -f backend/docker/mysql/init.sql
+          test -f backend/docker/nginx/nginx.prod.conf
+          echo "Required bind mounts verified."
+
+      - name: Validate Development Docker Compose
+        run: |
+          docker compose -f backend/docker-compose.yml config --quiet
+          echo "backend/docker-compose.yml syntax is valid."
+
+      - name: Validate Production Docker Compose
+        run: |
+          docker compose -f backend/docker-compose.prod.yml config --quiet
+          echo "backend/docker-compose.prod.yml syntax is valid."
+
+      - name: Verify Production Port Hardening (No Private Ports on 0.0.0.0)
+        run: |
+          node -e "
+          const execSync = require('child_process').execSync;
+          const config = JSON.parse(execSync('docker compose -f backend/docker-compose.prod.yml config --format json').toString());
+          for (const [name, svc] of Object.entries(config.services || {})) {
+            for (const p of svc.ports || []) {
+              const pub = p.published;
+              const hostIp = p.host_ip;
+              if (name === 'nginx') {
+                if (!['80', '443'].includes(String(pub))) {
+                  throw new Error('Unexpected public port on nginx: ' + pub);
+                }
+              } else {
+                if (hostIp !== '127.0.0.1') {
+                  throw new Error('Security violation: ' + name + ' publishes port ' + pub + ' on ' + (hostIp || '0.0.0.0'));
+                }
+              }
+            }
+          }
+          console.log('Port hardening check PASSED: All internal ports are safely isolated to 127.0.0.1 or internal bridge.');
+          "
+
+  # ─────────────────────────────────────────────────────────────
+  #  Job 4: Security & Compliance Checks
+  # ─────────────────────────────────────────────────────────────
+  security-checks:
+    name: Security & Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Check for Accidentally Committed Sensitive .env Files
+        run: |
+          # Check tracked files in Git for sensitive .env (backend or root .env)
+          TRACKED_ENVS=$(git ls-files "*.env" "*/*/.env" | grep -v "\.example" | grep -v "frontend/\.env" || true)
+          if [ -n "$TRACKED_ENVS" ]; then
+            echo "SECURITY ERROR: Sensitive .env file is tracked in git repository:"
+            echo "$TRACKED_ENVS"
+            exit 1
+          fi
+
+          # If frontend/.env exists, verify it contains ONLY non-sensitive client variables
+          if [ -f "frontend/.env" ]; then
+            if grep -Ei 'password|secret|token|private_key|mysql_pwd' frontend/.env; then
+              echo "SECURITY ERROR: frontend/.env contains sensitive credentials!"
+              exit 1
+            fi
+            echo "PASS: frontend/.env verified: contains only non-sensitive build variables."
+          fi
+          echo "PASS: No unapproved sensitive .env files committed."
+
+      - name: Check for Privilege Escalation in Register DTO
+        run: |
+          # RegisterRequest must NOT contain roles field (prevents self-assigned ROLE_ADMIN)
+          if grep -E 'List<String>\s+roles|Set<String>\s+roles|String\[\]\s+roles' backend/auth-service/src/main/java/com/ecommerce/auth/dto/request/RegisterRequest.java; then
+            echo "SECURITY VIOLATION: RegisterRequest exposes roles field! Privilege escalation risk."
+            exit 1
+          fi
+          echo "PASS: RegisterRequest is secure against privilege escalation."
+
+      - name: Verify Production Hibernate ddl-auto is 'validate'
+        run: |
+          # Prevent Hibernate automatic schema modification on production databases
+          for f in backend/*/src/main/resources/application-prod.yml; do
+            if grep -E 'ddl-auto:\s*update|ddl-auto:\s*create' "$f"; then
+              echo "ERROR: Unsafe ddl-auto in $f"
+              exit 1
+            fi
+          done
+          echo "PASS: All microservices use safe ddl-auto: validate in production."

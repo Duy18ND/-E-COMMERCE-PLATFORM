@@ -15,6 +15,7 @@ const Input = ({
   rightElement = null,
   containerStyle = {},
   inputStyle = {},
+  style = {},
   onFocus,
   onBlur,
   ...props
@@ -39,13 +40,22 @@ const Input = ({
       : '#cbd5e1';
 
   const boxShadow = error
-    ? '0 0 0 3px rgba(220, 38, 38, 0.1)'
+    ? '0 0 0 3px rgba(220, 38, 38, 0.12)'
     : focused
-      ? '0 0 0 3px rgba(37, 99, 235, 0.12)'
+      ? '0 0 0 3px rgba(37, 99, 235, 0.15)'
       : 'none';
 
   return (
-    <div className="form-field-group" style={{ marginBottom: '1rem', width: '100%', minWidth: 0, ...containerStyle }}>
+    <div
+      className="form-field-group"
+      style={{
+        marginBottom: '1rem',
+        width: '100%',
+        minWidth: 0,
+        ...style,
+        ...containerStyle
+      }}
+    >
       {label && (
         <label
           htmlFor={inputId}
@@ -70,23 +80,31 @@ const Input = ({
           alignItems: 'center',
           width: '100%',
           minWidth: 0,
+          height: '2.875rem',
           borderRadius: '0.625rem',
-          border: `1px solid ${borderColor}`,
+          border: `1.5px solid ${borderColor}`,
           backgroundColor: '#ffffff',
           boxShadow,
-          transition: 'border-color 0.18s ease, box-shadow 0.18s ease'
+          transition: 'border-color 0.18s ease, box-shadow 0.18s ease',
+          boxSizing: 'border-box'
         }}
       >
         {leftIcon && (
           <span
             style={{
+              position: 'absolute',
+              left: '0.875rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              paddingLeft: '0.85rem',
+              width: '1.25rem',
+              height: '1.25rem',
               color: error ? '#dc2626' : focused ? '#2563eb' : '#94a3b8',
               flexShrink: 0,
               pointerEvents: 'none',
+              zIndex: 2,
               transition: 'color 0.18s ease'
             }}
           >
@@ -106,20 +124,21 @@ const Input = ({
           required={required}
           style={{
             width: '100%',
+            height: '100%',
             minWidth: 0,
-            padding: leftIcon
-              ? rightElement
-                ? '0.68rem 0.5rem 0.68rem 0.6rem'
-                : '0.68rem 0.85rem 0.68rem 0.6rem'
-              : rightElement
-                ? '0.68rem 0.5rem 0.68rem 0.85rem'
-                : '0.62rem 0.85rem',
+            paddingLeft: leftIcon ? '2.625rem' : '0.875rem',
+            paddingRight: rightElement ? '2.75rem' : '0.875rem',
+            paddingTop: 0,
+            paddingBottom: 0,
+            margin: 0,
             fontSize: '0.925rem',
             borderRadius: '0.625rem',
             border: 'none',
             outline: 'none',
             backgroundColor: 'transparent',
             color: '#0f172a',
+            boxSizing: 'border-box',
+            lineHeight: '2.875rem',
             ...inputStyle
           }}
           className={className}
@@ -129,10 +148,14 @@ const Input = ({
         {rightElement && (
           <div
             style={{
+              position: 'absolute',
+              right: '0.625rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              paddingRight: '0.65rem',
+              zIndex: 2,
               flexShrink: 0
             }}
           >
@@ -148,8 +171,8 @@ const Input = ({
             display: 'flex',
             alignItems: 'center',
             gap: '0.3rem',
-            marginTop: '0.32rem',
-            fontSize: '0.76rem',
+            marginTop: '0.35rem',
+            fontSize: '0.78rem',
             fontWeight: 500,
             color: '#dc2626',
             lineHeight: 1.35

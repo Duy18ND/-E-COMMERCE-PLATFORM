@@ -22,4 +22,5 @@ public class ProductResponse implements Serializable {
     private String category;
     private String imageUrl;
     private String status;
+    private ActiveFlashSaleDto activeFlashSale;
 }

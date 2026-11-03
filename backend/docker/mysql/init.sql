@@ -38,6 +38,17 @@ FLUSH PRIVILEGES;
 -- ─────────────────────────────────────────────────────────────────────────────
 USE product_db;
 
+CREATE TABLE IF NOT EXISTS categories (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE COMMENT 'Tên danh mục sản phẩm',
+    description VARCHAR(255)                 COMMENT 'Mô tả danh mục',
+    image_url   VARCHAR(500)                 COMMENT 'Đường dẫn ảnh danh mục',
+    created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at  DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_categories_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Danh mục phân loại sản phẩm';
+
 CREATE TABLE IF NOT EXISTS products (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
     name           VARCHAR(200)   NOT NULL COMMENT 'Tên sản phẩm',
@@ -79,4 +90,69 @@ CREATE TABLE IF NOT EXISTS product_reviews (
     INDEX idx_reviews_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Đánh giá sản phẩm từ khách hàng đã mua hàng';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+--  Product Service: flash_sale_campaigns & flash_sale_items tables
+--  Quản lý chương trình Flash Sale, giá ưu đãi, hạn mức mua và tồn kho phân bổ.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS flash_sale_campaigns (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(200) NOT NULL COMMENT 'Tên chiến dịch Flash Sale',
+    start_time DATETIME(6)  NOT NULL COMMENT 'Thời điểm bắt đầu',
+    end_time   DATETIME(6)  NOT NULL COMMENT 'Thời điểm kết thúc',
+    status     VARCHAR(20)  NOT NULL DEFAULT 'UPCOMING' COMMENT 'UPCOMING, ACTIVE, ENDED, CANCELLED',
+    created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_fs_status_time (status, start_time, end_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Chương trình chiến dịch Flash Sale';
+
+CREATE TABLE IF NOT EXISTS flash_sale_items (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    campaign_id      BIGINT         NOT NULL COMMENT 'ID chiến dịch Flash Sale',
+    product_id       BIGINT         NOT NULL COMMENT 'ID sản phẩm tham gia Flash Sale',
+    flash_sale_price DECIMAL(12, 2) NOT NULL COMMENT 'Giá ưu đãi trong Flash Sale',
+    quantity         INT            NOT NULL COMMENT 'Số lượng phân bổ cho Flash Sale',
+    sold_quantity    INT            NOT NULL DEFAULT 0 COMMENT 'Số lượng đã bán',
+    user_limit       INT            NOT NULL DEFAULT 2 COMMENT 'Số lượng tối đa 1 khách được mua',
+    CONSTRAINT fk_fs_campaign FOREIGN KEY (campaign_id) REFERENCES flash_sale_campaigns(id) ON DELETE CASCADE,
+    CONSTRAINT fk_fs_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    CONSTRAINT uq_fs_campaign_product UNIQUE (campaign_id, product_id),
+    CONSTRAINT chk_fs_price CHECK (flash_sale_price > 0),
+    CONSTRAINT chk_fs_quantity CHECK (quantity > 0 AND sold_quantity >= 0 AND sold_quantity <= quantity),
+    INDEX idx_fs_item_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Chi tiết sản phẩm và hạn mức trong chiến dịch Flash Sale';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+--  Order Service: vouchers table
+--  Quản lý mã giảm giá (Voucher / Coupon), hạn sử dụng và giới hạn lượt dùng
+-- ─────────────────────────────────────────────────────────────────────────────
+USE order_db;
+
+CREATE TABLE IF NOT EXISTS vouchers (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(50)    NOT NULL COMMENT 'Mã voucher (duy nhất, không phân biệt hoa thường)',
+    name            VARCHAR(150)   NOT NULL COMMENT 'Tên chương trình khuyến mãi',
+    description     VARCHAR(500)            COMMENT 'Mô tả chi tiết voucher',
+    discount_type   VARCHAR(20)    NOT NULL COMMENT 'Loại giảm giá: FIXED (tiền cố định), PERCENT (%)',
+    discount_value  DECIMAL(12, 2) NOT NULL COMMENT 'Giá trị giảm (VNĐ hoặc %)',
+    max_discount    DECIMAL(12, 2)          COMMENT 'Mức giảm tối đa áp dụng cho PERCENT',
+    min_order_value DECIMAL(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Giá trị đơn hàng tối thiểu để áp dụng mã',
+    quantity        INT            NOT NULL COMMENT 'Tổng số lượt phát hành',
+    used_quantity   INT            NOT NULL DEFAULT 0 COMMENT 'Số lượt đã sử dụng',
+    start_date      DATE           NOT NULL COMMENT 'Ngày bắt đầu áp dụng',
+    end_date        DATE           NOT NULL COMMENT 'Ngày kết thúc áp dụng',
+    status          VARCHAR(20)    NOT NULL DEFAULT 'ACTIVE' COMMENT 'Trạng thái: ACTIVE, INACTIVE',
+    created_at      DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT uq_voucher_code UNIQUE (code),
+    CONSTRAINT chk_vouchers_discount_value CHECK (discount_value > 0),
+    CONSTRAINT chk_vouchers_quantity CHECK (quantity > 0 AND used_quantity >= 0 AND used_quantity <= quantity),
+    CONSTRAINT chk_vouchers_dates CHECK (end_date >= start_date),
+    INDEX idx_vouchers_code (code),
+    INDEX idx_vouchers_status_dates (status, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng mã giảm giá voucher cho đơn hàng';
+
 

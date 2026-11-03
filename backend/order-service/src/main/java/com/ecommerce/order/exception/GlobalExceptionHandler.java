@@ -26,6 +26,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateResourceException(
+            DuplicateResourceException ex, HttpServletRequest request) {
+
+        log.warn("Duplicate resource on {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(ProductNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleProductNotFoundException(
             ProductNotFoundException ex, HttpServletRequest request) {
@@ -50,6 +59,15 @@ public class GlobalExceptionHandler {
 
         log.warn("Access denied on {}: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(
+            IllegalArgumentException ex, HttpServletRequest request) {
+
+        log.warn("Illegal argument error on {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 

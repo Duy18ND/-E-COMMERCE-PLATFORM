@@ -39,6 +39,7 @@ public class ProductResponse implements Serializable {
     private Long version;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private ActiveFlashSaleDto activeFlashSale;
 
     public static ProductResponse fromEntity(Product product) {
         if (product == null) {

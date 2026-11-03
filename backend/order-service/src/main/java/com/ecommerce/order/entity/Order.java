@@ -53,6 +53,16 @@ public class Order implements Serializable {
     @Column(name = "shipping_address", nullable = false, columnDefinition = "TEXT")
     private String shippingAddress;
 
+    @Column(name = "subtotal_amount", precision = 12, scale = 2)
+    private BigDecimal subtotalAmount;
+
+    @Column(name = "voucher_code", length = 50)
+    private String voucherCode;
+
+    @Column(name = "discount_amount", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
@@ -103,10 +113,18 @@ public class Order implements Serializable {
     }
 
     public void addStatusHistory(OrderStatusHistory history) {
+        if (history == null) {
+            return;
+        }
         if (statusHistories == null) {
             statusHistories = new ArrayList<>();
         }
-        statusHistories.add(history);
+        boolean alreadyExists = statusHistories.stream().anyMatch(existing ->
+                existing == history || (existing != null && existing.getId() != null && existing.getId().equals(history.getId()))
+        );
+        if (!alreadyExists) {
+            statusHistories.add(history);
+        }
         history.setOrder(this);
     }
 }

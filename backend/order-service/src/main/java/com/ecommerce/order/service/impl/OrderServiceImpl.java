@@ -1,6 +1,8 @@
 package com.ecommerce.order.service.impl;
 
 import com.ecommerce.order.client.ProductClient;
+import com.ecommerce.order.client.dto.ActiveFlashSaleDto;
+import com.ecommerce.order.client.dto.FlashSaleReserveRequest;
 import com.ecommerce.order.client.dto.ProductResponse;
 import com.ecommerce.order.client.dto.StockReservationItem;
 import com.ecommerce.order.dto.request.CheckoutItemRequest;
@@ -46,6 +48,7 @@ public class OrderServiceImpl implements OrderService {
     private final KafkaOrderProducer kafkaOrderProducer;
     private final CartRepository cartRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final com.ecommerce.order.service.VoucherService voucherService;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
             OrderStatus.PENDING, Set.of(OrderStatus.PAID, OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED),
@@ -77,8 +80,11 @@ public class OrderServiceImpl implements OrderService {
 
         log.info("Processing checkout for userId: {}, items count: {}", request.getUserId(), request.getItems().size());
 
-        // 1. Chống Price Tampering: Lấy giá chính xác mới nhất và tên từ Product Service (DB)
+        // 1. Chống Price Tampering & Kiểm tra Flash Sale (giá ưu đãi + giới hạn mua userLimit)
         BigDecimal totalAmount = BigDecimal.ZERO;
+        List<FlashSaleReserveRequest> flashSaleReservations = new ArrayList<>();
+        Map<Long, Integer> flashSaleQtyByProduct = new HashMap<>();
+
         for (CheckoutItemRequest itemReq : request.getItems()) {
             ApiResponse<ProductResponse> productApiResponse = productClient.getProductById(itemReq.getProductId());
             if (productApiResponse == null || productApiResponse.getData() == null) {
@@ -87,6 +93,27 @@ public class OrderServiceImpl implements OrderService {
             ProductResponse product = productApiResponse.getData();
 
             BigDecimal actualPrice = product.getPrice();
+            if (product.getActiveFlashSale() != null) {
+                ActiveFlashSaleDto activeFlashSale = product.getActiveFlashSale();
+                int cumulativeQty = flashSaleQtyByProduct.merge(
+                        itemReq.getProductId(), itemReq.getQuantity(), Integer::sum);
+
+                if (activeFlashSale.getUserLimit() != null && cumulativeQty > activeFlashSale.getUserLimit()) {
+                    throw new IllegalArgumentException(
+                            "Sản phẩm '" + product.getName() + "' chỉ cho phép mua tối đa "
+                                    + activeFlashSale.getUserLimit() + " sản phẩm với giá Flash Sale!");
+                }
+
+                if (activeFlashSale.getFlashSalePrice() != null) {
+                    actualPrice = activeFlashSale.getFlashSalePrice();
+                }
+
+                flashSaleReservations.add(FlashSaleReserveRequest.builder()
+                        .productId(itemReq.getProductId())
+                        .quantity(itemReq.getQuantity())
+                        .build());
+            }
+
             if (actualPrice == null) {
                 throw new IllegalStateException("Sản phẩm ID: " + itemReq.getProductId() + " chưa có giá hợp lệ");
             }
@@ -101,7 +128,28 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(itemTotal);
         }
 
-        // 2. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
+        // 1b. Áp mã giảm giá Voucher (nếu có) trước khi bảo lưu tồn kho
+        BigDecimal subtotalAmount = totalAmount;
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        String appliedVoucherCode = null;
+
+        if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
+            appliedVoucherCode = request.getVoucherCode().trim().toUpperCase();
+            if (voucherService != null) {
+                discountAmount = voucherService.redeemVoucherForOrder(appliedVoucherCode, subtotalAmount);
+            }
+        }
+
+        BigDecimal finalTotalAmount = subtotalAmount.subtract(discountAmount).max(BigDecimal.ZERO);
+
+        // 2a. Trừ tồn kho Flash Sale nguyên tử trên Redis Lua (và cập nhật soldQuantity) nếu sản phẩm đang chạy Flash Sale
+        for (FlashSaleReserveRequest fsReservation : flashSaleReservations) {
+            log.info("Calling ProductClient reserveFlashSaleStock for productId={}, quantity={}",
+                    fsReservation.getProductId(), fsReservation.getQuantity());
+            productClient.reserveFlashSaleStock(fsReservation);
+        }
+
+        // 2b. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
         List<StockReservationItem> reservationItems = request.getItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -118,7 +166,10 @@ public class OrderServiceImpl implements OrderService {
                 .receiverName(request.getReceiverName())
                 .receiverPhone(request.getReceiverPhone())
                 .shippingAddress(request.getShippingAddress())
-                .totalAmount(totalAmount)
+                .subtotalAmount(subtotalAmount)
+                .voucherCode(appliedVoucherCode)
+                .discountAmount(discountAmount)
+                .totalAmount(finalTotalAmount)
                 .status(OrderStatus.PENDING)
                 .paymentMethod(request.getPaymentMethod())
                 .build();
@@ -254,6 +305,11 @@ public class OrderServiceImpl implements OrderService {
                 order.getUserId() != null ? "CUSTOMER:" + order.getUserId() : "CUSTOMER",
                 "ROLE_CUSTOMER", "Khách hàng hủy đơn hàng");
 
+        // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
+        if (order.getVoucherCode() != null && voucherService != null) {
+            voucherService.restoreVoucherUsage(order.getVoucherCode());
+        }
+
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -383,6 +439,11 @@ public class OrderServiceImpl implements OrderService {
         recordStatusHistory(savedOrder, OrderStatus.FAILED, previousStatus, "PAYMENT_FAILED",
                 "PAYMENT_SERVICE", "SYSTEM", "Thanh toán thất bại: " + event.getReason());
 
+        // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
+        if (order.getVoucherCode() != null && voucherService != null) {
+            voucherService.restoreVoucherUsage(order.getVoucherCode());
+        }
+
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -453,7 +514,12 @@ public class OrderServiceImpl implements OrderService {
 
         // Nếu chuyển sang CANCELLED, bắt buộc phải gọi FeignClient ProductClient.restoreStock để hoàn lại kho
         if (newStatus == OrderStatus.CANCELLED) {
-            List<StockReservationItem> restoreItems = order.getOrderItems().stream()
+            // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
+        if (order.getVoucherCode() != null && voucherService != null) {
+            voucherService.restoreVoucherUsage(order.getVoucherCode());
+        }
+
+        List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                     .map(item -> StockReservationItem.builder()
                             .productId(item.getProductId())
                             .quantity(item.getQuantity())
@@ -495,7 +561,9 @@ public class OrderServiceImpl implements OrderService {
 
         boolean isAdmin = hasAdminRole(roles);
 
-        if (!isAdmin && authenticatedUserId != null && !order.getUserId().equals(authenticatedUserId)) {
+        if (!isAdmin && (authenticatedUserId == null || !order.getUserId().equals(authenticatedUserId))) {
+            log.warn("Access denied: User {} attempted to view order history of orderId {} owned by {}",
+                    authenticatedUserId, orderId, order.getUserId());
             throw new AccessDeniedException("Bạn không có quyền xem lịch sử đơn hàng của người dùng khác");
         }
 
@@ -531,7 +599,12 @@ public class OrderServiceImpl implements OrderService {
                 .actorRole(actorRole != null ? actorRole : "SYSTEM")
                 .note(note)
                 .build();
-        return orderStatusHistoryRepository.save(history);
+        OrderStatusHistory savedHistory = orderStatusHistoryRepository.save(history);
+        OrderStatusHistory syncedHistory = savedHistory != null ? savedHistory : history;
+        if (order != null) {
+            order.addStatusHistory(syncedHistory);
+        }
+        return syncedHistory;
     }
 
     private OrderStatusHistoryResponse mapToStatusHistoryResponse(OrderStatusHistory history) {
@@ -589,7 +662,7 @@ public class OrderServiceImpl implements OrderService {
                 : List.of();
 
         List<OrderStatusHistoryResponse> historyResponses = (order.getStatusHistories() != null && !order.getStatusHistories().isEmpty())
-                ? order.getStatusHistories().stream().map(this::mapToStatusHistoryResponse).toList()
+                ? order.getStatusHistories().stream().filter(Objects::nonNull).map(this::mapToStatusHistoryResponse).toList()
                 : List.of();
 
         return OrderResponse.builder()
@@ -598,6 +671,9 @@ public class OrderServiceImpl implements OrderService {
                 .receiverName(order.getReceiverName())
                 .receiverPhone(order.getReceiverPhone())
                 .shippingAddress(order.getShippingAddress())
+                .subtotalAmount(order.getSubtotalAmount() != null ? order.getSubtotalAmount() : order.getTotalAmount())
+                .voucherCode(order.getVoucherCode())
+                .discountAmount(order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO)
                 .totalAmount(order.getTotalAmount())
                 .status(order.getStatus())
                 .paymentMethod(order.getPaymentMethod())
