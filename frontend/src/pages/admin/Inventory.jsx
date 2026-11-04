@@ -1,23 +1,25 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import inventoryService from '../../services/inventoryService';
+import inventoryService, { getInventoryStatus } from '../../services/inventoryService';
 import useToast from '../../hooks/useToast';
 import Button from '../../components/common/Button';
 import Pagination from '../../components/admin/Pagination';
+import StockAdjustmentModal from '../../components/admin/StockAdjustmentModal';
 
 const INITIAL_MOCK_INVENTORY = [
-  { id: '1', name: 'Laptop Dell XPS 13', sku: 'DELL-XPS-13', stock: 10, minThreshold: 5 },
-  { id: '2', name: 'Điện thoại iPhone 15 Pro', sku: 'APPL-IP15P', stock: 3, minThreshold: 5 },
-  { id: '3', name: 'Bàn phím cơ không dây', sku: 'KEY-WL-01', stock: 25, minThreshold: 10 },
-  { id: '4', name: 'Tai nghe Bluetooth chống ồn', sku: 'AUD-BT-NC', stock: 0, minThreshold: 5 },
-  { id: '5', name: 'MacBook Air M2 13 inch', sku: 'APPL-MBA-M2', stock: 2, minThreshold: 5 },
-  { id: '6', name: 'Chuột không dây công thái học', sku: 'LOGI-MX-3S', stock: 18, minThreshold: 8 },
-  { id: '7', name: 'Robot hút bụi Ecovacs X2', sku: 'ECO-DEE-X2', stock: 0, minThreshold: 4 },
-  { id: '8', name: 'iPad Pro 11 M2 128GB', sku: 'APPL-IPD-11', stock: 12, minThreshold: 6 }
+  { id: '1', name: 'Laptop Dell XPS 13', sku: 'DELL-XPS-13', stock: 10, stockQuantity: 10, minThreshold: 5 },
+  { id: '2', name: 'Điện thoại iPhone 15 Pro', sku: 'APPL-IP15P', stock: 3, stockQuantity: 3, minThreshold: 5 },
+  { id: '3', name: 'Bàn phím cơ không dây', sku: 'KEY-WL-01', stock: 25, stockQuantity: 25, minThreshold: 10 },
+  { id: '4', name: 'Tai nghe Bluetooth chống ồn', sku: 'AUD-BT-NC', stock: 0, stockQuantity: 0, minThreshold: 5 },
+  { id: '5', name: 'MacBook Air M2 13 inch', sku: 'APPL-MBA-M2', stock: 2, stockQuantity: 2, minThreshold: 5 },
+  { id: '6', name: 'Chuột không dây công thái học', sku: 'LOGI-MX-3S', stock: 18, stockQuantity: 18, minThreshold: 8 },
+  { id: '7', name: 'Robot hút bụi Ecovacs X2', sku: 'ECO-DEE-X2', stock: 0, stockQuantity: 0, minThreshold: 4 },
+  { id: '8', name: 'iPad Pro 11 M2 128GB', sku: 'APPL-IPD-11', stock: 12, stockQuantity: 12, minThreshold: 6 }
 ];
 
 const Inventory = () => {
-  const { showToast } = useToast();
+  const { notify } = useToast();
   const [inventoryList, setInventoryList] = useState(INITIAL_MOCK_INVENTORY);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,18 +30,21 @@ const Inventory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Editing state
-  const [editingId, setEditingId] = useState(null);
-  const [newStockVal, setNewStockVal] = useState('');
+  // Modal điều chỉnh kho state
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const loadInventory = useCallback(async () => {
+    setIsLoading(true);
     try {
       const data = await inventoryService.getInventory();
       if (Array.isArray(data) && data.length > 0) {
         setInventoryList(data);
       }
-    } catch {
-      // Fallback sang INITIAL_MOCK_INVENTORY
+    } catch (err) {
+      console.warn('Lỗi tải tồn kho từ máy chủ, sử dụng dữ liệu cục bộ:', err);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -50,11 +55,22 @@ const Inventory = () => {
   // Metrics calculation
   const metrics = useMemo(() => {
     const total = inventoryList.length;
-    const outOfStock = inventoryList.filter((item) => item.stock <= 0).length;
-    const lowStock = inventoryList.filter(
-      (item) => item.stock > 0 && item.stock <= item.minThreshold
-    ).length;
-    const inStock = inventoryList.filter((item) => item.stock > item.minThreshold).length;
+    const outOfStock = inventoryList.filter((item) => {
+      const st = Number(item.stockQuantity ?? item.stock ?? 0);
+      return st <= 0;
+    }).length;
+
+    const lowStock = inventoryList.filter((item) => {
+      const st = Number(item.stockQuantity ?? item.stock ?? 0);
+      const th = Number(item.minThreshold || 5);
+      return st > 0 && st <= th;
+    }).length;
+
+    const inStock = inventoryList.filter((item) => {
+      const st = Number(item.stockQuantity ?? item.stock ?? 0);
+      const th = Number(item.minThreshold || 5);
+      return st > th;
+    }).length;
 
     return { total, outOfStock, lowStock, inStock };
   }, [inventoryList]);
@@ -68,20 +84,25 @@ const Inventory = () => {
           String(item.sku || '').toLowerCase().includes(term) ||
           String(item.name || '').toLowerCase().includes(term);
 
+        const currentStock = Number(item.stockQuantity ?? item.stock ?? 0);
+        const threshold = Number(item.minThreshold || 5);
+
         let matchStatus = true;
         if (stockStatusFilter === 'OUT_OF_STOCK') {
-          matchStatus = item.stock <= 0;
+          matchStatus = currentStock <= 0;
         } else if (stockStatusFilter === 'LOW_STOCK') {
-          matchStatus = item.stock > 0 && item.stock <= item.minThreshold;
+          matchStatus = currentStock > 0 && currentStock <= threshold;
         } else if (stockStatusFilter === 'IN_STOCK') {
-          matchStatus = item.stock > item.minThreshold;
+          matchStatus = currentStock > threshold;
         }
 
         return matchSearch && matchStatus;
       })
       .sort((a, b) => {
-        if (sortBy === 'stock_asc') return a.stock - b.stock;
-        if (sortBy === 'stock_desc') return b.stock - a.stock;
+        const stockA = Number(a.stockQuantity ?? a.stock ?? 0);
+        const stockB = Number(b.stockQuantity ?? b.stock ?? 0);
+        if (sortBy === 'stock_asc') return stockA - stockB;
+        if (sortBy === 'stock_desc') return stockB - stockA;
         if (sortBy === 'name_asc') return String(a.name).localeCompare(String(b.name), 'vi');
         return 0;
       });
@@ -115,77 +136,152 @@ const Inventory = () => {
     setCurrentPage(1);
   };
 
-  const handleStartEdit = (item) => {
-    setEditingId(item.id);
-    setNewStockVal(item.stock);
+  const handleOpenAdjustmentModal = (product) => {
+    setSelectedProduct(product);
+    setIsModalOpen(true);
   };
 
-  const handleSaveStock = async (id) => {
-    const parsedStock = Number(newStockVal);
-    if (Number.isNaN(parsedStock) || parsedStock < 0) {
-      if (showToast) {
-        showToast({
-          type: 'error',
-          title: 'Số lượng không hợp lệ',
-          message: 'Số lượng tồn kho không được nhỏ hơn 0.'
-        });
-      }
-      return;
-    }
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedProduct(null);
+  };
 
-    await inventoryService.updateStock(id, parsedStock);
-    setInventoryList(
-      inventoryList.map((item) =>
-        item.id === id ? { ...item, stock: parsedStock, stockQuantity: parsedStock } : item
+  const handleAdjustmentSuccess = (updatedItem) => {
+    setInventoryList((prevList) =>
+      prevList.map((item) =>
+        String(item.id) === String(updatedItem.id)
+          ? {
+              ...item,
+              ...updatedItem,
+              stock: Number(updatedItem.stockQuantity ?? updatedItem.stock ?? 0),
+              stockQuantity: Number(updatedItem.stockQuantity ?? updatedItem.stock ?? 0)
+            }
+          : item
       )
     );
-    setEditingId(null);
-    if (showToast) {
-      showToast({
-        type: 'success',
-        title: 'Đã cập nhật tồn kho',
-        message: `Số lượng tồn kho mới: ${parsedStock} sản phẩm.`
-      });
-    }
   };
 
   return (
-    <div>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Quản lý tồn kho</h1>
-        <p className="page-subtitle" style={{ margin: '0.25rem 0 0' }}>
-          Theo dõi số lượng hàng hóa và cảnh báo thiếu hụt trong kho
-        </p>
+    <div className="admin-inventory-page" style={{ paddingBottom: '2rem' }}>
+      {/* PAGE HEADER */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '1.5rem',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}
+      >
+        <div>
+          <h1 className="page-title" style={{ margin: 0 }}>Quản lý tồn kho &amp; Cảnh báo</h1>
+          <p className="page-subtitle" style={{ margin: '0.25rem 0 0' }}>
+            Theo dõi số lượng hàng hóa thực tế, điều chỉnh xuất nhập kho và cảnh báo thiếu hụt
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadInventory}
+            disabled={isLoading}
+          >
+            {isLoading ? '⏳ Đang tải...' : '🔄 Làm mới'}
+          </Button>
+        </div>
       </div>
 
       {/* METRIC CARDS */}
       <div className="grid-cols-4" style={{ marginBottom: '1.5rem' }}>
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <span style={{ fontSize: '0.825rem', color: '#64748b' }}>Tổng mặt hàng theo dõi</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', marginTop: '0.25rem' }}>
+        <div
+          className="card"
+          onClick={() => {
+            setStockStatusFilter('');
+            setCurrentPage(1);
+          }}
+          style={{
+            padding: '1.25rem',
+            cursor: 'pointer',
+            transition: 'transform 0.15s ease',
+            border: stockStatusFilter === '' ? '2px solid #3b82f6' : '1px solid #e2e8f0'
+          }}
+        >
+          <span style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: 600 }}>TỔNG MẶT HÀNG</span>
+          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0f172a', marginTop: '0.25rem' }}>
             {metrics.total}
           </div>
+          <small style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Đang quản lý trong kho</small>
         </div>
 
-        <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #16a34a' }}>
-          <span style={{ fontSize: '0.825rem', color: '#64748b' }}>Đủ hàng trong kho</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#16a34a', marginTop: '0.25rem' }}>
+        <div
+          className="card"
+          onClick={() => {
+            setStockStatusFilter('IN_STOCK');
+            setCurrentPage(1);
+          }}
+          style={{
+            padding: '1.25rem',
+            borderLeft: '4px solid #16a34a',
+            cursor: 'pointer',
+            border: stockStatusFilter === 'IN_STOCK' ? '2px solid #16a34a' : '1px solid #e2e8f0'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.825rem', color: '#166534', fontWeight: 600 }}>CÒN ĐỦ HÀNG</span>
+            <span>✅</span>
+          </div>
+          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#16a34a', marginTop: '0.25rem' }}>
             {metrics.inStock}
           </div>
+          <small style={{ color: '#16a34a', fontSize: '0.75rem' }}>&gt; Ngưỡng an toàn</small>
         </div>
 
-        <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #f59e0b' }}>
-          <span style={{ fontSize: '0.825rem', color: '#64748b' }}>Cảnh báo sắp hết hàng</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#d97706', marginTop: '0.25rem' }}>
+        <div
+          className="card"
+          onClick={() => {
+            setStockStatusFilter('LOW_STOCK');
+            setCurrentPage(1);
+          }}
+          style={{
+            padding: '1.25rem',
+            borderLeft: '4px solid #f59e0b',
+            cursor: 'pointer',
+            border: stockStatusFilter === 'LOW_STOCK' ? '2px solid #f59e0b' : '1px solid #e2e8f0'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.825rem', color: '#92400e', fontWeight: 600 }}>SẮP HẾT HÀNG</span>
+            <span>⚠️</span>
+          </div>
+          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#d97706', marginTop: '0.25rem' }}>
             {metrics.lowStock}
           </div>
+          <small style={{ color: '#b45309', fontSize: '0.75rem' }}>≤ Ngưỡng cảnh báo</small>
         </div>
 
-        <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #dc2626' }}>
-          <span style={{ fontSize: '0.825rem', color: '#64748b' }}>Đã hết hàng</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#dc2626', marginTop: '0.25rem' }}>
+        <div
+          className="card"
+          onClick={() => {
+            setStockStatusFilter('OUT_OF_STOCK');
+            setCurrentPage(1);
+          }}
+          style={{
+            padding: '1.25rem',
+            borderLeft: '4px solid #dc2626',
+            cursor: 'pointer',
+            border: stockStatusFilter === 'OUT_OF_STOCK' ? '2px solid #dc2626' : '1px solid #e2e8f0'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.825rem', color: '#991b1b', fontWeight: 600 }}>ĐÃ HẾT HÀNG</span>
+            <span>⛔</span>
+          </div>
+          <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#dc2626', marginTop: '0.25rem' }}>
             {metrics.outOfStock}
           </div>
+          <small style={{ color: '#dc2626', fontSize: '0.75rem' }}>Cần nhập hàng ngay</small>
         </div>
       </div>
 
@@ -219,7 +315,7 @@ const Inventory = () => {
               type="text"
               value={searchTerm}
               onChange={handleSearchChange}
-              placeholder="Tìm theo tên hoặc mã SKU..."
+              placeholder="Tìm theo tên sản phẩm hoặc mã SKU..."
               style={{
                 width: '100%',
                 padding: '0.6rem 0.85rem 0.6rem 2.2rem',
@@ -245,10 +341,10 @@ const Inventory = () => {
               backgroundColor: '#ffffff'
             }}
           >
-            <option value="">Tất cả tình trạng</option>
-            <option value="IN_STOCK">Đủ hàng (&gt; Ngưỡng an toàn)</option>
-            <option value="LOW_STOCK">Sắp hết hàng (≤ Ngưỡng)</option>
-            <option value="OUT_OF_STOCK">Hết hàng (= 0)</option>
+            <option value="">Tất cả tình trạng kho</option>
+            <option value="IN_STOCK">Còn đủ hàng (&gt; Ngưỡng an toàn)</option>
+            <option value="LOW_STOCK">Sắp hết hàng (≤ Ngưỡng cảnh báo)</option>
+            <option value="OUT_OF_STOCK">Đã hết hàng (= 0)</option>
           </select>
 
           {/* Sort By */}
@@ -266,7 +362,7 @@ const Inventory = () => {
           >
             <option value="">Sắp xếp: Mặc định</option>
             <option value="stock_desc">Tồn kho: Nhiều nhất</option>
-            <option value="stock_asc">Tồn kho: Ít nhất</option>
+            <option value="stock_asc">Tồn kho: Ít nhất (Ưu tiên cảnh báo)</option>
             <option value="name_asc">Tên mặt hàng: A - Z</option>
           </select>
         </div>
@@ -275,6 +371,17 @@ const Inventory = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
           <span style={{ color: '#64748b' }}>
             Hiển thị <strong>{filteredInventory.length}</strong> / {inventoryList.length} mặt hàng
+            {stockStatusFilter && (
+              <span style={{ marginLeft: '0.5rem', color: '#2563eb' }}>
+                (Đang lọc:{' '}
+                {stockStatusFilter === 'OUT_OF_STOCK'
+                  ? 'Đã hết hàng'
+                  : stockStatusFilter === 'LOW_STOCK'
+                  ? 'Sắp hết hàng'
+                  : 'Còn đủ hàng'}
+                )
+              </span>
+            )}
           </span>
           {(searchTerm || stockStatusFilter || sortBy) && (
             <button
@@ -297,102 +404,108 @@ const Inventory = () => {
       {/* INVENTORY TABLE */}
       <div className="card" style={{ padding: 0, borderRadius: '14px', overflow: 'hidden' }}>
         {filteredInventory.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📦</div>
-            <p style={{ fontWeight: 600 }}>Không tìm thấy mặt hàng nào</p>
-            <p style={{ fontSize: '0.85rem' }}>Thử thay đổi từ khóa tìm kiếm hoặc tình trạng tồn kho</p>
+          <div style={{ padding: '3.5rem', textAlign: 'center', color: '#64748b' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📦</div>
+            <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f172a' }}>Không tìm thấy mặt hàng nào phù hợp</p>
+            <p style={{ fontSize: '0.85rem' }}>Thử thay đổi từ khóa tìm kiếm hoặc bỏ chọn bộ lọc trạng thái</p>
+            <Button variant="secondary" size="sm" onClick={handleResetFilter} style={{ marginTop: '0.75rem' }}>
+              Đặt lại bộ lọc
+            </Button>
           </div>
         ) : (
           <>
-            <div className="table-responsive">
-              <table className="data-table">
+            <div className="table-responsive" style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th>Mã SKU</th>
+                    <th style={{ width: '130px' }}>Mã SKU</th>
                     <th>Tên sản phẩm</th>
-                    <th>Tồn kho hiện tại</th>
-                    <th>Ngưỡng tối thiểu</th>
-                    <th>Tình trạng</th>
-                    <th style={{ textAlign: 'center' }}>Thao tác</th>
+                    <th style={{ width: '130px', textAlign: 'center' }}>Tồn kho hiện tại</th>
+                    <th style={{ width: '130px', textAlign: 'center' }}>Ngưỡng an toàn</th>
+                    <th style={{ width: '160px', textAlign: 'center' }}>Tình trạng</th>
+                    <th style={{ width: '160px', textAlign: 'center' }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedInventory.map((item) => {
-                    const isOutOfStock = item.stock <= 0;
-                    const isLowStock = item.stock > 0 && item.stock <= item.minThreshold;
+                    const currentStock = Number(item.stockQuantity ?? item.stock ?? 0);
+                    const threshold = Number(item.minThreshold || 5);
+                    const statusInfo = getInventoryStatus(currentStock, threshold);
 
                     return (
-                      <tr key={item.id}>
+                      <tr key={item.id} style={{ transition: 'background-color 0.15s ease' }}>
                         <td>
                           <code
                             style={{
                               backgroundColor: '#f1f5f9',
-                              padding: '0.2rem 0.4rem',
-                              borderRadius: '4px',
+                              padding: '0.25rem 0.5rem',
+                              borderRadius: '6px',
                               fontSize: '0.85rem',
                               color: '#0f172a',
-                              fontWeight: 600
+                              fontWeight: 700
                             }}
                           >
                             {item.sku}
                           </code>
                         </td>
-                        <td style={{ fontWeight: 600 }}>{item.name}</td>
                         <td>
-                          {editingId === item.id ? (
-                            <input
-                              type="number"
-                              min="0"
-                              value={newStockVal}
-                              onChange={(e) => setNewStockVal(e.target.value)}
-                              style={{
-                                width: '80px',
-                                padding: '0.3rem 0.5rem',
-                                border: '2px solid #2563eb',
-                                borderRadius: '0.375rem',
-                                outline: 'none',
-                                fontWeight: 700
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <strong
-                              style={{
-                                fontSize: '1rem',
-                                color: isOutOfStock ? '#dc2626' : isLowStock ? '#d97706' : '#0f172a'
-                              }}
-                            >
-                              {item.stock}
-                            </strong>
-                          )}
-                        </td>
-                        <td>
-                          <span style={{ color: '#64748b' }}>{item.minThreshold} sp</span>
-                        </td>
-                        <td>
-                          {isOutOfStock ? (
-                            <span className="badge badge-danger">Hết hàng</span>
-                          ) : isLowStock ? (
-                            <span className="badge badge-warning">Sắp hết hàng</span>
-                          ) : (
-                            <span className="badge badge-success">Đủ hàng</span>
-                          )}
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>{item.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Mã ID: {item.id}</div>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {editingId === item.id ? (
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                              <Button variant="primary" size="sm" onClick={() => handleSaveStock(item.id)}>
-                                Lưu
-                              </Button>
-                              <Button variant="secondary" size="sm" onClick={() => setEditingId(null)}>
-                                Hủy
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button variant="outline" size="sm" onClick={() => handleStartEdit(item)}>
-                              Nhập kho
-                            </Button>
-                          )}
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '1.1rem',
+                              fontWeight: 800,
+                              color: statusInfo.color,
+                              padding: '0.2rem 0.6rem',
+                              borderRadius: '6px',
+                              backgroundColor: statusInfo.bgLight,
+                              border: `1px solid ${statusInfo.border}`
+                            }}
+                          >
+                            {currentStock}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span style={{ color: '#475569', fontWeight: 600, fontSize: '0.9rem' }}>
+                            {threshold} sp
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span
+                            className={`badge ${statusInfo.badgeClass}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              padding: '0.35rem 0.65rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.8rem',
+                              fontWeight: 700
+                            }}
+                          >
+                            <span>{statusInfo.icon}</span>
+                            <span>{statusInfo.label}</span>
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleOpenAdjustmentModal(item)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              fontSize: '0.825rem',
+                              padding: '0.4rem 0.75rem'
+                            }}
+                          >
+                            <span>⚙️</span>
+                            <span>Điều chỉnh kho</span>
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -417,6 +530,14 @@ const Inventory = () => {
           </>
         )}
       </div>
+
+      {/* STOCK ADJUSTMENT MODAL */}
+      <StockAdjustmentModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        product={selectedProduct}
+        onSuccess={handleAdjustmentSuccess}
+      />
     </div>
   );
 };
