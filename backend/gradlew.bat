@@ -41,6 +41,14 @@ set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 @rem Find java.exe
 if defined JAVA_HOME goto findJavaFromJavaHome
 
+@rem Auto-detect installed JDK 21 on Windows if JAVA_HOME is not set
+for /d %%i in ("%ProgramFiles%\Java\jdk-21*") do (
+    if exist "%%i\bin\java.exe" (
+        set "JAVA_HOME=%%i"
+        goto findJavaFromJavaHome
+    )
+)
+
 set JAVA_EXE=java.exe
 %JAVA_EXE% -version >NUL 2>&1
 if %ERRORLEVEL% equ 0 goto execute
