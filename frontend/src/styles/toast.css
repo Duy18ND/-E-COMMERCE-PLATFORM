@@ -1,5 +1,5 @@
 /* =========================================================
-   TOAST NOTIFICATION STYLES
+   TOAST NOTIFICATION & DIALOG STYLES - SHOPMART
    ========================================================= */
 
 .toast-container {
@@ -73,8 +73,8 @@
 }
 
 .toast-icon {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -94,6 +94,11 @@
   color: #dc2626;
 }
 
+.toast-icon.toast-icon-warning {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
 .toast-icon.toast-icon-info {
   background-color: #eff6ff;
   color: #2563eb;
@@ -109,7 +114,7 @@
   background: none;
   border: none;
   color: #94a3b8;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
   padding: 4px;
@@ -234,6 +239,43 @@
   background: linear-gradient(90deg, #10b981 0%, #2563eb 100%);
   width: 100%;
   transform-origin: left;
+}
+
+/* Modal Dialog Keyframes */
+@keyframes shopmartFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shopmartScaleUp {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes shopmartSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Accessibility: prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .toast-item,
+  .shopmart-dialog-overlay,
+  .shopmart-dialog-box {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Responsive adjustments */

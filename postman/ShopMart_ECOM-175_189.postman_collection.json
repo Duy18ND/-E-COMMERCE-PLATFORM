@@ -1,0 +1,927 @@
+{
+  "info": {
+    "_postman_id": "shopmart-ecom-175-189-collection",
+    "name": "ShopMart - ECOM-175 & ECOM-189 QA Test Suite",
+    "description": "Postman Collection v2.1 kiểm thử toàn diện luồng cập nhật, hủy đơn, quyền xem đơn (ECOM-175) và tracking, timeline, chuyển trạng thái không hợp lệ (ECOM-189).\n\nThiết kế bởi: Senior QA & Automation Engineer.\nNgày thực thi: 04/11/2026.\n\nCấu trúc phân quyền:\n- Khách hàng User A: Bearer {{userAToken}} (X-User-Id: {{userAId}}, ROLE_USER)\n- Khách hàng User B: Bearer {{userBToken}} (X-User-Id: {{userBId}}, ROLE_USER)\n- Quản trị viên Admin: Bearer {{adminToken}} (X-User-Id: {{adminId}}, ROLE_ADMIN)\n- Token không hợp lệ / hết hạn: {{invalidToken}} / {{expiredToken}}",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "testOrderId",
+      "value": "1001",
+      "type": "string"
+    },
+    {
+      "key": "otherUserOrderId",
+      "value": "1002",
+      "type": "string"
+    },
+    {
+      "key": "nonExistentOrderId",
+      "value": "999999",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Order Update",
+      "description": "Kiểm thử các kịch bản Admin cập nhật trạng thái đơn hàng (ECOM-175 Nhóm A & ECOM-291)",
+      "item": [
+        {
+          "name": "TC-175-01: Admin cập nhật trạng thái sang CONFIRMED",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRMED\",\n  \"note\": \"Admin đã xác nhận đơn hàng hợp lệ\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains success true and updated status CONFIRMED', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.status).to.eql('CONFIRMED');",
+                  "    pm.expect(json.data.id).to.eql(Number(pm.variables.get('testOrderId')));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-02: Admin cập nhật trạng thái sang SHIPPING",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SHIPPING\",\n  \"note\": \"Bàn giao cho đơn vị vận chuyển ViettelPost\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains updated status SHIPPING', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.status).to.eql('SHIPPING');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-03: Admin lấy danh sách đơn hàng có phân trang & lọc trạng thái",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders?status=CONFIRMED&page=0&size=10&sortBy=id&sortDir=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders"],
+              "query": [
+                { "key": "status", "value": "CONFIRMED" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" },
+                { "key": "sortBy", "value": "id" },
+                { "key": "sortDir", "value": "desc" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Paged response format is valid', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('content');",
+                  "    pm.expect(json.data).to.have.property('totalElements');",
+                  "    pm.expect(json.data).to.have.property('totalPages');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Order Cancellation",
+      "description": "Kiểm thử các kịch bản hủy đơn hàng bởi khách hàng và quản trị viên (ECOM-175 Nhóm B)",
+      "item": [
+        {
+          "name": "TC-175-09: Khách hàng hủy đơn hàng PENDING của chính mình",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}", "cancel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Order status is CANCELLED', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.status).to.eql('CANCELLED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-10: Cấm hủy đơn hàng không ở trạng thái PENDING",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}", "cancel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request or 409 Conflict', function () {",
+                  "    pm.expect([400, 409, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Response contains error message on non-PENDING cancel', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.message).to.include('PENDING');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-14: Hủy đơn hàng không tồn tại",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{nonExistentOrderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{nonExistentOrderId}}", "cancel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test('Response indicates resource not found', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-16: Chống IDOR khi hủy đơn hàng người khác",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userBToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}", "cancel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Access denied message returned', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.message).to.include('không có quyền');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Order Access Control",
+      "description": "Kiểm thử phân quyền xem đơn hàng, chống IDOR và chống bypass JWT (ECOM-175 Nhóm C)",
+      "item": [
+        {
+          "name": "TC-175-17: User A xem đơn hàng của chính mình",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response belongs to authenticated user', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.id).to.eql(Number(pm.variables.get('testOrderId')));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-18: User B xem trộm đơn hàng của User A -> 403 Forbidden (Chống IDOR)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userBToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden (IDOR Blocked)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Response does not leak order details', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.data).to.be.undefined;",
+                  "    pm.expect(json.message).to.include('không có quyền');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-19: Guest xem đơn hàng không có token -> 401 Unauthorized",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized or 403 Forbidden', function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-20: Admin xem chi tiết bất kỳ đơn hàng nào theo quyền",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Admin receives order details successfully', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.id).to.eql(Number(pm.variables.get('testOrderId')));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-22: JWT không hợp lệ bị từ chối",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{invalidToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/my-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "my-orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-175-23: JWT hết hạn bị từ chối",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{expiredToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/my-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "my-orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test('Token expired message returned', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message).to.include('hết hạn');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Tracking Permissions",
+      "description": "Kiểm thử bảo mật truy cập lịch sử Timeline trạng thái đơn hàng ECOM-315 (ECOM-189 Nhóm A)",
+      "item": [
+        {
+          "name": "TC-189-01: User A xem Timeline đơn hàng của mình",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}", "history"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Timeline data is an array', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(Array.isArray(json.data)).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-02: User B xem Timeline đơn hàng của User A -> 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userBToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}", "history"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('No timeline history is leaked', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.data).to.be.undefined;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-07: Admin xem Timeline qua endpoint Admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "history"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Admin retrieves full timeline history', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(Array.isArray(json.data)).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05. Invalid Status Transitions",
+      "description": "Kiểm thử chặn chuyển trạng thái không hợp lệ, chuyển lùi và giá trị rỗng/null (ECOM-189 Nhóm B)",
+      "item": [
+        {
+          "name": "TC-189-10: Cấm nhảy cóc từ PENDING trực tiếp sang DELIVERED",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\",\n  \"note\": \"Nhảy cóc trạng thái trái phép\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request or 500 IllegalState', function () {",
+                  "    pm.expect([400, 409, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Response rejects invalid transition', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.message).to.include('Không thể chuyển trạng thái');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-11: Cấm chuyển ngược từ DELIVERED về SHIPPING",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SHIPPING\",\n  \"note\": \"Chuyển lùi trạng thái\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 or 500 IllegalState', function () {",
+                  "    pm.expect([400, 409, 500]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Response message blocks backward transition', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.message).to.include('Không thể chuyển trạng thái');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-14: Gửi trạng thái không tồn tại trong Enum",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INVALID_RANDOM_STATUS\",\n  \"note\": \"Trạng thái không hợp lệ\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('Response indicates unreadable message or invalid enum', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-15: Gửi trạng thái rỗng hoặc null",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": null,\n  \"note\": \"Trạng thái null\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('Validation message for null status', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.message).to.include('không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-16: User thường không được cập nhật trạng thái Admin -> 403",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\",\n  \"note\": \"User tự xác nhận hoàn thành\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Access denied error returned', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.message).to.include('ADMIN');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06. Timeline History",
+      "description": "Kiểm thử cấu trúc, tính đầy đủ và thứ tự thời gian của dữ liệu Timeline (ECOM-189 Nhóm C)",
+      "item": [
+        {
+          "name": "TC-189-18: Kiểm tra thứ tự và dữ liệu Timeline của đơn hàng",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}", "history"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Timeline items are sorted ascending by createdAt', function () {",
+                  "    var json = pm.response.json();",
+                  "    var list = json.data;",
+                  "    pm.expect(list).to.be.an('array');",
+                  "    if (list.length >= 2) {",
+                  "        for (var i = 0; i < list.length - 1; i++) {",
+                  "            var timeA = new Date(list[i].createdAt).getTime();",
+                  "            var timeB = new Date(list[i+1].createdAt).getTime();",
+                  "            pm.expect(timeA).to.be.at.most(timeB);",
+                  "        }",
+                  "    }",
+                  "});",
+                  "pm.test('First event is ORDER_CREATED with status PENDING', function () {",
+                  "    var json = pm.response.json();",
+                  "    var list = json.data;",
+                  "    if (list.length > 0) {",
+                  "        pm.expect(list[0].status).to.eql('PENDING');",
+                  "        pm.expect(list[0].action).to.eql('ORDER_CREATED');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07. Admin Customer Synchronization",
+      "description": "Kiểm thử tính đồng nhất hai chiều giữa Admin, Khách hàng và MySQL (ECOM-189 Nhóm D)",
+      "item": [
+        {
+          "name": "TC-189-29: Bước 1 - Admin cập nhật trạng thái đơn hàng",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PROCESSING\",\n  \"note\": \"Bắt đầu đóng gói hàng\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders/{{testOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "orders", "{{testOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Admin update returns PROCESSING', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.status).to.eql('PROCESSING');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-30: Bước 2 - Khách hàng kiểm tra chi tiết đơn hàng thấy ngay trạng thái mới",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Customer reads updated status synchronized from Admin', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.status).to.eql('PROCESSING');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-189-31: Bước 3 - Khách hàng kiểm tra Timeline có bản ghi mốc PROCESSING mới",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userAToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{testOrderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{testOrderId}}", "history"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Timeline contains latest PROCESSING record', function () {",
+                  "    var json = pm.response.json();",
+                  "    var list = json.data;",
+                  "    var latest = list[list.length - 1];",
+                  "    pm.expect(latest.status).to.eql('PROCESSING');",
+                  "    pm.expect(latest.actorRole).to.eql('ROLE_ADMIN');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

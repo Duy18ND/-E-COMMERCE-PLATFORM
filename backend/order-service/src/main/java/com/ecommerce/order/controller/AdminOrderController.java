@@ -78,7 +78,7 @@ public class AdminOrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử trạng thái đơn hàng thành công", response));
     }
 
-    @GetMapping("/statistics")
+    @GetMapping({"/statistics", "/stats"})
     @Operation(summary = "Thống kê doanh thu và đơn hàng [ADMIN]", description = "Tính toán tổng số đơn hàng, tổng doanh thu và số lượng đơn hàng theo từng trạng thái bằng COUNT & SUM dưới Database. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
     public ResponseEntity<ApiResponse<DashboardResponse>> getOrderStatistics(
             @RequestHeader(value = "X-User-Roles", required = false) String roles) {

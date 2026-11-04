@@ -5,6 +5,7 @@ import com.ecommerce.product.dto.request.UpdateReviewRequest;
 import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ReviewResponse;
 import com.ecommerce.product.dto.response.ReviewSummaryResponse;
+import com.ecommerce.product.enums.ReviewStatus;
 import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.GlobalExceptionHandler;
@@ -64,6 +65,7 @@ class ReviewControllerTest {
                 .orderId(500L)
                 .rating(5)
                 .comment("Đánh giá sản phẩm cực tốt")
+                .status(ReviewStatus.APPROVED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();

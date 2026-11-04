@@ -476,32 +476,215 @@ export const orderService = {
     }
   },
 
-  // Admin xem toàn bộ đơn hàng (GET /api/admin/orders)
+  // Admin xem toàn bộ đơn hàng có phân trang & lọc trạng thái (GET /api/v1/admin/orders)
   getAllOrders: async (params) => {
     try {
-      return await api.get('/admin/orders', { params });
+      const response = await api.get('/admin/orders', { params });
+
+      // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
+      if (response && Array.isArray(response.content)) {
+        return {
+          content: response.content,
+          totalElements: response.totalElements ?? response.content.length,
+          totalPages: response.totalPages ?? 1,
+          pageNumber: response.pageNumber ?? 0,
+          pageSize: response.pageSize ?? 10,
+          last: response.last ?? true
+        };
+      }
+
+      // Nếu Backend trả về mảng trực tiếp
+      if (Array.isArray(response)) {
+        const page = params?.page || 0;
+        const size = params?.size || 10;
+        return {
+          content: response,
+          totalElements: response.length,
+          totalPages: Math.max(1, Math.ceil(response.length / size)),
+          pageNumber: page,
+          pageSize: size,
+          last: true
+        };
+      }
+
+      return response;
     } catch (err) {
+      // Fallback lưu trữ cục bộ nếu không kết nối được máy chủ Backend
       let orders = getStoredOrders();
       if (params?.status) {
         orders = orders.filter((o) => o.status === params.status);
       }
-      return orders;
+
+      const page = params?.page || 0;
+      const size = params?.size || 10;
+      const totalElements = orders.length;
+      const totalPages = Math.max(1, Math.ceil(totalElements / size));
+      const startIndex = page * size;
+      const content = orders.slice(startIndex, startIndex + size);
+
+      return {
+        content,
+        totalElements,
+        totalPages,
+        pageNumber: page,
+        pageSize: size,
+        last: page >= totalPages - 1
+      };
     }
   },
 
-  // Admin xem chi tiết bất kỳ đơn hàng nào (GET /api/admin/orders/{orderId})
+  // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId} hoặc /api/v1/admin/orders/{orderId})
   getAdminOrderById: async (id) => {
     try {
-      return await api.get(`/admin/orders/${id}`);
+      return await api.get(`/orders/${id}`);
     } catch (err) {
-      return orderService.getOrderById(id);
+      try {
+        return await api.get(`/admin/orders/${id}`);
+      } catch (adminErr) {
+        return orderService.getOrderById(id);
+      }
     }
   },
 
-  // Admin cập nhật trạng thái đơn (PUT /api/admin/orders/{orderId}/status)
-  updateOrderStatus: async (id, status) => {
+  // [Task ECOM-315 / ECOM-311] Lấy lịch sử dòng thời gian trạng thái đơn hàng (Timeline)
+  // Endpoint: GET /api/v1/orders/{orderId}/history
+  getOrderStatusHistory: async (id) => {
     try {
-      return await api.put(`/admin/orders/${id}/status`, { status });
+      const response = await api.get(`/orders/${id}/history`);
+      if (Array.isArray(response)) {
+        return response;
+      }
+      if (response && Array.isArray(response.data)) {
+        return response.data;
+      }
+      return [];
+    } catch (err) {
+      // Nếu là lỗi bảo mật 403 (IDOR) thì ném lỗi để UI hiển thị thông báo phân quyền
+      if (err.response?.status === 403) {
+        throw err;
+      }
+
+      // Thử gọi qua endpoint admin nếu người dùng có vai trò Admin
+      try {
+        const adminRes = await api.get(`/admin/orders/${id}/history`);
+        if (Array.isArray(adminRes)) return adminRes;
+        if (adminRes && Array.isArray(adminRes.data)) return adminRes.data;
+      } catch (adminErr) {
+        // Tiếp tục xử lý fallback
+      }
+
+      // Fallback Mock History khi chạy offline hoặc Backend chưa có dữ liệu DB
+      const orders = getStoredOrders();
+      const order = orders.find((o) => String(o.id) === String(id));
+      if (!order) {
+        return [];
+      }
+
+      const baseTime = new Date(order.createdAt || Date.now()).getTime();
+      const mockHistories = [
+        {
+          id: 1,
+          orderId: order.id,
+          status: ORDER_STATUS.PENDING,
+          statusDescription: 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
+          previousStatus: null,
+          action: 'CREATE_ORDER',
+          updatedBy: order.userEmail || 'Khách hàng',
+          actorRole: 'ROLE_USER',
+          note: order.note || 'Đặt hàng qua website ShopMart',
+          createdAt: new Date(baseTime).toISOString()
+        }
+      ];
+
+      const status = order.status;
+      if (status === ORDER_STATUS.PAID || status === ORDER_STATUS.CONFIRMED || status === ORDER_STATUS.PROCESSING || status === ORDER_STATUS.SHIPPING || status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.COMPLETED) {
+        mockHistories.push({
+          id: 2,
+          orderId: order.id,
+          status: ORDER_STATUS.CONFIRMED,
+          statusDescription: 'Đơn hàng đã được xác nhận bởi người bán / quản trị viên',
+          previousStatus: ORDER_STATUS.PENDING,
+          action: 'CONFIRM_ORDER',
+          updatedBy: 'ADMIN:1',
+          actorRole: 'ROLE_ADMIN',
+          note: 'Xác nhận thông tin đơn hàng và địa chỉ giao hàng hợp lệ',
+          createdAt: new Date(baseTime + 15 * 60000).toISOString()
+        });
+      }
+
+      if (status === ORDER_STATUS.PROCESSING || status === ORDER_STATUS.SHIPPING || status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.COMPLETED) {
+        mockHistories.push({
+          id: 3,
+          orderId: order.id,
+          status: ORDER_STATUS.PROCESSING,
+          statusDescription: 'Đơn hàng đang được chuẩn bị và đóng gói',
+          previousStatus: ORDER_STATUS.CONFIRMED,
+          action: 'PROCESS_ORDER',
+          updatedBy: 'ADMIN:1',
+          actorRole: 'ROLE_ADMIN',
+          note: 'Hàng đã kiểm tra chất lượng và niêm phong trong hộp đóng gói',
+          createdAt: new Date(baseTime + 45 * 60000).toISOString()
+        });
+      }
+
+      if (status === ORDER_STATUS.SHIPPING || status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.COMPLETED) {
+        mockHistories.push({
+          id: 4,
+          orderId: order.id,
+          status: ORDER_STATUS.SHIPPING,
+          statusDescription: 'Đơn hàng đang trên đường vận chuyển tới địa chỉ nhận hàng',
+          previousStatus: ORDER_STATUS.PROCESSING,
+          action: 'SHIP_ORDER',
+          updatedBy: 'SHIPPER:SP01',
+          actorRole: 'SYSTEM',
+          note: 'Đã bàn giao đơn hàng cho đơn vị vận chuyển Viettel Post',
+          createdAt: new Date(baseTime + 120 * 60000).toISOString()
+        });
+      }
+
+      if (status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.COMPLETED) {
+        mockHistories.push({
+          id: 5,
+          orderId: order.id,
+          status: ORDER_STATUS.DELIVERED,
+          statusDescription: 'Đơn hàng đã giao thành công',
+          previousStatus: ORDER_STATUS.SHIPPING,
+          action: 'DELIVER_ORDER',
+          updatedBy: 'SHIPPER:SP01',
+          actorRole: 'SYSTEM',
+          note: 'Giao hàng thành công tới tay người nhận. Khách hàng đã ký xác nhận',
+          createdAt: new Date(baseTime + 240 * 60000).toISOString()
+        });
+      }
+
+      if (status === ORDER_STATUS.CANCELLED) {
+        mockHistories.push({
+          id: 6,
+          orderId: order.id,
+          status: ORDER_STATUS.CANCELLED,
+          statusDescription: 'Đơn hàng đã bị hủy',
+          previousStatus: ORDER_STATUS.PENDING,
+          action: 'CANCEL_ORDER',
+          updatedBy: 'Khách hàng',
+          actorRole: 'ROLE_USER',
+          note: 'Khách hàng yêu cầu hủy đơn hàng',
+          createdAt: new Date(baseTime + 20 * 60000).toISOString()
+        });
+      }
+
+      return mockHistories;
+    }
+  },
+
+  // Alias tương thích ngược cho getOrderStatusHistory
+  getOrderHistory: async (id) => {
+    return await orderService.getOrderStatusHistory(id);
+  },
+
+  // Admin cập nhật trạng thái đơn (PUT /api/v1/admin/orders/{orderId}/status)
+  updateOrderStatus: async (id, status, note = '') => {
+    try {
+      return await api.put(`/admin/orders/${id}/status`, { status, note });
     } catch (err) {
       const orders = getStoredOrders();
       const updatedOrders = orders.map((o) => {
