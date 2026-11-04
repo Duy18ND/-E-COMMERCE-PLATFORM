@@ -665,11 +665,18 @@ export const orderService = {
           statusDescription: 'Đơn hàng đã bị hủy',
           previousStatus: ORDER_STATUS.PENDING,
           action: 'CANCEL_ORDER',
-          updatedBy: 'Khách hàng',
-          actorRole: 'ROLE_USER',
-          note: 'Khách hàng yêu cầu hủy đơn hàng',
+          updatedBy: order.cancelledBy || 'ADMIN:1',
+          actorRole: 'ROLE_ADMIN',
+          note: order.statusNote || 'Đơn hàng đã bị hủy theo yêu cầu',
           createdAt: new Date(baseTime + 20 * 60000).toISOString()
         });
+      } else if (order.statusNote && mockHistories.length > 0) {
+        const lastIdx = mockHistories.length - 1;
+        mockHistories[lastIdx] = {
+          ...mockHistories[lastIdx],
+          note: order.statusNote,
+          createdAt: order.statusUpdatedAt || mockHistories[lastIdx].createdAt
+        };
       }
 
       return mockHistories;
@@ -687,9 +694,15 @@ export const orderService = {
       return await api.put(`/admin/orders/${id}/status`, { status, note });
     } catch (err) {
       const orders = getStoredOrders();
+      const nowIso = new Date().toISOString();
       const updatedOrders = orders.map((o) => {
         if (String(o.id) === String(id)) {
-          return { ...o, status };
+          return {
+            ...o,
+            status,
+            statusNote: note ? String(note).trim() : o.statusNote || '',
+            statusUpdatedAt: nowIso
+          };
         }
         return o;
       });

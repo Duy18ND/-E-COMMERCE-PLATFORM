@@ -112,24 +112,41 @@ const ProductDetail = () => {
   const currentDiscount = storageOption ? storageOption.discount : (product.discountPercent || 0);
   const savedAmount = Math.max(0, currentOriginalPrice - currentSalePrice);
 
+  const sold = Number(product.sold ?? product.soldQuantity ?? 15);
+  const flashQuotaTotal = Number(product.stock ?? product.quantity ?? 0);
+  const flashQuotaRemaining =
+    product.remainingStock !== undefined
+      ? Math.max(0, Number(product.remainingStock))
+      : isSale && flashQuotaTotal > 0 && product.stockQuantity === undefined
+        ? Math.max(0, flashQuotaTotal - sold)
+        : null;
+
   const actualStockQuantity = Math.max(
     0,
-    Number(stockInfo?.stockQuantity ?? product.stockQuantity ?? product.stock ?? 0)
+    flashQuotaRemaining !== null
+      ? flashQuotaRemaining
+      : Number(stockInfo?.stockQuantity ?? product.stockQuantity ?? product.stock ?? 0)
   );
-  const isOutOfStock = stockInfo
-    ? !stockInfo.inStock || actualStockQuantity <= 0
-    : actualStockQuantity <= 0;
+  const isOutOfStock =
+    (flashQuotaRemaining !== null && flashQuotaRemaining <= 0) ||
+    (stockInfo ? !stockInfo.inStock || actualStockQuantity <= 0 : actualStockQuantity <= 0);
   const stockStatusMessage =
-    stockInfo?.stockStatusMessage ||
-    (isOutOfStock ? 'Hết hàng' : `Còn hàng (${actualStockQuantity} sản phẩm có sẵn)`);
+    isOutOfStock && isSale
+      ? 'Đã hết suất Flash Sale'
+      : stockInfo?.stockStatusMessage ||
+        (isOutOfStock ? 'Hết hàng' : `Còn hàng (${actualStockQuantity} sản phẩm có sẵn)`);
   const maxOrderQuantity = isSale
-    ? Math.max(1, Math.min(2, actualStockQuantity || 1))
+    ? Math.max(1, Math.min(Number(product.userLimit ?? 2), actualStockQuantity || 1))
     : Math.max(1, actualStockQuantity || 1);
 
-  const sold = Number(product.sold ?? 15);
-  const totalStock = Math.max(actualStockQuantity + sold, 1);
+  const totalStock =
+    isSale && flashQuotaTotal >= sold && flashQuotaTotal > 0
+      ? flashQuotaTotal
+      : Math.max(actualStockQuantity + sold, 1);
   const remainingStock = actualStockQuantity;
-  const progressPercent = Math.min(100, Math.round((sold / totalStock) * 100));
+  const progressPercent = isOutOfStock
+    ? 100
+    : Math.min(100, Math.round((sold / totalStock) * 100));
 
   // Gallery images demo
   const galleryImages = [
@@ -812,7 +829,7 @@ const ProductDetail = () => {
                   }}
                 >
                   <span>🛒</span>
-                  <span>{isOutOfStock ? 'Tạm hết hàng' : isAdded ? '✓ Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
+                  <span>{isOutOfStock ? (isSale ? 'Đã hết suất' : 'Tạm hết hàng') : isAdded ? '✓ Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
                 </button>
 
                 <button
@@ -842,7 +859,7 @@ const ProductDetail = () => {
                   }}
                 >
                   <span>⚡</span>
-                  <span>{isOutOfStock ? 'SẢN PHẨM ĐÃ HẾT HÀNG' : 'MUA NGAY VỚI GIÁ FLASH SALE'}</span>
+                  <span>{isOutOfStock ? (isSale ? 'ĐÃ HẾT SUẤT' : 'SẢN PHẨM ĐÃ HẾT HÀNG') : 'MUA NGAY VỚI GIÁ FLASH SALE'}</span>
                 </button>
               </div>
 

@@ -3,6 +3,7 @@
  * Quản lý Tài khoản Người dùng (Admin User Management) – LocalStorage sync + Mock Data layer.
  * Đồng bộ trạng thái khóa/mở tài khoản (ACTIVE / LOCKED) trên Frontend.
  */
+import api from './api';
 import { MOCK_USERS } from '../mock/mockUsers';
 import orderService from './orderService';
 
@@ -26,7 +27,8 @@ export const normalizeMockUser = (u, index = 0) => {
   const resolvedRole = isRoleAdmin ? 'ADMIN' : 'USER';
   const resolvedRoles = isRoleAdmin ? ['ROLE_ADMIN'] : ['ROLE_USER'];
   const resolvedName = u.name || u.fullName || 'Người dùng ShopMart';
-  const resolvedStatus = u.status === 'LOCKED' ? 'LOCKED' : 'ACTIVE';
+  const resolvedStatus =
+    u.status === 'LOCKED' || u.status === 'BLOCKED' ? 'LOCKED' : 'ACTIVE';
 
   return {
     ...u,
@@ -114,8 +116,25 @@ export const persistUsers = (users) => {
 const delay = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const userService = {
-  /** Lấy toàn bộ danh sách tài khoản */
+  /** Lấy toàn bộ danh sách tài khoản (ưu tiên gọi API Backend, fallback Mock Data) */
   async getAllUsers() {
+    try {
+      const response = await api.get('/admin/users', { params: { page: 0, size: 100 } });
+      const rawList = Array.isArray(response?.content)
+        ? response.content
+        : Array.isArray(response)
+          ? response
+          : [];
+      if (rawList.length > 0) {
+        const normalized = rawList
+          .map((item, idx) => normalizeMockUser(item, idx))
+          .filter(Boolean);
+        persistUsers(normalized);
+        return normalized;
+      }
+    } catch {
+      // Fallback sang localStorage + MOCK_USERS khi Backend chưa chạy
+    }
     await delay();
     return loadStoredUsers();
   },
@@ -142,11 +161,16 @@ const userService = {
     };
   },
 
-  /** Tìm danh sách đơn hàng của một tài khoản từ dữ liệu Mock Order hiện tại */
+  /** Tìm danh sách đơn hàng của một tài khoản từ dữ liệu Order hiện tại */
   async getUserOrders(user) {
     if (!user) return [];
     try {
-      const allOrders = await orderService.getAllOrders();
+      const allOrdersRes = await orderService.getAllOrders();
+      const allOrders = Array.isArray(allOrdersRes?.content)
+        ? allOrdersRes.content
+        : Array.isArray(allOrdersRes)
+          ? allOrdersRes
+          : [];
       if (!Array.isArray(allOrders)) return [];
 
       const cleanEmail = (user.email || '').trim().toLowerCase();
@@ -168,7 +192,7 @@ const userService = {
 
   /**
    * Cập nhật trạng thái tài khoản (ACTIVE / LOCKED)
-   * - Chỉ thay đổi trường status của Mock User, không xóa dữ liệu tài khoản.
+   * - Ưu tiên gọi API PUT /admin/users/{id}/status nếu Backend hoạt động, kết hợp đồng bộ localStorage.
    * - Không cho phép khóa tài khoản ADMIN hoặc tự khóa chính mình.
    */
   async updateUserStatus(id, nextStatus, currentAdminEmail = '') {
@@ -193,6 +217,17 @@ const userService = {
     }
 
     const resolvedStatus = nextStatus === 'LOCKED' ? 'LOCKED' : 'ACTIVE';
+
+    if (Number.isFinite(Number(id))) {
+      try {
+        await api.put(`/admin/users/${id}/status`, {
+          status: resolvedStatus === 'LOCKED' ? 'BLOCKED' : 'ACTIVE'
+        });
+      } catch {
+        // Fallback offline localStorage
+      }
+    }
+
     users[idx] = {
       ...target,
       status: resolvedStatus

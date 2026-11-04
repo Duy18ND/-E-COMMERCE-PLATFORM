@@ -9,6 +9,7 @@ const FlashSale = () => {
 
   // Lấy dữ liệu chiến dịch và sản phẩm
   const [activeCampaign, setActiveCampaign] = useState(() => saleService.getActiveCampaignSync());
+  const [isCountdownExpired, setIsCountdownExpired] = useState(false);
   const [allProducts, setAllProducts] = useState(() => {
     const prods = saleService.getAllProductsSync();
     return Array.isArray(prods) ? prods : [];
@@ -21,12 +22,18 @@ const FlashSale = () => {
   useEffect(() => {
     let active = true;
     const fetchActiveSaleData = async () => {
-      const [camp, prods] = await Promise.all([
+      const [camp, allCamps, prods] = await Promise.all([
         saleService.getActiveCampaign(),
+        saleService.getAllCampaigns(),
         saleService.getActiveFlashProducts()
       ]);
       if (active) {
-        if (camp) setActiveCampaign(camp);
+        const resolvedCamp =
+          camp || (Array.isArray(allCamps) && allCamps.length > 0 ? allCamps[0] : null);
+        if (resolvedCamp) {
+          setActiveCampaign(resolvedCamp);
+          setIsCountdownExpired(false);
+        }
         if (Array.isArray(prods) && prods.length > 0) {
           setAllProducts(prods);
         }
@@ -41,6 +48,66 @@ const FlashSale = () => {
   // Filter states
   const [selectedSlot, setSelectedSlot] = useState('slot-1');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  // Xác định trạng thái chiến dịch hiện tại (ACTIVE | UPCOMING | ENDED | PAUSED)
+  const currentCampaignStatus = useMemo(() => {
+    if (selectedSlot === 'slot-4') return 'ENDED';
+    if (selectedSlot === 'slot-2' || selectedSlot === 'slot-3') return 'UPCOMING';
+    if (isCountdownExpired) return 'ENDED';
+    const rawStatus = activeCampaign?.status;
+    if (rawStatus === 'PAUSED' || rawStatus === 'CANCELLED') return 'PAUSED';
+    if (rawStatus === 'ENDED') return 'ENDED';
+    if (rawStatus === 'UPCOMING') return 'UPCOMING';
+    if (activeCampaign?.endTime && new Date(activeCampaign.endTime).getTime() <= Date.now()) {
+      return 'ENDED';
+    }
+    return 'ACTIVE';
+  }, [activeCampaign, selectedSlot, isCountdownExpired]);
+
+  const campaignStateBanner = useMemo(() => {
+    switch (currentCampaignStatus) {
+      case 'UPCOMING':
+        return {
+          icon: '⏳',
+          badge: 'SẮP DIỄN RA',
+          title: 'Chương trình Flash Sale chưa bắt đầu',
+          desc: 'Khung giờ vàng sắp mở bán. Hãy thêm sản phẩm vào danh sách Yêu thích để sẵn sàng săn deal ngay khi mở suất!',
+          bg: '#eff6ff',
+          border: '#bfdbfe',
+          color: '#1d4ed8'
+        };
+      case 'ENDED':
+        return {
+          icon: '🏁',
+          badge: 'ĐÃ KẾT THÚC',
+          title: 'Chương trình Flash Sale đã kết thúc',
+          desc: 'Khung giờ Flash Sale này đã khép lại. Quý khách vui lòng chuyển sang khung giờ đang diễn ra hoặc sắp mở bán.',
+          bg: '#f1f5f9',
+          border: '#cbd5e1',
+          color: '#475569'
+        };
+      case 'PAUSED':
+        return {
+          icon: '⏸️',
+          badge: 'TẠM DỪNG',
+          title: 'Chiến dịch Flash Sale đang tạm dừng',
+          desc: 'Ban quản trị đang tạm dừng chiến dịch để cập nhật tồn kho khuyến mãi. Vui lòng quay lại sau ít phút.',
+          bg: '#fffbeb',
+          border: '#fde68a',
+          color: '#b45309'
+        };
+      default:
+        return {
+          icon: '⚡',
+          badge: 'ĐANG DIỄN RA',
+          title: 'Flash Sale giờ vàng đang mở bán',
+          desc: 'Giá ưu đãi độc quyền áp dụng trực tiếp khi đặt hàng. Số lượng suất ưu đãi có hạn!',
+          bg: '#fef2f2',
+          border: '#fecaca',
+          color: '#dc2626'
+        };
+    }
+  }, [currentCampaignStatus]);
 
   const categories = useMemo(() => [
     { id: 'ALL', label: `Tất cả sản phẩm (${allProducts?.length || 0})` },
@@ -184,7 +251,11 @@ const FlashSale = () => {
 
               {/* Countdown Component */}
               <div style={{ marginBottom: '1.75rem' }}>
-                <FlashCountdown targetEndTime={activeCampaign?.endTime} variant="hero" />
+                <FlashCountdown
+                  targetEndTime={activeCampaign?.endTime}
+                  variant="hero"
+                  onExpire={() => setIsCountdownExpired(true)}
+                />
               </div>
 
               {/* Action Buttons */}
@@ -462,6 +533,50 @@ const FlashSale = () => {
           </div>
         </div>
 
+        {/* CAMPAIGN STATE BANNER (4 TRẠNG THÁI: ACTIVE | UPCOMING | ENDED | PAUSED) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            padding: '0.85rem 1.15rem',
+            borderRadius: '14px',
+            backgroundColor: campaignStateBanner.bg,
+            border: `1px solid ${campaignStateBanner.border}`,
+            marginBottom: '1.35rem'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                padding: '0.25rem 0.65rem',
+                borderRadius: '9999px',
+                backgroundColor: campaignStateBanner.color,
+                color: '#ffffff',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                letterSpacing: '0.03em'
+              }}
+            >
+              <span>{campaignStateBanner.icon}</span>
+              <span>{campaignStateBanner.badge}</span>
+            </span>
+            <div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a' }}>
+                {campaignStateBanner.title}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+                {campaignStateBanner.desc}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 4. PRODUCTS GRID (12 CARD FLASH SALE CHUẨN ĐẸP) */}
         {!allProducts || allProducts.length === 0 ? (
           <div
@@ -578,7 +693,11 @@ const FlashSale = () => {
         ) : (
           <div className="product-grid">
             {filteredProducts.map((product) => (
-              <FlashSaleProductCard key={product.id} product={product} />
+              <FlashSaleProductCard
+                key={product.id}
+                product={product}
+                campaignStatus={currentCampaignStatus}
+              />
             ))}
           </div>
         )}

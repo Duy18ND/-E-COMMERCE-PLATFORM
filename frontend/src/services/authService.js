@@ -174,7 +174,7 @@ export const authService = {
   register: async ({ email, password, fullName, phone, address }) => {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanFullName = (fullName || '').trim();
-    const cleanPhone = (phone || '').trim();
+    const cleanPhone = (phone || '').replace(/\s+/g, '');
     const cleanAddress = (address || '').trim() || '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội';
 
     if (!USE_MOCK_AUTH) {
@@ -186,6 +186,28 @@ export const authService = {
           ...(cleanPhone ? { phone: cleanPhone } : {})
         };
         const responseData = await api.post('/auth/register', registerPayload);
+
+        // Đồng bộ lưu phone & address vào local mock users để hiển thị đầy đủ trên giao diện FE
+        mockUsersList = loadMockUsers();
+        if (!mockUsersList.some((u) => u.email.toLowerCase() === cleanEmail)) {
+          mockUsersList.push({
+            id: responseData?.userId ?? responseData?.id ?? Date.now(),
+            email: cleanEmail,
+            password,
+            fullName: cleanFullName,
+            name: cleanFullName,
+            phone: cleanPhone || '0912345678',
+            address: cleanAddress,
+            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
+            avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
+            role: 'USER',
+            roles: ['ROLE_USER'],
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString()
+          });
+          saveMockUsers(mockUsersList);
+        }
+
         return normalizeAuthPayload(responseData, {
           email: cleanEmail,
           fullName: cleanFullName,
@@ -212,11 +234,14 @@ export const authService = {
       password,
       fullName: cleanFullName,
       name: cleanFullName,
-      phone: cleanPhone,
+      phone: cleanPhone || '0912345678',
       address: cleanAddress,
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
       avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
-      roles: ['ROLE_USER']
+      role: 'USER',
+      roles: ['ROLE_USER'],
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString()
     };
 
     mockUsersList.push(newUser);

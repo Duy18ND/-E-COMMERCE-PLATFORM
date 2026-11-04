@@ -66,7 +66,7 @@ export const normalizeFlashSaleItemToProduct = (item, campaign = null) => {
     originalPrice > 0 && originalPrice > salePrice
       ? Math.round(((originalPrice - salePrice) / originalPrice) * 100)
       : 0;
-  const quantity = Number(item.quantity ?? item.stock ?? 1);
+  const quantity = Number(item.quantity ?? item.quota ?? item.stock ?? 1);
   const soldQuantity = Number(item.soldQuantity ?? item.sold ?? 0);
   const remainingStock = Number(item.remainingStock ?? Math.max(0, quantity - soldQuantity));
 
@@ -91,6 +91,8 @@ export const normalizeFlashSaleItemToProduct = (item, campaign = null) => {
     imageUrl: item.imageUrl || DEFAULT_PRODUCT_IMAGE,
     isFlashSale: true,
     campaignId: campaign?.id ?? item.campaignId ?? null,
+    campaignStatus: campaign?.status ?? item.campaignStatus ?? 'ACTIVE',
+    startTime: campaign?.startTime ?? item.startTime ?? null,
     endTime: campaign?.endTime ?? item.endTime ?? null
   };
 };
@@ -341,7 +343,22 @@ export const saleService = {
   // 6. Lấy sản phẩm Flash Sale theo ID
   getProductById: (id) => {
     const products = saleService.getAllProductsSync();
-    return products.find((p) => String(p.id) === String(id) || String(p.sku) === String(id));
+    const found = products.find((p) => String(p.id) === String(id) || String(p.sku) === String(id));
+    if (!found) return null;
+    const totalQuota = Number(found.stock ?? found.quantity ?? found.quota ?? 0);
+    const soldQty = Number(found.sold ?? found.soldQuantity ?? 0);
+    const remaining =
+      found.remainingStock !== undefined
+        ? Number(found.remainingStock)
+        : Math.max(0, totalQuota - soldQty);
+    return {
+      ...found,
+      isFlashSale: true,
+      stock: totalQuota,
+      sold: soldQty,
+      remainingStock: remaining,
+      stockQuantity: remaining
+    };
   },
 
   // 7. [ADMIN] Tạo chiến dịch Flash Sale mới qua REST API
@@ -416,14 +433,16 @@ export const saleService = {
     return updatedList.find((c) => String(c.id) === String(id));
   },
 
-  // 9. [ADMIN] Kích hoạt / Kết thúc trạng thái chiến dịch qua REST API
+  // 9. [ADMIN] Kích hoạt / Tạm dừng / Kết thúc trạng thái chiến dịch qua REST API
   updateCampaignStatus: async (id, status) => {
     if (Number.isFinite(Number(id))) {
       try {
+        const backendStatus = status === 'PAUSED' ? 'CANCELLED' : status;
         const updated = await api.put(`/admin/flash-sales/campaigns/${id}/status`, null, {
-          params: { status }
+          params: { status: backendStatus }
         });
-        return normalizeCampaignResponse(updated);
+        const normalized = normalizeCampaignResponse(updated);
+        return status === 'PAUSED' ? { ...normalized, status: 'PAUSED' } : normalized;
       } catch (err) {
         if (!isNetworkUnavailableError(err)) {
           throw err;

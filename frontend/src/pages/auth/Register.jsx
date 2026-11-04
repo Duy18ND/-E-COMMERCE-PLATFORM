@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import useNotification from '../../hooks/useNotification';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
@@ -12,7 +13,7 @@ export const validateRegisterForm = ({ fullName, email, phone, password, confirm
   const errors = {};
   const cleanName = (fullName || '').trim();
   const cleanEmail = (email || '').trim();
-  const cleanPhone = (phone || '').trim();
+  const cleanPhone = (phone || '').replace(/\s+/g, '');
 
   if (!cleanName) {
     errors.fullName = 'Họ và tên không được để trống.';
@@ -145,7 +146,7 @@ const Register = () => {
         email: formData.email.trim(),
         password: formData.password,
         fullName: formData.fullName.trim(),
-        phone: formData.phone.trim(),
+        phone: formData.phone.replace(/\s+/g, ''),
         address: formData.address.trim()
       });
 

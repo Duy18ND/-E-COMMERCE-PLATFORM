@@ -9,8 +9,11 @@ import useNotification from '../../hooks/useNotification';
 
 const AdminSales = () => {
   const navigate = useNavigate();
+  const { notify, confirmDialog } = useNotification();
   const [campaigns, setCampaigns] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -27,8 +30,13 @@ const AdminSales = () => {
 
   // Load campaigns from service
   const loadCampaigns = async () => {
-    const list = await saleService.getAllCampaigns();
-    setCampaigns(Array.isArray(list) ? list : []);
+    setLoading(true);
+    try {
+      const list = await saleService.getAllCampaigns();
+      setCampaigns(Array.isArray(list) ? list : []);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -40,10 +48,11 @@ const AdminSales = () => {
     const total = campaigns.length;
     const active = campaigns.filter((c) => c.status === 'ACTIVE').length;
     const upcoming = campaigns.filter((c) => c.status === 'UPCOMING').length;
+    const paused = campaigns.filter((c) => c.status === 'PAUSED' || c.status === 'CANCELLED').length;
     const ended = campaigns.filter((c) => c.status === 'ENDED').length;
     const totalRevenue = campaigns.reduce((sum, c) => sum + (c.revenue || 0), 0);
     const totalSkus = campaigns.reduce((sum, c) => sum + (c.productCount || 0), 0);
-    return { total, active, upcoming, ended, totalRevenue, totalSkus };
+    return { total, active, upcoming, paused, ended, totalRevenue, totalSkus };
   }, [campaigns]);
 
   // Filtered & Sorted
@@ -56,7 +65,12 @@ const AdminSales = () => {
           camp.code.toLowerCase().includes(term) ||
           (camp.categoryTag && camp.categoryTag.toLowerCase().includes(term));
 
-        const matchStatus = statusFilter === 'ALL' ? true : camp.status === statusFilter;
+        const matchStatus =
+          statusFilter === 'ALL'
+            ? true
+            : statusFilter === 'PAUSED'
+              ? camp.status === 'PAUSED' || camp.status === 'CANCELLED'
+              : camp.status === statusFilter;
         return matchSearch && matchStatus;
       })
       .sort((a, b) => {
@@ -91,18 +105,65 @@ const AdminSales = () => {
     }
   };
 
-  const handleToggleStatus = async (id) => {
+  const handleChangeCampaignStatus = async (camp, nextStatus) => {
+    if (!camp || actionLoadingId) return;
+
+    const statusMeta = {
+      ACTIVE: {
+        title: 'Xác nhận kích hoạt chiến dịch',
+        message: `Bạn có chắc chắn muốn KÍCH HOẠT chiến dịch "${camp.name}"? Các sản phẩm trong chiến dịch sẽ lập tức mở bán với giá Flash Sale.`,
+        variant: 'info',
+        confirmText: 'Kích hoạt ngay',
+        toastMsg: `Đã kích hoạt chiến dịch "${camp.name}" thành công!`
+      },
+      PAUSED: {
+        title: 'Xác nhận tạm dừng chiến dịch',
+        message: `Bạn có chắc chắn muốn TẠM DỪNG chiến dịch "${camp.name}"? Khách hàng sẽ tạm thời không thể đặt mua giá Flash Sale cho đến khi kích hoạt lại.`,
+        variant: 'warning',
+        confirmText: 'Tạm dừng chiến dịch',
+        toastMsg: `Đã tạm dừng chiến dịch "${camp.name}".`
+      },
+      ENDED: {
+        title: 'Xác nhận kết thúc chiến dịch',
+        message: `Bạn có chắc chắn muốn KẾT THÚC sớm chiến dịch "${camp.name}"? Chương trình khuyến mãi sẽ đóng lại và chốt số liệu doanh thu.`,
+        variant: 'danger',
+        confirmText: 'Kết thúc chiến dịch',
+        toastMsg: `Đã kết thúc chiến dịch "${camp.name}" thành công!`
+      }
+    }[nextStatus] || {
+      title: 'Xác nhận đổi trạng thái chiến dịch',
+      message: `Bạn có chắc chắn muốn chuyển chiến dịch "${camp.name}" sang trạng thái ${nextStatus}?`,
+      variant: 'warning',
+      confirmText: 'Xác nhận',
+      toastMsg: 'Cập nhật trạng thái chiến dịch thành công!'
+    };
+
+    const confirmed = await confirmDialog({
+      title: statusMeta.title,
+      message: statusMeta.message,
+      variant: statusMeta.variant,
+      confirmText: statusMeta.confirmText,
+      cancelText: 'Hủy bỏ'
+    });
+    if (!confirmed) return;
+
     try {
-      const target = campaigns.find((c) => String(c.id) === String(id));
-      await saleService.toggleCampaignStatus(id, target?.status);
+      setActionLoadingId(camp.id);
+      const updated = await saleService.updateCampaignStatus(camp.id, nextStatus);
       await loadCampaigns();
-      notify.success('Cập nhật trạng thái chiến dịch thành công!');
+      if (previewCampaign && String(previewCampaign.id) === String(camp.id)) {
+        setPreviewCampaign((prev) => (prev ? { ...prev, status: updated?.status || nextStatus } : null));
+      }
+      notify.success(statusMeta.toastMsg);
     } catch (err) {
       notify.error(err?.response?.data?.message || err?.message || 'Không thể cập nhật trạng thái chiến dịch');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleDelete = async (id, name) => {
+    if (actionLoadingId) return;
     const confirmed = await confirmDialog({
       title: 'Xác nhận xóa chiến dịch',
       message: `Bạn có chắc chắn muốn xóa chiến dịch "${name}"? Thao tác này sẽ xóa vĩnh viễn và không thể hoàn tác.`,
@@ -113,11 +174,14 @@ const AdminSales = () => {
     if (!confirmed) return;
 
     try {
+      setActionLoadingId(id);
       await saleService.deleteCampaign(id);
       await loadCampaigns();
       notify.success(`Đã xóa chiến dịch "${name}" thành công!`);
     } catch (err) {
       notify.error(err?.response?.data?.message || err?.message || 'Không thể xóa chiến dịch');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -456,14 +520,17 @@ const AdminSales = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
             {[
               { id: 'ALL', label: `Tất cả (${campaigns.length})` },
-              { id: 'ACTIVE', label: `Active (${metrics.active})` },
-              { id: 'UPCOMING', label: `Upcoming (${metrics.upcoming})` },
-              { id: 'ENDED', label: `Ended (${metrics.ended})` },
-              { id: 'DRAFT', label: 'Draft (0)' }
+              { id: 'ACTIVE', label: `Đang diễn ra (${metrics.active})` },
+              { id: 'UPCOMING', label: `Sắp diễn ra (${metrics.upcoming})` },
+              { id: 'PAUSED', label: `Tạm dừng (${metrics.paused})` },
+              { id: 'ENDED', label: `Đã kết thúc (${metrics.ended})` }
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setStatusFilter(tab.id)}
+                onClick={() => {
+                  setStatusFilter(tab.id);
+                  setCurrentPage(1);
+                }}
                 style={{
                   padding: '0.45rem 0.85rem',
                   borderRadius: '6px',
@@ -751,17 +818,31 @@ const AdminSales = () => {
                             fontWeight: 700,
                             padding: '3px 8px',
                             borderRadius: '9999px',
-                            backgroundColor: isCampActive ? '#dcfce7' : camp.status === 'UPCOMING' ? '#fef3c7' : '#f1f5f9',
-                            color: isCampActive ? '#166534' : camp.status === 'UPCOMING' ? '#92400e' : '#475569'
+                            backgroundColor: isCampActive
+                              ? '#dcfce7'
+                              : camp.status === 'UPCOMING'
+                                ? '#fef3c7'
+                                : camp.status === 'PAUSED' || camp.status === 'CANCELLED'
+                                  ? '#ffedd5'
+                                  : '#f1f5f9',
+                            color: isCampActive
+                              ? '#166534'
+                              : camp.status === 'UPCOMING'
+                                ? '#92400e'
+                                : camp.status === 'PAUSED' || camp.status === 'CANCELLED'
+                                  ? '#c2410c'
+                                  : '#475569'
                           }}
                         >
-                          {camp.status}
+                          {camp.status === 'PAUSED' || camp.status === 'CANCELLED'
+                            ? 'PAUSED'
+                            : camp.status}
                         </span>
                       </td>
 
-                      {/* Thao tác (Actions: View, Edit, Enable/Disable, Delete) */}
+                      {/* Thao tác (Actions: View, Edit, Activate/Pause/End, Delete) */}
                       <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                           {/* View Preview */}
                           <button
                             onClick={() => setPreviewCampaign(camp)}
@@ -799,27 +880,73 @@ const AdminSales = () => {
                             </button>
                           </Link>
 
-                          {/* Enable / Disable */}
-                          <button
-                            onClick={() => handleToggleStatus(camp.id)}
-                            title={isCampActive ? 'Tạm dừng chiến dịch' : 'Kích hoạt chiến dịch'}
-                            style={{
-                              padding: '5px 8px',
-                              borderRadius: '6px',
-                              border: isCampActive ? '1px solid #fed7aa' : '1px solid #bbf7d0',
-                              backgroundColor: isCampActive ? '#fff7ed' : '#f0fdf4',
-                              color: isCampActive ? '#c2410c' : '#166534',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {isCampActive ? '⏸️ Tắt' : '▶️ Bật'}
-                          </button>
+                          {/* Activate / Pause */}
+                          {isCampActive ? (
+                            <button
+                              onClick={() => handleChangeCampaignStatus(camp, 'PAUSED')}
+                              disabled={Boolean(actionLoadingId)}
+                              title="Tạm dừng chiến dịch"
+                              style={{
+                                padding: '5px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #fed7aa',
+                                backgroundColor: '#fff7ed',
+                                color: '#c2410c',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: actionLoadingId ? 'not-allowed' : 'pointer',
+                                opacity: actionLoadingId === camp.id ? 0.6 : 1
+                              }}
+                            >
+                              ⏸️ Tạm dừng
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleChangeCampaignStatus(camp, 'ACTIVE')}
+                              disabled={Boolean(actionLoadingId)}
+                              title="Kích hoạt chiến dịch"
+                              style={{
+                                padding: '5px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #bbf7d0',
+                                backgroundColor: '#f0fdf4',
+                                color: '#166534',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: actionLoadingId ? 'not-allowed' : 'pointer',
+                                opacity: actionLoadingId === camp.id ? 0.6 : 1
+                              }}
+                            >
+                              ▶️ Kích hoạt
+                            </button>
+                          )}
+
+                          {/* End Campaign */}
+                          {!isCampEnded && (
+                            <button
+                              onClick={() => handleChangeCampaignStatus(camp, 'ENDED')}
+                              disabled={Boolean(actionLoadingId)}
+                              title="Kết thúc chiến dịch"
+                              style={{
+                                padding: '5px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: '#f8fafc',
+                                color: '#475569',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: actionLoadingId ? 'not-allowed' : 'pointer',
+                                opacity: actionLoadingId === camp.id ? 0.6 : 1
+                              }}
+                            >
+                              ⏹️ Kết thúc
+                            </button>
+                          )}
 
                           {/* Delete */}
                           <button
                             onClick={() => handleDelete(camp.id, camp.name)}
+                            disabled={Boolean(actionLoadingId)}
                             title="Xóa chiến dịch"
                             style={{
                               padding: '5px 8px',
@@ -829,7 +956,7 @@ const AdminSales = () => {
                               color: '#dc2626',
                               fontSize: '0.75rem',
                               fontWeight: 600,
-                              cursor: 'pointer'
+                              cursor: actionLoadingId ? 'not-allowed' : 'pointer'
                             }}
                           >
                             🗑️
