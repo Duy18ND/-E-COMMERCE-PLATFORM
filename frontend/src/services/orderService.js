@@ -387,6 +387,9 @@ export const orderService = {
     try {
       return await api.get(`/orders/${id}`);
     } catch (err) {
+      if (err.response?.status === 403) {
+        throw err;
+      }
       const orders = getStoredOrders();
       const found = orders.find((o) => String(o.id) === String(id));
       if (!found) {
@@ -401,6 +404,9 @@ export const orderService = {
     try {
       return await api.put(`/orders/${id}/cancel`);
     } catch (err) {
+      if (err.response?.status === 403) {
+        throw err;
+      }
       const orders = getStoredOrders();
       const updatedOrders = orders.map((o) => {
         if (String(o.id) === String(id)) {
