@@ -243,7 +243,9 @@ const OrderDetail = () => {
             <div>
               <span style={{ color: '#64748b' }}>Phương thức:</span>{' '}
               <strong style={{ color: '#0f172a' }}>
-                {order.paymentMethod === 'MOCK_ONLINE' ? 'Thanh toán trực tuyến (Mô phỏng)' : 'Thanh toán khi nhận hàng (COD)'}
+                {order.paymentMethod === 'MOCK_ONLINE'
+                  ? `Thanh toán trực tuyến (${order.onlinePaymentProviderLabel || 'Mô phỏng'})`
+                  : 'Thanh toán khi nhận hàng (COD)'}
               </strong>
             </div>
             <div>

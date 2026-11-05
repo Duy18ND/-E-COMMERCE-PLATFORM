@@ -4,9 +4,9 @@ import { ORDER_STATUS } from '../utils/constants';
 
 export const paymentService = {
   // Thực hiện thanh toán mô phỏng (POST /api/payments/mock-pay/{orderId})
-  mockPay: async (orderId, success = true) => {
+  mockPay: async (orderId, success = true, provider = null) => {
     try {
-      return await api.post(`/payments/mock-pay/${orderId}`, { success });
+      return await api.post(`/payments/mock-pay/${orderId}`, { success, provider });
     } catch (err) {
       if (success) {
         return await orderService.updateOrderStatus(orderId, ORDER_STATUS.PAID);

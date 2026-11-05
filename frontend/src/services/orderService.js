@@ -306,6 +306,8 @@ export const orderService = {
     shippingAddress,
     note,
     paymentMethod,
+    onlinePaymentProvider = null,
+    onlinePaymentProviderLabel = null,
     couponCode = null,
     voucherCode = null,
     voucherId = null,
@@ -315,6 +317,7 @@ export const orderService = {
     totalAmount
   } = {}) => {
     const resolvedCouponCode = couponCode || voucherCode || null;
+    const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
 
     try {
       const apiOrder = await api.post('/orders/checkout', {
@@ -323,6 +326,8 @@ export const orderService = {
         shippingAddress,
         note: note || '',
         paymentMethod,
+        onlinePaymentProvider: isOnlinePay ? onlinePaymentProvider : null,
+        onlinePaymentProviderLabel: isOnlinePay ? onlinePaymentProviderLabel : null,
         couponCode: resolvedCouponCode,
         voucherCode: resolvedCouponCode,
         voucherId,
@@ -341,6 +346,9 @@ export const orderService = {
 
         return {
           ...apiOrder,
+          onlinePaymentProvider: apiOrder.onlinePaymentProvider ?? (isOnlinePay ? onlinePaymentProvider : null),
+          onlinePaymentProviderLabel: apiOrder.onlinePaymentProviderLabel ?? (isOnlinePay ? onlinePaymentProviderLabel : null),
+          paidAt: apiOrder.paidAt ?? (isOnlinePay ? new Date().toISOString() : null),
           couponCode: apiOrder.couponCode ?? resolvedCouponCode,
           voucherCode: apiOrder.voucherCode ?? resolvedCouponCode,
           voucherId: apiOrder.voucherId ?? voucherId,
@@ -408,7 +416,10 @@ export const orderService = {
         shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
         note: note || '',
         paymentMethod: paymentMethod || 'COD',
+        onlinePaymentProvider: isOnlinePay ? (onlinePaymentProvider || 'MOMO') : null,
+        onlinePaymentProviderLabel: isOnlinePay ? (onlinePaymentProviderLabel || 'Ví điện tử MoMo') : null,
         status: isOnlinePay ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING,
+        paidAt: isOnlinePay ? new Date().toISOString() : null,
         couponCode: resolvedCouponCode,
         voucherCode: resolvedCouponCode,
         voucherId: voucherId ?? null,
