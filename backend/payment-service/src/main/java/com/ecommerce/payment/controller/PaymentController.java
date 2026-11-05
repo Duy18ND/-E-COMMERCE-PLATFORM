@@ -50,10 +50,10 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<PaymentResponse>> mockPay(
             @Parameter(description = "ID của đơn hàng cần thanh toán", example = "101")
             @PathVariable Long orderId,
-            @Valid @RequestBody MockPaymentRequest request) {
-        boolean isSuccess = Boolean.TRUE.equals(request.getSuccess());
+            @Valid @RequestBody(required = false) MockPaymentRequest request) {
+        boolean isSuccess = request == null || request.getSuccess() == null || Boolean.TRUE.equals(request.getSuccess());
         log.info("REST request to mock pay for orderId: {}, success: {}, note: {}",
-                orderId, isSuccess, request.getNote());
+                orderId, isSuccess, request != null ? request.getNote() : "none");
         PaymentResponse response = paymentService.mockPay(orderId, isSuccess);
         String message = isSuccess
                 ? "Xác nhận thanh toán mô phỏng thành công"
