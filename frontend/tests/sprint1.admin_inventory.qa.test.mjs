@@ -108,6 +108,10 @@ test('ECOM-133 (ECOM-246 & ECOM-249): Kiểm thử Admin Quản lý Sản phẩm
     'product-service/src/main/java/com/ecommerce/product/dto/request/ProductCreateRequest.java'
   );
 
+  const stockModalCode = fs.existsSync(path.join(srcDir, 'components/admin/StockAdjustmentModal.jsx'))
+    ? readSrc('components/admin/StockAdjustmentModal.jsx')
+    : '';
+
   // 1. Kiểm tra Admin Products & ProductForm đã kết nối productService (BUG-S1-05, BUG-S1-06, BUG-S1-07)
   assert.match(adminProductsCode, /productService\.getAdminProducts\(\)/, 'Admin Products.jsx phải gọi productService.getAdminProducts()');
   assert.match(adminProductsCode, /productService\.delete\(id\)/, 'Admin Products.jsx phải gọi productService.delete(id) khi xóa');
@@ -117,7 +121,17 @@ test('ECOM-133 (ECOM-246 & ECOM-249): Kiểm thử Admin Quản lý Sản phẩm
   assert.match(productFormCode, /validateAdminProductForm/, 'ProductForm.jsx phải kiểm tra dữ liệu hợp lệ trước khi gửi');
   assert.match(productServiceCode, /api\.get\('\/products\/admin'/, 'productService phải hỗ trợ gọi GET /products/admin');
   assert.match(adminInventoryCode, /inventoryService\.getInventory\(\)/, 'Admin Inventory.jsx phải tải dữ liệu qua inventoryService');
-  assert.match(adminInventoryCode, /inventoryService\.updateStock/, 'Admin Inventory.jsx phải cập nhật tồn kho qua inventoryService.updateStock');
+  
+  // Hỗ trợ cả cơ chế inline updateStock cũ (Sprint 1) lẫn refactor modal StockAdjustmentModal chuyên dụng (Sprint 2)
+  const hasInventoryUpdateStock =
+    /inventoryService\.(updateStock|adjustStock|inboundStock)/.test(adminInventoryCode) ||
+    (/StockAdjustmentModal/.test(adminInventoryCode) &&
+      /inventoryService\.(inboundStock|adjustStock|decreaseStock|updateStock)/.test(stockModalCode));
+  assert.ok(
+    hasInventoryUpdateStock,
+    'Admin Inventory.jsx hoặc StockAdjustmentModal.jsx phải cập nhật tồn kho qua inventoryService'
+  );
+
   assert.match(inventoryServiceCode, /productService\.getAdminProducts/, 'inventoryService phải đồng bộ dữ liệu từ productService');
 
   // 2. Kiểm thử hàm validateAdminProductForm với các bộ dữ liệu biên

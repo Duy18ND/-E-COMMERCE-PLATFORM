@@ -73,7 +73,7 @@ spring:
         - id: product-service-user-reviews
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/*/reviews/me,/api/v1/products/**/reviews/me
+            - Path=/api/v1/products/*/reviews/me
             - Method=GET
           filters:
             - StripPrefix=0
@@ -175,6 +175,7 @@ spring:
                 fallbackUri: forward:/fallback/payment
 
       # ── CORS Global Configuration ────────────────────────────────────
+      # CORS Global Configuration
       globalcors:
         cors-configurations:
           '[/**]':
@@ -185,6 +186,7 @@ spring:
               - "http://localhost:3000"
               - "http://localhost:5173"
               - "http://localhost:8080"
+              - "https://across-bigger-screen-repair.trycloudflare.com"
             allowed-methods:
               - GET
               - POST
