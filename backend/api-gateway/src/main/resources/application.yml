@@ -46,7 +46,7 @@ spring:
         - id: auth-service-protected
           uri: lb://auth-service
           predicates:
-            - Path=/api/v1/users/**,/api/v1/admin/users/**
+            - Path=/api/v1/users/**,/api/v1/admin/users/**,/api/v1/admin/customers/**
           filters:
             - StripPrefix=0
             - AuthenticationFilter
@@ -59,7 +59,7 @@ spring:
         - id: product-service-admin
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**
+            - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**,/api/v1/admin/reviews,/api/v1/admin/reviews/**
             - Method=GET
           filters:
             - StripPrefix=0
@@ -100,7 +100,7 @@ spring:
         - id: product-service-mutation
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/**,/api/v1/admin/flash-sales/**,/api/v1/flash-sales/**
+            - Path=/api/v1/products/**,/api/v1/admin/flash-sales/**,/api/v1/flash-sales/**,/api/v1/admin/reviews/**
             - Method=POST,PUT,DELETE,PATCH
           filters:
             - StripPrefix=0
@@ -146,7 +146,7 @@ spring:
         - id: order-service
           uri: lb://order-service
           predicates:
-            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**,/api/v1/vouchers/**,/api/v1/admin/vouchers/**
+            - Path=/api/v1/orders/**,/api/v1/cart/**,/api/v1/admin/orders/**,/api/v1/vouchers/**,/api/v1/admin/vouchers/**,/api/v1/admin/statistics/**
           filters:
             - StripPrefix=0
             - AuthenticationFilter

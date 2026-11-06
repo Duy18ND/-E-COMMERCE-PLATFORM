@@ -3,11 +3,14 @@ package com.ecommerce.product.service;
 import com.ecommerce.product.client.OrderClient;
 import com.ecommerce.product.client.dto.OrderDetailResponse;
 import com.ecommerce.product.dto.request.CreateReviewRequest;
+import com.ecommerce.product.dto.request.ModerateReviewRequest;
 import com.ecommerce.product.dto.request.UpdateReviewRequest;
 import com.ecommerce.product.dto.response.ApiResponse;
+import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ReviewResponse;
 import com.ecommerce.product.dto.response.ReviewSummaryResponse;
 import com.ecommerce.product.entity.ProductReview;
+import com.ecommerce.product.enums.ReviewStatus;
 import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.exception.DuplicateResourceException;
 import com.ecommerce.product.exception.ResourceNotFoundException;
@@ -78,6 +81,7 @@ class ReviewServiceTest {
                 .orderId(500L)
                 .rating(5)
                 .comment("Sản phẩm rất tốt")
+                .status(ReviewStatus.APPROVED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -128,6 +132,7 @@ class ReviewServiceTest {
 
         assertThat(response.getId()).isEqualTo(99L);
         assertThat(response.getUserId()).isEqualTo(10L);
+        assertThat(response.getStatus()).isEqualTo(ReviewStatus.APPROVED);
         verify(orderClient, times(1)).getOrderById(500L, 10L);
     }
 
@@ -174,9 +179,8 @@ class ReviewServiceTest {
     @Test
     @DisplayName("updateReview: productId trên URL không khớp với review -> Ném IllegalArgumentException")
     void updateReview_WhenProductIdMismatch_ShouldThrowIllegalArgumentException() {
-        when(reviewRepository.findById(99L)).thenReturn(Optional.of(sampleReview)); // sampleReview has productId=1L
+        when(reviewRepository.findById(99L)).thenReturn(Optional.of(sampleReview));
 
-        // Client gọi với productId=2L
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> reviewService.updateReview(2L, 99L, 10L, updateRequest));
 
@@ -187,7 +191,7 @@ class ReviewServiceTest {
     @Test
     @DisplayName("updateReview: người dùng không phải owner -> Ném AccessDeniedException")
     void updateReview_WhenNotOwner_ShouldThrowAccessDeniedException() {
-        when(reviewRepository.findById(99L)).thenReturn(Optional.of(sampleReview)); // owner userId=10L
+        when(reviewRepository.findById(99L)).thenReturn(Optional.of(sampleReview));
 
         assertThrows(AccessDeniedException.class,
                 () -> reviewService.updateReview(1L, 99L, 999L, updateRequest));
@@ -245,7 +249,7 @@ class ReviewServiceTest {
     }
 
     // =========================================================================
-    // Get My Review & Summary Tests
+    // Get My Review & Summary Tests (Chỉ lấy APPROVED)
     // =========================================================================
 
     @Test
@@ -271,13 +275,13 @@ class ReviewServiceTest {
     }
 
     @Test
-    @DisplayName("getReviewsByProduct: Tính điểm trung bình và phân trang thành công")
+    @DisplayName("getReviewsByProduct: Chỉ lấy đánh giá APPROVED và tính điểm trung bình")
     void getReviewsByProduct_Success() {
         when(productRepository.existsById(1L)).thenReturn(true);
-        when(reviewRepository.findByProductId(eq(1L), any(Pageable.class)))
+        when(reviewRepository.findByProductIdAndStatus(eq(1L), eq(ReviewStatus.APPROVED), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleReview)));
         when(reviewRepository.calculateAverageRatingByProductId(1L)).thenReturn(4.55);
-        when(reviewRepository.countByProductId(1L)).thenReturn(1L);
+        when(reviewRepository.countByProductIdAndStatus(1L, ReviewStatus.APPROVED)).thenReturn(1L);
 
         ReviewSummaryResponse summary = reviewService.getReviewsByProduct(1L, PageRequest.of(0, 10));
 
@@ -285,5 +289,91 @@ class ReviewServiceTest {
         assertThat(summary.getAverageRating()).isEqualTo(4.6);
         assertThat(summary.getTotalReviews()).isEqualTo(1L);
         assertThat(summary.getReviews().getContent()).hasSize(1);
+        verify(reviewRepository, times(1)).findByProductIdAndStatus(eq(1L), eq(ReviewStatus.APPROVED), any(Pageable.class));
+    }
+
+    // =========================================================================
+    // Admin Moderation Tests
+    // =========================================================================
+
+    @Test
+    @DisplayName("moderateReview: Admin ẩn đánh giá vi phạm kèm lý do -> Lưu status=HIDDEN và hiddenReason")
+    void moderateReview_ToHidden_ShouldSaveHiddenReason() {
+        when(reviewRepository.findById(99L)).thenReturn(Optional.of(sampleReview));
+        when(reviewRepository.save(any(ProductReview.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ModerateReviewRequest modReq = ModerateReviewRequest.builder()
+                .status(ReviewStatus.HIDDEN)
+                .reason("Chứa từ ngữ xúc phạm, vi phạm tiêu chuẩn cộng đồng")
+                .build();
+
+        ReviewResponse response = reviewService.moderateReview(99L, modReq);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(ReviewStatus.HIDDEN);
+        assertThat(response.getHiddenReason()).isEqualTo("Chứa từ ngữ xúc phạm, vi phạm tiêu chuẩn cộng đồng");
+        verify(reviewRepository, times(1)).save(sampleReview);
+    }
+
+    @Test
+    @DisplayName("moderateReview: Admin duyệt lại đánh giá -> Lưu status=APPROVED và xóa hiddenReason")
+    void moderateReview_ToApproved_ShouldClearHiddenReason() {
+        sampleReview.setStatus(ReviewStatus.HIDDEN);
+        sampleReview.setHiddenReason("Lý do cũ");
+        when(reviewRepository.findById(99L)).thenReturn(Optional.of(sampleReview));
+        when(reviewRepository.save(any(ProductReview.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ModerateReviewRequest modReq = ModerateReviewRequest.builder()
+                .status(ReviewStatus.APPROVED)
+                .build();
+
+        ReviewResponse response = reviewService.moderateReview(99L, modReq);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(ReviewStatus.APPROVED);
+        assertThat(response.getHiddenReason()).isNull();
+        verify(reviewRepository, times(1)).save(sampleReview);
+    }
+
+    @Test
+    @DisplayName("moderateReview: Không tìm thấy reviewId -> Ném ResourceNotFoundException")
+    void moderateReview_NotFound_ShouldThrow() {
+        when(reviewRepository.findById(999L)).thenReturn(Optional.empty());
+
+        ModerateReviewRequest modReq = ModerateReviewRequest.builder()
+                .status(ReviewStatus.HIDDEN)
+                .reason("Vi phạm")
+                .build();
+
+        assertThrows(ResourceNotFoundException.class, () -> reviewService.moderateReview(999L, modReq));
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("getAllReviewsForAdmin: Lọc theo status HIDDEN")
+    void getAllReviewsForAdmin_WithStatus_ShouldFilterByStatus() {
+        sampleReview.setStatus(ReviewStatus.HIDDEN);
+        when(reviewRepository.findByStatus(eq(ReviewStatus.HIDDEN), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleReview)));
+
+        PagedResponse<ReviewResponse> response = reviewService.getAllReviewsForAdmin(ReviewStatus.HIDDEN, PageRequest.of(0, 10));
+
+        assertThat(response).isNotNull();
+        assertThat(response.getContent()).hasSize(1);
+        assertThat(response.getContent().get(0).getStatus()).isEqualTo(ReviewStatus.HIDDEN);
+        verify(reviewRepository, times(1)).findByStatus(eq(ReviewStatus.HIDDEN), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("getAllReviewsForAdmin: Không truyền status -> Lấy toàn bộ")
+    void getAllReviewsForAdmin_WithoutStatus_ShouldCallFindAll() {
+        when(reviewRepository.findAll(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleReview)));
+
+        PagedResponse<ReviewResponse> response = reviewService.getAllReviewsForAdmin(null, PageRequest.of(0, 10));
+
+        assertThat(response).isNotNull();
+        assertThat(response.getContent()).hasSize(1);
+        verify(reviewRepository, times(1)).findAll(any(Pageable.class));
     }
 }

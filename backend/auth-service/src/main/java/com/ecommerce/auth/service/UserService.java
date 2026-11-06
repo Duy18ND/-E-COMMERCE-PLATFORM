@@ -33,9 +33,20 @@ public interface UserService {
 
     void deleteAddress(Long userId, Long addressId);
 
-    // ?? Admin scope ????????????????????????????????????????????????????????????
+    // ── Admin scope ────────────────────────────────────────────────────────────
 
     PagedResponse<UserSummaryResponse> getAllUsers(Pageable pageable);
 
     UserSummaryResponse updateUserStatus(Long targetUserId, UpdateUserStatusRequest request);
+
+    /**
+     * [Task ECOM-145 / ECOM-325] Lấy danh sách khách hàng có phân quyền và phân trang cho Admin.
+     * Hỗ trợ tìm kiếm theo từ khóa (họ tên, email, SĐT) và lọc theo trạng thái tài khoản.
+     */
+    PagedResponse<UserSummaryResponse> getCustomers(String keyword, com.ecommerce.auth.enums.UserStatus status, Pageable pageable);
+
+    /**
+     * [Task ECOM-145] Đếm tổng số lượng khách hàng trong hệ thống.
+     */
+    long countCustomers();
 }

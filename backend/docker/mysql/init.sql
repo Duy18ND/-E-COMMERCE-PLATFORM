@@ -140,7 +140,8 @@ CREATE TABLE IF NOT EXISTS product_reviews (
     CONSTRAINT chk_rating CHECK (rating BETWEEN 1 AND 5),
     CONSTRAINT uq_review_product_user UNIQUE (product_id, user_id),
     INDEX idx_reviews_product_id (product_id),
-    INDEX idx_reviews_user_id (user_id)
+    INDEX idx_reviews_user_id (user_id),
+    INDEX idx_reviews_product_status (product_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Đánh giá sản phẩm từ khách hàng đã mua hàng';
 

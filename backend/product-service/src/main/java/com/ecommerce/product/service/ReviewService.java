@@ -1,9 +1,12 @@
 package com.ecommerce.product.service;
 
 import com.ecommerce.product.dto.request.CreateReviewRequest;
+import com.ecommerce.product.dto.request.ModerateReviewRequest;
 import com.ecommerce.product.dto.request.UpdateReviewRequest;
+import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ReviewResponse;
 import com.ecommerce.product.dto.response.ReviewSummaryResponse;
+import com.ecommerce.product.enums.ReviewStatus;
 import org.springframework.data.domain.Pageable;
 
 public interface ReviewService {
@@ -46,11 +49,11 @@ public interface ReviewService {
     void deleteReview(Long productId, Long reviewId, Long userId, String userRoles);
 
     /**
-     * Lấy toàn bộ đánh giá của sản phẩm kèm thống kê (phân trang).
+     * Lấy toàn bộ đánh giá APPROVED của sản phẩm kèm thống kê (phân trang cho Public).
      *
      * @param productId  ID sản phẩm
      * @param pageable   Thông tin phân trang
-     * @return ReviewSummaryResponse (avg rating, total, danh sách)
+     * @return ReviewSummaryResponse (avg rating, total, danh sách đánh giá đã duyệt)
      */
     ReviewSummaryResponse getReviewsByProduct(Long productId, Pageable pageable);
 
@@ -62,4 +65,22 @@ public interface ReviewService {
      * @return ReviewResponse hoặc null nếu chưa đánh giá
      */
     ReviewResponse getMyReviewForProduct(Long productId, Long userId);
+
+    /**
+     * Admin kiểm duyệt: duyệt (APPROVED) hoặc ẩn (HIDDEN) đánh giá vi phạm quy chuẩn.
+     *
+     * @param reviewId  ID đánh giá cần kiểm duyệt
+     * @param request   Trạng thái và lý do ẩn (nếu có)
+     * @return ReviewResponse sau khi cập nhật
+     */
+    ReviewResponse moderateReview(Long reviewId, ModerateReviewRequest request);
+
+    /**
+     * Admin lấy danh sách toàn bộ đánh giá trong hệ thống để kiểm duyệt (phân trang và lọc theo trạng thái).
+     *
+     * @param status    Trạng thái kiểm duyệt cần lọc (tùy chọn)
+     * @param pageable  Thông tin phân trang
+     * @return PagedResponse chứa danh sách đánh giá
+     */
+    PagedResponse<ReviewResponse> getAllReviewsForAdmin(ReviewStatus status, Pageable pageable);
 }

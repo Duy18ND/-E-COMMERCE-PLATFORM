@@ -304,4 +304,60 @@ class UserServiceTest {
         assertThat(sampleUser.getPhone()).isEqualTo("0912345678");
         verify(userRepository, times(1)).save(sampleUser);
     }
+
+    // =========================================================================
+    // [Task ECOM-145 / ECOM-325] Unit Tests cho Quản lý khách hàng
+    // Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+    // =========================================================================
+
+    @Test
+    @DisplayName("[ECOM-145 / ECOM-325] Lấy danh sách khách hàng có phân quyền và tìm kiếm")
+    void getCustomers_Success() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<User> page = new PageImpl<>(List.of(sampleUser), pageable, 1);
+        when(userRepository.searchCustomers(eq(RoleName.ROLE_USER), eq("Nguyen"), eq(UserStatus.ACTIVE), eq(pageable)))
+                .thenReturn(page);
+
+        PagedResponse<UserSummaryResponse> response = userService.getCustomers("Nguyen", UserStatus.ACTIVE, pageable);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getContent()).hasSize(1);
+        assertThat(response.getContent().get(0).getFullName()).isEqualTo("Nguyen Van A");
+        verify(userRepository, times(1)).searchCustomers(eq(RoleName.ROLE_USER), eq("Nguyen"), eq(UserStatus.ACTIVE), eq(pageable));
+    }
+
+    @Test
+    @DisplayName("[ECOM-145] Chặn khóa tài khoản có quyền Quản trị viên (ROLE_ADMIN)")
+    void updateUserStatus_BlockAdminUser_ShouldThrowIllegalArgumentException() {
+        Role adminRole = Role.builder().id(2L).name(RoleName.ROLE_ADMIN).build();
+        User adminUser = User.builder()
+                .id(2L)
+                .email("admin@example.com")
+                .fullName("Admin User")
+                .status(UserStatus.ACTIVE)
+                .roles(Set.of(adminRole))
+                .build();
+
+        UpdateUserStatusRequest request = new UpdateUserStatusRequest();
+        request.setStatus(UserStatus.BLOCKED);
+
+        when(userRepository.findById(2L)).thenReturn(Optional.of(adminUser));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                userService.updateUserStatus(2L, request));
+
+        assertThat(ex.getMessage()).contains("Không thể khóa tài khoản có quyền Quản trị viên");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[ECOM-145] Đếm tổng số khách hàng thành công")
+    void countCustomers_Success() {
+        when(userRepository.countByRoleName(RoleName.ROLE_USER)).thenReturn(42L);
+
+        long count = userService.countCustomers();
+
+        assertThat(count).isEqualTo(42L);
+        verify(userRepository, times(1)).countByRoleName(RoleName.ROLE_USER);
+    }
 }

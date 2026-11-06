@@ -9,6 +9,8 @@ import com.ecommerce.auth.dto.response.UserProfileResponse;
 import com.ecommerce.auth.dto.response.UserSummaryResponse;
 import com.ecommerce.auth.entity.User;
 import com.ecommerce.auth.entity.UserAddress;
+import com.ecommerce.auth.enums.RoleName;
+import com.ecommerce.auth.enums.UserStatus;
 import com.ecommerce.auth.exception.ResourceNotFoundException;
 import com.ecommerce.auth.repository.UserAddressRepository;
 import com.ecommerce.auth.repository.UserRepository;
@@ -209,10 +211,38 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy người dùng với ID: " + targetUserId));
 
+        // [Task ECOM-145] Bảo vệ tài khoản Quản trị viên khỏi việc bị khóa
+        boolean isTargetAdmin = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(r -> r.getName() == RoleName.ROLE_ADMIN);
+        if (isTargetAdmin && request.getStatus() == UserStatus.BLOCKED) {
+            throw new IllegalArgumentException("Không thể khóa tài khoản có quyền Quản trị viên (ROLE_ADMIN)");
+        }
+
         user.setStatus(request.getStatus());
         User updated = userRepository.save(user);
         log.info("User userId={} status updated to {}", targetUserId, updated.getStatus());
         return mapToUserSummary(updated);
+    }
+
+    /**
+     * [Task ECOM-145 / ECOM-325] Lấy danh sách khách hàng có phân quyền và phân trang cho Admin.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<UserSummaryResponse> getCustomers(String keyword, UserStatus status, Pageable pageable) {
+        String cleanKeyword = (keyword != null && !keyword.trim().isEmpty()) ? keyword.trim() : null;
+        Page<User> customerPage = userRepository.searchCustomers(RoleName.ROLE_USER, cleanKeyword, status, pageable);
+        return PagedResponse.fromPage(customerPage.map(this::mapToUserSummary));
+    }
+
+    /**
+     * [Task ECOM-145] Đếm tổng số lượng khách hàng trong hệ thống.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long countCustomers() {
+        return userRepository.countByRoleName(RoleName.ROLE_USER);
     }
 
     // Mappers
