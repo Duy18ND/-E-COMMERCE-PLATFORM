@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import inventoryService, { getInventoryStatus } from '../../services/inventoryService';
 import useToast from '../../hooks/useToast';
 import Button from '../../components/common/Button';
+import Loading from '../../components/common/Loading';
+import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
 import StockAdjustmentModal from '../../components/admin/StockAdjustmentModal';
 
@@ -20,6 +22,7 @@ const Inventory = () => {
   const { notify } = useToast();
   const [inventoryList, setInventoryList] = useState(INITIAL_MOCK_INVENTORY);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,12 +39,14 @@ const Inventory = () => {
 
   const loadInventory = useCallback(async () => {
     setIsLoading(true);
+    setError('');
     try {
       const data = await inventoryService.getInventory();
       if (Array.isArray(data) && data.length > 0) {
         setInventoryList(data);
       }
     } catch (err) {
+      setError(err.message || 'Không thể tải dữ liệu tồn kho từ máy chủ.');
       console.warn('Lỗi tải tồn kho từ máy chủ, sử dụng dữ liệu cục bộ:', err);
     } finally {
       setIsLoading(false);
@@ -192,6 +197,76 @@ const Inventory = () => {
           </Button>
         </div>
       </div>
+
+      {/* ERROR BANNER (NẾU LỖI KẾT NỐI API) */}
+      {error && (
+        <div style={{ marginBottom: '1rem' }}>
+          <ErrorMessage message={error} />
+          <div style={{ marginTop: '0.5rem' }}>
+            <Button variant="outline" size="sm" onClick={loadInventory}>
+              🔄 Thử lại kết nối
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER CẢNH BÁO TỒN KHO KHẨN CẤP (OUT_OF_STOCK / LOW_STOCK) */}
+      {(metrics.outOfStock > 0 || metrics.lowStock > 0) && (
+        <div
+          role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.5rem',
+            borderRadius: '12px',
+            backgroundColor: metrics.outOfStock > 0 ? '#fef2f2' : '#fffbeb',
+            border: `1px solid ${metrics.outOfStock > 0 ? '#fecaca' : '#fde68a'}`,
+            color: metrics.outOfStock > 0 ? '#991b1b' : '#92400e'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ fontSize: '1.35rem' }}>{metrics.outOfStock > 0 ? '🚨' : '⚠️'}</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                Cảnh báo tồn kho cần xử lý: {metrics.outOfStock} mặt hàng hết hàng, {metrics.lowStock} mặt hàng sắp hết hàng!
+              </div>
+              <div style={{ fontSize: '0.82rem', opacity: 0.9 }}>
+                Vui lòng kiểm tra và thực hiện nhập kho bổ sung để tránh gián đoạn đơn hàng của khách.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {metrics.outOfStock > 0 && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  setStockStatusFilter('OUT_OF_STOCK');
+                  setCurrentPage(1);
+                }}
+              >
+                ⛔ Xem hàng đã hết ({metrics.outOfStock})
+              </Button>
+            )}
+            {metrics.lowStock > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStockStatusFilter('LOW_STOCK');
+                  setCurrentPage(1);
+                }}
+              >
+                ⚠️ Xem sắp hết ({metrics.lowStock})
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* METRIC CARDS */}
       <div className="grid-cols-4" style={{ marginBottom: '1.5rem' }}>
@@ -403,7 +478,11 @@ const Inventory = () => {
 
       {/* INVENTORY TABLE */}
       <div className="card" style={{ padding: 0, borderRadius: '14px', overflow: 'hidden' }}>
-        {filteredInventory.length === 0 ? (
+        {isLoading ? (
+          <div style={{ padding: '3rem', textAlign: 'center' }}>
+            <Loading message="Đang đồng bộ dữ liệu tồn kho..." />
+          </div>
+        ) : filteredInventory.length === 0 ? (
           <div style={{ padding: '3.5rem', textAlign: 'center', color: '#64748b' }}>
             <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📦</div>
             <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f172a' }}>Không tìm thấy mặt hàng nào phù hợp</p>
@@ -433,7 +512,18 @@ const Inventory = () => {
                     const statusInfo = getInventoryStatus(currentStock, threshold);
 
                     return (
-                      <tr key={item.id} style={{ transition: 'background-color 0.15s ease' }}>
+                      <tr
+                        key={item.id}
+                        style={{
+                          transition: 'background-color 0.15s ease',
+                          backgroundColor:
+                            statusInfo.status === 'OUT_OF_STOCK'
+                              ? '#fff5f5'
+                              : statusInfo.status === 'LOW_STOCK'
+                              ? '#fffbeb'
+                              : 'transparent'
+                        }}
+                      >
                         <td>
                           <code
                             style={{

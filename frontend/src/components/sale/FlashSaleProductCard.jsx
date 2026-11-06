@@ -26,6 +26,10 @@ const FlashSaleProductCard = ({ product }) => {
   const sold = product.sold || 0;
   const totalStock = product.stock || 100;
   const progressPercent = Math.min(100, Math.round((sold / totalStock) * 100));
+  const isSoldOut =
+    sold >= totalStock ||
+    product.remainingStock === 0 ||
+    product.statusText === 'Đã cháy hàng';
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -37,6 +41,17 @@ const FlashSaleProductCard = ({ product }) => {
           type: 'error',
           title: 'Khóa chức năng',
           message: 'Tài khoản Quản trị viên (Admin) không thể mua hàng.'
+        });
+      }
+      return;
+    }
+
+    if (isSoldOut) {
+      if (showToast) {
+        showToast({
+          type: 'warning',
+          title: 'Hết suất Flash Sale',
+          message: 'Sản phẩm Flash Sale này đã hết suất ưu đãi!'
         });
       }
       return;
@@ -57,6 +72,17 @@ const FlashSaleProductCard = ({ product }) => {
           type: 'error',
           title: 'Khóa chức năng',
           message: 'Tài khoản Quản trị viên (Admin) không thể mua hàng.'
+        });
+      }
+      return;
+    }
+
+    if (isSoldOut) {
+      if (showToast) {
+        showToast({
+          type: 'warning',
+          title: 'Hết suất Flash Sale',
+          message: 'Sản phẩm Flash Sale này đã hết suất ưu đãi!'
         });
       }
       return;
@@ -288,38 +314,38 @@ const FlashSaleProductCard = ({ product }) => {
         {/* Mua ngay button */}
         <button
           onClick={handleBuyNow}
-          disabled={isAdmin}
+          disabled={isAdmin || isSoldOut}
           style={{
             flex: 1,
             minWidth: 0,
-            backgroundColor: '#dc2626',
+            backgroundColor: isSoldOut ? '#94a3b8' : '#dc2626',
             color: '#ffffff',
             border: 'none',
             borderRadius: '8px',
             padding: '0.5rem 0.5rem',
             fontSize: 'clamp(0.76rem, 1.5vw, 0.85rem)',
             fontWeight: 700,
-            cursor: isAdmin ? 'not-allowed' : 'pointer',
+            cursor: isAdmin || isSoldOut ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s ease',
-            boxShadow: '0 2px 6px rgba(220, 38, 38, 0.3)',
+            boxShadow: isSoldOut ? 'none' : '0 2px 6px rgba(220, 38, 38, 0.3)',
             textAlign: 'center',
             whiteSpace: 'nowrap'
           }}
           onMouseEnter={(e) => {
-            if (!isAdmin) e.currentTarget.style.backgroundColor = '#b91c1c';
+            if (!isAdmin && !isSoldOut) e.currentTarget.style.backgroundColor = '#b91c1c';
           }}
           onMouseLeave={(e) => {
-            if (!isAdmin) e.currentTarget.style.backgroundColor = '#dc2626';
+            if (!isAdmin && !isSoldOut) e.currentTarget.style.backgroundColor = '#dc2626';
           }}
         >
-          Mua ngay
+          {isSoldOut ? 'Đã cháy hàng' : 'Mua ngay'}
         </button>
 
         {/* Add to cart icon button */}
         <button
           onClick={handleAddToCart}
-          disabled={isAdmin}
-          title="Thêm vào giỏ hàng"
+          disabled={isAdmin || isSoldOut}
+          title={isSoldOut ? 'Đã hết suất Flash Sale' : 'Thêm vào giỏ hàng'}
           style={{
             width: '34px',
             height: '34px',
@@ -330,7 +356,8 @@ const FlashSaleProductCard = ({ product }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: isAdmin ? 'not-allowed' : 'pointer',
+            cursor: isAdmin || isSoldOut ? 'not-allowed' : 'pointer',
+            opacity: isSoldOut ? 0.55 : 1,
             transition: 'all 0.15s ease',
             flexShrink: 0
           }}

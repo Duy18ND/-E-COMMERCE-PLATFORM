@@ -9,8 +9,10 @@ import useNotification from '../../hooks/useNotification';
 
 const AdminSales = () => {
   const navigate = useNavigate();
+  const { notify, confirmDialog } = useNotification();
   const [campaigns, setCampaigns] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -27,8 +29,15 @@ const AdminSales = () => {
 
   // Load campaigns from service
   const loadCampaigns = async () => {
-    const list = await saleService.getAllCampaigns();
-    setCampaigns(Array.isArray(list) ? list : []);
+    setIsLoading(true);
+    try {
+      const list = await saleService.getAllCampaigns();
+      setCampaigns(Array.isArray(list) ? list : []);
+    } catch (err) {
+      notify.error(err?.message || 'Không thể tải danh sách chiến dịch Flash Sale');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {

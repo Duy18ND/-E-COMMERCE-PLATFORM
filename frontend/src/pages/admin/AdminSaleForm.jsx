@@ -14,6 +14,7 @@ const SAMPLE_BANNERS = [
 const AdminSaleForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { notify } = useNotification();
   const isEditing = Boolean(id);
 
   const [allAvailableProducts, setAllAvailableProducts] = useState(() =>
@@ -167,6 +168,14 @@ const AdminSaleForm = () => {
     );
   };
 
+  // Change quota (flashStock) of a selected product
+  const handleQuotaChange = (prodId, newQuota) => {
+    const val = Math.max(0, Math.floor(Number(newQuota) || 0));
+    setSelectedProducts((prev) =>
+      prev.map((item) => (item.productId === prodId ? { ...item, quota: val } : item))
+    );
+  };
+
   // Save campaign
   const handleSave = async (publishStatus) => {
     if (!formData.name.trim()) {
@@ -174,8 +183,41 @@ const AdminSaleForm = () => {
       return;
     }
 
+    if (!formData.startTime || !formData.endTime) {
+      notify.warning('Vui lòng chọn đầy đủ thời gian bắt đầu và thời gian kết thúc!');
+      return;
+    }
+
+    if (new Date(formData.endTime) <= new Date(formData.startTime)) {
+      notify.warning('Thời gian kết thúc phải lớn hơn thời gian bắt đầu chiến dịch!');
+      return;
+    }
+
+    if (!Number.isInteger(Number(formData.userLimit)) || Number(formData.userLimit) < 1) {
+      notify.warning('Giới hạn mua mỗi tài khoản phải là số nguyên lớn hơn hoặc bằng 1!');
+      return;
+    }
+
     if (selectedProducts.length === 0) {
       notify.warning('Vui lòng chọn ít nhất 1 sản phẩm tham gia chương trình Flash Sale!');
+      return;
+    }
+
+    const invalidPriceProd = selectedProducts.find(
+      (p) => Number(p.salePrice) <= 0 || Number(p.salePrice) >= Number(p.originalPrice)
+    );
+    if (invalidPriceProd) {
+      notify.warning(
+        `Sản phẩm "${invalidPriceProd.name}" có giá Flash Sale không hợp lệ (phải > 0 và nhỏ hơn giá gốc ${formatCurrency(invalidPriceProd.originalPrice)})!`
+      );
+      return;
+    }
+
+    const invalidQuotaProd = selectedProducts.find(
+      (p) => !Number.isInteger(Number(p.quota)) || Number(p.quota) < 1
+    );
+    if (invalidQuotaProd) {
+      notify.warning(`Sản phẩm "${invalidQuotaProd.name}" phải có số suất Flash Sale (quota) tối thiểu là 1!`);
       return;
     }
 
@@ -616,9 +658,10 @@ const AdminSaleForm = () => {
                 <thead>
                   <tr>
                     <th style={{ width: '40px', textAlign: 'center' }}>Chọn</th>
-                    <th>SẢN PHẨM & SKU</th>
+                    <th>SẢN PHẨM &amp; SKU</th>
                     <th>GIÁ GỐC (VNĐ)</th>
                     <th>GIÁ FLASH SALE (VNĐ)</th>
+                    <th style={{ width: '110px', textAlign: 'center' }}>SỐ SUẤT (QUOTA)</th>
                     <th style={{ textAlign: 'center' }}>% GIẢM</th>
                   </tr>
                 </thead>
@@ -627,6 +670,7 @@ const AdminSaleForm = () => {
                     const selectedItem = selectedProducts.find((p) => p.productId === prod.id);
                     const isSelected = Boolean(selectedItem);
                     const salePrice = selectedItem ? selectedItem.salePrice : (prod.salePrice || Math.round(prod.price * 0.7));
+                    const quota = selectedItem ? selectedItem.quota : (prod.stock || 50);
                     const discount = Math.round(((prod.price - salePrice) / prod.price) * 100);
 
                     return (
@@ -676,6 +720,31 @@ const AdminSaleForm = () => {
                           ) : (
                             <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
                               {formatCurrency(salePrice)}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {isSelected ? (
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={quota}
+                              onChange={(e) => handleQuotaChange(prod.id, e.target.value)}
+                              style={{
+                                width: '75px',
+                                padding: '4px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                fontSize: '0.85rem',
+                                outline: 'none'
+                              }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                              {quota} suất
                             </span>
                           )}
                         </td>
