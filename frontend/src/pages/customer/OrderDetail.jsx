@@ -45,6 +45,13 @@ const OrderDetail = () => {
 
   useEffect(() => {
     fetchOrderDetail();
+    // [Task ECOM-313] Lắng nghe đồng bộ cập nhật trạng thái từ trang Admin (cùng tab, đa tab, focus)
+    if (typeof orderService.subscribeOrderStatusSync === 'function') {
+      return orderService.subscribeOrderStatusSync(() => {
+        fetchOrderDetail();
+      }, id);
+    }
+    return undefined;
   }, [id]);
 
   // Hủy đơn hàng khi đơn còn ở trạng thái PENDING
@@ -206,6 +213,15 @@ const OrderDetail = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={loading || actionLoading}
+            onClick={fetchOrderDetail}
+          >
+            🔄 Làm mới
+          </Button>
+
           <Link to={`/orders/${order.id}/tracking`} style={{ textDecoration: 'none' }}>
             <Button variant="outline" size="sm">
               🚚 Theo dõi kiện hàng
