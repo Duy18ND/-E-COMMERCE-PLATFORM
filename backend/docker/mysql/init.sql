@@ -1,41 +1,99 @@
 -- ═══════════════════════════════════════════════════════════════
---  E-Commerce Platform — MySQL Initialization Script
---  Creates 4 isolated databases + grants permissions
+--  E-Commerce Platform — MySQL Complete Initialization Script
+--  Creates 4 isolated databases + sets full privileges + schemas
+--  Safe for initial setup and idempotent (IF NOT EXISTS)
 -- ═══════════════════════════════════════════════════════════════
 
--- Auth Service database
+-- ─────────────────────────────────────────────────────────────
+--  1. Create 4 isolated databases
+-- ─────────────────────────────────────────────────────────────
 CREATE DATABASE IF NOT EXISTS auth_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
--- Product Service database
 CREATE DATABASE IF NOT EXISTS product_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
--- Order Service database
 CREATE DATABASE IF NOT EXISTS order_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
--- Payment Service database
 CREATE DATABASE IF NOT EXISTS payment_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
--- Grant full privileges on all 4 databases to the ecommerce_user
+-- ─────────────────────────────────────────────────────────────
+--  2. User Privileges (Dev: ecommerce_user & Prod: ecommerce_prod_user)
+-- ─────────────────────────────────────────────────────────────
+CREATE USER IF NOT EXISTS 'ecommerce_user'@'%' IDENTIFIED BY 'ecommerce_pass';
 GRANT ALL PRIVILEGES ON auth_db.*    TO 'ecommerce_user'@'%';
 GRANT ALL PRIVILEGES ON product_db.* TO 'ecommerce_user'@'%';
 GRANT ALL PRIVILEGES ON order_db.*   TO 'ecommerce_user'@'%';
 GRANT ALL PRIVILEGES ON payment_db.* TO 'ecommerce_user'@'%';
 
+CREATE USER IF NOT EXISTS 'ecommerce_prod_user'@'%' IDENTIFIED BY 'ecommerce_prod_pass';
+GRANT ALL PRIVILEGES ON auth_db.*    TO 'ecommerce_prod_user'@'%';
+GRANT ALL PRIVILEGES ON product_db.* TO 'ecommerce_prod_user'@'%';
+GRANT ALL PRIVILEGES ON order_db.*   TO 'ecommerce_prod_user'@'%';
+GRANT ALL PRIVILEGES ON payment_db.* TO 'ecommerce_prod_user'@'%';
+
 FLUSH PRIVILEGES;
 
--- ─────────────────────────────────────────────────────────────────────────────
---  Product Service: products table
---  Ràng buộc CHECK (stock_quantity >= 0): Đảm bảo tồn kho không bao giờ bị âm ở tầng CSDL.
---  Cột version phục vụ JPA Optimistic Locking (@Version) khi xử lý đồng thời.
--- ─────────────────────────────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────
+--  3. Auth Service Database (auth_db)
+-- ─────────────────────────────────────────────────────────────
+USE auth_db;
+
+CREATE TABLE IF NOT EXISTS roles (
+    id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(20) NOT NULL UNIQUE COMMENT 'Tên vai trò (ROLE_USER, ROLE_ADMIN)'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng vai trò người dùng';
+
+INSERT IGNORE INTO roles (id, name) VALUES (1, 'ROLE_USER'), (2, 'ROLE_ADMIN');
+
+CREATE TABLE IF NOT EXISTS users (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email      VARCHAR(120) NOT NULL UNIQUE COMMENT 'Email đăng nhập duy nhất',
+    password   VARCHAR(255) NOT NULL        COMMENT 'Mật khẩu băm BCrypt',
+    full_name  VARCHAR(150) NOT NULL        COMMENT 'Họ và tên người dùng',
+    phone      VARCHAR(20)                  COMMENT 'Số điện thoại',
+    status     VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE' COMMENT 'Trạng thái: ACTIVE, BLOCKED',
+    created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_users_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng tài khoản người dùng';
+
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    PRIMARY KEY (user_id, role_id),
+    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng liên kết người dùng và vai trò';
+
+CREATE TABLE IF NOT EXISTS user_addresses (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id       BIGINT       NOT NULL COMMENT 'ID người dùng',
+    receiver_name VARCHAR(150) NOT NULL COMMENT 'Tên người nhận hàng',
+    phone         VARCHAR(20)  NOT NULL COMMENT 'Số điện thoại người nhận',
+    address_line  VARCHAR(255) NOT NULL COMMENT 'Địa chỉ chi tiết (số nhà, tên đường)',
+    city          VARCHAR(100) NOT NULL COMMENT 'Tỉnh/Thành phố',
+    district      VARCHAR(100)          COMMENT 'Quận/Huyện',
+    ward          VARCHAR(100)          COMMENT 'Phường/Xã',
+    is_default    BOOLEAN      NOT NULL DEFAULT FALSE COMMENT 'Địa chỉ mặc định',
+    created_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at    DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_address_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Sổ địa chỉ nhận hàng của người dùng';
+
+-- ─────────────────────────────────────────────────────────────
+--  4. Product Service Database (product_db)
+-- ─────────────────────────────────────────────────────────────
 USE product_db;
 
 CREATE TABLE IF NOT EXISTS categories (
@@ -70,22 +128,15 @@ CREATE TABLE IF NOT EXISTS products (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Danh mục sản phẩm và quản lý tồn kho';
 
--- ─────────────────────────────────────────────────────────────────────────────
---  Product Service: product_reviews table
---  Điều kiện đánh giá: user phải có đơn DELIVERED chứa sản phẩm.
---  Ràng buộc UNIQUE (product_id, user_id): mỗi user chỉ đánh giá 1 lần.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS product_reviews (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    product_id    BIGINT       NOT NULL COMMENT 'ID sản phẩm được đánh giá',
-    user_id       BIGINT       NOT NULL COMMENT 'ID người dùng viết đánh giá',
-    order_id      BIGINT       NOT NULL COMMENT 'ID đơn hàng DELIVERED — xác minh điều kiện đánh giá',
-    rating        TINYINT      NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5',
-    comment       TEXT                  COMMENT 'Nội dung bình luận (tuỳ chọn)',
-    status        VARCHAR(20)  NOT NULL DEFAULT 'APPROVED' COMMENT 'Trạng thái: APPROVED (hiển thị), HIDDEN (ẩn do vi phạm)',
-    hidden_reason VARCHAR(255)          COMMENT 'Lý do ẩn đánh giá vi phạm',
-    created_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at    DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT       NOT NULL COMMENT 'ID sản phẩm được đánh giá',
+    user_id    BIGINT       NOT NULL COMMENT 'ID người dùng viết đánh giá',
+    order_id   BIGINT       NOT NULL COMMENT 'ID đơn hàng DELIVERED — xác minh điều kiện đánh giá',
+    rating     INT          NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5 (Khớp Hibernate Integer)',
+    comment    TEXT                  COMMENT 'Nội dung bình luận (tuỳ chọn)',
+    created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     CONSTRAINT chk_rating CHECK (rating BETWEEN 1 AND 5),
     CONSTRAINT uq_review_product_user UNIQUE (product_id, user_id),
     INDEX idx_reviews_product_id (product_id),
@@ -94,10 +145,6 @@ CREATE TABLE IF NOT EXISTS product_reviews (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Đánh giá sản phẩm từ khách hàng đã mua hàng';
 
--- ─────────────────────────────────────────────────────────────────────────────
---  Product Service: flash_sale_campaigns & flash_sale_items tables
---  Quản lý chương trình Flash Sale, giá ưu đãi, hạn mức mua và tồn kho phân bổ.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flash_sale_campaigns (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     name       VARCHAR(200) NOT NULL COMMENT 'Tên chiến dịch Flash Sale',
@@ -127,10 +174,9 @@ CREATE TABLE IF NOT EXISTS flash_sale_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Chi tiết sản phẩm và hạn mức trong chiến dịch Flash Sale';
 
--- ─────────────────────────────────────────────────────────────────────────────
---  Order Service: vouchers table
---  Quản lý mã giảm giá (Voucher / Coupon), hạn sử dụng và giới hạn lượt dùng
--- ─────────────────────────────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────
+--  5. Order Service Database (order_db)
+-- ─────────────────────────────────────────────────────────────
 USE order_db;
 
 CREATE TABLE IF NOT EXISTS vouchers (
@@ -158,4 +204,93 @@ CREATE TABLE IF NOT EXISTS vouchers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng mã giảm giá voucher cho đơn hàng';
 
+CREATE TABLE IF NOT EXISTS orders (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id          BIGINT         NOT NULL COMMENT 'ID người dùng đặt hàng',
+    receiver_name    VARCHAR(100)   NOT NULL COMMENT 'Tên người nhận',
+    receiver_phone   VARCHAR(20)    NOT NULL COMMENT 'Số điện thoại người nhận',
+    shipping_address TEXT           NOT NULL COMMENT 'Địa chỉ nhận hàng chi tiết',
+    subtotal_amount  DECIMAL(12, 2)          COMMENT 'Tổng tiền hàng trước giảm giá',
+    voucher_code     VARCHAR(50)             COMMENT 'Mã voucher áp dụng',
+    discount_amount  DECIMAL(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Số tiền giảm giá',
+    total_amount     DECIMAL(12, 2) NOT NULL COMMENT 'Tổng số tiền thanh toán thực tế',
+    status           VARCHAR(20)    NOT NULL DEFAULT 'PENDING' COMMENT 'Trạng thái đơn hàng: PENDING, CONFIRMED, PROCESSING, SHIPPING, DELIVERED, CANCELLED, REFUNDED',
+    payment_method   VARCHAR(30)    NOT NULL COMMENT 'Phương thức thanh toán: COD, MOCK_ONLINE, VNPAY',
+    created_at       DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at       DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_orders_user_id (user_id),
+    INDEX idx_orders_status (status),
+    INDEX idx_orders_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng quản lý đơn hàng';
 
+CREATE TABLE IF NOT EXISTS order_items (
+    id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id          BIGINT         NOT NULL COMMENT 'ID đơn hàng liên kết',
+    product_id        BIGINT         NOT NULL COMMENT 'ID sản phẩm đã mua',
+    product_name      VARCHAR(255)   NOT NULL COMMENT 'Tên sản phẩm tại thời điểm mua',
+    quantity          INT            NOT NULL COMMENT 'Số lượng mua',
+    price_at_purchase DECIMAL(12, 2) NOT NULL COMMENT 'Giá bán tại thời điểm đặt hàng',
+    CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    INDEX idx_order_item_order_id (order_id),
+    INDEX idx_order_item_product_id (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng chi tiết các mặt hàng trong đơn hàng';
+
+CREATE TABLE IF NOT EXISTS order_status_history (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id        BIGINT       NOT NULL COMMENT 'ID đơn hàng liên kết',
+    status          VARCHAR(30)  NOT NULL COMMENT 'Trạng thái mới cập nhật',
+    previous_status VARCHAR(30)           COMMENT 'Trạng thái trước khi cập nhật',
+    action          VARCHAR(50)           COMMENT 'Hành động kích hoạt (ORDER_CREATED, STATUS_UPDATED, ...)',
+    updated_by      VARCHAR(100)          COMMENT 'Người thực hiện cập nhật',
+    actor_role      VARCHAR(50)           COMMENT 'Vai trò người cập nhật (ROLE_CUSTOMER, ROLE_ADMIN, SYSTEM)',
+    note            TEXT                  COMMENT 'Ghi chú cập nhật trạng thái',
+    created_at      DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_status_history_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    INDEX idx_status_history_order_id (order_id),
+    INDEX idx_status_history_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Nhật ký lịch sử thay đổi trạng thái đơn hàng (Timeline)';
+
+CREATE TABLE IF NOT EXISTS carts (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT      NOT NULL UNIQUE COMMENT 'ID người dùng sở hữu giỏ hàng',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6)          DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_carts_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng giỏ hàng của người dùng';
+
+CREATE TABLE IF NOT EXISTS cart_items (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cart_id    BIGINT      NOT NULL COMMENT 'ID giỏ hàng',
+    product_id BIGINT      NOT NULL COMMENT 'ID sản phẩm trong giỏ',
+    quantity   INT         NOT NULL COMMENT 'Số lượng sản phẩm',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6)          DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_cart_items_cart FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE CASCADE,
+    CONSTRAINT uk_cart_item_cart_product UNIQUE (cart_id, product_id),
+    INDEX idx_cart_items_cart_id (cart_id),
+    INDEX idx_cart_items_product_id (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng chi tiết các sản phẩm trong giỏ hàng';
+
+-- ─────────────────────────────────────────────────────────────
+--  6. Payment Service Database (payment_db)
+-- ─────────────────────────────────────────────────────────────
+USE payment_db;
+
+CREATE TABLE IF NOT EXISTS payments (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id         BIGINT         NOT NULL COMMENT 'ID đơn hàng liên kết',
+    amount           DECIMAL(15, 2) NOT NULL COMMENT 'Số tiền thanh toán',
+    payment_method   VARCHAR(50)    NOT NULL COMMENT 'Phương thức: COD, MOCK_ONLINE, VNPAY',
+    status           VARCHAR(20)    NOT NULL COMMENT 'Trạng thái thanh toán: PENDING, SUCCESS, FAILED',
+    transaction_code VARCHAR(100)            COMMENT 'Mã giao dịch đối soát duy nhất',
+    created_at       DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at       DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_payment_order_id (order_id),
+    INDEX idx_payment_transaction_code (transaction_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng lịch sử giao dịch thanh toán';
