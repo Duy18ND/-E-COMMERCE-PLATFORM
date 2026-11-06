@@ -237,8 +237,8 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
 const Checkout = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { notify } = useNotification();
   const { cartItems, totalItems, totalPrice, totalOriginalPrice, totalDiscount, refreshCart, addToCart } = useCart();
+  const { notify } = useNotification();
 
   const [formData, setFormData] = useState({
     receiverName:   user?.fullName || 'Nguyễn Văn A',
