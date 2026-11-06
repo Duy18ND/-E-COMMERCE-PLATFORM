@@ -231,6 +231,23 @@ class CartServiceTest {
     }
 
     @Test
+    @DisplayName("Xóa sản phẩm thất bại do IDOR / Item không thuộc giỏ của User -> Ném ResourceNotFoundException [ECOM-260]")
+    void removeCartItem_ItemNotBelongToUserCart_ThrowsResourceNotFoundException() {
+        // sampleCart chỉ có item ID 5, user cố xóa item ID 99 của user khác
+        CartItem item = CartItem.builder().id(5L).cart(sampleCart).productId(101L).quantity(2).build();
+        sampleCart.addItem(item);
+
+        when(cartRepository.findByUserIdWithItems(10L)).thenReturn(Optional.of(sampleCart));
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> cartService.removeCartItem(10L, 99L)
+        );
+
+        verify(cartRepository, never()).save(any(Cart.class));
+    }
+
+    @Test
     @DisplayName("Xóa toàn bộ giỏ hàng thành công")
     void clearCart_Success() {
         CartItem item = CartItem.builder().id(5L).cart(sampleCart).productId(101L).quantity(2).build();
