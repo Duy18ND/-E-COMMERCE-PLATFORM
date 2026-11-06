@@ -22,7 +22,7 @@ test('TC-296-BE-01: AdminOrderController khai báo đầy đủ 4 Endpoint Quả
   assert.match(controller, /@GetMapping[\s\S]*?public ResponseEntity<ApiResponse<PagedResponse<OrderResponse>>> getAllOrders/, 'Phải có GET danh sách đơn hàng toàn hệ thống');
   assert.match(controller, /@PutMapping\(["']\/\{id\}\/status["']\)/, 'Phải có PUT /{id}/status cập nhật trạng thái');
   assert.match(controller, /@GetMapping\(["']\/\{id\}\/history["']\)/, 'Phải có GET /{id}/history lấy timeline lịch sử');
-  assert.match(controller, /@GetMapping\(["']\/statistics["']\)/, 'Phải có GET /statistics lấy thống kê dashboard');
+  assert.match(controller, /@GetMapping\(\{?["']\/statistics["']/, 'Phải có GET /statistics lấy thống kê dashboard');
 });
 
 test('TC-296-BE-02: Cơ chế RBAC kiểm tra quyền ADMIN chặt chẽ (chống bypass role giả mạo / substring)', () => {

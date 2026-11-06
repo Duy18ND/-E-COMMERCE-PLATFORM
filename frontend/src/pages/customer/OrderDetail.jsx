@@ -11,6 +11,12 @@ import { ORDER_STATUS } from '../../utils/constants';
 import useNotification from '../../hooks/useNotification';
 import OrderTimeline from '../../components/order/OrderTimeline';
 
+/**
+ * Trang chi tiết đơn hàng (OrderDetail)
+ * Triển khai theo task ECOM-188 (và ECOM-311/ECOM-308)
+ * [FE] Trang chi tiết đơn: ngày đặt, mã đơn, timeline và trạng thái hiện tại
+ * Hiển thị các mốc có thời gian thực tế, không suy diễn trạng thái chưa cập nhật
+ */
 const OrderDetail = () => {
   const { id } = useParams();
   const { notify, confirmDialog } = useNotification();
@@ -27,7 +33,11 @@ const OrderDetail = () => {
       const data = await orderService.getOrderById(id);
       setOrder(data);
     } catch (err) {
-      setError(err.message || 'Không thể tải chi tiết đơn hàng.');
+      if (err.response?.status === 403) {
+        setError('Bạn không có quyền xem thông tin đơn hàng này (Bảo mật IDOR).');
+      } else {
+        setError(err.message || 'Không thể tải chi tiết đơn hàng.');
+      }
     } finally {
       setLoading(false);
     }
@@ -169,7 +179,14 @@ const OrderDetail = () => {
             <OrderStatus status={order.status} />
           </div>
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
-            Đặt ngày: {order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN') : '---'}
+            Đặt ngày: {order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            }) : '---'}
           </p>
         </div>
 
@@ -199,7 +216,7 @@ const OrderDetail = () => {
         )}
       </div>
 
-      {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-311 / ECOM-315) */}
+      {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-173 / ECOM-188 / ECOM-311 / ECOM-315) */}
       <OrderTimeline
         orderId={order.id}
         currentStatus={order.status}
@@ -351,9 +368,9 @@ const OrderDetail = () => {
               marginTop: '0.25rem'
             }}
           >
-            <span>Tổng thanh toán:</span>
+            <span>Tổng số tiền:</span>
             <span style={{ color: '#2563eb', fontSize: '1.35rem', fontWeight: 800 }}>
-              {formatCurrency(totalAmount)}
+              {formatCurrency(order.totalAmount ?? totalAmount)}
             </span>
           </div>
         </div>

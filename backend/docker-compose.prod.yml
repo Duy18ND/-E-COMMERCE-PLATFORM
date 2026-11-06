@@ -103,7 +103,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-product_db}
-      MYSQL_USER: ${MYSQL_USER:-ecommerce_user}
+      MYSQL_USER: ${MYSQL_USER:-ecommerce_prod_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
       - "127.0.0.1:3307:3306"
@@ -164,11 +164,11 @@ services:
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8761/actuator/health | grep UP || curl -sf http://localhost:8761/actuator/health | grep UP || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8761/actuator/health | grep -q UP || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 8
-      start_period: 35s
+      start_period: 40s
 
   # ─────────────────────────────────────────────
   #  5. Auth Service — INTERNAL ONLY
@@ -190,7 +190,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/auth_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -203,11 +203,11 @@ services:
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8081/actuator/health | grep UP || curl -sf http://localhost:8081/actuator/health | grep UP || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8081/actuator/health | grep -q UP || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 35s
+      retries: 8
+      start_period: 45s
 
   # ─────────────────────────────────────────────
   #  5. Product Service — INTERNAL ONLY
@@ -229,7 +229,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-product_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -241,11 +241,11 @@ services:
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8082/actuator/health | grep UP || curl -sf http://localhost:8082/actuator/health | grep UP || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8082/actuator/health | grep -q UP || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 35s
+      retries: 8
+      start_period: 45s
 
   # ─────────────────────────────────────────────
   #  5. Order Service — INTERNAL ONLY
@@ -267,18 +267,18 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8083/actuator/health | grep UP || curl -sf http://localhost:8083/actuator/health | grep UP || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8083/actuator/health | grep -q UP || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 35s
+      retries: 8
+      start_period: 45s
 
   # ─────────────────────────────────────────────
   #  5. Payment Service — INTERNAL ONLY
@@ -300,18 +300,18 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/actuator/health | grep UP || curl -sf http://localhost:8084/actuator/health | grep UP || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/actuator/health | grep -q UP || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 35s
+      retries: 8
+      start_period: 45s
 
   # ─────────────────────────────────────────────
   #  6. API Gateway — INTERNAL ONLY
@@ -349,11 +349,11 @@ services:
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health | grep UP || curl -sf http://localhost:8080/actuator/health | grep UP || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 35s
+      retries: 8
+      start_period: 45s
 
   # ─────────────────────────────────────────────
   #  7. Frontend — INTERNAL ONLY

@@ -67,7 +67,8 @@ const formatTimelineDate = (dateString) => {
 };
 
 /**
- * Component OrderTimeline – Triển khai theo task ECOM-311
+ * Component OrderTimeline – Triển khai theo task ECOM-173 (và ECOM-311)
+ * [FE] Timeline theo dõi đơn hàng từ xác nhận đến đã giao
  * Tích hợp API Backend ECOM-315: GET /api/v1/orders/{id}/history
  *
  * Props:
@@ -173,11 +174,17 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
 
   // Xác định chỉ số bước hiện tại trong chuỗi Stepper
   const currentStepIndex = stepperSteps.findIndex((s) => s.key === activeStatus);
-  const activeIndex = currentStepIndex !== -1 ? currentStepIndex : 0;
+  const activeIndex = currentStepIndex !== -1
+    ? currentStepIndex
+    : (STEP_ORDER_INDEX[activeStatus] !== undefined ? STEP_ORDER_INDEX[activeStatus] : 0);
 
-  // Lấy thời điểm hoàn thành của một bước từ mảng history
+  // Lấy thời điểm hoàn thành của một bước từ mảng history (chỉ lấy mốc có thời gian thực tế)
   const getStepCompletedTime = (stepKey) => {
-    const found = history.find((h) => h.status === stepKey);
+    const found = history.find(
+      (h) => h.status === stepKey ||
+        (stepKey === ORDER_STATUS.CONFIRMED && h.status === ORDER_STATUS.PAID) ||
+        (stepKey === ORDER_STATUS.DELIVERED && h.status === ORDER_STATUS.COMPLETED)
+    );
     return found ? formatTimelineDate(found.createdAt) : null;
   };
 
