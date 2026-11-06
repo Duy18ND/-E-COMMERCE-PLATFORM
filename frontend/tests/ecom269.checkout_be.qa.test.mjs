@@ -175,6 +175,6 @@ describe('ECOM-269: [BE] QA TEST API, VALIDATION VÀ QUYỀN TRUY CẬP (CHECKOU
 
     assert.match(paymentServiceTest, /void testMockPay_Success\(\)/, 'Service test mockPay thành công');
     assert.match(paymentServiceTest, /void testMockPay_Failure\(\)/, 'Service test mockPay thất bại');
-    assert.match(paymentServiceTest, /void testMockPay_AlreadyPaid_ThrowsIllegalStateException\(\)/, 'Service test đã thanh toán ném ngoại lệ');
+    assert.match(paymentServiceTest, /void testMockPay_AlreadyPaid_(?:ThrowsIllegalStateException|Idempotent_ReturnsSuccess)\(\)/, 'Service test đã thanh toán (idempotent / exception)');
   });
 });

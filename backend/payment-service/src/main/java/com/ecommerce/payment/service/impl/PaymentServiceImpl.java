@@ -132,11 +132,20 @@ public class PaymentServiceImpl implements PaymentService {
                 orderId, isSuccess);
 
         Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy thông tin thanh toán cho đơn hàng ID: " + orderId));
+                .orElseGet(() -> {
+                    log.info("[Mock Pay] Không tìm thấy bản ghi payment cho orderId {}, tự động khởi tạo bản ghi mới để hoàn tất thanh toán", orderId);
+                    Payment newPayment = Payment.builder()
+                            .orderId(orderId)
+                            .amount(BigDecimal.ZERO)
+                            .paymentMethod("MOCK_ONLINE")
+                            .status(PaymentStatus.PENDING)
+                            .build();
+                    return paymentRepository.save(newPayment);
+                });
 
         if (payment.getStatus() == PaymentStatus.SUCCESS) {
-            throw new IllegalStateException("Đơn hàng ID " + orderId + " đã được thanh toán thành công trước đó");
+            log.info("[Mock Pay] Đơn hàng ID {} đã được thanh toán thành công trước đó", orderId);
+            return mapToPaymentResponse(payment);
         }
 
         if (isSuccess) {

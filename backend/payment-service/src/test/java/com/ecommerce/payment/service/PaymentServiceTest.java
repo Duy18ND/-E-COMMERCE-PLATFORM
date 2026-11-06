@@ -283,31 +283,46 @@ class PaymentServiceTest {
         }
 
         @Test
-        @DisplayName("mockPay - Đã thanh toán trước đó: ném IllegalStateException")
-        void testMockPay_AlreadyPaid_ThrowsIllegalStateException() {
+        @DisplayName("mockPay - Đã thanh toán trước đó: idempotent trả về kết quả thành công hiện tại")
+        void testMockPay_AlreadyPaid_Idempotent_ReturnsSuccess() {
             Payment payment = Payment.builder()
                     .id(3L)
                     .orderId(103L)
+                    .amount(new BigDecimal("2000000"))
+                    .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.SUCCESS)
+                    .transactionCode("TXN-EXISTING123")
                     .build();
 
             when(paymentRepository.findByOrderId(103L)).thenReturn(Optional.of(payment));
 
-            IllegalStateException ex = assertThrows(IllegalStateException.class,
-                    () -> paymentService.mockPay(103L, true));
-            assertThat(ex.getMessage())
-                    .contains("103")
-                    .contains("đã được thanh toán thành công trước đó");
+            PaymentResponse response = paymentService.mockPay(103L, true);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+            assertThat(response.getTransactionCode()).isEqualTo("TXN-EXISTING123");
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
         }
 
         @Test
-        @DisplayName("mockPay - Đơn hàng không tồn tại: ném ResourceNotFoundException")
-        void testMockPay_OrderNotFound_ThrowsResourceNotFoundException() {
+        @DisplayName("mockPay - Đơn hàng chưa có bản ghi: tự động khởi tạo và xử lý thành công")
+        void testMockPay_OrderNotFound_AutoCreatesPaymentAndProcesses() {
             when(paymentRepository.findByOrderId(999L)).thenReturn(Optional.empty());
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
+                Payment p = invocation.getArgument(0);
+                p.setId(99L);
+                return p;
+            });
 
-            ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
-                    () -> paymentService.mockPay(999L, true));
-            assertThat(ex.getMessage()).contains("999");
+            PaymentResponse response = paymentService.mockPay(999L, true);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getOrderId()).isEqualTo(999L);
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+            assertThat(response.getTransactionCode()).isNotNull().startsWith("TXN-");
+            verify(paymentRepository, atLeastOnce()).save(any(Payment.class));
+            verify(kafkaPaymentProducer, times(1)).sendPaymentSuccess(any(PaymentSuccessEvent.class));
         }
     }
 }
