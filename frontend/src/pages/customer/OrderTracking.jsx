@@ -54,6 +54,13 @@ const OrderTracking = () => {
     if (id) {
       fetchTrackingData();
     }
+    // [Task ECOM-313] Lắng nghe đồng bộ cập nhật trạng thái từ trang Admin (cùng tab, đa tab, focus)
+    if (id && typeof orderService.subscribeOrderStatusSync === 'function') {
+      return orderService.subscribeOrderStatusSync(() => {
+        fetchTrackingData();
+      }, id);
+    }
+    return undefined;
   }, [id]);
 
   // =========================================================================

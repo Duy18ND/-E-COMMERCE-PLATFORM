@@ -110,13 +110,27 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
   }, [orderId]);
 
   useEffect(() => {
-    if (propHistory && Array.isArray(propHistory)) {
-      setHistory(propHistory);
+    if (propHistory && Array.isArray(propHistory) && propHistory.length > 0) {
+      const sorted = [...propHistory].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      setHistory(sorted);
       setLoading(false);
     } else if (orderId) {
       fetchHistory();
+    } else if (propHistory && Array.isArray(propHistory)) {
+      setHistory(propHistory);
+      setLoading(false);
     }
-  }, [orderId, propHistory, fetchHistory]);
+  }, [orderId, propStatus, propHistory, fetchHistory]);
+
+  // [Task ECOM-313] Tự động đồng bộ dòng thời gian khi Admin cập nhật trạng thái đơn hàng
+  useEffect(() => {
+    if (!orderId || typeof orderService.subscribeOrderStatusSync !== 'function') {
+      return undefined;
+    }
+    return orderService.subscribeOrderStatusSync(() => {
+      fetchHistory();
+    }, orderId);
+  }, [orderId, fetchHistory]);
 
   // Xác định trạng thái hiện tại từ prop hoặc bản ghi mới nhất trong history
   const activeStatus =

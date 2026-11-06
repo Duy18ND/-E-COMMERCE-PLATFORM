@@ -1,8 +1,44 @@
 import api from './api';
 import cartService from './cartService';
-import { ORDER_STATUS } from '../utils/constants';
+import { ORDER_STATUS, ORDER_STATUS_LABELS } from '../utils/constants';
 
 const ORDERS_STORAGE_KEY = 'shopmart_orders_mock';
+export const ORDER_STATUS_SYNC_EVENT = 'shopmart:order-status-updated';
+const ORDER_SYNC_SIGNAL_KEY = 'shopmart_order_sync_signal';
+
+// Описание mô tả trạng thái chuẩn đồng bộ với OrderStatusHistoryResponse.java (Backend)
+const STATUS_DESCRIPTIONS = {
+  [ORDER_STATUS.PENDING]: 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
+  [ORDER_STATUS.PAID]: 'Đã thanh toán thành công qua cổng thanh toán',
+  [ORDER_STATUS.CONFIRMED]: 'Đơn hàng đã được xác nhận bởi người bán / quản trị viên',
+  [ORDER_STATUS.PROCESSING]: 'Đơn hàng đang được chuẩn bị và đóng gói',
+  [ORDER_STATUS.SHIPPING]: 'Đơn hàng đang trên đường vận chuyển tới địa chỉ nhận hàng',
+  [ORDER_STATUS.DELIVERED]: 'Đơn hàng đã giao thành công',
+  [ORDER_STATUS.CANCELLED]: 'Đơn hàng đã bị hủy',
+  [ORDER_STATUS.FAILED]: 'Đơn hàng xử lý thất bại',
+  [ORDER_STATUS.REFUNDED]: 'Đơn hàng đã được hoàn tiền'
+};
+
+/**
+ * [Task ECOM-313] Phát tín hiệu đồng bộ trạng thái đơn hàng giữa trang Admin và trang Customer
+ * Hỗ trợ đồng bộ tức thời trong cùng tab (CustomEvent) và đa tab trình duyệt (localStorage storage event).
+ */
+const notifyOrderStatusSync = (payload) => {
+  const syncDetail = {
+    ...payload,
+    timestamp: new Date().toISOString()
+  };
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(ORDER_SYNC_SIGNAL_KEY, JSON.stringify(syncDetail));
+    }
+  } catch (e) {
+    // Ignore storage quota errors
+  }
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent(ORDER_STATUS_SYNC_EVENT, { detail: syncDetail }));
+  }
+};
 
 const INITIAL_MOCK_ORDERS = [
   {
@@ -402,20 +438,54 @@ export const orderService = {
   // Khách tự hủy đơn PENDING (PUT /api/orders/{orderId}/cancel)
   cancelOrder: async (id) => {
     try {
-      return await api.put(`/orders/${id}/cancel`);
+      const response = await api.put(`/orders/${id}/cancel`);
+      notifyOrderStatusSync({
+        orderId: id,
+        status: ORDER_STATUS.CANCELLED,
+        actorRole: 'ROLE_USER',
+        action: 'ORDER_CANCELLED'
+      });
+      return response;
     } catch (err) {
       if (err.response?.status === 403) {
         throw err;
       }
+      const nowIso = new Date().toISOString();
       const orders = getStoredOrders();
       const updatedOrders = orders.map((o) => {
         if (String(o.id) === String(id)) {
-          return { ...o, status: ORDER_STATUS.CANCELLED };
+          const prevStatus = o.status || ORDER_STATUS.PENDING;
+          const existingHistories = Array.isArray(o.statusHistories) ? o.statusHistories : [];
+          const cancelEntry = {
+            id: Date.now(),
+            orderId: o.id,
+            status: ORDER_STATUS.CANCELLED,
+            statusDescription: STATUS_DESCRIPTIONS[ORDER_STATUS.CANCELLED],
+            previousStatus: prevStatus,
+            action: 'ORDER_CANCELLED',
+            updatedBy: o.userEmail || 'CUSTOMER',
+            actorRole: 'ROLE_USER',
+            note: 'Khách hàng hủy đơn hàng',
+            createdAt: nowIso
+          };
+          return {
+            ...o,
+            status: ORDER_STATUS.CANCELLED,
+            updatedAt: nowIso,
+            statusHistories: [...existingHistories, cancelEntry]
+          };
         }
         return o;
       });
       setStoredOrders(updatedOrders);
-      return updatedOrders.find((o) => String(o.id) === String(id));
+      const updatedOrder = updatedOrders.find((o) => String(o.id) === String(id));
+      notifyOrderStatusSync({
+        orderId: id,
+        status: ORDER_STATUS.CANCELLED,
+        actorRole: 'ROLE_USER',
+        action: 'ORDER_CANCELLED'
+      });
+      return updatedOrder;
     }
   },
 
@@ -615,7 +685,19 @@ export const orderService = {
         });
       }
 
-      return mockHistories;
+      // [Task ECOM-313] Đồng bộ các bản ghi cập nhật trạng thái thực tế từ Admin / Customer đã lưu trong order.statusHistories
+      if (Array.isArray(order.statusHistories) && order.statusHistories.length > 0) {
+        order.statusHistories.forEach((recorded) => {
+          const existingIdx = mockHistories.findIndex((m) => m.status === recorded.status);
+          if (existingIdx !== -1) {
+            mockHistories[existingIdx] = { ...mockHistories[existingIdx], ...recorded };
+          } else {
+            mockHistories.push(recorded);
+          }
+        });
+      }
+
+      return mockHistories.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
     }
   },
 
@@ -624,21 +706,113 @@ export const orderService = {
     return await orderService.getOrderStatusHistory(id);
   },
 
-  // Admin cập nhật trạng thái đơn (PUT /api/v1/admin/orders/{orderId}/status)
+  // [Task ECOM-313 / ECOM-317] Admin cập nhật trạng thái đơn (PUT /api/v1/admin/orders/{orderId}/status)
+  // Đồng bộ tức thời giữa AdminOrders và các trang Customer (Orders, OrderDetail, OrderTracking, OrderTimeline)
   updateOrderStatus: async (id, status, note = '') => {
+    note = typeof note === 'string' ? note.trim() : '';
     try {
-      return await api.put(`/admin/orders/${id}/status`, { status, note });
+      const response = await api.put(`/admin/orders/${id}/status`, { status, note });
+      notifyOrderStatusSync({
+        orderId: id,
+        status,
+        note,
+        actorRole: 'ROLE_ADMIN',
+        action: 'ADMIN_STATUS_UPDATE'
+      });
+      return response;
     } catch (err) {
+      if (err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 404) {
+        throw err;
+      }
+      const nowIso = new Date().toISOString();
       const orders = getStoredOrders();
       const updatedOrders = orders.map((o) => {
         if (String(o.id) === String(id)) {
-          return { ...o, status };
+          const prevStatus = o.status || ORDER_STATUS.PENDING;
+          const existingHistories = Array.isArray(o.statusHistories) ? o.statusHistories : [];
+          const logNote =
+            note ||
+            `Admin cập nhật trạng thái đơn hàng từ ${ORDER_STATUS_LABELS[prevStatus] || prevStatus} sang ${ORDER_STATUS_LABELS[status] || status}`;
+          const historyRecord = {
+            id: Date.now(),
+            orderId: o.id,
+            status,
+            statusDescription: STATUS_DESCRIPTIONS[status] || `Chuyển trạng thái sang ${ORDER_STATUS_LABELS[status] || status}`,
+            previousStatus: prevStatus,
+            action: 'ADMIN_STATUS_UPDATE',
+            updatedBy: 'ADMIN:1',
+            actorRole: 'ROLE_ADMIN',
+            note: logNote,
+            createdAt: nowIso
+          };
+          return {
+            ...o,
+            status,
+            updatedAt: nowIso,
+            statusHistories: [...existingHistories, historyRecord]
+          };
         }
         return o;
       });
       setStoredOrders(updatedOrders);
-      return updatedOrders.find((o) => String(o.id) === String(id));
+      const updatedOrder = updatedOrders.find((o) => String(o.id) === String(id));
+      notifyOrderStatusSync({
+        orderId: id,
+        status,
+        note,
+        actorRole: 'ROLE_ADMIN',
+        action: 'ADMIN_STATUS_UPDATE'
+      });
+      return updatedOrder;
     }
+  },
+
+  /**
+   * [Task ECOM-313] Đăng ký lắng nghe sự kiện đồng bộ cập nhật trạng thái đơn hàng từ Admin
+   * Hỗ trợ 3 kênh: CustomEvent cùng tab, StorageEvent đa tab trình duyệt, và Window Focus.
+   */
+  subscribeOrderStatusSync: (onSync, targetOrderId = null) => {
+    if (typeof window === 'undefined' || typeof onSync !== 'function') {
+      return () => {};
+    }
+
+    const handleCustomSync = (event) => {
+      const detail = event?.detail || {};
+      if (!targetOrderId || !detail.orderId || String(detail.orderId) === String(targetOrderId)) {
+        onSync(detail);
+      }
+    };
+
+    const handleStorageSync = (event) => {
+      if (event.key === ORDERS_STORAGE_KEY || event.key === ORDER_SYNC_SIGNAL_KEY) {
+        if (event.key === ORDER_SYNC_SIGNAL_KEY && event.newValue) {
+          try {
+            const parsed = JSON.parse(event.newValue);
+            if (!targetOrderId || !parsed.orderId || String(parsed.orderId) === String(targetOrderId)) {
+              onSync(parsed);
+            }
+            return;
+          } catch (e) {
+            // Fallback call
+          }
+        }
+        onSync({ source: 'storage' });
+      }
+    };
+
+    const handleWindowFocus = () => {
+      onSync({ source: 'focus' });
+    };
+
+    window.addEventListener(ORDER_STATUS_SYNC_EVENT, handleCustomSync);
+    window.addEventListener('storage', handleStorageSync);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      window.removeEventListener(ORDER_STATUS_SYNC_EVENT, handleCustomSync);
+      window.removeEventListener('storage', handleStorageSync);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   },
 
   // Admin thống kê dashboard (GET /api/admin/orders/stats)

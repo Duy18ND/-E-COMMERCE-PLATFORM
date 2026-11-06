@@ -11,6 +11,8 @@ const FILTER_TABS = [
   { key: 'ALL', label: 'Tất cả' },
   { key: ORDER_STATUS.PENDING, label: 'Chờ xử lý / TT' },
   { key: ORDER_STATUS.PAID, label: 'Đã thanh toán' },
+  { key: ORDER_STATUS.CONFIRMED, label: 'Đã xác nhận' },
+  { key: ORDER_STATUS.PROCESSING, label: 'Đang xử lý' },
   { key: ORDER_STATUS.SHIPPING, label: 'Đang giao' },
   { key: ORDER_STATUS.COMPLETED, label: 'Hoàn thành' },
   { key: ORDER_STATUS.CANCELLED, label: 'Đã hủy' }
@@ -40,6 +42,13 @@ const Orders = () => {
 
   useEffect(() => {
     fetchOrders();
+    // [Task ECOM-313] Đồng bộ tự động danh sách đơn hàng Customer khi Admin cập nhật trạng thái
+    if (typeof orderService.subscribeOrderStatusSync === 'function') {
+      return orderService.subscribeOrderStatusSync(() => {
+        fetchOrders();
+      });
+    }
+    return undefined;
   }, []);
 
   // Lọc danh sách theo tab trạng thái và từ khóa tìm kiếm

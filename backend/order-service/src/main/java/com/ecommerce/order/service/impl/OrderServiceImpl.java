@@ -670,8 +670,13 @@ public class OrderServiceImpl implements OrderService {
                 ? order.getOrderItems().stream().map(this::mapToOrderItemResponse).toList()
                 : List.of();
 
-        List<OrderStatusHistoryResponse> historyResponses = (order.getStatusHistories() != null && !order.getStatusHistories().isEmpty())
-                ? order.getStatusHistories().stream().filter(Objects::nonNull).map(this::mapToStatusHistoryResponse).toList()
+        List<OrderStatusHistory> rawHistories = order.getStatusHistories();
+        if ((rawHistories == null || rawHistories.isEmpty())
+                && orderStatusHistoryRepository != null && order.getId() != null) {
+            rawHistories = orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtAsc(order.getId());
+        }
+        List<OrderStatusHistoryResponse> historyResponses = (rawHistories != null && !rawHistories.isEmpty())
+                ? rawHistories.stream().filter(Objects::nonNull).map(this::mapToStatusHistoryResponse).toList()
                 : List.of();
 
         return OrderResponse.builder()
