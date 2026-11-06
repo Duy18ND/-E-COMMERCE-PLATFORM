@@ -160,6 +160,9 @@ class PaymentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"note\": \"Thiếu trường success\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                .andExpect(jsonPath("$.message").value("Dữ liệu đầu vào không hợp lệ"))
+                .andExpect(jsonPath("$.validationErrors.success").exists());
     }
 }
