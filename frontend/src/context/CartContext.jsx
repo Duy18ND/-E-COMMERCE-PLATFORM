@@ -62,7 +62,7 @@ export const CartProvider = ({ children }) => {
 
     const sumQty = normalized.reduce((sum, item) => sum + item.quantity, 0);
     const sumTotal = Number(
-      cartData.totalPrice ?? normalized.reduce((sum, item) => sum + item.subTotal, 0)
+      cartData.totalPrice ?? cartData.totalAmount ?? normalized.reduce((sum, item) => sum + item.subTotal, 0)
     );
     const sumOriginal = Number(
       cartData.totalOriginalPrice ?? normalized.reduce((sum, item) => sum + item.originalSubTotal, 0)
