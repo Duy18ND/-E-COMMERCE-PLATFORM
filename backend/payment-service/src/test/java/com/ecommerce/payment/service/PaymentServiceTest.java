@@ -231,4 +231,80 @@ class PaymentServiceTest {
                     .hasMessageContaining("999");
         }
     }
+
+    @Nested
+    @DisplayName("[ECOM-269] mockPay Tests (Simulated Payment Flow)")
+    class MockPaymentTests {
+
+        @Test
+        @DisplayName("mockPay - Thành công: cập nhật SUCCESS, sinh mã giao dịch và phát sự kiện payment-success")
+        void testMockPay_Success() {
+            Payment payment = Payment.builder()
+                    .id(1L)
+                    .orderId(101L)
+                    .amount(new BigDecimal("15000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+
+            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(payment));
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PaymentResponse response = paymentService.mockPay(101L, true);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+            assertThat(response.getTransactionCode()).isNotNull().startsWith("TXN-");
+            verify(kafkaPaymentProducer, times(1)).sendPaymentSuccess(any(PaymentSuccessEvent.class));
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
+
+        @Test
+        @DisplayName("mockPay - Thất bại: cập nhật FAILED và phát sự kiện payment-failed (Saga Rollback)")
+        void testMockPay_Failure() {
+            Payment payment = Payment.builder()
+                    .id(2L)
+                    .orderId(102L)
+                    .amount(new BigDecimal("5000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+
+            when(paymentRepository.findByOrderId(102L)).thenReturn(Optional.of(payment));
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PaymentResponse response = paymentService.mockPay(102L, false);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.FAILED);
+            verify(kafkaPaymentProducer, times(1)).sendPaymentFailed(any(PaymentFailedEvent.class));
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+        }
+
+        @Test
+        @DisplayName("mockPay - Đã thanh toán trước đó: ném IllegalStateException")
+        void testMockPay_AlreadyPaid_ThrowsIllegalStateException() {
+            Payment payment = Payment.builder()
+                    .id(3L)
+                    .orderId(103L)
+                    .status(PaymentStatus.SUCCESS)
+                    .build();
+
+            when(paymentRepository.findByOrderId(103L)).thenReturn(Optional.of(payment));
+
+            assertThatThrownBy(() -> paymentService.mockPay(103L, true))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("đã được thanh toán thành công trước đó");
+        }
+
+        @Test
+        @DisplayName("mockPay - Đơn hàng không tồn tại: ném ResourceNotFoundException")
+        void testMockPay_OrderNotFound_ThrowsResourceNotFoundException() {
+            when(paymentRepository.findByOrderId(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.mockPay(999L, true))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("999");
+        }
+    }
 }

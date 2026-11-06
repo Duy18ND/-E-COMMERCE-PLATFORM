@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -101,5 +102,64 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.data.id").value(5))
                 .andExpect(jsonPath("$.data.orderId").value(202))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
+
+    /**
+     * [Task ECOM-269] Kiểm tra API POST /api/v1/payments/mock-pay/{orderId}
+     */
+    @Test
+    @DisplayName("[ECOM-269] POST /api/v1/payments/mock-pay/{orderId} - Thanh toán thành công -> 200 OK")
+    void testMockPay_Success() throws Exception {
+        PaymentResponse response = PaymentResponse.builder()
+                .id(1L)
+                .orderId(101L)
+                .amount(new BigDecimal("15000000"))
+                .paymentMethod("MOCK_ONLINE")
+                .status(PaymentStatus.SUCCESS)
+                .transactionCode("TXN-SUCCESS123")
+                .build();
+
+        when(paymentService.mockPay(101L, true)).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/payments/mock-pay/{orderId}", 101L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"success\": true, \"note\": \"Khách thanh toán thử nghiệm thành công\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Xác nhận thanh toán mô phỏng thành công"))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.transactionCode").value("TXN-SUCCESS123"));
+    }
+
+    @Test
+    @DisplayName("[ECOM-269] POST /api/v1/payments/mock-pay/{orderId} - Thanh toán thất bại -> 200 OK với thông báo Saga Rollback")
+    void testMockPay_Failure() throws Exception {
+        PaymentResponse response = PaymentResponse.builder()
+                .id(2L)
+                .orderId(102L)
+                .amount(new BigDecimal("5000000"))
+                .paymentMethod("MOCK_ONLINE")
+                .status(PaymentStatus.FAILED)
+                .build();
+
+        when(paymentService.mockPay(102L, false)).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/payments/mock-pay/{orderId}", 102L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"success\": false, \"note\": \"Tài khoản không đủ số dư\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Thanh toán mô phỏng thất bại — đã kích hoạt hoàn kho (Saga Rollback)"))
+                .andExpect(jsonPath("$.data.status").value("FAILED"));
+    }
+
+    @Test
+    @DisplayName("[ECOM-269] POST /api/v1/payments/mock-pay/{orderId} - Thiếu trường success -> 400 Bad Request")
+    void testMockPay_MissingSuccess_ShouldReturnBadRequest() throws Exception {
+        mockMvc.perform(post("/api/v1/payments/mock-pay/{orderId}", 101L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"note\": \"Thiếu trường success\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
     }
 }
