@@ -163,6 +163,44 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("[ECOM-278] GET /api/v1/users/profile: Thiếu X-User-Id -> 403 Forbidden")
+    void getProfile_MissingXUserId_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/users/profile"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("[ECOM-278] PUT /api/v1/users/profile: Thiếu X-User-Id -> 403 Forbidden")
+    void updateProfile_MissingXUserId_ShouldReturn403() throws Exception {
+        UpdateProfileRequest updateRequest = UpdateProfileRequest.builder()
+                .fullName("User Test")
+                .phone("0912345678")
+                .build();
+
+        mockMvc.perform(put("/api/v1/users/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("[ECOM-278] PUT /api/v1/users/profile: Họ tên vượt quá 150 ký tự -> 400 Bad Request")
+    void updateProfile_WhenFullNameExceeds150Chars_ShouldReturn400() throws Exception {
+        String longName = "A".repeat(151);
+        UpdateProfileRequest invalidRequest = UpdateProfileRequest.builder()
+                .fullName(longName)
+                .phone("0912345678")
+                .build();
+
+        mockMvc.perform(put("/api/v1/users/profile")
+                        .header("X-User-Id", 100L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.fullName").exists());
+    }
+
+    @Test
     @DisplayName("[ECOM-128] PUT /api/v1/users/profile: Cập nhật thông tin cá nhân và địa chỉ thành công")
     void updateProfile_Success() throws Exception {
         UpdateProfileRequest updateRequest = UpdateProfileRequest.builder()

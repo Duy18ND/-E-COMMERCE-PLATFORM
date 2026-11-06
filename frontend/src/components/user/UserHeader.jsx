@@ -7,6 +7,7 @@ import Input from '../common/Input';
 import Button from '../common/Button';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
 import voucherService from '../../services/voucherService';
+import userService, { isValidVietnamesePhone } from '../../services/userService';
 
 const UserHeader = () => {
   const { user, isAuthenticated, isAdmin, logout, updateUser } = useAuth();
@@ -22,6 +23,8 @@ const UserHeader = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
   const [savedVoucherCount, setSavedVoucherCount] = useState(() => voucherService.getSavedIds().length);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
   const dropdownRef = useRef(null);
   const categoryMenuRef = useRef(null);
 
@@ -99,6 +102,7 @@ const UserHeader = () => {
   const handleOpenEdit = () => {
     setIsDropdownOpen(false);
     setIsMobileMenuOpen(false);
+    setFormError('');
     setIsEditModalOpen(true);
   };
 
@@ -107,21 +111,46 @@ const UserHeader = () => {
     setProfileData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (updateUser) {
-      updateUser({
+    setFormError('');
+
+    if (profileData.phone && !isValidVietnamesePhone(profileData.phone)) {
+      setFormError('Số điện thoại không đúng định dạng Việt Nam (VD: 0912345678 hoặc +84912345678)');
+      return;
+    }
+
+    if (profileData.fullName && profileData.fullName.length > 150) {
+      setFormError('Họ tên không được vượt quá 150 ký tự');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await userService.updateProfile({
         fullName: profileData.fullName,
-        email: profileData.email,
         phone: profileData.phone,
         avatarUrl: profileData.avatarUrl
       });
+
+      if (updateUser) {
+        updateUser({
+          fullName: profileData.fullName,
+          email: profileData.email,
+          phone: profileData.phone,
+          avatarUrl: profileData.avatarUrl
+        });
+      }
+      setSuccessToast('Cập nhật thông tin thành công!');
+      setTimeout(() => {
+        setSuccessToast('');
+        setIsEditModalOpen(false);
+      }, 1200);
+    } catch (err) {
+      setFormError(err.message || 'Không thể cập nhật hồ sơ cá nhân. Vui lòng thử lại!');
+    } finally {
+      setSaving(false);
     }
-    setSuccessToast('Cập nhật thông tin thành công!');
-    setTimeout(() => {
-      setSuccessToast('');
-      setIsEditModalOpen(false);
-    }, 1200);
   };
 
   const currentAvatar =
@@ -492,6 +521,25 @@ const UserHeader = () => {
         )}
 
         <form onSubmit={handleSaveProfile}>
+          {formError && (
+            <div
+              style={{
+                backgroundColor: '#fef2f2',
+                color: '#b91c1c',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                border: '1px solid #fecaca',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <span>⚠️</span>
+              <span>{formError}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
             <img
               src={profileData.avatarUrl || currentAvatar}
@@ -582,8 +630,8 @@ const UserHeader = () => {
               <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit" variant="primary">
-                Lưu thay đổi
+              <Button type="submit" variant="primary" disabled={saving}>
+                {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Button>
             </div>
           </div>

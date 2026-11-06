@@ -322,6 +322,29 @@ class OrderControllerTest {
     }
 
     @Test
+    @DisplayName("[ECOM-278] Chống IDOR: User khác cố tình hủy đơn hàng -> 403 Forbidden")
+    void cancelOrder_IDOR_ShouldReturnForbidden() throws Exception {
+        when(orderService.cancelOrder(eq(1L), eq(20L)))
+                .thenThrow(new AccessDeniedException("Bạn không có quyền hủy đơn hàng này"));
+
+        mockMvc.perform(put("/api/v1/orders/1/cancel")
+                        .header("X-User-Id", 20L))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("[ECOM-278] Hủy đơn hàng thất bại khi trạng thái khác PENDING -> 400 Bad Request")
+    void cancelOrder_WhenNotPending_ShouldReturnBadRequest() throws Exception {
+        when(orderService.cancelOrder(eq(1L), eq(10L)))
+                .thenThrow(new IllegalStateException("Chỉ có thể hủy đơn hàng ở trạng thái PENDING. Trạng thái hiện tại: PAID"));
+
+        mockMvc.perform(put("/api/v1/orders/1/cancel")
+                        .header("X-User-Id", 10L))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
     @DisplayName("[ECOM-267] Tạo đơn hàng từ giỏ (POST /api/v1/orders/from-cart) thành công")
     void createOrderFromCart_Success() throws Exception {
         CheckoutRequest request = CheckoutRequest.builder()
