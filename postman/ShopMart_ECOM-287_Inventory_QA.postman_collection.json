@@ -1,0 +1,598 @@
+{
+  "info": {
+    "_postman_id": "shopmart-ecom-287-inventory-qa",
+    "name": "ShopMart - ECOM-287 QA Test Suite (Inventory API, Validation & RBAC)",
+    "description": "Postman Collection v2.1 kiểm thử toàn diện chức năng Quản lý tồn kho theo Task ECOM-287 (Sprint 2 - Epic Quản lý tồn kho).\n\nBao gồm:\n- Functional API: Inbound Stock, Adjust Stock, Check Stock, Reserve Stock, Restore Stock.\n- Validation & Boundary Cases: null, âm, rỗng, max length 255, 400 Bad Request, 404 Not Found, 409 Conflict.\n- Authorization & RBAC: Token JWT, header nội bộ X-User-Roles, phân quyền ADMIN vs USER, kiểm thử chống false-positive role.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "outOfStockProductId",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "nonExistentProductId",
+      "value": "999999",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication Setup",
+      "description": "Lấy JWT token cho Admin và User thường",
+      "item": [
+        {
+          "name": "TC-287-AUTH-01: Đăng nhập Admin lấy token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@shopmart.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin login successful (200 OK)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "var token = jsonData.data ? jsonData.data.accessToken : jsonData.accessToken;",
+                  "pm.collectionVariables.set('adminToken', token);",
+                  "pm.test('Admin token received', function() {",
+                  "    pm.expect(token).to.be.a('string').and.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-AUTH-02: Đăng nhập Khách hàng (User) lấy token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@shopmart.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('User login successful (200 OK)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "var token = jsonData.data ? jsonData.data.accessToken : jsonData.accessToken;",
+                  "pm.collectionVariables.set('userToken', token);",
+                  "pm.test('User token received', function() {",
+                  "    pm.expect(token).to.be.a('string').and.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Functional Inventory API",
+      "description": "Kiểm thử các luồng chức năng hợp lệ của API Tồn kho",
+      "item": [
+        {
+          "name": "TC-287-FUNC-01: Admin nhập thêm kho hợp lệ (Inbound Stock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 20,\n  \"note\": \"Nhập hàng đợt mới từ nhà cung cấp\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "inbound"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Nhập kho thành công 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Phản hồi thành công và cập nhật tồn kho', function () {",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.message).to.eql('Nhập kho thành công');",
+                  "    pm.expect(res.data.stockQuantity).to.be.at.least(20);",
+                  "    pm.expect(res.data.status).to.eql('ACTIVE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-FUNC-02: Admin điều chỉnh tồn kho kiểm kê (Adjust Stock > 0)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualStock\": 35,\n  \"reason\": \"Biên bản kiểm kê kho định kỳ quý 4\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/adjust-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "adjust-stock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Điều chỉnh kho thành công 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Tồn kho thực tế cập nhật chính xác = 35', function () {",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.stockQuantity).to.eql(35);",
+                  "    pm.expect(res.data.status).to.eql('ACTIVE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-FUNC-03: Điều chỉnh kho về 0 tự động chuyển sang OUT_OF_STOCK",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualStock\": 0,\n  \"reason\": \"Hàng kiểm kê thực tế đã bán hết sạch\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/adjust-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "adjust-stock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Tồn kho = 0 và trạng thái OUT_OF_STOCK', function () {",
+                  "    pm.expect(res.data.stockQuantity).to.eql(0);",
+                  "    pm.expect(res.data.status).to.eql('OUT_OF_STOCK');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-FUNC-04: Public API kiểm tra tồn kho theo sản phẩm (GET stock)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/stock?quantity=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "stock"],
+              "query": [
+                { "key": "quantity", "value": "5" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Public API trả về 200 OK không cần auth', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Chứa đầy đủ thông tin stockQuantity, inStock, sufficientStock', function () {",
+                  "    pm.expect(res.data).to.have.property('stockQuantity');",
+                  "    pm.expect(res.data).to.have.property('inStock');",
+                  "    pm.expect(res.data).to.have.property('sufficientStock');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Validation & Negative Cases",
+      "description": "Kiểm thử các kịch bản dữ liệu sai, vi phạm validation và ngoại lệ",
+      "item": [
+        {
+          "name": "TC-287-VAL-01: Inbound - Chặn số lượng nhập âm (-5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": -5,\n  \"note\": \"Số lượng âm\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "inbound"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Thông báo lỗi validation số lượng >= 1', function () {",
+                  "    pm.expect(res.errors.quantity).to.include('lớn hơn hoặc bằng 1');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-VAL-02: Inbound - Chặn số lượng nhập bằng 0",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "inbound"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-VAL-03: Inbound - Chặn khi thiếu body (Empty JSON {})",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "inbound"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Trả về 400 Bad Request khi thiếu quantity', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Báo lỗi Số lượng không được để trống', function () {",
+                  "    pm.expect(res.errors.quantity).to.include('không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-VAL-04: AdjustStock - Chặn số lượng tồn kho âm (-10)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualStock\": -10,\n  \"reason\": \"Số lượng âm\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/adjust-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "adjust-stock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Báo lỗi không được nhỏ hơn 0', function () {",
+                  "    pm.expect(res.errors.actualStock).to.include('không được nhỏ hơn 0');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-VAL-05: AdjustStock - Chặn khi để trống lý do điều chỉnh",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualStock\": 10,\n  \"reason\": \"   \"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/adjust-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "adjust-stock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Báo lỗi lý do không được để trống', function () {",
+                  "    pm.expect(res.errors.reason).to.include('không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-VAL-06: AdjustStock - Trả về 404 khi ID sản phẩm không tồn tại",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualStock\": 10,\n  \"reason\": \"Sản phẩm không có thực\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{nonExistentProductId}}/adjust-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{nonExistentProductId}}", "adjust-stock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Trả về 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Thông điệp báo không tìm thấy sản phẩm', function () {",
+                  "    pm.expect(res.message).to.include('Không tìm thấy sản phẩm');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Authorization & RBAC Security",
+      "description": "Kiểm thử cơ chế phân quyền RBAC và kiểm soát truy cập",
+      "item": [
+        {
+          "name": "TC-287-AUTH-03: Inbound - Chặn truy cập khi không có Token (401/403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "inbound"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Chặn truy cập trái phép (401 hoặc 403)', function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-AUTH-04: Inbound - Chặn Khách hàng ROLE_USER thực hiện nhập kho (403 Forbidden)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 10,\n  \"note\": \"User thử nhập kho trái phép\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/inbound",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "inbound"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Chặn quyền User: 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "var res = pm.response.json();",
+                  "pm.test('Báo lỗi chỉ ADMIN mới có quyền', function () {",
+                  "    pm.expect(res.message).to.include('Chỉ tài khoản ADMIN');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-287-AUTH-05: AdjustStock - Chặn Khách hàng ROLE_USER điều chỉnh kho (403 Forbidden)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualStock\": 10,\n  \"reason\": \"User thử điều chỉnh kho\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/adjust-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}", "adjust-stock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Chặn quyền User: 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -714,6 +714,91 @@ export const productService = {
     }
     localProducts = localProducts.filter((p) => String(p.id) !== String(id));
     return { success: true, id };
+  },
+
+  /**
+   * [Task ECOM-283] Nhập thêm hàng vào kho [ADMIN]
+   * Gọi API: POST /api/v1/products/{id}/inbound
+   * @param {number|string} id - Mã sản phẩm
+   * @param {Object} data - { quantity, note }
+   */
+  inboundStock: async (id, { quantity, note = '' }) => {
+    const qty = Number(quantity);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new Error('Số lượng nhập kho phải là số nguyên lớn hơn 0');
+    }
+
+    try {
+      const response = await api.post(`/products/${id}/inbound`, {
+        quantity: qty,
+        note: String(note ?? '').trim()
+      });
+      const normalized = normalizeProduct(response);
+      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
+      return normalized;
+    } catch (err) {
+      const existing = localProducts.find((p) => String(p.id) === String(id));
+      if (!existing) {
+        throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
+      }
+      const newStock = Math.max(0, Number(existing.stockQuantity ?? existing.stock ?? 0) + qty);
+      const updatedStatus = newStock > 0 && existing.status === 'OUT_OF_STOCK' ? 'ACTIVE' : existing.status;
+      const updated = normalizeProduct({
+        ...existing,
+        stock: newStock,
+        stockQuantity: newStock,
+        status: updatedStatus
+      });
+      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? updated : p));
+      return updated;
+    }
+  },
+
+  /**
+   * [Task ECOM-283] Điều chỉnh số lượng tồn kho kiểm kê [ADMIN]
+   * Gọi API: POST /api/v1/products/{id}/adjust-stock
+   * @param {number|string} id - Mã sản phẩm
+   * @param {Object} data - { actualStock, reason }
+   */
+  adjustStock: async (id, { actualStock, reason = '' }) => {
+    const stockVal = Number(actualStock);
+    if (!Number.isInteger(stockVal) || stockVal < 0) {
+      throw new Error('Số lượng tồn kho thực tế phải là số nguyên không âm (>= 0)');
+    }
+    const cleanReason = String(reason ?? '').trim();
+    if (!cleanReason) {
+      throw new Error('Lý do điều chỉnh kho không được để trống');
+    }
+
+    try {
+      const response = await api.post(`/products/${id}/adjust-stock`, {
+        actualStock: stockVal,
+        reason: cleanReason
+      });
+      const normalized = normalizeProduct(response);
+      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
+      return normalized;
+    } catch (err) {
+      const existing = localProducts.find((p) => String(p.id) === String(id));
+      if (!existing) {
+        throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
+      }
+      let updatedStatus = existing.status;
+      if (stockVal === 0 && existing.status === 'ACTIVE') {
+        updatedStatus = 'OUT_OF_STOCK';
+      } else if (stockVal > 0 && existing.status === 'OUT_OF_STOCK') {
+        updatedStatus = 'ACTIVE';
+      }
+
+      const updated = normalizeProduct({
+        ...existing,
+        stock: stockVal,
+        stockQuantity: stockVal,
+        status: updatedStatus
+      });
+      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? updated : p));
+      return updated;
+    }
   }
 };
 
