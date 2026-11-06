@@ -237,6 +237,7 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
 const Checkout = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { notify } = useNotification();
   const { cartItems, totalItems, totalPrice, totalOriginalPrice, totalDiscount, refreshCart, addToCart } = useCart();
 
   const [formData, setFormData] = useState({
