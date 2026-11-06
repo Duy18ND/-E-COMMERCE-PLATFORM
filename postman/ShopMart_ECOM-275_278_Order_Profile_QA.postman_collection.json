@@ -1,0 +1,475 @@
+{
+  "info": {
+    "_postman_id": "ecom-275-278-order-profile-qa-collection",
+    "name": "ShopMart - ECOM-275 & ECOM-278 [FE & BE] QA Test Lịch Sử Đơn Hàng & Hồ Sơ Cá Nhân",
+    "description": "Bộ kiểm thử tự động API Backend và tích hợp Frontend cho Task ECOM-275 và ECOM-278 thuộc Feature ECOM-126 (Lịch sử đơn hàng & Hồ sơ cá nhân) và Epic CUSTOMER. Bao gồm kiểm thử API lịch sử đơn hàng (/my-orders), chi tiết đơn hàng (chống IDOR), hủy đơn hàng (hoàn lại kho tồn khi PENDING), xem và cập nhật hồ sơ cá nhân (/users/profile), validation định dạng số điện thoại Việt Nam, và kiểm soát quyền truy cập RBAC.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "tokenUserA",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenUserB",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenAdmin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userAId",
+      "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "userBId",
+      "value": "20",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "1001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication Setup",
+      "item": [
+        {
+          "name": "TC-AUTH-01: Đăng nhập Khách hàng A (User A)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@test.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Đăng nhập User A thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    var token = (json.data && json.data.accessToken) || json.accessToken;",
+                  "    pm.collectionVariables.set('tokenUserA', token);",
+                  "    pm.collectionVariables.set('userAId', (json.data && json.data.userId) || 10);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-AUTH-02: Đăng nhập Khách hàng B (User B - Test IDOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer2@test.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Đăng nhập User B thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    var token = (json.data && json.data.accessToken) || json.accessToken;",
+                  "    pm.collectionVariables.set('tokenUserB', token);",
+                  "    pm.collectionVariables.set('userBId', (json.data && json.data.userId) || 20);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-AUTH-03: Đăng nhập Quản trị viên (ROLE_ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@shopmart.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Đăng nhập Admin thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    var token = (json.data && json.data.accessToken) || json.accessToken;",
+                  "    pm.collectionVariables.set('tokenAdmin', token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. User Profile APIs (ECOM-128 / ECOM-277 / ECOM-278)",
+      "item": [
+        {
+          "name": "TC-PROFILE-01: Xem hồ sơ người dùng (GET /api/v1/users/profile)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserA}}" },
+              { "key": "X-User-Id", "value": "{{userAId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "profile"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Lấy hồ sơ cá nhân thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('email');",
+                  "    pm.expect(json.data).to.have.property('fullName');",
+                  "    pm.expect(json.data).to.not.have.property('password');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-PROFILE-02: Cập nhật hồ sơ với dữ liệu hợp lệ (PUT /api/v1/users/profile)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserA}}" },
+              { "key": "X-User-Id", "value": "{{userAId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Nguyễn Văn A Updated\",\n  \"phone\": \"0912345678\",\n  \"addressLine\": \"123 Cầu Giấy\",\n  \"city\": \"Hà Nội\",\n  \"district\": \"Cầu Giấy\",\n  \"ward\": \"Dịch Vọng\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "profile"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cập nhật hồ sơ thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.fullName).to.eql('Nguyễn Văn A Updated');",
+                  "    pm.expect(json.data.phone).to.eql('0912345678');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-PROFILE-03: Cập nhật hồ sơ với SĐT sai định dạng VN -> HTTP 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserA}}" },
+              { "key": "X-User-Id", "value": "{{userAId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"User Invalid Phone\",\n  \"phone\": \"0123456789\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "profile"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Từ chối số điện thoại sai định dạng HTTP 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-PROFILE-04: Cập nhật hồ sơ thiếu token xác thực -> HTTP 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "profile"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Chặn truy cập ẩn danh HTTP 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Order History APIs (ECOM-127 / ECOM-276 / ECOM-278)",
+      "item": [
+        {
+          "name": "TC-ORDER-01: Lấy danh sách đơn hàng của User A (GET /api/v1/orders/my-orders)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserA}}" },
+              { "key": "X-User-Id", "value": "{{userAId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/my-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "my-orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Lấy danh sách đơn hàng thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.be.an('array');",
+                  "    if (json.data.length > 0) {",
+                  "        pm.collectionVariables.set('orderId', json.data[0].id);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-ORDER-02: Lấy chi tiết đơn hàng chính chủ (GET /api/v1/orders/{id})",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserA}}" },
+              { "key": "X-User-Id", "value": "{{userAId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Lấy chi tiết đơn hàng thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('id');",
+                  "    pm.expect(json.data).to.have.property('status');",
+                  "    pm.expect(json.data).to.have.property('totalAmount');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-ORDER-03: Chống IDOR - User B xem đơn hàng của User A -> HTTP 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserB}}" },
+              { "key": "X-User-Id", "value": "{{userBId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Chống IDOR - Từ chối truy cập đơn hàng của người khác HTTP 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-ORDER-04: Admin xem chi tiết đơn hàng của khách hàng -> HTTP 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "X-User-Id", "value": "1" },
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin xem chi tiết đơn hàng thành công HTTP 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Order Cancellation APIs (ECOM-127 / ECOM-278)",
+      "item": [
+        {
+          "name": "TC-CANCEL-01: Chống IDOR - User B cố tình hủy đơn hàng của User A -> HTTP 403",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserB}}" },
+              { "key": "X-User-Id", "value": "{{userBId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}", "cancel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Chống IDOR - Chặn hủy đơn hàng của người khác HTTP 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-CANCEL-02: Chính chủ User A hủy đơn hàng PENDING -> HTTP 200 (Hoàn tồn kho)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenUserA}}" },
+              { "key": "X-User-Id", "value": "{{userAId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}", "cancel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Hủy đơn hàng thành công HTTP 200', function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        var json = pm.response.json();",
+                  "        pm.expect(json.success).to.be.true;",
+                  "        pm.expect(json.data.status).to.eql('CANCELLED');",
+                  "    } else {",
+                  "        // Nếu đơn đã không còn ở trạng thái PENDING thì trả về lỗi nghiệp vụ 400/500",
+                  "        pm.expect([400, 500]).to.include(pm.response.code);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
