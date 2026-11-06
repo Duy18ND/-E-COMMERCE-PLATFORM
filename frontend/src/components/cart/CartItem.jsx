@@ -22,6 +22,7 @@ const CartItem = ({ item }) => {
 
   if (!item) return null;
 
+  const effectiveId = item.id || item.itemId;
   const isSale = Boolean(item.isFlashSale || item.salePrice);
   const effectivePrice = Number(isSale && item.salePrice ? item.salePrice : item.price || item.unitPrice || 0);
   const originalPrice = Number(item.originalPrice || effectivePrice);
@@ -29,6 +30,18 @@ const CartItem = ({ item }) => {
   const discountPercent = item.discountPercent || (originalPrice > effectivePrice ? Math.round(((originalPrice - effectivePrice) / originalPrice) * 100) : 0);
   const lineSavings = Math.max(0, (originalPrice - effectivePrice) * qty);
   const lineTotal = effectivePrice * qty;
+
+  const handleDecrease = () => {
+    if (qty <= 1) {
+      handleRemove();
+    } else {
+      updateQuantity(effectiveId, qty - 1);
+    }
+  };
+
+  const handleIncrease = () => {
+    updateQuantity(effectiveId, qty + 1);
+  };
 
   return (
     <div
@@ -172,7 +185,8 @@ const CartItem = ({ item }) => {
           }}
         >
           <button
-            onClick={() => updateQuantity(item.id, qty - 1)}
+            aria-label="Giảm số lượng"
+            onClick={handleDecrease}
             style={{
               width: '32px',
               height: '32px',
@@ -185,11 +199,15 @@ const CartItem = ({ item }) => {
           >
             -
           </button>
-          <span style={{ minWidth: '36px', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}>
+          <span
+            aria-label="Số lượng hiện tại"
+            style={{ minWidth: '36px', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}
+          >
             {qty}
           </span>
           <button
-            onClick={() => updateQuantity(item.id, qty + 1)}
+            aria-label="Tăng số lượng"
+            onClick={handleIncrease}
             style={{
               width: '32px',
               height: '32px',
@@ -213,6 +231,7 @@ const CartItem = ({ item }) => {
 
         {/* Remove button */}
         <button
+          aria-label="Xóa sản phẩm"
           onClick={handleRemove}
           style={{
             background: 'none',

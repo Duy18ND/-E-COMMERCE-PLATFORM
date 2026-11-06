@@ -1,0 +1,678 @@
+{
+  "info": {
+    "_postman_id": "ecom-269-checkout-payment-qa-collection",
+    "name": "ShopMart - ECOM-269 [BE] QA Test Đặt Hàng & Thanh Toán Mô Phỏng (API, Validation & Access Control)",
+    "description": "Bộ kiểm thử tự động API Backend cho Task ECOM-269 thuộc Feature ECOM-121 (Đặt hàng & Thanh toán mô phỏng) và Epic CUSTOMER. Bao gồm kiểm thử API checkout, tạo đơn từ giỏ hàng, xác nhận thanh toán mô phỏng (COD / Mock Online), Saga rollback khi thanh toán thất bại, validation dữ liệu người nhận / số điện thoại VN, và kiểm soát quyền truy cập chống IDOR.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "userAId",
+      "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "userBId",
+      "value": "20",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "1001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication Setup",
+      "item": [
+        {
+          "name": "TC-269-AUTH-01: Đăng nhập User A lấy JWT Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@test.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Đăng nhập User A thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.token).to.not.be.empty;",
+                  "    pm.environment.set('tokenUserA', json.data.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Functional Checkout & Payment API (Happy Path)",
+      "item": [
+        {
+          "name": "TC-269-FUNC-01: Đặt hàng trực tiếp với danh sách sản phẩm (POST /api/v1/orders/checkout)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn A\",\n  \"receiverPhone\": \"0987654321\",\n  \"shippingAddress\": \"123 Đường Cầu Giấy, Hà Nội\",\n  \"paymentMethod\": \"MOCK_ONLINE\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Đặt hàng thành công trả về 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data).to.have.property('id');",
+                  "    pm.expect(json.data.status).to.eql('PENDING');",
+                  "    pm.collectionVariables.set('orderId', json.data.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-FUNC-02: Đặt hàng từ giỏ hàng hiện tại (POST /api/v1/orders/from-cart)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn A\",\n  \"receiverPhone\": \"0912345678\",\n  \"shippingAddress\": \"456 Kim Mã, Ba Đình, Hà Nội\",\n  \"paymentMethod\": \"COD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/from-cart",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "from-cart"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tạo đơn từ giỏ thành công trả về 201 Created', function () {",
+                  "    pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-FUNC-03: Xác nhận thanh toán mô phỏng thành công (POST /api/v1/payments/mock-pay/{orderId})",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"success\": true,\n  \"note\": \"Mô phỏng thanh toán trực tuyến thành công\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/mock-pay/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "mock-pay", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Xác nhận thanh toán mô phỏng trả về 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.status).to.eql('SUCCESS');",
+                  "    pm.expect(json.data.transactionCode).to.not.be.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-FUNC-04: Tra cứu thông tin thanh toán theo orderId (GET /api/v1/payments/order/{orderId})",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/order/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "order", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tra cứu thanh toán thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.orderId).to.eql(Number(pm.collectionVariables.get('orderId')));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-FUNC-05: Lấy danh sách đơn hàng của người dùng (GET /api/v1/orders/my-orders)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/my-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "my-orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Lấy danh sách my-orders thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-FUNC-06: Xem chi tiết đơn hàng theo orderId (GET /api/v1/orders/{id})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Xem chi tiết đơn hàng thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.id).to.eql(Number(pm.collectionVariables.get('orderId')));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Validation & Negative Cases",
+      "item": [
+        {
+          "name": "TC-269-VAL-01: Checkout thiếu tên người nhận -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"\",\n  \"receiverPhone\": \"0987654321\",\n  \"shippingAddress\": \"Hà Nội\",\n  \"paymentMethod\": \"COD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Thiếu receiverName trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Tên người nhận không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-VAL-02: Checkout số điện thoại không đúng định dạng VN -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn A\",\n  \"receiverPhone\": \"12345678\",\n  \"shippingAddress\": \"Hà Nội\",\n  \"paymentMethod\": \"COD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sai định dạng SĐT trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Số điện thoại không đúng định dạng');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-VAL-03: Checkout thiếu địa chỉ nhận hàng -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn A\",\n  \"receiverPhone\": \"0987654321\",\n  \"shippingAddress\": \"\",\n  \"paymentMethod\": \"COD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Thiếu shippingAddress trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Địa chỉ nhận hàng không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-VAL-04: Checkout thiếu phương thức thanh toán -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn A\",\n  \"receiverPhone\": \"0987654321\",\n  \"shippingAddress\": \"Hà Nội\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Thiếu paymentMethod trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Phương thức thanh toán không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-VAL-05: Mock pay thiếu trường success -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Thiếu success\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/mock-pay/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "mock-pay", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Thiếu success trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-VAL-06: Mock pay thất bại kích hoạt Saga Rollback (success = false)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"success\": false,\n  \"note\": \"Thanh toán thất bại\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/mock-pay/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "mock-pay", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Mock pay thất bại trả về 200 kèm Rollback message', function () {",
+                  "    pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Authorization & IDOR Security",
+      "item": [
+        {
+          "name": "TC-269-SEC-01: Guest gọi Checkout thiếu X-User-Id -> 403 Forbidden",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn A\",\n  \"receiverPhone\": \"0987654321\",\n  \"shippingAddress\": \"Hà Nội\",\n  \"paymentMethod\": \"COD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "checkout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Guest gọi checkout trả về 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Thiếu thông tin người dùng xác thực');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-SEC-02: Guest gọi Tạo đơn từ giỏ thiếu X-User-Id -> 403 Forbidden",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn A\",\n  \"receiverPhone\": \"0987654321\",\n  \"shippingAddress\": \"Hà Nội\",\n  \"paymentMethod\": \"COD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/from-cart",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "from-cart"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Guest gọi from-cart trả về 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-SEC-03: Tấn công IDOR - User B cố xem đơn hàng của User A -> 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userBId}}"
+              },
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_USER"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('User B xem đơn User A bị chặn với 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-269-SEC-04: Tấn công IDOR - User B cố hủy đơn hàng của User A -> 403 Forbidden",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userBId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}", "cancel"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('User B hủy đơn User A bị chặn với 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

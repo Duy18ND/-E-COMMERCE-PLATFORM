@@ -151,7 +151,7 @@ public class FlashSaleController {
     public ResponseEntity<ApiResponse<Void>> initFlashSale(
             @PathVariable Long productId,
             @RequestParam int stock,
-            @RequestHeader("X-User-Roles") String userRoles) {
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles) {
 
         requireAdminRole(userRoles);
 
