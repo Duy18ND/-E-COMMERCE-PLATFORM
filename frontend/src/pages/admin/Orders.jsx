@@ -91,6 +91,11 @@ const AdminOrders = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
 
+  // Form cập nhật trạng thái đơn trong Modal (ECOM-292 / ECOM-293)
+  const [modalTargetStatus, setModalTargetStatus] = useState('');
+  const [statusNote, setStatusNote] = useState('');
+  const [statusFormError, setStatusFormError] = useState('');
+
   // Race condition guard ref
   const requestIdRef = useRef(0);
 
@@ -222,39 +227,107 @@ const AdminOrders = () => {
   };
 
   // Đóng modal xem chi tiết
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
+    if (actionLoading) return;
     setSelectedOrder(null);
     setDetailError('');
-  };
+    setStatusNote('');
+    setStatusFormError('');
+  }, [actionLoading]);
+
+  // Đồng bộ trạng thái mặc định cho Form cập nhật trạng thái khi mở modal hoặc đổi trạng thái đơn
+  useEffect(() => {
+    if (selectedOrder) {
+      const allowed = ORDER_TRANSITIONS[selectedOrder.status] || [];
+      setModalTargetStatus(allowed.length > 0 ? allowed[0].target : '');
+      setStatusNote('');
+      setStatusFormError('');
+    }
+  }, [selectedOrder?.id, selectedOrder?.status]);
+
+  // Hỗ trợ đóng modal chi tiết bằng phím Escape
+  useEffect(() => {
+    if (!selectedOrder) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !actionLoading) {
+        handleCloseDetail();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOrder, actionLoading, handleCloseDetail]);
 
   // Cập nhật trạng thái gọi API Backend PUT /api/v1/admin/orders/{orderId}/status
-  const handleTransitionStatus = async (orderId, targetStatus, actionLabel) => {
+  const handleTransitionStatus = async (orderId, targetStatus, actionLabel, customNote = '') => {
     const isDanger = targetStatus === ORDER_STATUS.CANCELLED;
+    const noteSuffix = customNote ? ` (Ghi chú: "${customNote}")` : '';
     const confirmed = await confirmDialog({
       title: isDanger ? 'Xác nhận hủy đơn hàng' : 'Cập nhật trạng thái đơn hàng',
-      message: `Bạn có chắc chắn muốn chuyển trạng thái đơn hàng #${orderId} sang "${actionLabel}"?`,
+      message: `Bạn có chắc chắn muốn chuyển trạng thái đơn hàng #${orderId} sang "${actionLabel}"${noteSuffix}?`,
       variant: isDanger ? 'danger' : 'primary',
       confirmText: actionLabel,
       cancelText: 'Quay lại'
     });
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     setActionLoading(true);
     try {
-      const updatedOrder = await orderService.updateOrderStatus(orderId, targetStatus);
+      const updatedOrder = await orderService.updateOrderStatus(orderId, targetStatus, customNote);
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, ...updatedOrder, status: targetStatus } : o))
       );
-      // Nếu đang mở modal của đơn hàng này thì cập nhật luôn
+      // Nếu đang mở modal của đơn hàng này thì cập nhật luôn cả lịch sử timeline
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder((prev) => ({ ...prev, ...updatedOrder, status: targetStatus }));
+        let refreshedHistories = updatedOrder?.statusHistories;
+        if (!refreshedHistories) {
+          try {
+            refreshedHistories = await orderService.getOrderStatusHistory(orderId);
+          } catch {
+            refreshedHistories = selectedOrder.statusHistories;
+          }
+        }
+        setSelectedOrder((prev) => ({
+          ...prev,
+          ...updatedOrder,
+          status: targetStatus,
+          statusHistories: refreshedHistories || prev.statusHistories
+        }));
       }
       notify.success(`Cập nhật đơn hàng #${orderId} sang "${actionLabel}" thành công!`);
+      return true;
     } catch (err) {
       notify.error(`Lỗi khi cập nhật trạng thái đơn hàng: ${err.message}`);
+      return false;
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Xử lý submit Form cập nhật trạng thái đơn trong Modal chi tiết (ECOM-292 / ECOM-293)
+  const handleModalStatusSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedOrder || actionLoading) return;
+
+    const allowed = ORDER_TRANSITIONS[selectedOrder.status] || [];
+    const matchedTransition = allowed.find((t) => t.target === modalTargetStatus);
+    if (!matchedTransition) {
+      setStatusFormError('Trạng thái chuyển tiếp không hợp lệ theo quy trình đơn hàng.');
+      return;
+    }
+
+    if (modalTargetStatus === ORDER_STATUS.CANCELLED && !statusNote.trim()) {
+      setStatusFormError('Vui lòng nhập lý do hủy đơn hàng (bắt buộc khi hủy đơn).');
+      notify.warning('Vui lòng nhập lý do hủy đơn hàng.');
+      return;
+    }
+
+    setStatusFormError('');
+    await handleTransitionStatus(
+      selectedOrder.id,
+      modalTargetStatus,
+      matchedTransition.label,
+      statusNote.trim()
+    );
   };
 
   // Format nhãn phương thức thanh toán
@@ -903,6 +976,125 @@ const AdminOrders = () => {
                 <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e40af' }}>
                   {formatCurrency(selectedOrder.totalAmount || 0)}
                 </span>
+              </div>
+
+              {/* FORM CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG (ECOM-292 / ECOM-293) */}
+              <div
+                style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '10px',
+                  padding: '1.1rem'
+                }}
+              >
+                <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                  ⚙️ Cập nhật trạng thái đơn hàng
+                </h4>
+                {(ORDER_TRANSITIONS[selectedOrder.status] || []).length === 0 ? (
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic' }}>
+                    Đơn hàng đang ở trạng thái cuối (<strong>{ORDER_STATUS_LABELS[selectedOrder.status] || selectedOrder.status}</strong>), không thể chuyển sang trạng thái khác.
+                  </div>
+                ) : (
+                  <form onSubmit={handleModalStatusSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                      <div>
+                        <label
+                          htmlFor="modal-order-status-select"
+                          style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.3rem' }}
+                        >
+                          Chuyển sang trạng thái tiếp theo <span style={{ color: '#dc2626' }}>*</span>
+                        </label>
+                        <select
+                          id="modal-order-status-select"
+                          value={modalTargetStatus}
+                          disabled={actionLoading}
+                          onChange={(e) => {
+                            setModalTargetStatus(e.target.value);
+                            setStatusFormError('');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.875rem',
+                            backgroundColor: '#ffffff',
+                            outline: 'none'
+                          }}
+                        >
+                          {(ORDER_TRANSITIONS[selectedOrder.status] || []).map((trans) => (
+                            <option key={trans.target} value={trans.target}>
+                              {trans.label} ({ORDER_STATUS_LABELS[trans.target] || trans.target})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="modal-order-status-note"
+                          style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.3rem' }}
+                        >
+                          Ghi chú / Lý do cập nhật{' '}
+                          {modalTargetStatus === ORDER_STATUS.CANCELLED ? (
+                            <span style={{ color: '#dc2626' }}>* (Bắt buộc khi hủy)</span>
+                          ) : (
+                            <span style={{ color: '#64748b' }}>(Tùy chọn)</span>
+                          )}
+                        </label>
+                        <input
+                          id="modal-order-status-note"
+                          type="text"
+                          value={statusNote}
+                          disabled={actionLoading}
+                          onChange={(e) => {
+                            setStatusNote(e.target.value);
+                            if (statusFormError) setStatusFormError('');
+                          }}
+                          placeholder={
+                            modalTargetStatus === ORDER_STATUS.CANCELLED
+                              ? 'Nhập lý do hủy đơn hàng...'
+                              : 'Nhập ghi chú xử lý đơn (nếu có)...'
+                          }
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            borderRadius: '6px',
+                            border: statusFormError ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                            fontSize: '0.875rem',
+                            backgroundColor: '#ffffff',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {statusFormError && (
+                      <div style={{ color: '#dc2626', fontSize: '0.8rem', fontWeight: 600 }}>
+                        ⚠️ {statusFormError}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        type="submit"
+                        disabled={actionLoading || !modalTargetStatus}
+                        style={{
+                          padding: '0.5rem 1.15rem',
+                          borderRadius: '6px',
+                          border: 'none',
+                          backgroundColor: modalTargetStatus === ORDER_STATUS.CANCELLED ? '#dc2626' : '#2563eb',
+                          color: '#ffffff',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          cursor: actionLoading ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {actionLoading ? '⏳ Đang cập nhật...' : '💾 Lưu trạng thái mới'}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
 
               {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-311 / ECOM-315) */}
