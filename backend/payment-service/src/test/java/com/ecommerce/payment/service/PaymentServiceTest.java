@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -292,9 +293,11 @@ class PaymentServiceTest {
 
             when(paymentRepository.findByOrderId(103L)).thenReturn(Optional.of(payment));
 
-            assertThatThrownBy(() -> paymentService.mockPay(103L, true))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("đã được thanh toán thành công trước đó");
+            IllegalStateException ex = assertThrows(IllegalStateException.class,
+                    () -> paymentService.mockPay(103L, true));
+            assertThat(ex.getMessage())
+                    .contains("103")
+                    .contains("đã được thanh toán thành công trước đó");
         }
 
         @Test
@@ -302,9 +305,9 @@ class PaymentServiceTest {
         void testMockPay_OrderNotFound_ThrowsResourceNotFoundException() {
             when(paymentRepository.findByOrderId(999L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> paymentService.mockPay(999L, true))
-                    .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("999");
+            ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                    () -> paymentService.mockPay(999L, true));
+            assertThat(ex.getMessage()).contains("999");
         }
     }
 }
