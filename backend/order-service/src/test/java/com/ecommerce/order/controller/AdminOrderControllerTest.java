@@ -203,4 +203,33 @@ class AdminOrderControllerTest {
                 .andExpect(jsonPath("$.data.ordersByStatus.PENDING").value(5))
                 .andExpect(jsonPath("$.data.ordersByStatus.DELIVERED").value(20));
     }
+
+    @Test
+    @DisplayName("[ECOM-143 / ECOM-145] GET /api/v1/admin/orders/customer/{userId}: Admin xem lịch sử mua hàng của khách hàng thành công")
+    void getOrdersByCustomer_AdminRole_Success() throws Exception {
+        com.ecommerce.order.dto.response.OrderResponse order = com.ecommerce.order.dto.response.OrderResponse.builder()
+                .id(101L)
+                .userId(55L)
+                .totalAmount(new BigDecimal("450000.00"))
+                .status(OrderStatus.DELIVERED)
+                .build();
+
+        when(orderService.getOrdersByUserId(eq(55L), any(), eq("ROLE_ADMIN"))).thenReturn(List.of(order));
+
+        mockMvc.perform(get("/api/v1/admin/orders/customer/55")
+                        .header("X-User-Roles", "ROLE_ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].id").value(101))
+                .andExpect(jsonPath("$.data[0].userId").value(55))
+                .andExpect(jsonPath("$.data[0].status").value("DELIVERED"));
+    }
+
+    @Test
+    @DisplayName("[ECOM-143 / ECOM-145] GET /api/v1/admin/orders/customer/{userId}: Người dùng không có ROLE_ADMIN bị chặn 403")
+    void getOrdersByCustomer_NonAdmin_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/orders/customer/55")
+                        .header("X-User-Roles", "ROLE_USER"))
+                .andExpect(status().isForbidden());
+    }
 }

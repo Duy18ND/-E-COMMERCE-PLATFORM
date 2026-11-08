@@ -60,8 +60,13 @@ public class AdminUserController {
     }
 
     private void requireAdminRole(String roles) {
-        if (roles != null && roles.contains("ROLE_ADMIN")) {
-            return;
+        if (roles != null) {
+            boolean hasAdmin = java.util.Arrays.stream(roles.split(","))
+                    .map(String::trim)
+                    .anyMatch("ROLE_ADMIN"::equals);
+            if (hasAdmin) {
+                return;
+            }
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getAuthorities() != null &&

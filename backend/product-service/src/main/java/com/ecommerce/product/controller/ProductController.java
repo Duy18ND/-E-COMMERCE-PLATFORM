@@ -313,4 +313,16 @@ public class ProductController {
         PagedResponse<ProductResponse> response = productService.getAdminProducts(keyword, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm cho Admin thành công", response));
     }
+
+    /**
+     * [Task ECOM-145 / ECOM-326] API nội bộ & Admin đếm số lượng sản phẩm sắp hết hàng.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @GetMapping("/low-stock/count")
+    @Operation(summary = "Đếm số sản phẩm sắp hết hàng", description = "Trả về tổng số sản phẩm đang kinh doanh có tồn kho <= threshold (mặc định 5)")
+    public ResponseEntity<ApiResponse<Long>> countLowStockProducts(
+            @RequestParam(value = "threshold", defaultValue = "5") Integer threshold) {
+        long count = productService.countLowStockProducts(threshold);
+        return ResponseEntity.ok(ApiResponse.success("Đếm số sản phẩm sắp hết hàng thành công", count));
+    }
 }

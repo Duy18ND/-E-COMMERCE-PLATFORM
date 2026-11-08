@@ -113,6 +113,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Định dạng dữ liệu yêu cầu không hợp lệ hoặc sai kiểu giá trị"));
     }
 
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatchException(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+
+        log.warn("Parameter type mismatch on {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("Tham số truy vấn không hợp lệ: " + ex.getName()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
