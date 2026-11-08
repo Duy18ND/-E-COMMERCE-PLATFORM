@@ -492,6 +492,18 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /**
+     * [Task ECOM-145 / ECOM-326] Đếm số lượng sản phẩm sắp hết hàng phục vụ thống kê Dashboard.
+     * Ngưỡng mặc định: 5 sản phẩm (đồng bộ với cấu hình tồn kho trên AdminWeb).
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long countLowStockProducts(Integer threshold) {
+        int safeThreshold = (threshold != null && threshold >= 0) ? threshold : 5;
+        return productRepository.countLowStockProducts(safeThreshold, ProductStatus.INACTIVE);
+    }
+
+    /**
      * [Task ECOM-248] Hàm helper kiểm tra hợp lệ giá sản phẩm (> 0) và số lượng tồn
      * kho (>= 0)
      * ở tầng nghiệp vụ (Service layer) nhằm đảm bảo an toàn dữ liệu tuyệt đối.

@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -52,4 +53,31 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      */
     @Query("SELECT o.status, COUNT(o) FROM Order o GROUP BY o.status")
     List<Object[]> countOrdersByStatusGroup();
+
+    /**
+     * [Task ECOM-145 / ECOM-326] Đếm tổng số đơn hàng trong khoảng thời gian chỉ định.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.createdAt >= :startDate AND o.createdAt <= :endDate")
+    Long countTotalOrdersBetween(@Param("startDate") LocalDateTime startDate,
+                                 @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * [Task ECOM-145 / ECOM-326] Tính tổng doanh thu của các đơn hàng hợp lệ trong khoảng thời gian chỉ định.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+           "WHERE o.status IN :statuses AND o.createdAt >= :startDate AND o.createdAt <= :endDate")
+    BigDecimal sumTotalAmountByStatusInAndCreatedAtBetween(@Param("statuses") Collection<OrderStatus> statuses,
+                                                           @Param("startDate") LocalDateTime startDate,
+                                                           @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * [Task ECOM-145 / ECOM-326] Đếm số lượng đơn hàng gom nhóm theo từng trạng thái trong khoảng thời gian chỉ định.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @Query("SELECT o.status, COUNT(o) FROM Order o " +
+           "WHERE o.createdAt >= :startDate AND o.createdAt <= :endDate GROUP BY o.status")
+    List<Object[]> countOrdersByStatusGroupBetween(@Param("startDate") LocalDateTime startDate,
+                                                   @Param("endDate") LocalDateTime endDate);
 }

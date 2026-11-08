@@ -93,4 +93,14 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
          * không phân biệt hoa thường).
          */
         long countByCategoryIgnoreCase(String categoryName);
+
+        /**
+         * [Task ECOM-145 / ECOM-326] Đếm số lượng sản phẩm sắp hết hàng (stockQuantity <= threshold)
+         * loại trừ các sản phẩm đã xóa mềm (INACTIVE), phục vụ thống kê Admin Dashboard.
+         * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+         */
+        @Query("SELECT COUNT(p) FROM Product p WHERE p.status <> :excludedStatus AND p.stockQuantity <= :threshold")
+        long countLowStockProducts(
+                        @Param("threshold") int threshold,
+                        @Param("excludedStatus") ProductStatus excludedStatus);
 }
