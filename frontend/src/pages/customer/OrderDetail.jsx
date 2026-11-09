@@ -42,6 +42,19 @@ const OrderDetail = () => {
     try {
       // Gọi API Backend: GET /api/orders/{orderId}
       const data = await orderService.getOrderById(id);
+      if (data && data.status === ORDER_STATUS.PENDING && typeof window !== 'undefined' && window.sessionStorage) {
+        try {
+          const rawOverrides = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
+          const overrides = rawOverrides ? JSON.parse(rawOverrides) : {};
+          const override = overrides[String(id)];
+          if (override?.status) {
+            setOrder({ ...data, status: override.status });
+            return;
+          }
+        } catch (e) {
+          // Bỏ qua lỗi đọc sessionStorage
+        }
+      }
       setOrder(data);
     } catch (err) {
       if (silent) return;
@@ -196,12 +209,12 @@ const OrderDetail = () => {
   const receiverName = order.receiverName || order.shippingAddress?.fullName || 'Người nhận';
   const phone = order.receiverPhone || order.shippingAddress?.phone || '---';
   const fullAddress = order.shippingAddress?.fullAddress || order.shippingAddress || 'Chưa cung cấp';
+  const isPending = order.status === ORDER_STATUS.PENDING;
   // Nếu vừa xác nhận từ màn hình QR nhưng Kafka ở Backend đang trên đường cập nhật, ưu tiên hiển thị trạng thái vừa xác nhận
-  const effectiveStatus = order.status === ORDER_STATUS.PENDING && awaitingStatus ? awaitingStatus : order.status;
-  const isPending = effectiveStatus === ORDER_STATUS.PENDING;
+  const effectiveStatus = isPending && awaitingStatus ? awaitingStatus : order.status;
   // Mọi phương thức khác COD (MOCK_ONLINE, VNPAY, MOMO, BANK_TRANSFER, QR_CODE...) đều thanh toán qua mã QR
   const isOnlinePayment = order.paymentMethod === 'MOCK_ONLINE' || (!!order.paymentMethod && order.paymentMethod !== 'COD');
-  const canPayByQr = isPending && isOnlinePayment;
+  const canPayByQr = isPending && !awaitingStatus && isOnlinePayment;
   const isPaidStatus =
     effectiveStatus === ORDER_STATUS.PAID ||
     effectiveStatus === ORDER_STATUS.COMPLETED ||
