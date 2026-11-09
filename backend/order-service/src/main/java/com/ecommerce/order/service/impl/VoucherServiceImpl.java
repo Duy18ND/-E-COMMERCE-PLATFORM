@@ -5,14 +5,18 @@ import com.ecommerce.order.dto.request.VoucherRequest;
 import com.ecommerce.order.dto.response.ApplyVoucherResponse;
 import com.ecommerce.order.dto.response.VoucherResponse;
 import com.ecommerce.order.entity.Voucher;
+import com.ecommerce.order.entity.VoucherUsage;
 import com.ecommerce.order.enums.DiscountType;
 import com.ecommerce.order.enums.VoucherStatus;
+import com.ecommerce.order.enums.VoucherUsageStatus;
 import com.ecommerce.order.exception.DuplicateResourceException;
 import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.repository.VoucherRepository;
+import com.ecommerce.order.repository.VoucherUsageRepository;
 import com.ecommerce.order.service.VoucherService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,13 +25,27 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+/**
+ * [Task ECOM-166 / ECOM-167 / ECOM-183 / ECOM-339] Triển khai nghiệp vụ quản lý và áp dụng Voucher & mã giảm giá.
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class VoucherServiceImpl implements VoucherService {
 
     private final VoucherRepository voucherRepository;
+
+    @Autowired(required = false)
+    private VoucherUsageRepository voucherUsageRepository;
+
+    public void setVoucherUsageRepository(VoucherUsageRepository voucherUsageRepository) {
+        this.voucherUsageRepository = voucherUsageRepository;
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -146,12 +164,34 @@ public class VoucherServiceImpl implements VoucherService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<VoucherResponse> getAvailableVouchersForUser(Long userId) {
+        List<VoucherResponse> activeVouchers = getActiveVouchers();
+        if (userId == null || voucherUsageRepository == null) {
+            return activeVouchers;
+        }
+        Set<Long> usedVoucherIds = voucherUsageRepository.findByUserIdAndStatus(userId, VoucherUsageStatus.APPLIED)
+                .stream()
+                .map(VoucherUsage::getVoucherId)
+                .collect(Collectors.toSet());
+        if (usedVoucherIds.isEmpty()) {
+            return activeVouchers;
+        }
+        return activeVouchers.stream()
+                .filter(v -> v.getId() == null || !usedVoucherIds.contains(v.getId()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ApplyVoucherResponse applyVoucher(ApplyVoucherRequest request) {
         String code = request.getCode().trim().toUpperCase();
         LocalDate today = LocalDate.now();
 
         Voucher voucher = voucherRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Mã giảm giá không tồn tại: " + code));
+
+        // [Task ECOM-167] Chặn dùng trùng: kiểm tra người dùng hiện tại đã áp dụng mã này chưa
+        validateUserNotAlreadyUsed(voucher, request.getUserId());
 
         BigDecimal discount = calculateAndValidateDiscount(voucher, request.getOrderTotal(), today);
         BigDecimal finalAmount = request.getOrderTotal().subtract(discount).max(BigDecimal.ZERO);
@@ -191,6 +231,52 @@ public class VoucherServiceImpl implements VoucherService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public BigDecimal redeemVoucherForOrder(String rawCode, BigDecimal subtotalAmount, Long userId, Long orderId) {
+        validateUserCanUseVoucher(rawCode, userId);
+        BigDecimal discount = redeemVoucherForOrder(rawCode, subtotalAmount);
+        recordVoucherUsage(rawCode, userId, orderId, discount);
+        return discount;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void validateUserCanUseVoucher(String rawCode, Long userId) {
+        if (rawCode == null || rawCode.trim().isEmpty() || userId == null || voucherUsageRepository == null) {
+            return;
+        }
+        String code = rawCode.trim().toUpperCase();
+        if (voucherUsageRepository.existsByVoucherCodeIgnoreCaseAndUserIdAndStatus(
+                code, userId, VoucherUsageStatus.APPLIED)) {
+            log.warn("Duplicate voucher usage blocked for userId={}, code={}", userId, code);
+            throw new IllegalStateException("Bạn đã sử dụng mã giảm giá này rồi.");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordVoucherUsage(String rawCode, Long userId, Long orderId, BigDecimal discountAmount) {
+        if (rawCode == null || rawCode.trim().isEmpty() || userId == null || voucherUsageRepository == null) {
+            return;
+        }
+        String code = rawCode.trim().toUpperCase();
+        Long voucherId = voucherRepository.findByCodeIgnoreCase(code)
+                .map(Voucher::getId)
+                .orElse(0L);
+
+        VoucherUsage usage = VoucherUsage.builder()
+                .voucherId(voucherId)
+                .voucherCode(code)
+                .userId(userId)
+                .orderId(orderId)
+                .discountAmount(discountAmount != null ? discountAmount : BigDecimal.ZERO)
+                .status(VoucherUsageStatus.APPLIED)
+                .build();
+        voucherUsageRepository.save(usage);
+        log.info("Recorded voucher usage: code={}, userId={}, orderId={}, discount={}", code, userId, orderId, discountAmount);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void restoreVoucherUsage(String voucherCode) {
         if (voucherCode == null || voucherCode.trim().isEmpty()) {
             return;
@@ -198,6 +284,43 @@ public class VoucherServiceImpl implements VoucherService {
         String code = voucherCode.trim().toUpperCase();
         int rows = voucherRepository.decrementUsedQuantityByCode(code);
         log.info("Restored voucher usage for code={}: affected rows={}", code, rows);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void restoreVoucherUsageForOrder(String voucherCode, Long userId, Long orderId) {
+        if (voucherCode == null || voucherCode.trim().isEmpty() || voucherUsageRepository == null) {
+            return;
+        }
+        String code = voucherCode.trim().toUpperCase();
+        Optional<VoucherUsage> usageOpt = Optional.empty();
+        if (orderId != null) {
+            usageOpt = voucherUsageRepository.findFirstByVoucherCodeIgnoreCaseAndOrderIdAndStatusOrderByIdDesc(
+                    code, orderId, VoucherUsageStatus.APPLIED);
+        }
+        if (usageOpt.isEmpty() && userId != null) {
+            usageOpt = voucherUsageRepository.findFirstByVoucherCodeIgnoreCaseAndUserIdAndStatusOrderByIdDesc(
+                    code, userId, VoucherUsageStatus.APPLIED);
+        }
+        usageOpt.ifPresent(usage -> {
+            usage.setStatus(VoucherUsageStatus.RESTORED);
+            voucherUsageRepository.save(usage);
+            log.info("Restored voucher_usages record id={} to RESTORED for code={}, userId={}, orderId={}",
+                    usage.getId(), code, userId, orderId);
+        });
+    }
+
+    private void validateUserNotAlreadyUsed(Voucher voucher, Long userId) {
+        if (userId == null || voucherUsageRepository == null) {
+            return;
+        }
+        boolean alreadyUsed = (voucher.getId() != null && voucherUsageRepository.existsByVoucherIdAndUserIdAndStatus(
+                voucher.getId(), userId, VoucherUsageStatus.APPLIED))
+                || voucherUsageRepository.existsByVoucherCodeIgnoreCaseAndUserIdAndStatus(
+                voucher.getCode(), userId, VoucherUsageStatus.APPLIED);
+        if (alreadyUsed) {
+            throw new IllegalStateException("Bạn đã sử dụng mã giảm giá này rồi.");
+        }
     }
 
     private BigDecimal calculateAndValidateDiscount(Voucher voucher, BigDecimal orderTotal, LocalDate today) {

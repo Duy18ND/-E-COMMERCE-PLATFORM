@@ -160,4 +160,27 @@ class AdminReviewControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("APPROVED"));
     }
+
+    @Test
+    @DisplayName("[Task ECOM-193] GET /api/v1/admin/reviews: ROLE_ADMIN_VIEWER (substring bypass) -> Trả về 403 Forbidden")
+    void getAllReviews_WithRoleAdminViewer_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/reviews")
+                        .header("X-User-Roles", "ROLE_ADMIN_VIEWER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+
+        verifyNoInteractions(reviewService);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-351] GET /api/v1/admin/reviews: Truyền status không hợp lệ (status=INVALID) -> Trả về 400 Bad Request")
+    void getAllReviews_InvalidStatusEnum_ShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/reviews")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .param("status", "INVALID_STATUS"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verifyNoInteractions(reviewService);
+    }
 }

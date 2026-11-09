@@ -129,14 +129,16 @@ CREATE TABLE IF NOT EXISTS products (
   COMMENT='Danh mục sản phẩm và quản lý tồn kho';
 
 CREATE TABLE IF NOT EXISTS product_reviews (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    product_id BIGINT       NOT NULL COMMENT 'ID sản phẩm được đánh giá',
-    user_id    BIGINT       NOT NULL COMMENT 'ID người dùng viết đánh giá',
-    order_id   BIGINT       NOT NULL COMMENT 'ID đơn hàng DELIVERED — xác minh điều kiện đánh giá',
-    rating     INT          NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5 (Khớp Hibernate Integer)',
-    comment    TEXT                  COMMENT 'Nội dung bình luận (tuỳ chọn)',
-    created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id    BIGINT       NOT NULL COMMENT 'ID sản phẩm được đánh giá',
+    user_id       BIGINT       NOT NULL COMMENT 'ID người dùng viết đánh giá',
+    order_id      BIGINT       NOT NULL COMMENT 'ID đơn hàng DELIVERED — xác minh điều kiện đánh giá',
+    rating        INT          NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5 (Khớp Hibernate Integer)',
+    comment       TEXT                  COMMENT 'Nội dung bình luận (tuỳ chọn)',
+    status        VARCHAR(20)  NOT NULL DEFAULT 'APPROVED' COMMENT 'Trạng thái kiểm duyệt: APPROVED, HIDDEN',
+    hidden_reason VARCHAR(255)          COMMENT 'Lý do ẩn đánh giá vi phạm',
+    created_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at    DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     CONSTRAINT chk_rating CHECK (rating BETWEEN 1 AND 5),
     CONSTRAINT uq_review_product_user UNIQUE (product_id, user_id),
     INDEX idx_reviews_product_id (product_id),
@@ -203,6 +205,25 @@ CREATE TABLE IF NOT EXISTS vouchers (
     INDEX idx_vouchers_status_dates (status, start_date, end_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng mã giảm giá voucher cho đơn hàng';
+
+-- [Task ECOM-166 / ECOM-167 / ECOM-183] Bảng lưu lịch sử sử dụng voucher của từng người dùng theo đơn hàng
+-- Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+CREATE TABLE IF NOT EXISTS voucher_usages (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    voucher_id      BIGINT         NOT NULL COMMENT 'ID voucher liên kết',
+    voucher_code    VARCHAR(50)    NOT NULL COMMENT 'Mã voucher tại thời điểm áp dụng',
+    user_id         BIGINT         NOT NULL COMMENT 'ID người dùng sử dụng voucher',
+    order_id        BIGINT                  COMMENT 'ID đơn hàng áp dụng voucher',
+    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Số tiền được giảm từ voucher',
+    status          VARCHAR(20)    NOT NULL DEFAULT 'APPLIED' COMMENT 'Trạng thái lượt dùng: APPLIED (đang áp dụng), RESTORED (đã hoàn lượt khi hủy đơn/lỗi thanh toán)',
+    used_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Thời điểm sử dụng mã',
+    updated_at      DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_voucher_usage_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE,
+    INDEX idx_voucher_usage_voucher_user (voucher_id, user_id, status),
+    INDEX idx_voucher_usage_code_user (voucher_code, user_id, status),
+    INDEX idx_voucher_usage_order_id (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng lịch sử sử dụng voucher của người dùng (chặn dùng trùng và hoàn lượt khi hủy đơn)';
 
 CREATE TABLE IF NOT EXISTS orders (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,

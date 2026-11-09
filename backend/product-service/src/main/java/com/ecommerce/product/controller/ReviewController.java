@@ -18,10 +18,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
+
 /**
- * Controller quản lý đánh giá sản phẩm.
- * API xem danh sách đánh giá là public.
- * API xem đánh giá cá nhân (/me), tạo, sửa, xoá yêu cầu user đã xác thực (X-User-Id từ API Gateway).
+ * [Task ECOM-177] Controller API tạo, sửa đánh giá, lấy danh sách đánh giá sản phẩm.
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+ * - API xem danh sách đánh giá là public.
+ * - API xem đánh giá cá nhân (/me), tạo, sửa, xoá yêu cầu user đã xác thực (X-User-Id từ API Gateway).
  */
 @RestController
 @RequestMapping("/api/v1/products/{productId}/reviews")
@@ -121,7 +124,9 @@ public class ReviewController {
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles) {
 
-        requireAuthenticated(userId);
+        if (userId == null && !hasAdminRole(userRoles)) {
+            requireAuthenticated(userId);
+        }
         reviewService.deleteReview(productId, reviewId, userId, userRoles);
         return ResponseEntity.ok(ApiResponse.success("Xoá đánh giá thành công", null));
     }
@@ -132,5 +137,11 @@ public class ReviewController {
         if (userId == null) {
             throw new AccessDeniedException("Bạn cần đăng nhập để thực hiện thao tác này (thiếu X-User-Id)");
         }
+    }
+
+    private boolean hasAdminRole(String roles) {
+        return roles != null && Arrays.stream(roles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
     }
 }
