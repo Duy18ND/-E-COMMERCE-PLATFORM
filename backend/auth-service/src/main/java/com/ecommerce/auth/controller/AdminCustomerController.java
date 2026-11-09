@@ -52,6 +52,13 @@ public class AdminCustomerController {
 
         requireAdminRole(roles);
 
+        if (page < 0) {
+            throw new IllegalArgumentException("Chỉ số trang (page) không được nhỏ hơn 0");
+        }
+        if (size <= 0) {
+            throw new IllegalArgumentException("Kích thước trang (size) phải lớn hơn 0");
+        }
+
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
