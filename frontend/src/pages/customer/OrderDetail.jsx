@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -10,6 +10,10 @@ import ErrorMessage from '../../components/common/ErrorMessage';
 import { ORDER_STATUS } from '../../utils/constants';
 import useNotification from '../../hooks/useNotification';
 import OrderTimeline from '../../components/order/OrderTimeline';
+import QrPaymentModal from '../../components/order/QrPaymentModal';
+
+// Số lần thử đồng bộ lại trạng thái đơn (mỗi 1 giây) sau khi xác nhận thanh toán QR, chờ Kafka cập nhật
+const MAX_PAYMENT_SYNC_ATTEMPTS = 8;
 
 /**
  * Trang chi tiết đơn hàng (OrderDetail)
@@ -19,27 +23,35 @@ import OrderTimeline from '../../components/order/OrderTimeline';
  */
 const OrderDetail = () => {
   const { id } = useParams();
+  const location = useLocation();
   const { notify, confirmDialog } = useNotification();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+  const [qrOpen, setQrOpen] = useState(false);
+  // Trạng thái đơn đang chờ đồng bộ sau thanh toán QR (PAID / FAILED) — truyền từ Checkout qua navigation state
+  const [awaitingStatus, setAwaitingStatus] = useState(location.state?.expectedStatus || null);
+  const syncAttemptsRef = useRef(0);
 
-  const fetchOrderDetail = async () => {
-    setLoading(true);
-    setError('');
+  const fetchOrderDetail = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       // Gọi API Backend: GET /api/orders/{orderId}
       const data = await orderService.getOrderById(id);
       setOrder(data);
     } catch (err) {
+      if (silent) return;
       if (err.response?.status === 403) {
         setError('Bạn không có quyền xem thông tin đơn hàng này (Bảo mật IDOR).');
       } else {
         setError(err.message || 'Không thể tải chi tiết đơn hàng.');
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -53,6 +65,22 @@ const OrderDetail = () => {
     }
     return undefined;
   }, [id]);
+
+  // Sau khi xác nhận thanh toán QR: đồng bộ lại trạng thái đơn mỗi 1 giây cho tới khi Kafka cập nhật
+  // (PENDING -> PAID / FAILED) hoặc hết số lần thử, tránh hiển thị trạng thái PENDING cũ.
+  useEffect(() => {
+    if (!awaitingStatus || !order) return undefined;
+    if (order.status !== ORDER_STATUS.PENDING || syncAttemptsRef.current >= MAX_PAYMENT_SYNC_ATTEMPTS) {
+      setAwaitingStatus(null);
+      syncAttemptsRef.current = 0;
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      syncAttemptsRef.current += 1;
+      fetchOrderDetail({ silent: true });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [awaitingStatus, order]);
 
   // Hủy đơn hàng khi đơn còn ở trạng thái PENDING
   const handleCancelOrder = async () => {
@@ -77,18 +105,28 @@ const OrderDetail = () => {
     }
   };
 
-  // Thanh toán mô phỏng nếu đơn còn PENDING
-  const handleMockPay = async () => {
-    setActionLoading(true);
-    try {
-      await paymentService.mockPay(id, true);
-      notify.success('Thanh toán thành công! Đang làm mới dữ liệu...');
-      await fetchOrderDetail();
-    } catch (err) {
-      notify.error(err.message || 'Thanh toán mô phỏng thất bại.');
-    } finally {
-      setActionLoading(false);
-    }
+  // Thanh toán mô phỏng qua màn hình QR nếu đơn còn PENDING
+  // Gọi API POST /payments/mock-pay/{orderId} với body { success, note }
+  const handleMockPay = (success = true, note = '') => paymentService.mockPay(id, success, note);
+
+  const startPaymentSync = (expectedStatus) => {
+    syncAttemptsRef.current = 0;
+    setAwaitingStatus(expectedStatus);
+    fetchOrderDetail({ silent: true });
+  };
+
+  const handleQrPaid = () => {
+    setQrOpen(false);
+    setOrder((prev) => (prev ? { ...prev, status: ORDER_STATUS.PAID } : prev));
+    notify.success(`Thanh toán thành công! Đơn hàng #${id} đã chuyển sang ĐÃ THANH TOÁN (PAID).`);
+    startPaymentSync(ORDER_STATUS.PAID);
+  };
+
+  const handleQrFailed = () => {
+    setQrOpen(false);
+    setOrder((prev) => (prev ? { ...prev, status: ORDER_STATUS.FAILED } : prev));
+    notify.error(`Thanh toán đơn hàng #${id} thất bại. Hệ thống đã hoàn lại tồn kho và lượt sử dụng Voucher (Saga Rollback).`);
+    startPaymentSync(ORDER_STATUS.FAILED);
   };
 
   if (loading) {
@@ -158,10 +196,35 @@ const OrderDetail = () => {
   const receiverName = order.receiverName || order.shippingAddress?.fullName || 'Người nhận';
   const phone = order.receiverPhone || order.shippingAddress?.phone || '---';
   const fullAddress = order.shippingAddress?.fullAddress || order.shippingAddress || 'Chưa cung cấp';
-  const isPending = order.status === ORDER_STATUS.PENDING;
+  // Nếu vừa xác nhận từ màn hình QR nhưng Kafka ở Backend đang trên đường cập nhật, ưu tiên hiển thị trạng thái vừa xác nhận
+  const effectiveStatus = order.status === ORDER_STATUS.PENDING && awaitingStatus ? awaitingStatus : order.status;
+  const isPending = effectiveStatus === ORDER_STATUS.PENDING;
+  // Mọi phương thức khác COD (MOCK_ONLINE, VNPAY, MOMO, BANK_TRANSFER, QR_CODE...) đều thanh toán qua mã QR
+  const isOnlinePayment = order.paymentMethod === 'MOCK_ONLINE' || (!!order.paymentMethod && order.paymentMethod !== 'COD');
+  const canPayByQr = isPending && isOnlinePayment;
+  const isPaidStatus =
+    effectiveStatus === ORDER_STATUS.PAID ||
+    effectiveStatus === ORDER_STATUS.COMPLETED ||
+    effectiveStatus === ORDER_STATUS.DELIVERED ||
+    (isOnlinePayment && (
+      effectiveStatus === ORDER_STATUS.CONFIRMED ||
+      effectiveStatus === ORDER_STATUS.PROCESSING ||
+      effectiveStatus === ORDER_STATUS.SHIPPING
+    ));
+  const isFailedStatus = effectiveStatus === ORDER_STATUS.FAILED;
+  const isSyncingPayment = !!awaitingStatus && order.status === ORDER_STATUS.PENDING;
 
   return (
     <div className="container page-container" style={{ paddingBottom: '3rem' }}>
+      {/* Màn hình quét mã QR thanh toán (VietQR) — mở lại bất cứ lúc nào khi đơn online còn PENDING */}
+      <QrPaymentModal
+        isOpen={qrOpen && canPayByQr}
+        order={order}
+        onPay={handleMockPay}
+        onPaid={handleQrPaid}
+        onFailed={handleQrFailed}
+        onPayLater={() => setQrOpen(false)}
+      />
       {/* Nút quay lại */}
       <div style={{ marginBottom: '1.25rem' }}>
         <Link
@@ -228,7 +291,7 @@ const OrderDetail = () => {
             </Button>
           </Link>
 
-          {/* Nút thao tác khách hàng: Hủy đơn hoặc Thanh toán mô phỏng */}
+          {/* Nút thao tác khách hàng: Hủy đơn hoặc Thanh toán ngay qua mã QR */}
           {isPending && (
             <>
               <Button
@@ -240,20 +303,61 @@ const OrderDetail = () => {
                 {actionLoading ? 'Đang xử lý...' : 'Hủy đơn hàng'}
               </Button>
 
-              {order.paymentMethod === 'MOCK_ONLINE' && (
+              {canPayByQr && (
                 <Button
                   variant="primary"
                   size="sm"
-                  disabled={actionLoading}
-                  onClick={handleMockPay}
+                  disabled={actionLoading || isSyncingPayment}
+                  onClick={() => setQrOpen(true)}
                 >
-                  {actionLoading ? 'Đang xử lý...' : 'Thanh toán ngay'}
+                  📱 Thanh toán QR ngay
                 </Button>
               )}
             </>
           )}
         </div>
       </div>
+
+      {/* Đang đồng bộ trạng thái thanh toán từ Kafka (sau khi xác nhận trên màn hình QR) */}
+      {isSyncingPayment && (
+        <div
+          className="card"
+          style={{
+            padding: '0.85rem 1.1rem', marginBottom: '1.5rem', fontSize: '0.875rem',
+            border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', color: '#1e40af',
+            display: 'flex', alignItems: 'center', gap: '0.6rem'
+          }}
+        >
+          <span>⏳</span>
+          <span>
+            Đang đồng bộ kết quả thanh toán ({awaitingStatus === ORDER_STATUS.PAID ? 'ĐÃ THANH TOÁN' : 'THẤT BẠI'}) từ hệ thống...
+          </span>
+        </div>
+      )}
+
+      {/* Nhắc thanh toán cho đơn online còn PENDING */}
+      {canPayByQr && !isSyncingPayment && (
+        <div
+          className="card"
+          style={{
+            padding: '1rem 1.25rem', marginBottom: '1.5rem',
+            border: '1px solid #fde68a', backgroundColor: '#fffbeb',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem'
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.95rem' }}>
+              ⏰ Đơn hàng đang chờ thanh toán
+            </div>
+            <div style={{ fontSize: '0.825rem', color: '#a16207', marginTop: '0.2rem' }}>
+              Quét mã VietQR để thanh toán {formatCurrency(order.totalAmount || 0)} và hoàn tất đơn hàng.
+            </div>
+          </div>
+          <Button variant="primary" size="sm" disabled={actionLoading} onClick={() => setQrOpen(true)}>
+            📱 Thanh toán QR ngay
+          </Button>
+        </div>
+      )}
 
       {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-173 / ECOM-188 / ECOM-311 / ECOM-315) */}
       <OrderTimeline
@@ -299,13 +403,17 @@ const OrderDetail = () => {
             <div>
               <span style={{ color: '#64748b' }}>Phương thức:</span>{' '}
               <strong style={{ color: '#0f172a' }}>
-                {order.paymentMethod === 'MOCK_ONLINE' ? 'Thanh toán trực tuyến (Mô phỏng)' : 'Thanh toán khi nhận hàng (COD)'}
+                {isOnlinePayment ? 'Thanh toán trực tuyến (Chuyển khoản QR)' : 'Thanh toán khi nhận hàng (COD)'}
               </strong>
             </div>
             <div>
               <span style={{ color: '#64748b' }}>Trạng thái thanh toán:</span>{' '}
-              <span style={{ fontWeight: 600, color: order.status === ORDER_STATUS.PAID || order.status === ORDER_STATUS.COMPLETED || order.status === ORDER_STATUS.DELIVERED ? '#16a34a' : '#d97706' }}>
-                {order.status === ORDER_STATUS.PAID || order.status === ORDER_STATUS.COMPLETED || order.status === ORDER_STATUS.DELIVERED ? 'Đã thanh toán' : 'Chưa thanh toán'}
+              <span style={{ fontWeight: 600, color: isPaidStatus ? '#16a34a' : isFailedStatus ? '#dc2626' : '#d97706' }}>
+                {isPaidStatus
+                  ? 'Đã thanh toán'
+                  : isFailedStatus
+                    ? 'Thanh toán thất bại (đã hoàn kho & hoàn Voucher)'
+                    : 'Chưa thanh toán'}
               </span>
             </div>
           </div>

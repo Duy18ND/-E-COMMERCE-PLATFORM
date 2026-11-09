@@ -11,6 +11,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import CartSummary from '../../components/cart/CartSummary';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import QrPaymentModal from '../../components/order/QrPaymentModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtMoney = (n) => Number(n).toLocaleString('vi-VN') + 'đ';
@@ -256,6 +257,8 @@ const Checkout = () => {
   const [appliedVoucher,  setAppliedVoucher]  = useState(null); // { voucher, discountAmount }
   const [pickerOpen,      setPickerOpen]      = useState(false);
 
+  // ── QR payment state (đơn thanh toán trực tuyến chờ quét mã VietQR) ───────
+  const [qrOrder, setQrOrder] = useState(null);
   // Pre-fill user info
   useEffect(() => {
     if (user) {
@@ -376,12 +379,19 @@ const Checkout = () => {
         discountAmount:  appliedVoucher?.discountAmount  ?? 0
       });
 
-      if (formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE && createdOrder?.id) {
-        try { await paymentService.mockPay(createdOrder.id, true); }
-        catch (payErr) { console.warn('Lỗi thanh toán mô phỏng:', payErr); }
+      await refreshCart();
+
+      // Thanh toán trực tuyến (khác COD): giữ đơn PENDING và mở màn hình quét mã QR thay vì chuyển trang ngay
+      const isOnlinePayment = formData.paymentMethod !== PAYMENT_METHOD.COD;
+      if (isOnlinePayment && createdOrder?.id && createdOrder?.status !== 'PAID') {
+        setQrOrder({
+          ...createdOrder,
+          totalAmount: createdOrder.totalAmount ?? finalTotal
+        });
+        notify.success(`Đặt hàng thành công! Vui lòng quét mã QR để thanh toán đơn hàng #${createdOrder.id}.`);
+        return;
       }
 
-      await refreshCart();
       notify.success(`Đặt hàng thành công! Đơn hàng #${createdOrder?.id || ''} đã được ghi nhận.`);
       navigate('/order-success', { state: { orderId: createdOrder?.id, order: createdOrder } });
     } catch (err) {
@@ -391,6 +401,31 @@ const Checkout = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ── QR payment handlers ────────────────────────────────────────────────────
+  // Gọi API POST /payments/mock-pay/{orderId} với body { success, note }
+  const handleQrPay = (success, note) => paymentService.mockPay(qrOrder.id, success, note);
+
+  const handleQrPaid = () => {
+    const orderId = qrOrder?.id;
+    notify.success(`Thanh toán thành công! Đơn hàng #${orderId} đã chuyển sang ĐÃ THANH TOÁN (PAID).`);
+    setQrOrder(null);
+    navigate(`/orders/${orderId}`, { state: { expectedStatus: 'PAID', fromQrPayment: true } });
+  };
+
+  const handleQrFailed = () => {
+    const orderId = qrOrder?.id;
+    notify.error(`Thanh toán đơn hàng #${orderId} thất bại. Hệ thống đã hoàn lại tồn kho và lượt sử dụng Voucher (Saga Rollback).`);
+    setQrOrder(null);
+    navigate(`/orders/${orderId}`, { state: { expectedStatus: 'FAILED', fromQrPayment: true } });
+  };
+
+  const handleQrPayLater = () => {
+    const orderId = qrOrder?.id;
+    notify.info(`Đơn hàng #${orderId} đang chờ thanh toán. Bạn có thể bấm "Thanh toán QR ngay" trong chi tiết đơn hàng bất cứ lúc nào.`);
+    setQrOrder(null);
+    navigate(`/orders/${orderId}`);
   };
 
   // Derived totals
@@ -423,7 +458,27 @@ const Checkout = () => {
 
       {error && <ErrorMessage message={error} onClose={() => setError('')} />}
 
-      {cartItems.length === 0 ? (
+      {/* ── Màn hình quét mã QR thanh toán (VietQR) cho đơn online vừa tạo ── */}
+      <QrPaymentModal
+        isOpen={!!qrOrder}
+        order={qrOrder}
+        onPay={handleQrPay}
+        onPaid={handleQrPaid}
+        onFailed={handleQrFailed}
+        onPayLater={handleQrPayLater}
+      />
+
+      {qrOrder ? (
+        <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
+          <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>📱</span>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+            Đơn hàng #{qrOrder.id} đang chờ thanh toán
+          </h3>
+          <p style={{ color: '#64748b', fontSize: '0.875rem', margin: '0.5rem 0 0' }}>
+            Vui lòng hoàn tất quét mã QR để xác nhận thanh toán.
+          </p>
+        </div>
+      ) : cartItems.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
           <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>🛒</span>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>Giỏ hàng của bạn đang trống</h3>
@@ -487,7 +542,7 @@ const Checkout = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {[
                       { value: PAYMENT_METHOD.COD,         icon: '💵', desc: 'Thanh toán bằng tiền mặt khi shipper giao tận nơi và đồng kiểm hàng' },
-                      { value: PAYMENT_METHOD.MOCK_ONLINE,  icon: '💳', desc: 'Tự động duyệt trạng thái Đã Thanh Toán (PAID) phục vụ kiểm thử nhanh' }
+                      { value: PAYMENT_METHOD.MOCK_ONLINE,  icon: '📱', desc: 'Quét mã VietQR chuyển khoản — Tự động duyệt trạng thái Đã Thanh Toán (PAID) ngay khi xác nhận giao dịch' }
                     ].map((pm) => (
                       <label key={pm.value} style={{
                         display: 'flex', alignItems: 'center', gap: '0.75rem',
