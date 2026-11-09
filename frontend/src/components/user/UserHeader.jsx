@@ -6,21 +6,8 @@ import Modal from '../common/Modal';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
-import { MOCK_USERS } from '../../mock/mockUsers';
 import voucherService from '../../services/voucherService';
-
-const DEFAULT_AVATAR_URL =
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80';
-
-const EMPTY_AVATAR_PLACEHOLDER =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" rx="60" fill="#e2e8f0"/><circle cx="60" cy="45" r="22" fill="#94a3b8"/><path d="M24 102c6-20 22-32 36-32s30 12 36 32" fill="#94a3b8"/></svg>'
-  );
-
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-const ALLOWED_IMAGE_EXT = /\.(jpg|jpeg|png|webp)$/i;
-const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB
+import userService, { isValidVietnamesePhone } from '../../services/userService';
 
 const UserHeader = () => {
   const { user, isAuthenticated, isAdmin, logout, updateUser } = useAuth();
@@ -35,19 +22,17 @@ const UserHeader = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
-  const [avatarError, setAvatarError] = useState('');
-  const [selectedAvatarFileName, setSelectedAvatarFileName] = useState('');
   const [savedVoucherCount, setSavedVoucherCount] = useState(() => voucherService.getSavedIds().length);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
   const dropdownRef = useRef(null);
   const categoryMenuRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // Profile Edit Form state
   const [profileData, setProfileData] = useState({
     fullName: '',
     email: '',
     phone: '',
-    address: '',
     avatarUrl: ''
   });
 
@@ -60,37 +45,14 @@ const UserHeader = () => {
   // Sync profile data when user changes or modal opens
   useEffect(() => {
     if (user) {
-      const matchedMock =
-        MOCK_USERS.find(
-          (m) =>
-            (user.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
-            (user.id && String(m.id) === String(user.id))
-        ) || MOCK_USERS[0];
-
-      const initialAvatar = user.avatarRemoved
-        ? ''
-        : user.avatarUrl ||
-        user.avatar ||
-        matchedMock?.avatarUrl ||
-        matchedMock?.avatar ||
-        DEFAULT_AVATAR_URL;
-
       setProfileData({
-        fullName: user.fullName || user.username || matchedMock?.fullName || '',
-        email: user.email || matchedMock?.email || 'user@shopmart.com',
-        phone: user.phone || matchedMock?.phone || '0912 345 678',
-        address:
-          user.address ||
-          matchedMock?.address ||
-          '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
-        avatarUrl: initialAvatar
+        fullName: user.fullName || user.username || '',
+        email: user.email || 'user@shopmart.com',
+        phone: user.phone || '0912 345 678',
+        avatarUrl:
+          user.avatarUrl ||
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
       });
-      setAvatarError('');
-      setSelectedAvatarFileName(
-        typeof initialAvatar === 'string' && initialAvatar.startsWith('data:image/')
-          ? 'Ảnh đã chọn từ máy'
-          : ''
-      );
     }
   }, [user, isEditModalOpen]);
 
@@ -140,7 +102,7 @@ const UserHeader = () => {
   const handleOpenEdit = () => {
     setIsDropdownOpen(false);
     setIsMobileMenuOpen(false);
-    setAvatarError('');
+    setFormError('');
     setIsEditModalOpen(true);
   };
 
@@ -149,97 +111,52 @@ const UserHeader = () => {
     setProfileData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleTriggerFileSelect = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleAvatarFileChange = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
-    const fileType = (file.type || '').toLowerCase();
-    const fileName = file.name || '';
-    const isValidType =
-      ALLOWED_IMAGE_TYPES.includes(fileType) && ALLOWED_IMAGE_EXT.test(fileName);
-
-    if (!isValidType) {
-      setAvatarError('Định dạng ảnh không hợp lệ! Chỉ cho phép file JPG, JPEG, PNG hoặc WEBP.');
-      e.target.value = '';
-      return;
-    }
-
-    if (file.size > MAX_AVATAR_SIZE) {
-      setAvatarError('Dung lượng ảnh vượt quá 5MB! Vui lòng chọn ảnh có kích thước tối đa 5MB.');
-      e.target.value = '';
-      return;
-    }
-
-    setAvatarError('');
-    setSelectedAvatarFileName(file.name);
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const resultUrl = event.target?.result;
-      if (typeof resultUrl === 'string') {
-        setProfileData((prev) => ({
-          ...prev,
-          avatarUrl: resultUrl
-        }));
-      }
-    };
-    reader.onerror = () => {
-      setAvatarError('Không thể đọc file ảnh. Vui lòng thử lại.');
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const handleRemoveAvatar = () => {
-    setProfileData((prev) => ({
-      ...prev,
-      avatarUrl: ''
-    }));
-    setSelectedAvatarFileName('');
-    setAvatarError('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    const isRemoved = !profileData.avatarUrl;
-    if (updateUser) {
-      updateUser({
-        fullName: profileData.fullName,
-        email: profileData.email,
-        phone: profileData.phone,
-        address: profileData.address,
-        avatarUrl: profileData.avatarUrl,
-        avatar: profileData.avatarUrl,
-        avatarRemoved: isRemoved
-      });
+    setFormError('');
+
+    if (profileData.phone && !isValidVietnamesePhone(profileData.phone)) {
+      setFormError('Số điện thoại không đúng định dạng Việt Nam (VD: 0912345678 hoặc +84912345678)');
+      return;
     }
-    setSuccessToast('Cập nhật thông tin thành công!');
-    setTimeout(() => {
-      setSuccessToast('');
-      setIsEditModalOpen(false);
-    }, 1200);
+
+    if (profileData.fullName && profileData.fullName.length > 150) {
+      setFormError('Họ tên không được vượt quá 150 ký tự');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await userService.updateProfile({
+        fullName: profileData.fullName,
+        phone: profileData.phone,
+        avatarUrl: profileData.avatarUrl
+      });
+
+      if (updateUser) {
+        updateUser({
+          fullName: profileData.fullName,
+          email: profileData.email,
+          phone: profileData.phone,
+          avatarUrl: profileData.avatarUrl
+        });
+      }
+      setSuccessToast('Cập nhật thông tin thành công!');
+      setTimeout(() => {
+        setSuccessToast('');
+        setIsEditModalOpen(false);
+      }, 1200);
+    } catch (err) {
+      setFormError(err.message || 'Không thể cập nhật hồ sơ cá nhân. Vui lòng thử lại!');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const currentAvatar = user?.avatarRemoved
-    ? EMPTY_AVATAR_PLACEHOLDER
-    : user?.avatarUrl ||
-    user?.avatar ||
+  const currentAvatar =
+    user?.avatarUrl ||
     profileData.avatarUrl ||
-    DEFAULT_AVATAR_URL;
-
-  const modalAvatarPreview = profileData.avatarUrl || EMPTY_AVATAR_PLACEHOLDER;
-  const hasLocalSelectedAvatar =
-    Boolean(selectedAvatarFileName) ||
-    (typeof profileData.avatarUrl === 'string' && profileData.avatarUrl.startsWith('data:image/'));
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80';
 
   return (
     <header className="site-header user-header">
@@ -604,121 +521,46 @@ const UserHeader = () => {
         )}
 
         <form onSubmit={handleSaveProfile}>
-          <div style={{ marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <img
-                src={modalAvatarPreview}
-                alt="Avatar Preview"
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: profileData.avatarUrl ? '3px solid #2563eb' : '3px solid #cbd5e1',
-                  flexShrink: 0,
-                  backgroundColor: '#f1f5f9'
-                }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>
-                  Ảnh đại diện người dùng
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
-                  Cho phép JPG, JPEG, PNG, WEBP (Tối đa 5MB)
-                </div>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                  onChange={handleAvatarFileChange}
-                  style={{ display: 'none' }}
-                />
-
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: '0.5rem',
-                    marginTop: '0.55rem'
-                  }}
-                >
-                  {!hasLocalSelectedAvatar ? (
-                    <button
-                      type="button"
-                      onClick={handleTriggerFileSelect}
-                      style={{
-                        backgroundColor: '#eff6ff',
-                        color: '#2563eb',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '6px',
-                        padding: '0.35rem 0.7rem',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Chọn ảnh từ máy
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleTriggerFileSelect}
-                      style={{
-                        backgroundColor: '#eff6ff',
-                        color: '#2563eb',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '6px',
-                        padding: '0.35rem 0.7rem',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Thay ảnh
-                    </button>
-                  )}
-
-                  {Boolean(profileData.avatarUrl) && (
-                    <button
-                      type="button"
-                      onClick={handleRemoveAvatar}
-                      style={{
-                        backgroundColor: '#fef2f2',
-                        color: '#dc2626',
-                        border: '1px solid #fecaca',
-                        borderRadius: '6px',
-                        padding: '0.35rem 0.7rem',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Xóa ảnh
-                    </button>
-                  )}
-                </div>
+          {formError && (
+            <div
+              style={{
+                backgroundColor: '#fef2f2',
+                color: '#b91c1c',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                border: '1px solid #fecaca',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <span>⚠️</span>
+              <span>{formError}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+            <img
+              src={profileData.avatarUrl || currentAvatar}
+              alt="Avatar Preview"
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '3px solid #2563eb',
+                flexShrink: 0
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>
+                Ảnh đại diện người dùng
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
+                Bạn có thể cập nhật đường dẫn ảnh (URL) bên dưới
               </div>
             </div>
-
-            {avatarError && (
-              <div
-                role="alert"
-                style={{
-                  marginTop: '0.5rem',
-                  padding: '0.45rem 0.75rem',
-                  backgroundColor: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#dc2626',
-                  borderRadius: '6px',
-                  fontSize: '0.78rem',
-                  fontWeight: 500
-                }}
-              >
-                ⚠️ {avatarError}
-              </div>
-            )}
           </div>
 
           <Input
@@ -749,12 +591,11 @@ const UserHeader = () => {
           />
 
           <Input
-            label="Địa chỉ"
-            name="address"
-            type="text"
-            value={profileData.address}
+            label="Đường dẫn ảnh đại diện (Avatar URL)"
+            name="avatarUrl"
+            value={profileData.avatarUrl}
             onChange={handleProfileChange}
-            placeholder="Nhập địa chỉ nhận hàng..."
+            placeholder="https://images.unsplash.com/..."
           />
 
           <div
@@ -789,8 +630,8 @@ const UserHeader = () => {
               <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit" variant="primary">
-                Lưu thay đổi
+              <Button type="submit" variant="primary" disabled={saving}>
+                {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Button>
             </div>
           </div>
@@ -801,3 +642,4 @@ const UserHeader = () => {
 };
 
 export default UserHeader;
+

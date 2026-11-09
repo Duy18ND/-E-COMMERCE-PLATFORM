@@ -107,7 +107,9 @@ const OrderSuccess = () => {
               </div>
             </div>
             <div>
-              <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Phương thức thanh toán:</span>
+              <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                {isOnlinePayment ? 'Phương thức thanh toán:' : 'Phương thức:'}
+              </span>
               <div style={{ fontWeight: 700, color: isOnlinePayment ? '#1e40af' : '#0f172a', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <span>{isOnlinePayment ? '💳' : '💵'}</span>
                 <span>{paymentMethodLabel}</span>
@@ -115,7 +117,7 @@ const OrderSuccess = () => {
             </div>
             <div>
               <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                {isOnlinePayment ? 'Trạng thái thanh toán:' : 'Trạng thái đơn hàng:'}
+                {isOnlinePayment ? 'Trạng thái thanh toán:' : 'Trạng thái ban đầu:'}
               </span>
               <div>
                 {isOnlinePayment ? (
@@ -186,6 +188,7 @@ const OrderSuccess = () => {
         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <Link to={`/orders/${orderId}`} style={{ textDecoration: 'none' }}>
             <button
+              title="Xem chi tiết đơn hàng"
               style={{
                 backgroundColor: '#2563eb',
                 color: '#ffffff',
@@ -244,6 +247,23 @@ const OrderSuccess = () => {
               }}
             >
               Lịch sử đơn hàng
+            </button>
+          </Link>
+
+          <Link to="/flash-sale" style={{ textDecoration: 'none' }}>
+            <button
+              style={{
+                backgroundColor: '#fff1f2',
+                color: '#dc2626',
+                border: '1px solid #fecdd3',
+                borderRadius: '9999px',
+                padding: '0.75rem 1.25rem',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            >
+              ⚡ Tiếp tục săn Flash Sale
             </button>
           </Link>
         </div>

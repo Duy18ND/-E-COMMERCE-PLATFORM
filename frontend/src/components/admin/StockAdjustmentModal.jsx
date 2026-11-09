@@ -34,6 +34,18 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
     }
   }, [isOpen, product]);
 
+  // Hỗ trợ đóng modal bằng phím Escape (Accessibility)
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !isSubmitting) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitting, onClose]);
+
   const currentStock = Math.max(0, Math.floor(Number(product?.stockQuantity ?? product?.stock ?? 0)));
   const currentThreshold = Math.max(1, Math.floor(Number(thresholdInput) || product?.minThreshold || 5));
 
@@ -258,6 +270,9 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Điều chỉnh tồn kho và cảnh báo"
         style={{
           backgroundColor: '#ffffff',
           borderRadius: '16px',

@@ -1,0 +1,337 @@
+{
+  "info": {
+    "_postman_id": "shopmart-ecom-307-flashsale-qa",
+    "name": "ShopMart - ECOM-307 QA Test Suite (Flash Sale API, Validation & RBAC)",
+    "description": "Postman Collection v2.1 kiểm thử toàn diện chức năng Flash Sale Backend theo Task ECOM-307 (Sprint 2 - Epic Flash Sale System).\n\nBao gồm:\n- Phân quyền và Bảo mật RBAC: Header X-User-Roles, kiểm thử phân quyền Guest, ROLE_USER, ROLE_ADMIN, chống leo thang đặc quyền.\n- Public & Customer APIs: Tra cứu chiến dịch hiệu lực (/flash-sales/active), Đặt chỗ tồn kho Redis Lua (/flash-sales/reserve).\n- Admin Campaign Management CRUD: Danh sách, Chi tiết, Tạo mới, Cập nhật thông tin, Cập nhật trạng thái, Xóa chiến dịch, Khởi tạo tồn kho Redis.\n- Validation & Boundary Cases: Tên rỗng/quá dài, Ngày kết thúc trước ngày bắt đầu, Giá flash sale >= giá gốc, Số lượng > tồn kho thực tế, Trùng lặp sản phẩm, Trạng thái sai.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "campaignId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication Setup",
+      "description": "Lấy JWT token cho Admin và User thường",
+      "item": [
+        {
+          "name": "TC-307-AUTH-01: Đăng nhập Admin lấy token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@shopmart.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-AUTH-02: Đăng nhập User thường lấy token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@shopmart.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. RBAC & Security Tests",
+      "description": "Kiểm thử phòng thủ phân quyền: Guest / User / Admin",
+      "item": [
+        {
+          "name": "TC-307-SEC-01: Guest gọi GET /admin/flash-sales/campaigns -> 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-SEC-02: User thường (ROLE_USER) gọi POST /admin/flash-sales/campaigns -> 403 Forbidden",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_USER" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Flash Sale Trái Phép\",\n  \"startTime\": \"2026-12-01T10:00:00\",\n  \"endTime\": \"2026-12-01T12:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 100000,\n      \"quantity\": 10,\n      \"userLimit\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-SEC-03: Admin hợp lệ (ROLE_ADMIN) gọi GET /admin/flash-sales/campaigns -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Public & Customer APIs",
+      "description": "API công khai tra cứu và đặt chỗ tồn kho Flash Sale",
+      "item": [
+        {
+          "name": "TC-307-PUB-01: Guest lấy danh sách Flash Sale đang hiệu lực -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/flash-sales/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["flash-sales", "active"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-PUB-02: Đặt chỗ tồn kho Flash Sale qua Redis Lua -> 200 OK",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/flash-sales/reserve",
+              "host": ["{{baseUrl}}"],
+              "path": ["flash-sales", "reserve"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-PUB-03: Đặt chỗ thất bại khi quantity <= 0 -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/flash-sales/reserve",
+              "host": ["{{baseUrl}}"],
+              "path": ["flash-sales", "reserve"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Admin Campaign CRUD Management",
+      "description": "API Quản lý chiến dịch Flash Sale dành cho Quản trị viên",
+      "item": [
+        {
+          "name": "TC-307-CRUD-01: Admin lấy chi tiết chiến dịch theo ID -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns/{{campaignId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns", "{{campaignId}}"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-CRUD-02: Admin tạo chiến dịch Flash Sale mới -> 201 Created",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Flash Sale Postman Test\",\n  \"startTime\": \"2026-12-01T10:00:00\",\n  \"endTime\": \"2026-12-01T14:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 15000000,\n      \"quantity\": 20,\n      \"userLimit\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-CRUD-03: Admin cập nhật trạng thái chiến dịch -> 200 OK",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns/{{campaignId}}/status?status=ACTIVE",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns", "{{campaignId}}", "status"],
+              "query": [
+                { "key": "status", "value": "ACTIVE" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "TC-307-CRUD-04: Admin khởi tạo trực tiếp số lượng Flash Sale lên Redis -> 200 OK",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/products/{{productId}}?stock=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "products", "{{productId}}"],
+              "query": [
+                { "key": "stock", "value": "50" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Validation & Edge Cases",
+      "description": "Kiểm thử các trường hợp dữ liệu sai và ca biên",
+      "item": [
+        {
+          "name": "TC-307-VAL-01: Chặn tạo chiến dịch với tên rỗng -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"   \",\n  \"startTime\": \"2026-12-01T10:00:00\",\n  \"endTime\": \"2026-12-01T12:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 100000,\n      \"quantity\": 10,\n      \"userLimit\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-VAL-02: Chặn khi endTime <= startTime -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sale Đảo Giờ\",\n  \"startTime\": \"2026-12-01T14:00:00\",\n  \"endTime\": \"2026-12-01T10:00:00\",\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"flashSalePrice\": 100000,\n      \"quantity\": 10,\n      \"userLimit\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-VAL-03: Chặn khi danh sách items rỗng -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sale Không Item\",\n  \"startTime\": \"2026-12-01T10:00:00\",\n  \"endTime\": \"2026-12-01T12:00:00\",\n  \"items\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "TC-307-VAL-04: Cập nhật trạng thái không hợp lệ -> 400 Bad Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/flash-sales/campaigns/{{campaignId}}/status?status=INVALID_STATUS",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "flash-sales", "campaigns", "{{campaignId}}", "status"],
+              "query": [
+                { "key": "status", "value": "INVALID_STATUS" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

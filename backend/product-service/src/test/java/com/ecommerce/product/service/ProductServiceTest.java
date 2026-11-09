@@ -621,4 +621,15 @@ class ProductServiceTest {
         assertThat(response.getActiveFlashSale().getFlashSalePrice()).isEqualByComparingTo("1499.99");
         assertThat(response.getActiveFlashSale().getUserLimit()).isEqualTo(2);
     }
+
+    @Test
+    @DisplayName("[ECOM-145 / ECOM-326] countLowStockProducts dùng ngưỡng mặc định 5 khi truyền null/âm và loại trừ sản phẩm INACTIVE")
+    void shouldCountLowStockProductsExcludingInactive() {
+        when(productRepository.countLowStockProducts(5, com.ecommerce.product.enums.ProductStatus.INACTIVE)).thenReturn(7L);
+        when(productRepository.countLowStockProducts(3, com.ecommerce.product.enums.ProductStatus.INACTIVE)).thenReturn(2L);
+
+        assertThat(productService.countLowStockProducts(null)).isEqualTo(7L);
+        assertThat(productService.countLowStockProducts(-1)).isEqualTo(7L);
+        assertThat(productService.countLowStockProducts(3)).isEqualTo(2L);
+    }
 }

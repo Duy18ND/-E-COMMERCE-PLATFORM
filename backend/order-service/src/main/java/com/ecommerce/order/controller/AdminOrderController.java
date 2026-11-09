@@ -78,6 +78,24 @@ public class AdminOrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử trạng thái đơn hàng thành công", response));
     }
 
+    /**
+     * [Task ECOM-143 / ECOM-145] Admin xem danh sách lịch sử mua hàng của một khách hàng cụ thể.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @GetMapping("/customer/{userId}")
+    @Operation(summary = "Xem lịch sử mua hàng của khách hàng [ADMIN]", description = "Lấy toàn bộ danh sách đơn hàng đã đặt của một khách hàng cụ thể. Yêu cầu ROLE_ADMIN")
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrdersByCustomer(
+            @RequestHeader(value = "X-User-Id", required = false) Long adminId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long userId) {
+
+        requireAdminRole(roles);
+
+        Long effectiveAdminId = adminId != null ? adminId : 0L;
+        List<OrderResponse> response = orderService.getOrdersByUserId(userId, effectiveAdminId, roles);
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử mua hàng của khách hàng thành công", response));
+    }
+
     @GetMapping({"/statistics", "/stats"})
     @Operation(summary = "Thống kê doanh thu và đơn hàng [ADMIN]", description = "Tính toán tổng số đơn hàng, tổng doanh thu và số lượng đơn hàng theo từng trạng thái bằng COUNT & SUM dưới Database. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
     public ResponseEntity<ApiResponse<DashboardResponse>> getOrderStatistics(

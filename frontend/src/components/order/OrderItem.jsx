@@ -64,11 +64,18 @@ const OrderItem = ({ order }) => {
           </div>
         </div>
 
-        <Link to={`/orders/${order.id || order.orderNumber}`}>
-          <Button variant="outline" size="sm">
-            Xem chi tiết
-          </Button>
-        </Link>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <Link to={`/orders/${order.id || order.orderNumber}/tracking`}>
+            <Button variant="secondary" size="sm">
+              Theo dõi
+            </Button>
+          </Link>
+          <Link to={`/orders/${order.id || order.orderNumber}`}>
+            <Button variant="outline" size="sm">
+              Xem chi tiết
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   );

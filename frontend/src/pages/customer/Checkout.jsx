@@ -367,8 +367,8 @@ const Checkout = () => {
   const couponCode        = appliedVoucher?.couponCode ?? appliedVoucher?.voucher?.code ?? null;
   const voucherDiscount   = Number(appliedVoucher?.discountAmount ?? 0);
   const discountAmount    = appliedVoucher ? voucherDiscount : 0;
-  const totalAmount       = Math.max(0, subtotal - discountAmount) + shippingFee;
-  const finalTotal        = totalAmount;
+  const finalTotal        = Math.max(0, totalPrice - voucherDiscount) + shippingFee;
+  const totalAmount       = finalTotal;
   const savedVoucherCount = savedVouchers.length;
 
   const handleAddSampleItem = () => {
@@ -615,7 +615,7 @@ const Checkout = () => {
                             </span>
                           </div>
                           <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
-                            Hỗ trợ MoMo, ZaloPay, VietQR / Chuyển khoản ngân hàng và Thẻ quốc tế Visa/Mastercard
+                            Hỗ trợ MoMo, ZaloPay, VietQR / Chuyển khoản ngân hàng và Thẻ quốc tế Visa/Mastercard — Tự động duyệt trạng thái Đã Thanh Toán (PAID)
                           </div>
                         </div>
                       </label>
@@ -803,7 +803,7 @@ const Checkout = () => {
                       padding: '0.95rem',
                       fontSize: '1rem',
                       fontWeight: 800,
-                      cursor: (loading || cartItems.length === 0) ? 'not-allowed' : 'pointer',
+                      cursor: loading ? 'not-allowed' : 'pointer',
                       boxShadow: isOnlineMethod ? '0 4px 14px rgba(37, 99, 235, 0.35)' : '0 4px 14px rgba(220, 38, 38, 0.35)',
                       transition: 'all 0.2s',
                       display: 'flex',

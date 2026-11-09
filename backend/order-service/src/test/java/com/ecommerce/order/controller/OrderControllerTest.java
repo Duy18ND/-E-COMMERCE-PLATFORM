@@ -74,6 +74,97 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.userId").value(10L));
     }
 
+    /**
+     * [Task ECOM-269] Kiểm tra validate dữ liệu khi đặt hàng (Checkout).
+     */
+    @Test
+    @DisplayName("[ECOM-269] Checkout: Số điện thoại không đúng định dạng VN -> 400 Bad Request")
+    void checkout_InvalidPhone_ShouldReturnBadRequest() throws Exception {
+        CheckoutRequest request = CheckoutRequest.builder()
+                .receiverName("Nguyễn Văn A")
+                .receiverPhone("123456") // Sai định dạng
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        mockMvc.perform(post("/api/v1/orders/checkout")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("[ECOM-269] Checkout: Thiếu tên người nhận -> 400 Bad Request")
+    void checkout_MissingReceiverName_ShouldReturnBadRequest() throws Exception {
+        CheckoutRequest request = CheckoutRequest.builder()
+                .receiverName("") // Rỗng
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        mockMvc.perform(post("/api/v1/orders/checkout")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("[ECOM-269] Checkout: Thiếu phương thức thanh toán -> 400 Bad Request")
+    void checkout_MissingPaymentMethod_ShouldReturnBadRequest() throws Exception {
+        CheckoutRequest request = CheckoutRequest.builder()
+                .receiverName("Nguyễn Văn A")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(null) // Null
+                .build();
+
+        mockMvc.perform(post("/api/v1/orders/checkout")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("[ECOM-269] Checkout: Thiếu X-User-Id và userId -> 403 Forbidden")
+    void checkout_MissingUserId_ShouldReturnForbidden() throws Exception {
+        CheckoutRequest request = CheckoutRequest.builder()
+                .receiverName("Nguyễn Văn A")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        mockMvc.perform(post("/api/v1/orders/checkout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("[ECOM-269] Tạo đơn từ giỏ: Thiếu X-User-Id và userId -> 403 Forbidden")
+    void createOrderFromCart_MissingUserId_ShouldReturnForbidden() throws Exception {
+        CheckoutRequest request = CheckoutRequest.builder()
+                .receiverName("Nguyễn Văn A")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        mockMvc.perform(post("/api/v1/orders/from-cart")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
     @Test
     @DisplayName("Xem lịch sử đơn: X-User-Id khớp với path userId -> Trả về 200 OK")
     void getOrdersByUserId_Authorized_Success() throws Exception {
@@ -228,6 +319,29 @@ class OrderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+    }
+
+    @Test
+    @DisplayName("[ECOM-278] Chống IDOR: User khác cố tình hủy đơn hàng -> 403 Forbidden")
+    void cancelOrder_IDOR_ShouldReturnForbidden() throws Exception {
+        when(orderService.cancelOrder(eq(1L), eq(20L)))
+                .thenThrow(new AccessDeniedException("Bạn không có quyền hủy đơn hàng này"));
+
+        mockMvc.perform(put("/api/v1/orders/1/cancel")
+                        .header("X-User-Id", 20L))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("[ECOM-278] Hủy đơn hàng thất bại khi trạng thái khác PENDING -> 400 Bad Request")
+    void cancelOrder_WhenNotPending_ShouldReturnBadRequest() throws Exception {
+        when(orderService.cancelOrder(eq(1L), eq(10L)))
+                .thenThrow(new IllegalStateException("Chỉ có thể hủy đơn hàng ở trạng thái PENDING. Trạng thái hiện tại: PAID"));
+
+        mockMvc.perform(put("/api/v1/orders/1/cancel")
+                        .header("X-User-Id", 10L))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test

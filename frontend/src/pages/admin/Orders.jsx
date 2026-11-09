@@ -90,13 +90,11 @@ const AdminOrders = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
-  const [modalTransitionNote, setModalTransitionNote] = useState('');
-  const [modalNoteError, setModalNoteError] = useState('');
 
-  // Table Row Status Transition & Note Modal state
-  const [transitionModal, setTransitionModal] = useState(null);
-  const [transitionNote, setTransitionNote] = useState('');
-  const [transitionNoteError, setTransitionNoteError] = useState('');
+  // Form cập nhật trạng thái đơn trong Modal (ECOM-292 / ECOM-293)
+  const [modalTargetStatus, setModalTargetStatus] = useState('');
+  const [statusNote, setStatusNote] = useState('');
+  const [statusFormError, setStatusFormError] = useState('');
 
   // Race condition guard ref
   const requestIdRef = useRef(0);
@@ -214,8 +212,6 @@ const AdminOrders = () => {
     setSelectedOrder(orderSummary);
     setDetailLoading(true);
     setDetailError('');
-    setModalTransitionNote('');
-    setModalNoteError('');
 
     try {
       // Gọi API lấy dữ liệu chi tiết đầy đủ (items, timeline histories)
@@ -231,52 +227,72 @@ const AdminOrders = () => {
   };
 
   // Đóng modal xem chi tiết
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
+    if (actionLoading) return;
     setSelectedOrder(null);
     setDetailError('');
-    setModalTransitionNote('');
-    setModalNoteError('');
-  };
+    setStatusNote('');
+    setStatusFormError('');
+  }, [actionLoading]);
 
-  // Thực thi gọi API cập nhật trạng thái kèm ghi chú (note) và đồng bộ danh sách + modal
-  const executeOrderStatusUpdate = async (orderId, targetStatus, actionLabel, noteText = '') => {
-    const cleanedNote = String(noteText || '').trim();
+  // Đồng bộ trạng thái mặc định cho Form cập nhật trạng thái khi mở modal hoặc đổi trạng thái đơn
+  useEffect(() => {
+    if (selectedOrder) {
+      const allowed = ORDER_TRANSITIONS[selectedOrder.status] || [];
+      setModalTargetStatus(allowed.length > 0 ? allowed[0].target : '');
+      setStatusNote('');
+      setStatusFormError('');
+    }
+  }, [selectedOrder?.id, selectedOrder?.status]);
+
+  // Hỗ trợ đóng modal chi tiết bằng phím Escape
+  useEffect(() => {
+    if (!selectedOrder) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !actionLoading) {
+        handleCloseDetail();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOrder, actionLoading, handleCloseDetail]);
+
+  // Cập nhật trạng thái gọi API Backend PUT /api/v1/admin/orders/{orderId}/status
+  const handleTransitionStatus = async (orderId, targetStatus, actionLabel, customNote = '') => {
+    const isDanger = targetStatus === ORDER_STATUS.CANCELLED;
+    const noteSuffix = customNote ? ` (Ghi chú: "${customNote}")` : '';
+    const confirmed = await confirmDialog({
+      title: isDanger ? 'Xác nhận hủy đơn hàng' : 'Cập nhật trạng thái đơn hàng',
+      message: `Bạn có chắc chắn muốn chuyển trạng thái đơn hàng #${orderId} sang "${actionLabel}"${noteSuffix}?`,
+      variant: isDanger ? 'danger' : 'primary',
+      confirmText: actionLabel,
+      cancelText: 'Quay lại'
+    });
+    if (!confirmed) return;
+
     setActionLoading(true);
     try {
-      const updatedOrder = await orderService.updateOrderStatus(orderId, targetStatus, cleanedNote);
+      const updatedOrder = await orderService.updateOrderStatus(orderId, targetStatus, customNote);
       setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId
-            ? { ...o, ...updatedOrder, status: targetStatus, statusNote: cleanedNote || o.statusNote }
-            : o
-        )
+        prev.map((o) => (o.id === orderId ? { ...o, ...updatedOrder, status: targetStatus } : o))
       );
-
-      // Nếu đang mở modal chi tiết của đơn hàng này thì đồng bộ trạng thái + lịch sử timeline ngay lập tức
+      // Nếu đang mở modal của đơn hàng này thì cập nhật luôn cả lịch sử timeline
       if (selectedOrder && selectedOrder.id === orderId) {
-        let freshHistories = updatedOrder?.statusHistories;
-        if (!Array.isArray(freshHistories)) {
+        let refreshedHistories = updatedOrder?.statusHistories;
+        if (!refreshedHistories) {
           try {
-            freshHistories = await orderService.getOrderStatusHistory(orderId);
+            refreshedHistories = await orderService.getOrderStatusHistory(orderId);
           } catch {
-            freshHistories = selectedOrder.statusHistories;
+            refreshedHistories = selectedOrder.statusHistories;
           }
         }
-        setSelectedOrder((prev) =>
-          prev
-            ? {
-                ...prev,
-                ...updatedOrder,
-                status: targetStatus,
-                statusNote: cleanedNote || prev.statusNote,
-                statusHistories: freshHistories
-              }
-            : null
-        );
-        setModalTransitionNote('');
-        setModalNoteError('');
+        setSelectedOrder((prev) => ({
+          ...prev,
+          ...updatedOrder,
+          status: targetStatus,
+          statusHistories: refreshedHistories || prev.statusHistories
+        }));
       }
-
       notify.success(`Cập nhật đơn hàng #${orderId} sang "${actionLabel}" thành công!`);
       return true;
     } catch (err) {
@@ -287,62 +303,30 @@ const AdminOrders = () => {
     }
   };
 
-  // Khi bấm nút chuyển trạng thái từ bảng danh sách -> mở Modal nhập ghi chú / lý do hủy / mã vận đơn
-  const handleTransitionStatus = (orderId, targetStatus, actionLabel) => {
-    setTransitionModal({ orderId, targetStatus, actionLabel });
-    setTransitionNote('');
-    setTransitionNoteError('');
-  };
-
-  // Xác nhận chuyển trạng thái từ Modal ghi chú của bảng danh sách
-  const handleConfirmTableTransition = async () => {
-    if (!transitionModal || actionLoading) return;
-    const { orderId, targetStatus, actionLabel } = transitionModal;
-    const isCancel = targetStatus === ORDER_STATUS.CANCELLED;
-
-    if (isCancel && !transitionNote.trim()) {
-      setTransitionNoteError('Vui lòng nhập lý do hủy đơn hàng (bắt buộc).');
-      return;
-    }
-
-    const ok = await executeOrderStatusUpdate(
-      orderId,
-      targetStatus,
-      actionLabel,
-      transitionNote.trim()
-    );
-    if (ok) {
-      setTransitionModal(null);
-      setTransitionNote('');
-      setTransitionNoteError('');
-    }
-  };
-
-  // Cập nhật trạng thái trực tiếp ngay trong Modal Chi tiết đơn hàng
-  const handleModalStatusUpdate = async (targetStatus, actionLabel) => {
+  // Xử lý submit Form cập nhật trạng thái đơn trong Modal chi tiết (ECOM-292 / ECOM-293)
+  const handleModalStatusSubmit = async (e) => {
+    e.preventDefault();
     if (!selectedOrder || actionLoading) return;
-    const isDanger = targetStatus === ORDER_STATUS.CANCELLED;
 
-    if (isDanger && !modalTransitionNote.trim()) {
-      setModalNoteError('Vui lòng nhập lý do hủy đơn hàng trước khi xác nhận hủy (bắt buộc).');
+    const allowed = ORDER_TRANSITIONS[selectedOrder.status] || [];
+    const matchedTransition = allowed.find((t) => t.target === modalTargetStatus);
+    if (!matchedTransition) {
+      setStatusFormError('Trạng thái chuyển tiếp không hợp lệ theo quy trình đơn hàng.');
       return;
     }
 
-    setModalNoteError('');
-    const confirmed = await confirmDialog({
-      title: isDanger ? 'Xác nhận hủy đơn hàng' : 'Cập nhật trạng thái đơn hàng',
-      message: `Bạn có chắc chắn muốn chuyển trạng thái đơn hàng #${selectedOrder.id} sang "${actionLabel}"${modalTransitionNote.trim() ? ` với ghi chú: "${modalTransitionNote.trim()}"` : ''}?`,
-      variant: isDanger ? 'danger' : 'primary',
-      confirmText: actionLabel,
-      cancelText: 'Quay lại'
-    });
-    if (!confirmed) return;
+    if (modalTargetStatus === ORDER_STATUS.CANCELLED && !statusNote.trim()) {
+      setStatusFormError('Vui lòng nhập lý do hủy đơn hàng (bắt buộc khi hủy đơn).');
+      notify.warning('Vui lòng nhập lý do hủy đơn hàng.');
+      return;
+    }
 
-    await executeOrderStatusUpdate(
+    setStatusFormError('');
+    await handleTransitionStatus(
       selectedOrder.id,
-      targetStatus,
-      actionLabel,
-      modalTransitionNote.trim()
+      modalTargetStatus,
+      matchedTransition.label,
+      statusNote.trim()
     );
   };
 
@@ -994,149 +978,122 @@ const AdminOrders = () => {
                 </span>
               </div>
 
-              {/* CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG TRỰC TIẾP TRONG MODAL CHI TIẾT */}
+              {/* FORM CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG (ECOM-292 / ECOM-293) */}
               <div
                 style={{
-                  backgroundColor: '#ffffff',
+                  backgroundColor: '#f8fafc',
                   border: '1px solid #cbd5e1',
                   borderRadius: '10px',
-                  padding: '1rem 1.15rem'
+                  padding: '1.1rem'
                 }}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.5rem',
-                    marginBottom: '0.75rem'
-                  }}
-                >
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-                    ⚡ Cập nhật trạng thái đơn hàng
-                  </h4>
-                  <OrderStatus status={selectedOrder.status} />
-                </div>
-
+                <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                  ⚙️ Cập nhật trạng thái đơn hàng
+                </h4>
                 {(ORDER_TRANSITIONS[selectedOrder.status] || []).length === 0 ? (
-                  <div
-                    style={{
-                      fontSize: '0.825rem',
-                      color: '#64748b',
-                      backgroundColor: '#f8fafc',
-                      padding: '0.65rem 0.85rem',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0'
-                    }}
-                  >
-                    🔒 Đơn hàng đang ở trạng thái cuối (<strong>{ORDER_STATUS_LABELS[selectedOrder.status] || selectedOrder.status}</strong>) nên không thể chuyển đổi thêm.
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic' }}>
+                    Đơn hàng đang ở trạng thái cuối (<strong>{ORDER_STATUS_LABELS[selectedOrder.status] || selectedOrder.status}</strong>), không thể chuyển sang trạng thái khác.
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <div>
-                      <label
-                        style={{
-                          display: 'block',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          color: '#334155',
-                          marginBottom: '0.35rem'
-                        }}
-                      >
-                        Ghi chú chuyển trạng thái / Mã vận đơn / Lý do hủy đơn{' '}
-                        <span style={{ color: '#dc2626', fontWeight: 700 }}>
-                          (Bắt buộc nếu Hủy đơn)
-                        </span>
-                      </label>
-                      <input
-                        type="text"
-                        value={modalTransitionNote}
-                        onChange={(e) => {
-                          setModalTransitionNote(e.target.value);
-                          if (modalNoteError) setModalNoteError('');
-                        }}
-                        placeholder="Nhập ghi chú xử lý, mã vận đơn giao hàng hoặc lý do hủy đơn..."
-                        style={{
-                          width: '100%',
-                          padding: '0.55rem 0.85rem',
-                          borderRadius: '8px',
-                          border: modalNoteError ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          backgroundColor: modalNoteError ? '#fef2f2' : '#ffffff',
-                          fontSize: '0.85rem',
-                          outline: 'none'
-                        }}
-                      />
-                      {modalNoteError && (
-                        <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, marginTop: '0.3rem' }}>
-                          ⚠️ {modalNoteError}
-                        </div>
-                      )}
+                  <form onSubmit={handleModalStatusSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                      <div>
+                        <label
+                          htmlFor="modal-order-status-select"
+                          style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.3rem' }}
+                        >
+                          Chuyển sang trạng thái tiếp theo <span style={{ color: '#dc2626' }}>*</span>
+                        </label>
+                        <select
+                          id="modal-order-status-select"
+                          value={modalTargetStatus}
+                          disabled={actionLoading}
+                          onChange={(e) => {
+                            setModalTargetStatus(e.target.value);
+                            setStatusFormError('');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.875rem',
+                            backgroundColor: '#ffffff',
+                            outline: 'none'
+                          }}
+                        >
+                          {(ORDER_TRANSITIONS[selectedOrder.status] || []).map((trans) => (
+                            <option key={trans.target} value={trans.target}>
+                              {trans.label} ({ORDER_STATUS_LABELS[trans.target] || trans.target})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                      {/* Quick note presets */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.45rem' }}>
-                        {[
-                          'Đã xác nhận thông tin & địa chỉ giao hàng',
-                          'Đã đóng gói niêm phong tại kho',
-                          'Đã bàn giao Viettel Post - MVĐ: VTP882910',
-                          'Khách hàng yêu cầu hủy đơn hàng'
-                        ].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => {
-                              setModalTransitionNote(preset);
-                              if (modalNoteError) setModalNoteError('');
-                            }}
-                            style={{
-                              padding: '2px 8px',
-                              borderRadius: '9999px',
-                              border: '1px solid #e2e8f0',
-                              backgroundColor: '#f8fafc',
-                              color: '#475569',
-                              fontSize: '0.72rem',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            + {preset}
-                          </button>
-                        ))}
+                      <div>
+                        <label
+                          htmlFor="modal-order-status-note"
+                          style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.3rem' }}
+                        >
+                          Ghi chú / Lý do cập nhật{' '}
+                          {modalTargetStatus === ORDER_STATUS.CANCELLED ? (
+                            <span style={{ color: '#dc2626' }}>* (Bắt buộc khi hủy)</span>
+                          ) : (
+                            <span style={{ color: '#64748b' }}>(Tùy chọn)</span>
+                          )}
+                        </label>
+                        <input
+                          id="modal-order-status-note"
+                          type="text"
+                          value={statusNote}
+                          disabled={actionLoading}
+                          onChange={(e) => {
+                            setStatusNote(e.target.value);
+                            if (statusFormError) setStatusFormError('');
+                          }}
+                          placeholder={
+                            modalTargetStatus === ORDER_STATUS.CANCELLED
+                              ? 'Nhập lý do hủy đơn hàng...'
+                              : 'Nhập ghi chú xử lý đơn (nếu có)...'
+                          }
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            borderRadius: '6px',
+                            border: statusFormError ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                            fontSize: '0.875rem',
+                            backgroundColor: '#ffffff',
+                            outline: 'none'
+                          }}
+                        />
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      {(ORDER_TRANSITIONS[selectedOrder.status] || []).map((act) => {
-                        const isDanger = act.variant === 'danger';
-                        const isSuccess = act.variant === 'success';
-                        const bgColor = isDanger ? '#fef2f2' : isSuccess ? '#dcfce7' : '#eff6ff';
-                        const textColor = isDanger ? '#dc2626' : isSuccess ? '#15803d' : '#1d4ed8';
-                        const borderColor = isDanger ? '#fecaca' : isSuccess ? '#bbf7d0' : '#bfdbfe';
+                    {statusFormError && (
+                      <div style={{ color: '#dc2626', fontSize: '0.8rem', fontWeight: 600 }}>
+                        ⚠️ {statusFormError}
+                      </div>
+                    )}
 
-                        return (
-                          <button
-                            key={act.target}
-                            type="button"
-                            disabled={actionLoading}
-                            onClick={() => handleModalStatusUpdate(act.target, act.label)}
-                            style={{
-                              padding: '0.5rem 0.9rem',
-                              borderRadius: '8px',
-                              border: `1px solid ${borderColor}`,
-                              backgroundColor: bgColor,
-                              color: textColor,
-                              fontSize: '0.825rem',
-                              fontWeight: 700,
-                              cursor: actionLoading ? 'not-allowed' : 'pointer',
-                              opacity: actionLoading ? 0.65 : 1,
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            {actionLoading ? 'Đang xử lý...' : act.label}
-                          </button>
-                        );
-                      })}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        type="submit"
+                        disabled={actionLoading || !modalTargetStatus}
+                        style={{
+                          padding: '0.5rem 1.15rem',
+                          borderRadius: '6px',
+                          border: 'none',
+                          backgroundColor: modalTargetStatus === ORDER_STATUS.CANCELLED ? '#dc2626' : '#2563eb',
+                          color: '#ffffff',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          cursor: actionLoading ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {actionLoading ? '⏳ Đang cập nhật...' : '💾 Lưu trạng thái mới'}
+                      </button>
                     </div>
-                  </div>
+                  </form>
                 )}
               </div>
 
@@ -1174,141 +1131,6 @@ const AdminOrders = () => {
                 }}
               >
                 Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3.F. MODAL XÁC NHẬN CHUYỂN TRẠNG THÁI & NHẬP GHI CHÚ TỪ BẢNG ĐƠN HÀNG */}
-      {transitionModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1100,
-            padding: '1rem'
-          }}
-          onClick={() => !actionLoading && setTransitionModal(null)}
-          aria-modal="true"
-          role="dialog"
-        >
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: '12px',
-              maxWidth: '480px',
-              width: '100%',
-              padding: '1.35rem 1.5rem',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: '0 0 0.4rem', fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
-              {transitionModal.targetStatus === ORDER_STATUS.CANCELLED
-                ? `Xác nhận hủy đơn hàng #${transitionModal.orderId}`
-                : `Cập nhật trạng thái đơn hàng #${transitionModal.orderId}`}
-            </h3>
-            <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>
-              Chuyển trạng thái đơn hàng <strong>#{transitionModal.orderId}</strong> sang{' '}
-              <strong>"{transitionModal.actionLabel}"</strong>.
-            </p>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  color: '#0f172a',
-                  marginBottom: '0.35rem'
-                }}
-              >
-                {transitionModal.targetStatus === ORDER_STATUS.CANCELLED ? (
-                  <>
-                    Lý do hủy đơn hàng <span style={{ color: '#dc2626' }}>*</span>
-                  </>
-                ) : transitionModal.targetStatus === ORDER_STATUS.SHIPPING ? (
-                  'Mã vận đơn / Ghi chú bàn giao vận chuyển'
-                ) : (
-                  'Ghi chú cập nhật trạng thái (tùy chọn)'
-                )}
-              </label>
-              <textarea
-                rows={3}
-                value={transitionNote}
-                onChange={(e) => {
-                  setTransitionNote(e.target.value);
-                  if (transitionNoteError) setTransitionNoteError('');
-                }}
-                placeholder={
-                  transitionModal.targetStatus === ORDER_STATUS.CANCELLED
-                    ? 'Nhập lý do hủy đơn (VD: Khách hàng yêu cầu hủy, Không liên hệ được người nhận...)'
-                    : transitionModal.targetStatus === ORDER_STATUS.SHIPPING
-                      ? 'Nhập mã vận đơn & đơn vị giao hàng (VD: Viettel Post - MVĐ: VTP882910)...'
-                      : 'Nhập ghi chú xử lý cho bước chuyển trạng thái này...'
-                }
-                style={{
-                  width: '100%',
-                  padding: '0.6rem 0.85rem',
-                  borderRadius: '8px',
-                  border: transitionNoteError ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                  backgroundColor: transitionNoteError ? '#fef2f2' : '#ffffff',
-                  fontSize: '0.85rem',
-                  outline: 'none',
-                  resize: 'vertical'
-                }}
-              />
-              {transitionNoteError && (
-                <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, marginTop: '0.3rem' }}>
-                  ⚠️ {transitionNoteError}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
-              <button
-                type="button"
-                disabled={actionLoading}
-                onClick={() => setTransitionModal(null)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
-                  color: '#475569',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  cursor: actionLoading ? 'not-allowed' : 'pointer'
-                }}
-              >
-                Quay lại
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading}
-                onClick={handleConfirmTableTransition}
-                style={{
-                  padding: '0.5rem 1.15rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor:
-                    transitionModal.targetStatus === ORDER_STATUS.CANCELLED ? '#dc2626' : '#2563eb',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  cursor: actionLoading ? 'not-allowed' : 'pointer',
-                  opacity: actionLoading ? 0.7 : 1
-                }}
-              >
-                {actionLoading ? 'Đang cập nhật...' : transitionModal.actionLabel}
               </button>
             </div>
           </div>

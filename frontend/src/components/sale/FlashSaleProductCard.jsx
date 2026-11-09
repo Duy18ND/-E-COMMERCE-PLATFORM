@@ -6,7 +6,7 @@ import useAuth from '../../hooks/useAuth';
 import useToast from '../../hooks/useToast';
 import saleService from '../../services/saleService';
 
-const FlashSaleProductCard = ({ product, campaignStatus }) => {
+const FlashSaleProductCard = ({ product }) => {
   const { addToCart } = useCart();
   const { isAdmin } = useAuth();
   const { showToast } = useToast();
@@ -23,35 +23,13 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
   const salePrice = product.salePrice || originalPrice;
   const discountPercent = product.discountPercent || (originalPrice > salePrice ? Math.round(((originalPrice - salePrice) / originalPrice) * 100) : 0);
   const savedAmount = Math.max(0, originalPrice - salePrice);
-  const sold = Number(product.sold ?? product.soldQuantity ?? 0);
-  const totalStock = Number(product.stock ?? product.quantity ?? product.quota ?? 100);
-  const remainingStock =
-    product.remainingStock !== undefined
-      ? Number(product.remainingStock)
-      : Math.max(0, totalStock - sold);
-  const isOutOfStock = totalStock <= 0 || sold >= totalStock || remainingStock <= 0;
-
-  const effectiveCampaignStatus = campaignStatus || product.campaignStatus || 'ACTIVE';
-  const isUpcoming = effectiveCampaignStatus === 'UPCOMING';
-  const isEnded = effectiveCampaignStatus === 'ENDED';
-  const isPaused =
-    effectiveCampaignStatus === 'PAUSED' || effectiveCampaignStatus === 'CANCELLED';
-  const isCampaignInactive = isUpcoming || isEnded || isPaused;
-  const isPurchaseDisabled = isAdmin || isOutOfStock || isCampaignInactive;
-
-  const progressPercent = isOutOfStock
-    ? 100
-    : totalStock > 0
-      ? Math.min(100, Math.round((sold / totalStock) * 100))
-      : 0;
-
-  const getBuyButtonLabel = () => {
-    if (isOutOfStock) return 'Đã hết suất';
-    if (isUpcoming) return 'Sắp diễn ra';
-    if (isEnded) return 'Đã kết thúc';
-    if (isPaused) return 'Tạm dừng';
-    return 'Mua ngay';
-  };
+  const sold = product.sold || 0;
+  const totalStock = product.stock || 100;
+  const progressPercent = Math.min(100, Math.round((sold / totalStock) * 100));
+  const isSoldOut =
+    sold >= totalStock ||
+    product.remainingStock === 0 ||
+    product.statusText === 'Đã cháy hàng';
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -68,27 +46,12 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
       return;
     }
 
-    if (isOutOfStock) {
+    if (isSoldOut) {
       if (showToast) {
         showToast({
           type: 'warning',
-          title: 'Đã hết suất Flash Sale',
-          message: 'Sản phẩm này đã bán hết số suất ưu đãi trong chương trình Flash Sale.'
-        });
-      }
-      return;
-    }
-
-    if (isCampaignInactive) {
-      if (showToast) {
-        showToast({
-          type: 'info',
-          title: 'Chiến dịch chưa khả dụng',
-          message: isUpcoming
-            ? 'Chương trình Flash Sale chưa bắt đầu. Vui lòng quay lại đúng khung giờ!'
-            : isPaused
-              ? 'Chương trình Flash Sale đang tạm dừng.'
-              : 'Chương trình Flash Sale đã kết thúc.'
+          title: 'Hết suất Flash Sale',
+          message: 'Sản phẩm Flash Sale này đã hết suất ưu đãi!'
         });
       }
       return;
@@ -114,27 +77,12 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
       return;
     }
 
-    if (isOutOfStock) {
+    if (isSoldOut) {
       if (showToast) {
         showToast({
           type: 'warning',
-          title: 'Đã hết suất Flash Sale',
-          message: 'Sản phẩm này đã bán hết số suất ưu đãi trong chương trình Flash Sale.'
-        });
-      }
-      return;
-    }
-
-    if (isCampaignInactive) {
-      if (showToast) {
-        showToast({
-          type: 'info',
-          title: 'Chiến dịch chưa khả dụng',
-          message: isUpcoming
-            ? 'Chương trình Flash Sale chưa bắt đầu. Vui lòng quay lại đúng khung giờ!'
-            : isPaused
-              ? 'Chương trình Flash Sale đang tạm dừng.'
-              : 'Chương trình Flash Sale đã kết thúc.'
+          title: 'Hết suất Flash Sale',
+          message: 'Sản phẩm Flash Sale này đã hết suất ưu đãi!'
         });
       }
       return;
@@ -227,55 +175,24 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
             </div>
           )}
 
-          {/* Hot tag / Out of stock tag top-right */}
-          {(isOutOfStock || product.statusText) && (
+          {/* Hot tag top-right */}
+          {product.statusText && (
             <div
               style={{
                 position: 'absolute',
                 top: '8px',
                 right: '8px',
-                backgroundColor: isOutOfStock ? 'rgba(100, 116, 139, 0.92)' : 'rgba(15, 23, 42, 0.75)',
+                backgroundColor: 'rgba(15, 23, 42, 0.75)',
                 backdropFilter: 'blur(4px)',
                 color: '#f8fafc',
                 fontSize: '0.68rem',
-                fontWeight: 700,
+                fontWeight: 600,
                 padding: '2px 7px',
                 borderRadius: '9999px',
                 zIndex: 2
               }}
             >
-              {isOutOfStock ? 'Đã hết suất' : product.statusText}
-            </div>
-          )}
-
-          {/* Out of quota overlay */}
-          {isOutOfStock && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundColor: 'rgba(15, 23, 42, 0.38)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1,
-                pointerEvents: 'none'
-              }}
-            >
-              <span
-                style={{
-                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                  color: '#ffffff',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '9999px',
-                  letterSpacing: '0.03em',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Đã hết suất
-              </span>
+              {product.statusText}
             </div>
           )}
 
@@ -288,7 +205,6 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                filter: isOutOfStock ? 'grayscale(35%)' : 'none',
                 transition: 'transform 0.35s ease'
               }}
               onMouseEnter={(e) => (e.target.style.transform = 'scale(1.06)')}
@@ -362,9 +278,9 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
         {/* Progress Bar & Sold Count */}
         <div style={{ marginBottom: '0.85rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.2rem', fontSize: '0.7rem', marginBottom: '0.25rem' }}>
-            <span style={{ color: isOutOfStock ? '#64748b' : '#ea580c', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '2px' }}>
-              <span>{isOutOfStock ? '⛔' : '🔥'}</span>
-              <span>{isOutOfStock ? 'Đã hết suất' : (product.statusText || 'Đang bán chạy')}</span>
+            <span style={{ color: '#ea580c', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '2px' }}>
+              <span>🔥</span>
+              <span>{product.statusText || 'Đang bán chạy'}</span>
             </span>
             <span style={{ color: '#64748b', fontWeight: 600 }}>
               Đã bán {sold}/{totalStock}
@@ -374,7 +290,7 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
           <div
             style={{
               height: '6px',
-              backgroundColor: isOutOfStock ? '#e2e8f0' : '#fee2e2',
+              backgroundColor: '#fee2e2',
               borderRadius: '9999px',
               overflow: 'hidden',
               position: 'relative'
@@ -384,9 +300,7 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
               style={{
                 height: '100%',
                 width: `${progressPercent}%`,
-                background: isOutOfStock
-                  ? '#94a3b8'
-                  : 'linear-gradient(90deg, #f97316 0%, #ef4444 100%)',
+                background: 'linear-gradient(90deg, #f97316 0%, #ef4444 100%)',
                 borderRadius: '9999px',
                 transition: 'width 0.5s ease'
               }}
@@ -400,63 +314,62 @@ const FlashSaleProductCard = ({ product, campaignStatus }) => {
         {/* Mua ngay button */}
         <button
           onClick={handleBuyNow}
-          disabled={isPurchaseDisabled}
+          disabled={isAdmin || isSoldOut}
           style={{
             flex: 1,
             minWidth: 0,
-            backgroundColor: isOutOfStock || isCampaignInactive ? '#94a3b8' : '#dc2626',
+            backgroundColor: isSoldOut ? '#94a3b8' : '#dc2626',
             color: '#ffffff',
             border: 'none',
             borderRadius: '8px',
             padding: '0.5rem 0.5rem',
             fontSize: 'clamp(0.76rem, 1.5vw, 0.85rem)',
             fontWeight: 700,
-            cursor: isPurchaseDisabled ? 'not-allowed' : 'pointer',
+            cursor: isAdmin || isSoldOut ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s ease',
-            boxShadow: isOutOfStock || isCampaignInactive ? 'none' : '0 2px 6px rgba(220, 38, 38, 0.3)',
+            boxShadow: isSoldOut ? 'none' : '0 2px 6px rgba(220, 38, 38, 0.3)',
             textAlign: 'center',
-            whiteSpace: 'nowrap',
-            opacity: isPurchaseDisabled ? 0.85 : 1
+            whiteSpace: 'nowrap'
           }}
           onMouseEnter={(e) => {
-            if (!isPurchaseDisabled) e.currentTarget.style.backgroundColor = '#b91c1c';
+            if (!isAdmin && !isSoldOut) e.currentTarget.style.backgroundColor = '#b91c1c';
           }}
           onMouseLeave={(e) => {
-            if (!isPurchaseDisabled) e.currentTarget.style.backgroundColor = '#dc2626';
+            if (!isAdmin && !isSoldOut) e.currentTarget.style.backgroundColor = '#dc2626';
           }}
         >
-          {getBuyButtonLabel()}
+          {isSoldOut ? 'Đã cháy hàng' : 'Mua ngay'}
         </button>
 
         {/* Add to cart icon button */}
         <button
           onClick={handleAddToCart}
-          disabled={isPurchaseDisabled}
-          title={isOutOfStock ? 'Đã hết suất Flash Sale' : isCampaignInactive ? 'Chiến dịch chưa khả dụng' : 'Thêm vào giỏ hàng'}
+          disabled={isAdmin || isSoldOut}
+          title={isSoldOut ? 'Đã hết suất Flash Sale' : 'Thêm vào giỏ hàng'}
           style={{
             width: '34px',
             height: '34px',
             borderRadius: '8px',
             border: '1px solid #e2e8f0',
-            backgroundColor: isPurchaseDisabled ? '#f1f5f9' : isAdding ? '#dcfce7' : '#ffffff',
-            color: isPurchaseDisabled ? '#94a3b8' : isAdding ? '#16a34a' : '#334155',
+            backgroundColor: isAdding ? '#dcfce7' : '#ffffff',
+            color: isAdding ? '#16a34a' : '#334155',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: isPurchaseDisabled ? 'not-allowed' : 'pointer',
+            cursor: isAdmin || isSoldOut ? 'not-allowed' : 'pointer',
+            opacity: isSoldOut ? 0.55 : 1,
             transition: 'all 0.15s ease',
-            flexShrink: 0,
-            opacity: isPurchaseDisabled ? 0.7 : 1
+            flexShrink: 0
           }}
           onMouseEnter={(e) => {
-            if (!isPurchaseDisabled && !isAdding) {
+            if (!isAdmin && !isAdding) {
               e.currentTarget.style.borderColor = '#dc2626';
               e.currentTarget.style.color = '#dc2626';
               e.currentTarget.style.backgroundColor = '#fee2e2';
             }
           }}
           onMouseLeave={(e) => {
-            if (!isPurchaseDisabled && !isAdding) {
+            if (!isAdmin && !isAdding) {
               e.currentTarget.style.borderColor = '#e2e8f0';
               e.currentTarget.style.color = '#334155';
               e.currentTarget.style.backgroundColor = '#ffffff';

@@ -133,4 +133,12 @@ public interface ProductService {
      * OUT_OF_STOCK).
      */
     PagedResponse<ProductResponse> getAdminProducts(String keyword, ProductStatus status, Pageable pageable);
+
+    /**
+     * [Task ECOM-145 / ECOM-326] Đếm số sản phẩm sắp hết hàng (stockQuantity <= threshold).
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    default long countLowStockProducts(Integer threshold) {
+        return 0L;
+    }
 }

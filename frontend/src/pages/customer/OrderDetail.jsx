@@ -45,6 +45,13 @@ const OrderDetail = () => {
 
   useEffect(() => {
     fetchOrderDetail();
+    // [Task ECOM-313] Lắng nghe đồng bộ cập nhật trạng thái từ trang Admin (cùng tab, đa tab, focus)
+    if (typeof orderService.subscribeOrderStatusSync === 'function') {
+      return orderService.subscribeOrderStatusSync(() => {
+        fetchOrderDetail();
+      }, id);
+    }
+    return undefined;
   }, [id]);
 
   // Hủy đơn hàng khi đơn còn ở trạng thái PENDING
@@ -93,12 +100,47 @@ const OrderDetail = () => {
   }
 
   if (error && !order) {
+    const is403 = error.includes('403') || error.includes('IDOR') || error.includes('quyền xem');
     return (
-      <div className="container page-container">
-        <ErrorMessage message={error} />
-        <Link to="/orders" style={{ color: '#2563eb', fontWeight: 600 }}>
-          &larr; Quay lại danh sách đơn hàng
-        </Link>
+      <div className="container page-container" style={{ padding: '2rem 1rem', maxWidth: '640px', margin: '0 auto' }}>
+        {is403 ? (
+          <div
+            className="card"
+            style={{
+              padding: '2.5rem 2rem',
+              textAlign: 'center',
+              borderRadius: '1rem',
+              border: '1px solid #fee2e2',
+              background: 'linear-gradient(180deg, #fff5f5 0%, #ffffff 100%)'
+            }}
+          >
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🛡️</div>
+            <div style={{ display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '9999px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.75rem', border: '1px solid #fecaca' }}>
+              HTTP 403 Forbidden &bull; IDOR Protection
+            </div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#991b1b', margin: '0 0 0.75rem 0' }}>
+              Quyền truy cập bị từ chối
+            </h2>
+            <p style={{ fontSize: '0.925rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              {error}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <Link to="/orders" style={{ textDecoration: 'none' }}>
+                <Button variant="primary" size="sm">Danh sách đơn hàng của bạn</Button>
+              </Link>
+              <Link to="/" style={{ textDecoration: 'none' }}>
+                <Button variant="secondary" size="sm">Về trang chủ</Button>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+            <ErrorMessage message={error} />
+            <Link to="/orders" style={{ color: '#2563eb', fontWeight: 600 }}>
+              &larr; Quay lại danh sách đơn hàng
+            </Link>
+          </>
+        )}
       </div>
     );
   }
@@ -190,30 +232,47 @@ const OrderDetail = () => {
           </p>
         </div>
 
-        {/* Nút thao tác khách hàng: Hủy đơn hoặc Thanh toán mô phỏng */}
-        {isPending && (
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={actionLoading}
-              onClick={handleCancelOrder}
-            >
-              {actionLoading ? 'Đang xử lý...' : 'Hủy đơn hàng'}
-            </Button>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={loading || actionLoading}
+            onClick={fetchOrderDetail}
+          >
+            🔄 Làm mới
+          </Button>
 
-            {order.paymentMethod === 'MOCK_ONLINE' && (
+          <Link to={`/orders/${order.id}/tracking`} style={{ textDecoration: 'none' }}>
+            <Button variant="outline" size="sm">
+              🚚 Theo dõi kiện hàng
+            </Button>
+          </Link>
+
+          {/* Nút thao tác khách hàng: Hủy đơn hoặc Thanh toán mô phỏng */}
+          {isPending && (
+            <>
               <Button
-                variant="primary"
+                variant="danger"
                 size="sm"
                 disabled={actionLoading}
-                onClick={handleMockPay}
+                onClick={handleCancelOrder}
               >
-                {actionLoading ? 'Đang xử lý...' : 'Thanh toán ngay'}
+                {actionLoading ? 'Đang xử lý...' : 'Hủy đơn hàng'}
               </Button>
-            )}
-          </div>
-        )}
+
+              {order.paymentMethod === 'MOCK_ONLINE' && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={actionLoading}
+                  onClick={handleMockPay}
+                >
+                  {actionLoading ? 'Đang xử lý...' : 'Thanh toán ngay'}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-173 / ECOM-188 / ECOM-311 / ECOM-315) */}

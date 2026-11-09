@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
@@ -27,4 +28,11 @@ public interface ProductClient {
 
     @PostMapping("/api/v1/flash-sales/reserve")
     ApiResponse<Void> reserveFlashSaleStock(@RequestBody FlashSaleReserveRequest request);
+
+    /**
+     * [Task ECOM-145 / ECOM-326] Đếm số lượng sản phẩm sắp hết hàng phục vụ thống kê Dashboard Admin.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    @GetMapping("/api/v1/products/low-stock/count")
+    ApiResponse<Long> countLowStockProducts(@RequestParam("threshold") int threshold);
 }

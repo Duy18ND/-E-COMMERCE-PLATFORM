@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import saleService from '../../services/saleService';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -11,21 +11,11 @@ const SAMPLE_BANNERS = [
   'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80'
 ];
 
-const ALLOWED_BANNER_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-const ALLOWED_BANNER_EXT_REGEX = /\.(jpg|jpeg|png|webp)$/i;
-const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5MB
-
 const AdminSaleForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { notify } = useNotification();
   const isEditing = Boolean(id);
-  const bannerInputRef = useRef(null);
-
-  const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [bannerError, setBannerError] = useState('');
-  const [hasCustomBanner, setHasCustomBanner] = useState(false);
 
   const [allAvailableProducts, setAllAvailableProducts] = useState(() =>
     saleService.getAllProductsSync()
@@ -147,52 +137,6 @@ const AdminSaleForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    setFieldErrors((prev) => {
-      if (!prev[name]) return prev;
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
-  };
-
-  // Handle Banner file upload from computer
-  const handleBannerFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const isValidType =
-      ALLOWED_BANNER_TYPES.includes(file.type) || ALLOWED_BANNER_EXT_REGEX.test(file.name || '');
-    if (!isValidType) {
-      setBannerError('Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPG, JPEG, PNG hoặc WEBP.');
-      if (bannerInputRef.current) bannerInputRef.current.value = '';
-      return;
-    }
-
-    if (file.size > MAX_BANNER_SIZE) {
-      setBannerError('Dung lượng ảnh vượt quá 5MB. Vui lòng chọn ảnh nhỏ hơn 5MB.');
-      if (bannerInputRef.current) bannerInputRef.current.value = '';
-      return;
-    }
-
-    setBannerError('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setFormData((prev) => ({ ...prev, bannerUrl: reader.result }));
-        setHasCustomBanner(true);
-      }
-    };
-    reader.onerror = () => {
-      setBannerError('Không thể đọc file ảnh. Vui lòng thử lại.');
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleRemoveBanner = () => {
-    setBannerError('');
-    setHasCustomBanner(false);
-    setFormData((prev) => ({ ...prev, bannerUrl: SAMPLE_BANNERS[0] }));
-    if (bannerInputRef.current) bannerInputRef.current.value = '';
   };
 
   // Toggle product selection in table
@@ -208,158 +152,83 @@ const AdminSaleForm = () => {
           name: prod.shortName || prod.name,
           sku: prod.sku || `SKU-${prod.id}`,
           originalPrice: prod.price,
-          salePrice: prod.salePrice || Math.max(1, Math.round(prod.price * 0.7)),
-          quota: Math.max(1, prod.stock || 50),
+          salePrice: prod.salePrice || Math.round(prod.price * 0.7),
+          quota: prod.stock || 50,
           imageUrl: prod.imageUrl
         }
       ]);
-      setFieldErrors((prev) => {
-        if (!prev.products) return prev;
-        const next = { ...prev };
-        delete next.products;
-        return next;
-      });
     }
   };
 
   // Change sale price of a selected product
   const handlePriceChange = (prodId, newSalePrice) => {
-    const val = newSalePrice === '' ? '' : Number(newSalePrice);
+    const val = Number(newSalePrice) || 0;
     setSelectedProducts((prev) =>
       prev.map((item) => (item.productId === prodId ? { ...item, salePrice: val } : item))
     );
-    setFieldErrors((prev) => {
-      if (!prev.productItems?.[prodId]?.salePrice) return prev;
-      const nextItems = { ...(prev.productItems || {}) };
-      nextItems[prodId] = { ...nextItems[prodId], salePrice: undefined };
-      return { ...prev, productItems: nextItems };
-    });
   };
 
-  // Change quota (quantity) of a selected product
+  // Change quota (flashStock) of a selected product
   const handleQuotaChange = (prodId, newQuota) => {
-    const val = newQuota === '' ? '' : Number(newQuota);
+    const val = Math.max(0, Math.floor(Number(newQuota) || 0));
     setSelectedProducts((prev) =>
       prev.map((item) => (item.productId === prodId ? { ...item, quota: val } : item))
     );
-    setFieldErrors((prev) => {
-      if (!prev.productItems?.[prodId]?.quota) return prev;
-      const nextItems = { ...(prev.productItems || {}) };
-      nextItems[prodId] = { ...nextItems[prodId], quota: undefined };
-      return { ...prev, productItems: nextItems };
-    });
-  };
-
-  // Validate entire campaign form
-  const validateCampaignForm = () => {
-    const errors = {};
-    const productItems = {};
-
-    if (!formData.name || !formData.name.trim()) {
-      errors.name = 'Tên chiến dịch Flash Sale không được để trống.';
-    }
-
-    if (!formData.startTime) {
-      errors.startTime = 'Vui lòng chọn thời điểm bắt đầu chiến dịch.';
-    }
-
-    if (!formData.endTime) {
-      errors.endTime = 'Vui lòng chọn thời điểm kết thúc chiến dịch.';
-    }
-
-    if (formData.startTime && formData.endTime) {
-      const startMs = new Date(formData.startTime).getTime();
-      const endMs = new Date(formData.endTime).getTime();
-      const nowMs = Date.now();
-
-      if (Number.isNaN(startMs)) {
-        errors.startTime = 'Thời điểm bắt đầu không hợp lệ.';
-      }
-      if (Number.isNaN(endMs)) {
-        errors.endTime = 'Thời điểm kết thúc không hợp lệ.';
-      }
-      if (!Number.isNaN(startMs) && !Number.isNaN(endMs)) {
-        if (startMs >= endMs) {
-          errors.endTime = 'Thời điểm kết thúc phải lớn hơn thời điểm bắt đầu.';
-        } else if (endMs <= nowMs) {
-          errors.endTime = 'Thời điểm kết thúc không được nằm trong quá khứ.';
-        }
-      }
-    }
-
-    const parsedUserLimit = Number(formData.userLimit);
-    if (
-      formData.userLimit === '' ||
-      !Number.isFinite(parsedUserLimit) ||
-      !Number.isInteger(parsedUserLimit) ||
-      parsedUserLimit < 1
-    ) {
-      errors.userLimit = 'Giới hạn mua phải là số nguyên dương (>= 1).';
-    }
-
-    if (!Array.isArray(selectedProducts) || selectedProducts.length === 0) {
-      errors.products = 'Phải chọn ít nhất 1 sản phẩm tham gia chiến dịch Flash Sale.';
-    } else {
-      for (const item of selectedProducts) {
-        const itemErr = {};
-        const origPrice = Number(item.originalPrice ?? 0);
-        const salePrice = Number(item.salePrice);
-        const quota = Number(item.quota);
-
-        if (item.salePrice === '' || !Number.isFinite(salePrice) || salePrice <= 0) {
-          itemErr.salePrice = 'Giá Flash Sale phải lớn hơn 0.';
-        } else if (origPrice > 0 && salePrice >= origPrice) {
-          itemErr.salePrice = `Giá Flash Sale phải nhỏ hơn giá gốc (${formatCurrency(origPrice)}).`;
-        }
-
-        if (
-          item.quota === '' ||
-          !Number.isFinite(quota) ||
-          !Number.isInteger(quota) ||
-          quota < 1
-        ) {
-          itemErr.quota = 'Số lượng Flash Sale phải là số nguyên dương (>= 1).';
-        }
-
-        if (Object.keys(itemErr).length > 0) {
-          productItems[item.productId] = itemErr;
-        }
-      }
-
-      if (Object.keys(productItems).length > 0) {
-        errors.productItems = productItems;
-      }
-    }
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
   };
 
   // Save campaign
   const handleSave = async (publishStatus) => {
-    if (saving) return;
-
-    if (!validateCampaignForm()) {
-      notify.warning('Vui lòng kiểm tra và sửa các trường dữ liệu không hợp lệ trên biểu mẫu!');
+    if (!formData.name.trim()) {
+      notify.warning('Vui lòng nhập tên chiến dịch Flash Sale!');
       return;
     }
 
-    const normalizedProducts = selectedProducts.map((p) => ({
-      ...p,
-      salePrice: Number(p.salePrice),
-      quota: Math.max(1, Number(p.quota))
-    }));
+    if (!formData.startTime || !formData.endTime) {
+      notify.warning('Vui lòng chọn đầy đủ thời gian bắt đầu và thời gian kết thúc!');
+      return;
+    }
+
+    if (new Date(formData.endTime) <= new Date(formData.startTime)) {
+      notify.warning('Thời gian kết thúc phải lớn hơn thời gian bắt đầu chiến dịch!');
+      return;
+    }
+
+    if (!Number.isInteger(Number(formData.userLimit)) || Number(formData.userLimit) < 1) {
+      notify.warning('Giới hạn mua mỗi tài khoản phải là số nguyên lớn hơn hoặc bằng 1!');
+      return;
+    }
+
+    if (selectedProducts.length === 0) {
+      notify.warning('Vui lòng chọn ít nhất 1 sản phẩm tham gia chương trình Flash Sale!');
+      return;
+    }
+
+    const invalidPriceProd = selectedProducts.find(
+      (p) => Number(p.salePrice) <= 0 || Number(p.salePrice) >= Number(p.originalPrice)
+    );
+    if (invalidPriceProd) {
+      notify.warning(
+        `Sản phẩm "${invalidPriceProd.name}" có giá Flash Sale không hợp lệ (phải > 0 và nhỏ hơn giá gốc ${formatCurrency(invalidPriceProd.originalPrice)})!`
+      );
+      return;
+    }
+
+    const invalidQuotaProd = selectedProducts.find(
+      (p) => !Number.isInteger(Number(p.quota)) || Number(p.quota) < 1
+    );
+    if (invalidQuotaProd) {
+      notify.warning(`Sản phẩm "${invalidQuotaProd.name}" phải có số suất Flash Sale (quota) tối thiểu là 1!`);
+      return;
+    }
 
     const payload = {
       ...formData,
-      userLimit: Math.max(1, Number(formData.userLimit)),
       status: publishStatus || formData.status,
-      productIds: normalizedProducts.map((p) => p.productId),
-      productCount: normalizedProducts.length,
-      customProducts: normalizedProducts
+      productIds: selectedProducts.map((p) => p.productId),
+      productCount: selectedProducts.length,
+      customProducts: selectedProducts
     };
 
-    setSaving(true);
     try {
       if (isEditing) {
         await saleService.updateCampaign(id, payload);
@@ -376,8 +245,6 @@ const AdminSaleForm = () => {
         err?.message ||
         'Không thể lưu chiến dịch Flash Sale';
       notify.error(`Lỗi: ${errMsg}`);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -522,17 +389,12 @@ const AdminSaleForm = () => {
                   width: '100%',
                   padding: '0.75rem 1rem',
                   borderRadius: '10px',
-                  border: fieldErrors.name ? '1.5px solid #dc2626' : '1.5px solid #cbd5e1',
+                  border: '1.5px solid #cbd5e1',
                   fontSize: '0.925rem',
                   outline: 'none',
-                  backgroundColor: fieldErrors.name ? '#fef2f2' : '#ffffff'
+                  backgroundColor: '#ffffff'
                 }}
               />
-              {fieldErrors.name && (
-                <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, marginTop: '0.35rem' }}>
-                  ⚠️ {fieldErrors.name}
-                </div>
-              )}
             </div>
 
             {/* Banner Selection / Upload */}
@@ -541,96 +403,35 @@ const AdminSaleForm = () => {
                 Banner quảng bá chiến dịch (Tỷ lệ 16:9 hoặc 21:9)
               </label>
 
-              <input
-                ref={bannerInputRef}
-                type="file"
-                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                onChange={handleBannerFileChange}
-                style={{ display: 'none' }}
-              />
-
               <div className="form-grid-2" style={{ alignItems: 'center' }}>
-                {/* Upload from computer / preset box */}
+                {/* Drag / preset box */}
                 <div
                   style={{
                     border: '2px dashed #cbd5e1',
                     borderRadius: '12px',
-                    padding: '1rem',
+                    padding: '1.25rem 1rem',
                     textAlign: 'center',
                     backgroundColor: '#f8fafc',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.45rem'
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    const next = SAMPLE_BANNERS[(SAMPLE_BANNERS.indexOf(formData.bannerUrl) + 1) % SAMPLE_BANNERS.length];
+                    setFormData((prev) => ({ ...prev, bannerUrl: next }));
                   }}
                 >
-                  <span style={{ fontSize: '1.4rem', display: 'block' }}>☁️</span>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={() => bannerInputRef.current?.click()}
-                      style={{
-                        padding: '0.4rem 0.85rem',
-                        borderRadius: '8px',
-                        border: '1px solid #bfdbfe',
-                        backgroundColor: '#eff6ff',
-                        color: '#2563eb',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      📁 {hasCustomBanner ? 'Thay ảnh' : 'Chọn ảnh từ máy'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBannerError('');
-                        setHasCustomBanner(false);
-                        const next = SAMPLE_BANNERS[(SAMPLE_BANNERS.indexOf(formData.bannerUrl) + 1) % SAMPLE_BANNERS.length];
-                        setFormData((prev) => ({ ...prev, bannerUrl: next }));
-                      }}
-                      style={{
-                        padding: '0.4rem 0.75rem',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: '#ffffff',
-                        color: '#475569',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🔄 Đổi banner mẫu
-                    </button>
-                    {hasCustomBanner && (
-                      <button
-                        type="button"
-                        onClick={handleRemoveBanner}
-                        style={{
-                          padding: '0.4rem 0.75rem',
-                          borderRadius: '8px',
-                          border: '1px solid #fecaca',
-                          backgroundColor: '#fef2f2',
-                          color: '#dc2626',
-                          fontSize: '0.78rem',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        🗑️ Xóa ảnh
-                      </button>
-                    )}
+                  <span style={{ fontSize: '1.5rem', display: 'block', marginBottom: '4px' }}>☁️</span>
+                  <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#2563eb' }}>
+                    Kéo thả hoặc Bấm đổi banner mẫu
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                    Hỗ trợ JPG, JPEG, PNG, WEBP (Tối đa 5MB) • Khuyến nghị 1920x600px
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>
+                    Khuyến nghị: 1920x600px PNG, JPG, WebP
                   </div>
                 </div>
 
                 {/* Banner Thumbnail Preview */}
                 <div
                   style={{
-                    height: '104px',
+                    height: '92px',
                     borderRadius: '12px',
                     overflow: 'hidden',
                     position: 'relative',
@@ -655,15 +456,10 @@ const AdminSaleForm = () => {
                       borderRadius: '4px'
                     }}
                   >
-                    {hasCustomBanner ? 'Ảnh tải lên từ máy' : 'Tỉ lệ chuẩn'}
+                    Tỉ lệ chuẩn
                   </span>
                 </div>
               </div>
-              {bannerError && (
-                <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, marginTop: '0.35rem' }}>
-                  ⚠️ {bannerError}
-                </div>
-              )}
             </div>
 
             {/* Mô tả chiến dịch */}
@@ -690,10 +486,10 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Start and End Times */}
-            <div className="form-grid-2" style={{ marginBottom: '1.25rem', alignItems: 'start' }}>
+            <div className="form-grid-2" style={{ marginBottom: '1.25rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
-                  🕒 Thời điểm bắt đầu <span style={{ color: '#dc2626' }}>*</span>
+                  🕒 Thời điểm bắt đầu
                 </label>
                 <input
                   type="datetime-local"
@@ -704,21 +500,15 @@ const AdminSaleForm = () => {
                     width: '100%',
                     padding: '0.6rem 0.85rem',
                     borderRadius: '8px',
-                    border: fieldErrors.startTime ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                    backgroundColor: fieldErrors.startTime ? '#fef2f2' : '#ffffff',
+                    border: '1px solid #cbd5e1',
                     fontSize: '0.85rem'
                   }}
                 />
-                {fieldErrors.startTime && (
-                  <div style={{ fontSize: '0.74rem', color: '#dc2626', fontWeight: 600, marginTop: '0.3rem' }}>
-                    ⚠️ {fieldErrors.startTime}
-                  </div>
-                )}
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
-                  🚩 Thời điểm kết thúc <span style={{ color: '#dc2626' }}>*</span>
+                  🚩 Thời điểm kết thúc
                 </label>
                 <input
                   type="datetime-local"
@@ -729,50 +519,38 @@ const AdminSaleForm = () => {
                     width: '100%',
                     padding: '0.6rem 0.85rem',
                     borderRadius: '8px',
-                    border: fieldErrors.endTime ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                    backgroundColor: fieldErrors.endTime ? '#fef2f2' : '#ffffff',
+                    border: '1px solid #cbd5e1',
                     fontSize: '0.85rem'
                   }}
                 />
-                {fieldErrors.endTime && (
-                  <div style={{ fontSize: '0.74rem', color: '#dc2626', fontWeight: 600, marginTop: '0.3rem' }}>
-                    ⚠️ {fieldErrors.endTime}
-                  </div>
-                )}
               </div>
             </div>
 
             {/* Giới hạn mua & Trạng thái công bố */}
-            <div className="form-grid-2" style={{ alignItems: 'start' }}>
+            <div className="form-grid-2" style={{ alignItems: 'center' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
-                  👥 Giới hạn mua / khách hàng <span style={{ color: '#dc2626' }}>*</span>
+                  👥 Giới hạn mua / khách hàng
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <input
                     type="number"
                     name="userLimit"
                     min={1}
-                    max={100}
+                    max={10}
                     value={formData.userLimit}
                     onChange={handleChange}
                     style={{
-                      width: '72px',
+                      width: '64px',
                       padding: '0.55rem',
                       borderRadius: '8px',
-                      border: fieldErrors.userLimit ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                      backgroundColor: fieldErrors.userLimit ? '#fef2f2' : '#ffffff',
+                      border: '1px solid #cbd5e1',
                       textAlign: 'center',
                       fontWeight: 700
                     }}
                   />
                   <span style={{ fontSize: '0.8rem', color: '#64748b' }}>sản phẩm / tài khoản</span>
                 </div>
-                {fieldErrors.userLimit && (
-                  <div style={{ fontSize: '0.74rem', color: '#dc2626', fontWeight: 600, marginTop: '0.3rem' }}>
-                    ⚠️ {fieldErrors.userLimit}
-                  </div>
-                )}
               </div>
 
               <div>
@@ -780,7 +558,7 @@ const AdminSaleForm = () => {
                   Trạng thái công bố
                 </label>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                  {['ACTIVE', 'UPCOMING', 'PAUSED', 'ENDED'].map((st) => (
+                  {['ACTIVE', 'UPCOMING', 'DRAFT'].map((st) => (
                     <button
                       key={st}
                       type="button"
@@ -829,7 +607,7 @@ const AdminSaleForm = () => {
                     Danh sách sản phẩm & Phân bổ suất Flash Sale
                   </h3>
                   <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                    Chỉnh sửa trực tiếp đơn giá đặc biệt và số lượng suất dành riêng cho deal
+                    Chỉnh sửa trực tiếp đơn giá đặc biệt và tồn kho dành riêng cho deal
                   </div>
                 </div>
               </div>
@@ -838,23 +616,6 @@ const AdminSaleForm = () => {
                 Đã chọn: {selectedProducts.length} sản phẩm
               </span>
             </div>
-
-            {fieldErrors.products && (
-              <div
-                style={{
-                  padding: '0.65rem 0.9rem',
-                  marginBottom: '1rem',
-                  borderRadius: '8px',
-                  backgroundColor: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#dc2626',
-                  fontSize: '0.8rem',
-                  fontWeight: 700
-                }}
-              >
-                ⚠️ {fieldErrors.products}
-              </div>
-            )}
 
             {/* Table Search & Filter Toolbar */}
             <div className="form-grid-2" style={{ marginBottom: '1rem' }}>
@@ -892,15 +653,15 @@ const AdminSaleForm = () => {
             </div>
 
             {/* Products Selection Table */}
-            <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+            <div className="table-responsive" style={{ maxHeight: '360px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
               <table className="data-table" style={{ margin: 0 }}>
                 <thead>
                   <tr>
                     <th style={{ width: '40px', textAlign: 'center' }}>Chọn</th>
-                    <th>SẢN PHẨM & SKU</th>
+                    <th>SẢN PHẨM &amp; SKU</th>
                     <th>GIÁ GỐC (VNĐ)</th>
                     <th>GIÁ FLASH SALE (VNĐ)</th>
-                    <th>SỐ LƯỢNG SALE (SUẤT)</th>
+                    <th style={{ width: '110px', textAlign: 'center' }}>SỐ SUẤT (QUOTA)</th>
                     <th style={{ textAlign: 'center' }}>% GIẢM</th>
                   </tr>
                 </thead>
@@ -908,16 +669,9 @@ const AdminSaleForm = () => {
                   {displayableCatalog.map((prod) => {
                     const selectedItem = selectedProducts.find((p) => p.productId === prod.id);
                     const isSelected = Boolean(selectedItem);
-                    const salePrice = selectedItem
-                      ? selectedItem.salePrice
-                      : (prod.salePrice || Math.round(prod.price * 0.7));
-                    const quota = selectedItem ? selectedItem.quota : Math.max(1, prod.stock || 50);
-                    const numericSalePrice = Number(salePrice) || 0;
-                    const discount =
-                      prod.price > 0 && prod.price > numericSalePrice && numericSalePrice > 0
-                        ? Math.round(((prod.price - numericSalePrice) / prod.price) * 100)
-                        : 0;
-                    const rowErrors = fieldErrors.productItems?.[prod.id] || {};
+                    const salePrice = selectedItem ? selectedItem.salePrice : (prod.salePrice || Math.round(prod.price * 0.7));
+                    const quota = selectedItem ? selectedItem.quota : (prod.stock || 50);
+                    const discount = Math.round(((prod.price - salePrice) / prod.price) * 100);
 
                     return (
                       <tr key={prod.id} style={{ backgroundColor: isSelected ? '#fef2f2' : undefined }}>
@@ -948,66 +702,48 @@ const AdminSaleForm = () => {
                         </td>
                         <td>
                           {isSelected ? (
-                            <div>
-                              <input
-                                type="number"
-                                min={1}
-                                value={salePrice}
-                                onChange={(e) => handlePriceChange(prod.id, e.target.value)}
-                                style={{
-                                  width: '125px',
-                                  padding: '4px 8px',
-                                  borderRadius: '6px',
-                                  border: rowErrors.salePrice ? '1.5px solid #dc2626' : '1.5px solid #ef4444',
-                                  backgroundColor: rowErrors.salePrice ? '#fff1f2' : '#ffffff',
-                                  color: '#dc2626',
-                                  fontWeight: 800,
-                                  fontSize: '0.85rem',
-                                  outline: 'none'
-                                }}
-                              />
-                              {rowErrors.salePrice && (
-                                <div style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600, marginTop: '2px', maxWidth: '175px' }}>
-                                  {rowErrors.salePrice}
-                                </div>
-                              )}
-                            </div>
+                            <input
+                              type="number"
+                              value={salePrice}
+                              onChange={(e) => handlePriceChange(prod.id, e.target.value)}
+                              style={{
+                                width: '120px',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                border: '1.5px solid #ef4444',
+                                color: '#dc2626',
+                                fontWeight: 800,
+                                fontSize: '0.85rem',
+                                outline: 'none'
+                              }}
+                            />
                           ) : (
                             <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
                               {formatCurrency(salePrice)}
                             </span>
                           )}
                         </td>
-                        <td>
+                        <td style={{ textAlign: 'center' }}>
                           {isSelected ? (
-                            <div>
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={quota}
-                                onChange={(e) => handleQuotaChange(prod.id, e.target.value)}
-                                style={{
-                                  width: '85px',
-                                  padding: '4px 8px',
-                                  borderRadius: '6px',
-                                  border: rowErrors.quota ? '1.5px solid #dc2626' : '1.5px solid #cbd5e1',
-                                  backgroundColor: rowErrors.quota ? '#fff1f2' : '#ffffff',
-                                  color: '#0f172a',
-                                  fontWeight: 700,
-                                  fontSize: '0.85rem',
-                                  textAlign: 'center',
-                                  outline: 'none'
-                                }}
-                              />
-                              {rowErrors.quota && (
-                                <div style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600, marginTop: '2px', maxWidth: '150px' }}>
-                                  {rowErrors.quota}
-                                </div>
-                              )}
-                            </div>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={quota}
+                              onChange={(e) => handleQuotaChange(prod.id, e.target.value)}
+                              style={{
+                                width: '75px',
+                                padding: '4px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                fontSize: '0.85rem',
+                                outline: 'none'
+                              }}
+                            />
                           ) : (
-                            <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
                               {quota} suất
                             </span>
                           )}
@@ -1018,7 +754,7 @@ const AdminSaleForm = () => {
                               fontSize: '0.725rem',
                               fontWeight: 800,
                               color: '#ffffff',
-                              backgroundColor: discount > 0 ? '#dc2626' : '#94a3b8',
+                              backgroundColor: '#dc2626',
                               padding: '2px 6px',
                               borderRadius: '4px'
                             }}
@@ -1078,7 +814,6 @@ const AdminSaleForm = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
             <button
               type="button"
-              disabled={saving}
               onClick={() => navigate('/admin/sales')}
               style={{
                 padding: '0.75rem 1.5rem',
@@ -1088,7 +823,7 @@ const AdminSaleForm = () => {
                 color: '#475569',
                 fontWeight: 600,
                 fontSize: '0.9rem',
-                cursor: saving ? 'not-allowed' : 'pointer'
+                cursor: 'pointer'
               }}
             >
               Hủy bỏ
@@ -1096,8 +831,7 @@ const AdminSaleForm = () => {
 
             <button
               type="button"
-              disabled={saving}
-              onClick={() => handleSave('UPCOMING')}
+              onClick={() => handleSave('DRAFT')}
               style={{
                 padding: '0.75rem 1.5rem',
                 borderRadius: '8px',
@@ -1106,17 +840,15 @@ const AdminSaleForm = () => {
                 color: '#1d4ed8',
                 fontWeight: 700,
                 fontSize: '0.9rem',
-                cursor: saving ? 'not-allowed' : 'pointer',
-                opacity: saving ? 0.7 : 1
+                cursor: 'pointer'
               }}
             >
-              {saving ? 'Đang lưu...' : 'Lưu lịch chờ (Upcoming)'}
+              Lưu bản nháp
             </button>
 
             <button
               type="button"
-              disabled={saving}
-              onClick={() => handleSave(formData.status)}
+              onClick={() => handleSave('ACTIVE')}
               style={{
                 padding: '0.75rem 1.85rem',
                 borderRadius: '8px',
@@ -1125,16 +857,15 @@ const AdminSaleForm = () => {
                 color: '#ffffff',
                 fontWeight: 800,
                 fontSize: '0.95rem',
-                cursor: saving ? 'not-allowed' : 'pointer',
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
-                opacity: saving ? 0.7 : 1
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)'
               }}
             >
               <span>🚀</span>
-              <span>{saving ? 'Đang xử lý...' : 'Kích hoạt & Lưu chương trình'}</span>
+              <span>Kích hoạt & Lưu chương trình</span>
             </button>
           </div>
         </div>

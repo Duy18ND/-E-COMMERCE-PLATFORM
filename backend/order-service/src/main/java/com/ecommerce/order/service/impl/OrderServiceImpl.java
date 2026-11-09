@@ -50,6 +50,15 @@ public class OrderServiceImpl implements OrderService {
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final com.ecommerce.order.service.VoucherService voucherService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.ecommerce.order.client.AuthClient authClient;
+
+    public void setAuthClient(com.ecommerce.order.client.AuthClient authClient) {
+        this.authClient = authClient;
+    }
+
+    private static final int DEFAULT_LOW_STOCK_THRESHOLD = 5;
+
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
             OrderStatus.PENDING, Set.of(OrderStatus.PAID, OrderStatus.CONFIRMED, OrderStatus.CANCELLED, OrderStatus.FAILED),
             OrderStatus.PAID, Set.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED, OrderStatus.REFUNDED),
@@ -622,18 +631,49 @@ public class OrderServiceImpl implements OrderService {
                 .build();
     }
 
+    /**
+     * [Task ECOM-145 / ECOM-326] Lấy báo cáo thống kê tổng quan (doanh thu, đơn hàng, sản phẩm sắp hết, tổng khách hàng).
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
     @Override
     @Transactional(readOnly = true)
     public DashboardResponse getOrderStatistics() {
-        Long totalOrders = orderRepository.countTotalOrders();
-        BigDecimal totalRevenue = orderRepository.sumTotalAmountByStatusIn(REVENUE_STATUSES);
+        return getOrderStatistics(null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardResponse getOrderStatistics(java.time.LocalDateTime startDate, java.time.LocalDateTime endDate) {
+        Long totalOrders;
+        BigDecimal totalRevenue;
+        List<Object[]> rows;
+
+        if (startDate == null && endDate == null) {
+            totalOrders = orderRepository.countTotalOrders();
+            totalRevenue = orderRepository.sumTotalAmountByStatusIn(REVENUE_STATUSES);
+            rows = orderRepository.countOrdersByStatusGroup();
+        } else {
+            if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+                throw new IllegalArgumentException("Thời điểm bắt đầu không được lớn hơn thời điểm kết thúc");
+            }
+            java.time.LocalDateTime effectiveStart = startDate != null
+                    ? startDate
+                    : java.time.LocalDateTime.of(1970, 1, 1, 0, 0, 0);
+            java.time.LocalDateTime effectiveEnd = endDate != null
+                    ? endDate
+                    : java.time.LocalDateTime.of(9999, 12, 31, 23, 59, 59);
+
+            totalOrders = orderRepository.countTotalOrdersBetween(effectiveStart, effectiveEnd);
+            totalRevenue = orderRepository.sumTotalAmountByStatusInAndCreatedAtBetween(
+                    REVENUE_STATUSES, effectiveStart, effectiveEnd);
+            rows = orderRepository.countOrdersByStatusGroupBetween(effectiveStart, effectiveEnd);
+        }
 
         Map<OrderStatus, Long> ordersByStatus = new EnumMap<>(OrderStatus.class);
         for (OrderStatus s : OrderStatus.values()) {
             ordersByStatus.put(s, 0L);
         }
 
-        List<Object[]> rows = orderRepository.countOrdersByStatusGroup();
         if (rows != null) {
             for (Object[] row : rows) {
                 if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
@@ -652,6 +692,8 @@ public class OrderServiceImpl implements OrderService {
         long pendingCount = ordersByStatus.getOrDefault(OrderStatus.PENDING, 0L);
         long completedCount = ordersByStatus.getOrDefault(OrderStatus.DELIVERED, 0L);
         long cancelledCount = ordersByStatus.getOrDefault(OrderStatus.CANCELLED, 0L);
+        long lowStockCount = fetchLowStockProductsCount();
+        long totalUsersCount = fetchTotalUsersCount();
 
         return DashboardResponse.builder()
                 .totalOrders(totalOrders != null ? totalOrders : 0L)
@@ -660,9 +702,39 @@ public class OrderServiceImpl implements OrderService {
                 .pendingOrders(pendingCount)
                 .completedOrders(completedCount)
                 .cancelledOrders(cancelledCount)
-                .lowStockProductsCount(0L)
-                .totalUsers(0L)
+                .lowStockProductsCount(lowStockCount)
+                .totalUsers(totalUsersCount)
                 .build();
+    }
+
+    private long fetchLowStockProductsCount() {
+        if (productClient == null) {
+            return 0L;
+        }
+        try {
+            ApiResponse<Long> response = productClient.countLowStockProducts(DEFAULT_LOW_STOCK_THRESHOLD);
+            if (response != null && response.getData() != null) {
+                return Math.max(0L, response.getData());
+            }
+        } catch (Exception ex) {
+            log.warn("[Task ECOM-145 / ECOM-326] Không thể lấy số lượng sản phẩm sắp hết từ product-service, dùng giá trị dự phòng 0: {}", ex.getMessage());
+        }
+        return 0L;
+    }
+
+    private long fetchTotalUsersCount() {
+        if (authClient == null) {
+            return 0L;
+        }
+        try {
+            ApiResponse<Long> response = authClient.countCustomers();
+            if (response != null && response.getData() != null) {
+                return Math.max(0L, response.getData());
+            }
+        } catch (Exception ex) {
+            log.warn("[Task ECOM-145 / ECOM-326] Không thể lấy tổng số khách hàng từ auth-service, dùng giá trị dự phòng 0: {}", ex.getMessage());
+        }
+        return 0L;
     }
 
     private OrderResponse mapToOrderResponse(Order order) {
@@ -670,8 +742,13 @@ public class OrderServiceImpl implements OrderService {
                 ? order.getOrderItems().stream().map(this::mapToOrderItemResponse).toList()
                 : List.of();
 
-        List<OrderStatusHistoryResponse> historyResponses = (order.getStatusHistories() != null && !order.getStatusHistories().isEmpty())
-                ? order.getStatusHistories().stream().filter(Objects::nonNull).map(this::mapToStatusHistoryResponse).toList()
+        List<OrderStatusHistory> rawHistories = order.getStatusHistories();
+        if ((rawHistories == null || rawHistories.isEmpty())
+                && orderStatusHistoryRepository != null && order.getId() != null) {
+            rawHistories = orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtAsc(order.getId());
+        }
+        List<OrderStatusHistoryResponse> historyResponses = (rawHistories != null && !rawHistories.isEmpty())
+                ? rawHistories.stream().filter(Objects::nonNull).map(this::mapToStatusHistoryResponse).toList()
                 : List.of();
 
         return OrderResponse.builder()
