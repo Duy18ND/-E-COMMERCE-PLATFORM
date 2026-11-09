@@ -309,10 +309,18 @@ const userService = {
       throw new Error(`Không tìm thấy thông tin khách hàng #${id}`);
     }
 
-    const REVENUE_EXCLUDED = new Set(['CANCELLED', 'FAILED', 'REFUNDED']);
+    // Đồng bộ đúng quy tắc REVENUE_STATUSES của Backend OrderServiceImpl:
+    // Chỉ cộng các đơn PAID, CONFIRMED, PROCESSING, SHIPPING, DELIVERED (không cộng đơn PENDING, CANCELLED, FAILED, REFUNDED)
+    const VALID_REVENUE_STATUSES = new Set([
+      'PAID',
+      'CONFIRMED',
+      'PROCESSING',
+      'SHIPPING',
+      'DELIVERED'
+    ]);
     const totalSpent = userOrders
-      .filter((o) => !REVENUE_EXCLUDED.has(String(o.status || '').toUpperCase()))
-      .reduce((sum, o) => sum + Number(o.finalAmount ?? o.totalAmount ?? 0), 0);
+      .filter((o) => VALID_REVENUE_STATUSES.has(String(o.status || '').toUpperCase()))
+      .reduce((sum, o) => sum + Number(o.totalAmount ?? o.finalAmount ?? 0), 0);
 
     const completedOrderCount = userOrders.filter(
       (o) => String(o.status || '').toUpperCase() === 'DELIVERED'

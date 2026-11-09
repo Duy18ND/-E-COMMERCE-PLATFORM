@@ -207,12 +207,12 @@ const Dashboard = () => {
   const totalUsers = Number(statsData?.totalUsers ?? 0);
   const lowStockProductsCount = Number(statsData?.lowStockProductsCount ?? 0);
 
-  // 7 Thẻ KPI bắt buộc theo yêu cầu TASK 1
+  // 8 Thẻ KPI hiển thị đầy đủ tất cả các trường từ Backend DashboardResponse
   const kpiCards = [
     {
       title: 'Tổng doanh thu',
       value: formatCurrency(totalRevenue),
-      sub: 'Tính trên đơn đã thanh toán & hoàn tất',
+      sub: 'Đơn PAID, CONFIRMED, PROCESSING, SHIPPING, DELIVERED',
       icon: '💰',
       color: '#2563eb',
       bg: '#eff6ff'
@@ -220,39 +220,39 @@ const Dashboard = () => {
     {
       title: 'Tổng đơn hàng',
       value: totalOrders.toLocaleString('vi-VN'),
-      sub: 'Toàn bộ đơn phát sinh trên hệ thống',
+      sub: 'Toàn bộ đơn hàng ghi nhận trên hệ thống',
       icon: '📦',
       color: '#0f172a',
       bg: '#f1f5f9'
     },
     {
-      title: 'Đơn hàng thành công',
+      title: 'Đơn giao thành công',
       value: completedOrders.toLocaleString('vi-VN'),
-      sub: 'Trạng thái Đã giao (DELIVERED)',
+      sub: `Trạng thái DELIVERED (${totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : '0.0'}%)`,
       icon: '✅',
       color: '#16a34a',
       bg: '#dcfce7'
     },
     {
-      title: 'Đơn hàng đang xử lý',
+      title: 'Đơn đang xử lý',
       value: processingOrders.toLocaleString('vi-VN'),
-      sub: 'Đã thanh toán / Xác nhận / Đang giao',
+      sub: 'PAID • CONFIRMED • PROCESSING • SHIPPING',
       icon: '🚚',
       color: '#0284c7',
       bg: '#e0f2fe'
     },
     {
-      title: 'Đơn hàng chờ xử lý',
+      title: 'Đơn chờ xử lý',
       value: pendingOrders.toLocaleString('vi-VN'),
-      sub: 'Đơn mới chờ duyệt (PENDING)',
+      sub: `Trạng thái PENDING (${totalOrders > 0 ? ((pendingOrders / totalOrders) * 100).toFixed(1) : '0.0'}%)`,
       icon: '⏳',
       color: '#d97706',
       bg: '#fef3c7'
     },
     {
-      title: 'Đơn hàng đã hủy',
+      title: 'Đơn đã hủy',
       value: cancelledOrders.toLocaleString('vi-VN'),
-      sub: 'Trạng thái Đã hủy (CANCELLED)',
+      sub: `Trạng thái CANCELLED (${totalOrders > 0 ? ((cancelledOrders / totalOrders) * 100).toFixed(1) : '0.0'}%)`,
       icon: '❌',
       color: '#dc2626',
       bg: '#fee2e2'
@@ -264,25 +264,59 @@ const Dashboard = () => {
       icon: '👥',
       color: '#7c3aed',
       bg: '#ede9fe'
+    },
+    {
+      title: 'Sản phẩm sắp hết hàng',
+      value: lowStockProductsCount.toLocaleString('vi-VN'),
+      sub: 'Cảnh báo tồn kho thấp từ Product Service',
+      icon: '⚠️',
+      color: lowStockProductsCount > 0 ? '#ea580c' : '#64748b',
+      bg: lowStockProductsCount > 0 ? '#ffedd5' : '#f1f5f9'
     }
   ];
 
-  // Thống kê chi tiết từng trạng thái từ ordersByStatus của Backend
+  // Thống kê chi tiết toàn bộ 9 trạng thái từ ordersByStatus của Backend
   const statusBreakdown = useMemo(() => {
     const map = statsData?.ordersByStatus || {};
     return STATUS_META.map((meta) => {
       const count = Number(map[meta.key] ?? 0);
       const percentage =
         totalOrders > 0 ? Math.round((count / totalOrders) * 1000) / 10 : 0;
+      const isRevenueCounted = REVENUE_STATUS_SET.has(meta.key);
       return {
         ...meta,
         count,
-        percentage
+        percentage,
+        isRevenueCounted
       };
     });
   }, [statsData, totalOrders]);
 
+  // Phân tích cơ cấu đơn hàng tạo doanh thu từ dữ liệu thật của GET /api/v1/admin/statistics
+  const revenueStatusSummary = useMemo(() => {
+    const revenueItems = statusBreakdown.filter((item) => item.isRevenueCounted);
+    const totalRevenueOrders = revenueItems.reduce((sum, item) => sum + item.count, 0);
+    const nonRevenueOrders = Math.max(0, totalOrders - totalRevenueOrders);
+    const revenueOrderRatio =
+      totalOrders > 0 ? Math.round((totalRevenueOrders / totalOrders) * 1000) / 10 : 0;
+
+    return {
+      revenueItems: revenueItems.map((item) => ({
+        ...item,
+        shareOfRevenueOrders:
+          totalRevenueOrders > 0
+            ? Math.round((item.count / totalRevenueOrders) * 1000) / 10
+            : 0
+      })),
+      totalRevenueOrders,
+      nonRevenueOrders,
+      revenueOrderRatio
+    };
+  }, [statusBreakdown, totalOrders]);
+
   // Tổng hợp dữ liệu biểu đồ doanh thu thực tế theo ngày từ danh sách đơn hàng thật của Backend
+  // Chỉ cộng các đơn thuộc REVENUE_STATUS_SET (PAID, CONFIRMED, PROCESSING, SHIPPING, DELIVERED)
+  // Không cộng đơn PENDING (chưa thanh toán), CANCELLED (đã hủy), FAILED, REFUNDED
   const dailyRevenueSeries = useMemo(() => {
     if (!Array.isArray(realOrders) || realOrders.length === 0) return [];
 
@@ -312,16 +346,26 @@ const Dashboard = () => {
       current.orderCount += 1;
       const statusUpper = String(ord.status || '').toUpperCase();
       if (REVENUE_STATUS_SET.has(statusUpper)) {
-        current.revenue += Number(ord.finalAmount ?? ord.totalAmount ?? 0);
+        current.revenue += Number(ord.totalAmount ?? ord.finalAmount ?? 0);
         current.revenueOrderCount += 1;
       }
 
       grouped.set(dateKey, current);
     }
 
-    return Array.from(grouped.values())
+    const sorted = Array.from(grouped.values())
       .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
-      .slice(-14); // Tối đa 14 mốc ngày gần nhất có dữ liệu thực tế
+      .slice(-14);
+
+    const seriesRevenueSum = sorted.reduce((s, item) => s + item.revenue, 0);
+
+    return sorted.map((item) => ({
+      ...item,
+      revenueSharePct:
+        seriesRevenueSum > 0
+          ? Math.round((item.revenue / seriesRevenueSum) * 1000) / 10
+          : 0
+    }));
   }, [realOrders, startDate, endDate]);
 
   const maxDailyRevenue = useMemo(() => {
@@ -633,7 +677,7 @@ const Dashboard = () => {
               marginBottom: '1.75rem'
             }}
           >
-            {/* 4A. BIỂU ĐỒ DOANH THU THỰC TẾ THEO NGÀY */}
+            {/* 4A. BIỂU ĐỒ DOANH THU & CƠ CẤU ĐƠN HÀNG TÍNH DOANH THU */}
             <div className="card" style={{ borderRadius: '14px', padding: '1.25rem' }}>
               <div
                 style={{
@@ -641,36 +685,125 @@ const Dashboard = () => {
                   justifyContent: 'space-between',
                   alignItems: 'flex-start',
                   gap: '0.75rem',
-                  marginBottom: '1rem',
+                  marginBottom: '0.9rem',
                   flexWrap: 'wrap'
                 }}
               >
                 <div>
                   <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                    📈 Biểu đồ Doanh thu & Đơn hàng theo ngày
+                    📈 Biểu đồ Doanh thu & Cơ cấu Ghi nhận
                   </h2>
                   <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                    Tổng hợp từ các đơn hàng thực tế trên hệ thống (không dùng dữ liệu giả)
+                    Dữ liệu thật từ GET /api/v1/admin/statistics (chỉ tính đơn đã thanh toán & hợp lệ)
                   </p>
                 </div>
                 <span
                   style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    color: '#2563eb',
-                    backgroundColor: '#eff6ff',
-                    padding: '0.25rem 0.65rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    color: '#1d4ed8',
+                    backgroundColor: '#dbeafe',
+                    padding: '0.3rem 0.7rem',
                     borderRadius: '9999px'
                   }}
                 >
-                  Tổng: {formatCurrency(totalRevenue)}
+                  Tổng doanh thu: {formatCurrency(totalRevenue)}
                 </span>
               </div>
 
+              {/* Thanh cơ cấu đơn tính doanh thu vs đơn chưa/không tính doanh thu */}
+              <div
+                style={{
+                  padding: '0.85rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  marginBottom: '1rem'
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                    fontSize: '0.8rem',
+                    marginBottom: '0.45rem'
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                    Đơn ghi nhận doanh thu: {revenueStatusSummary.totalRevenueOrders} / {totalOrders} đơn ({revenueStatusSummary.revenueOrderRatio}%)
+                  </span>
+                  <span style={{ color: '#64748b', fontSize: '0.76rem' }}>
+                    Loại trừ: {revenueStatusSummary.nonRevenueOrders} đơn (PENDING, CANCELLED, FAILED, REFUNDED)
+                  </span>
+                </div>
+
+                {/* Stacked Bar hiển thị tỷ lệ các trạng thái tạo doanh thu */}
+                <div
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    height: '12px',
+                    borderRadius: '9999px',
+                    backgroundColor: '#e2e8f0',
+                    overflow: 'hidden',
+                    marginBottom: '0.6rem'
+                  }}
+                >
+                  {revenueStatusSummary.revenueItems.map((item) =>
+                    item.shareOfRevenueOrders > 0 ? (
+                      <div
+                        key={item.key}
+                        title={`${item.key}: ${item.count} đơn (${item.shareOfRevenueOrders}% nhóm doanh thu)`}
+                        style={{
+                          width: `${item.shareOfRevenueOrders}%`,
+                          height: '100%',
+                          backgroundColor: item.color
+                        }}
+                      />
+                    ) : null
+                  )}
+                </div>
+
+                {/* Chú thích (Legend) 5 trạng thái tạo doanh thu */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.65rem' }}>
+                  {revenueStatusSummary.revenueItems.map((item) => (
+                    <div
+                      key={item.key}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontSize: '0.74rem',
+                        color: '#334155',
+                        fontWeight: 600
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: item.color,
+                          display: 'inline-block'
+                        }}
+                      />
+                      <span>{item.key}:</span>
+                      <strong style={{ color: '#0f172a' }}>
+                        {item.count} ({item.shareOfRevenueOrders}%)
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Biểu đồ cột doanh thu theo ngày đặt hàng từ dữ liệu đơn thật */}
               {dailyRevenueSeries.length === 0 ? (
                 <div
                   style={{
-                    padding: '2.75rem 1rem',
+                    padding: '2rem 1rem',
                     textAlign: 'center',
                     backgroundColor: '#f8fafc',
                     borderRadius: '10px',
@@ -678,12 +811,12 @@ const Dashboard = () => {
                     color: '#64748b'
                   }}
                 >
-                  <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>📊</div>
-                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>
-                    Chưa có dữ liệu đơn hàng theo ngày trong kỳ này
+                  <div style={{ fontSize: '1.75rem', marginBottom: '0.35rem' }}>📊</div>
+                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
+                    Chưa có dữ liệu doanh thu theo từng ngày trong kỳ lọc này
                   </div>
-                  <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                    Biểu đồ sẽ tự động hiển thị ngay khi có đơn hàng phát sinh trên Backend.
+                  <div style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                    Hệ thống không tự sinh dữ liệu mẫu. Biểu đồ cột theo ngày sẽ hiển thị khi có đơn hàng thực tế.
                   </div>
                 </div>
               ) : (
@@ -693,8 +826,8 @@ const Dashboard = () => {
                       display: 'flex',
                       alignItems: 'flex-end',
                       gap: '0.55rem',
-                      height: '210px',
-                      padding: '1.25rem 0.5rem 0.5rem',
+                      height: '175px',
+                      padding: '1.1rem 0.5rem 0.45rem',
                       borderBottom: '1px solid #e2e8f0',
                       overflowX: 'auto'
                     }}
@@ -702,38 +835,41 @@ const Dashboard = () => {
                     {dailyRevenueSeries.map((point) => {
                       const heightPct =
                         maxDailyRevenue > 0
-                          ? Math.max((point.revenue / maxDailyRevenue) * 100, point.revenue > 0 ? 8 : 3)
+                          ? Math.max(
+                              (point.revenue / maxDailyRevenue) * 100,
+                              point.revenue > 0 ? 10 : 3
+                            )
                           : 4;
                       return (
                         <div
                           key={point.dateKey}
                           style={{
-                            flex: '1 0 42px',
+                            flex: '1 0 46px',
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
                             height: '100%',
                             justifyContent: 'flex-end'
                           }}
-                          title={`Ngày ${point.dateKey}: Doanh thu ${formatCurrency(point.revenue)} (${point.orderCount} đơn)`}
+                          title={`Ngày ${point.dateKey}: ${formatCurrency(point.revenue)} (${point.revenueOrderCount}/${point.orderCount} đơn tính doanh thu • ${point.revenueSharePct}%)`}
                         >
                           <div
                             style={{
-                              fontSize: '0.66rem',
+                              fontSize: '0.65rem',
                               fontWeight: 700,
                               color: '#1e293b',
-                              marginBottom: '4px',
+                              marginBottom: '3px',
                               whiteSpace: 'nowrap'
                             }}
                           >
                             {point.revenue > 0
                               ? `${Math.round(point.revenue / 1000).toLocaleString('vi-VN')}k`
-                              : '0'}
+                              : '0 ₫'}
                           </div>
                           <div
                             style={{
                               width: '100%',
-                              maxWidth: '38px',
+                              maxWidth: '36px',
                               height: `${heightPct}%`,
                               background:
                                 point.revenue > 0
@@ -748,7 +884,7 @@ const Dashboard = () => {
                     })}
                   </div>
 
-                  {/* Nhãn trục hoành (Ngày + Số đơn) */}
+                  {/* Nhãn trục hoành (Ngày + Số đơn + Tỷ trọng %) */}
                   <div
                     style={{
                       display: 'flex',
@@ -761,15 +897,15 @@ const Dashboard = () => {
                       <div
                         key={point.dateKey}
                         style={{
-                          flex: '1 0 42px',
+                          flex: '1 0 46px',
                           textAlign: 'center',
-                          fontSize: '0.72rem',
+                          fontSize: '0.7rem',
                           color: '#475569'
                         }}
                       >
                         <div style={{ fontWeight: 700 }}>{point.label}</div>
-                        <div style={{ fontSize: '0.66rem', color: '#94a3b8' }}>
-                          {point.orderCount} đơn
+                        <div style={{ fontSize: '0.64rem', color: '#2563eb', fontWeight: 600 }}>
+                          {point.revenueSharePct}%
                         </div>
                       </div>
                     ))}
@@ -778,14 +914,14 @@ const Dashboard = () => {
               )}
             </div>
 
-            {/* 4B. BIỂU ĐỒ PHÂN BỔ TRẠNG THÁI ĐƠN HÀNG (DONUT + PROGRESS BARS) */}
+            {/* 4B. BIỂU ĐỒ PHÂN BỔ ĐƠN HÀNG THEO TRẠNG THÁI (DONUT + LEGEND 9 TRẠNG THÁI) */}
             <div className="card" style={{ borderRadius: '14px', padding: '1.25rem' }}>
               <div style={{ marginBottom: '1rem' }}>
                 <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                  🎯 Biểu đồ Phân bổ Trạng thái Đơn hàng
+                  🎯 Biểu đồ Phân bổ Đơn hàng theo Trạng thái
                 </h2>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                  Tỷ trọng đơn hàng theo từng trạng thái từ API Thống kê Backend
+                  Số liệu, chú thích màu sắc và tỷ lệ phần trăm của toàn bộ 9 trạng thái từ Backend
                 </p>
               </div>
 
@@ -818,8 +954,16 @@ const Dashboard = () => {
                   }}
                 >
                   {/* SVG Donut Chart */}
-                  <div style={{ position: 'relative', width: '160px', height: '160px', margin: '0 auto', flexShrink: 0 }}>
-                    <svg width="160" height="160" viewBox="0 0 160 160">
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '165px',
+                      height: '165px',
+                      margin: '0 auto',
+                      flexShrink: 0
+                    }}
+                  >
+                    <svg width="165" height="165" viewBox="0 0 160 160">
                       <circle
                         cx="80"
                         cy="80"
@@ -857,7 +1001,14 @@ const Dashboard = () => {
                         pointerEvents: 'none'
                       }}
                     >
-                      <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
+                      <span
+                        style={{
+                          fontSize: '1.45rem',
+                          fontWeight: 800,
+                          color: '#0f172a',
+                          lineHeight: 1.1
+                        }}
+                      >
                         {totalOrders}
                       </span>
                       <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
@@ -866,63 +1017,88 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  {/* Thanh tỷ trọng các trạng thái có đơn */}
-                  <div style={{ flex: 1, minWidth: '210px', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                    {statusBreakdown
-                      .filter((s) => s.count > 0 || ['PENDING', 'PROCESSING', 'SHIPPING', 'DELIVERED', 'CANCELLED'].includes(s.key))
-                      .map((item) => (
-                        <div key={item.key}>
-                          <div
+                  {/* Chú thích (Legend) & Thanh tỷ trọng cho toàn bộ 9 trạng thái Backend */}
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: '220px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.45rem'
+                    }}
+                  >
+                    {statusBreakdown.map((item) => (
+                      <div key={item.key}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: '0.76rem',
+                            marginBottom: '2px'
+                          }}
+                        >
+                          <span
                             style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              fontSize: '0.78rem',
-                              marginBottom: '3px'
+                              fontWeight: 600,
+                              color: '#334155',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem'
                             }}
                           >
-                            <span style={{ fontWeight: 600, color: '#334155', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                              <span
-                                style={{
-                                  width: '9px',
-                                  height: '9px',
-                                  borderRadius: '50%',
-                                  backgroundColor: item.color,
-                                  display: 'inline-block'
-                                }}
-                              />
-                              {item.shortLabel}
-                            </span>
-                            <span style={{ fontWeight: 700, color: '#0f172a' }}>
-                              {item.count} đơn ({item.percentage}%)
-                            </span>
-                          </div>
-                          <div
-                            style={{
-                              width: '100%',
-                              height: '7px',
-                              borderRadius: '9999px',
-                              backgroundColor: '#f1f5f9',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            <div
+                            <span
                               style={{
-                                width: `${Math.min(100, item.percentage)}%`,
-                                height: '100%',
+                                width: '9px',
+                                height: '9px',
+                                borderRadius: '50%',
                                 backgroundColor: item.color,
-                                borderRadius: '9999px'
+                                display: 'inline-block'
                               }}
                             />
-                          </div>
+                            <span>{item.shortLabel}</span>
+                            <code
+                              style={{
+                                fontSize: '0.66rem',
+                                color: '#64748b',
+                                backgroundColor: '#f1f5f9',
+                                padding: '0 4px',
+                                borderRadius: '4px'
+                              }}
+                            >
+                              {item.key}
+                            </code>
+                          </span>
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                            {item.count} đơn ({item.percentage}%)
+                          </span>
                         </div>
-                      ))}
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '6px',
+                            borderRadius: '9999px',
+                            backgroundColor: '#f1f5f9',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min(100, item.percentage)}%`,
+                              height: '100%',
+                              backgroundColor: item.color,
+                              borderRadius: '9999px'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 5. BẢNG THỐNG KÊ ĐƠN HÀNG THEO TRẠNG THÁI & TỔNG QUAN HOẠT ĐỘNG HỆ THỐNG */}
+          {/* 5. BẢNG THỐNG KÊ ĐƠN HÀNG THEO 9 TRẠNG THÁI & TỔNG QUAN HOẠT ĐỘNG HỆ THỐNG */}
           <div
             style={{
               display: 'grid',
@@ -931,25 +1107,26 @@ const Dashboard = () => {
               marginBottom: '1.75rem'
             }}
           >
-            {/* 5A. BẢNG THỐNG KÊ ĐƠN HÀNG THEO TRẠNG THÁI */}
+            {/* 5A. BẢNG THỐNG KÊ ĐƠN HÀNG THEO 9 TRẠNG THÁI BACKEND */}
             <div className="card" style={{ borderRadius: '14px', padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '1.15rem 1.25rem', borderBottom: '1px solid #e2e8f0' }}>
                 <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                  📋 Bảng Thống kê Đơn hàng theo Trạng thái
+                  📋 Bảng Thống kê Đơn hàng theo Trạng thái (ordersByStatus)
                 </h2>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                  Chi tiết số lượng và tỷ lệ phần trăm của toàn bộ 9 trạng thái đơn hàng
+                  Đối chiếu chính xác 9 trạng thái chuẩn của Backend OrderStatus
                 </p>
               </div>
 
               <div className="table-responsive" style={{ overflowX: 'auto' }}>
-                <table className="data-table" style={{ width: '100%', minWidth: '520px' }}>
+                <table className="data-table" style={{ width: '100%', minWidth: '580px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <th>Trạng thái</th>
-                      <th>Nhóm xử lý</th>
-                      <th style={{ textAlign: 'right' }}>Số lượng đơn</th>
-                      <th style={{ textAlign: 'right' }}>Tỷ trọng</th>
+                      <th>Mã Backend</th>
+                      <th>Hiển thị</th>
+                      <th>Doanh thu</th>
+                      <th style={{ textAlign: 'right' }}>Số lượng</th>
+                      <th style={{ textAlign: 'right' }}>Tỷ lệ (%)</th>
                       <th style={{ textAlign: 'center' }}>Tra cứu</th>
                     </tr>
                   </thead>
@@ -957,10 +1134,52 @@ const Dashboard = () => {
                     {statusBreakdown.map((row) => (
                       <tr key={row.key}>
                         <td>
+                          <code
+                            style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              color: '#1e293b',
+                              backgroundColor: '#f1f5f9',
+                              padding: '0.2rem 0.45rem',
+                              borderRadius: '5px'
+                            }}
+                          >
+                            {row.key}
+                          </code>
+                        </td>
+                        <td>
                           <OrderStatus status={row.key} />
                         </td>
-                        <td style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>
-                          {row.group}
+                        <td>
+                          {row.isRevenueCounted ? (
+                            <span
+                              style={{
+                                fontSize: '0.73rem',
+                                fontWeight: 700,
+                                color: '#166534',
+                                backgroundColor: '#dcfce7',
+                                padding: '0.18rem 0.5rem',
+                                borderRadius: '9999px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              ✓ Tính doanh thu
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: '0.73rem',
+                                fontWeight: 600,
+                                color: '#64748b',
+                                backgroundColor: '#f1f5f9',
+                                padding: '0.18rem 0.5rem',
+                                borderRadius: '9999px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              — Không tính
+                            </span>
+                          )}
                         </td>
                         <td
                           style={{
@@ -987,7 +1206,8 @@ const Dashboard = () => {
                             style={{
                               fontSize: '0.78rem',
                               fontWeight: 600,
-                              color: '#2563eb'
+                              color: '#2563eb',
+                              whiteSpace: 'nowrap'
                             }}
                           >
                             Xem đơn →

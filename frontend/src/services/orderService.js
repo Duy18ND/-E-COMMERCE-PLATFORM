@@ -940,6 +940,19 @@ export const orderService = {
       getCount('PROCESSING') +
       getCount('SHIPPING');
 
+    let totalUsers = Number(rawStats?.totalUsers ?? 0);
+    if (totalUsers === 0) {
+      try {
+        const countRes = await api.get('/admin/customers/count');
+        const parsedCount = Number(countRes ?? 0);
+        if (Number.isFinite(parsedCount) && parsedCount > 0) {
+          totalUsers = parsedCount;
+        }
+      } catch {
+        // Giữ nguyên giá trị 0 từ DashboardResponse nếu endpoint count không phản hồi
+      }
+    }
+
     return {
       totalOrders: Number(rawStats?.totalOrders ?? 0),
       totalRevenue: Number(rawStats?.totalRevenue ?? 0),
@@ -960,7 +973,7 @@ export const orderService = {
       cancelledOrders,
       processingOrders,
       lowStockProductsCount: Number(rawStats?.lowStockProductsCount ?? 0),
-      totalUsers: Number(rawStats?.totalUsers ?? 0)
+      totalUsers
     };
   },
 
