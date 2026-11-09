@@ -79,6 +79,8 @@ const AdminOrders = () => {
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -151,19 +153,51 @@ const AdminOrders = () => {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Bộ lọc tìm kiếm Client-side bổ trợ (Mã đơn, Tên khách hàng, SĐT)
+  // Bộ lọc tìm kiếm & khoảng ngày đặt hàng Client-side bổ trợ (Mã đơn, Tên khách hàng, SĐT, Khoảng ngày)
   const displayedOrders = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return orders;
-    }
     const term = searchTerm.toLowerCase().trim();
+    const cleanIdTerm = term.replace(/^#/, '');
+    const cleanPhoneTerm = term.replace(/\s+/g, '');
+
+    let startTs = null;
+    if (startDate) {
+      const parsedStart = new Date(`${startDate}T00:00:00`).getTime();
+      if (!Number.isNaN(parsedStart)) startTs = parsedStart;
+    }
+
+    let endTs = null;
+    if (endDate) {
+      const parsedEnd = new Date(`${endDate}T23:59:59.999`).getTime();
+      if (!Number.isNaN(parsedEnd)) endTs = parsedEnd;
+    }
+
     return orders.filter((order) => {
-      const orderId = String(order.id || '');
-      const customerName = (order.receiverName || order.userEmail || '').toLowerCase();
-      const phone = String(order.receiverPhone || '');
-      return orderId.includes(term) || customerName.includes(term) || phone.includes(term);
+      // Lọc theo khoảng ngày đặt hàng nếu có chọn startDate / endDate
+      if (startTs !== null || endTs !== null) {
+        const orderTs = order.createdAt ? new Date(order.createdAt).getTime() : NaN;
+        if (Number.isNaN(orderTs)) return false;
+        if (startTs !== null && orderTs < startTs) return false;
+        if (endTs !== null && orderTs > endTs) return false;
+      }
+
+      if (!term) return true;
+
+      const orderId = String(order.id || '').toLowerCase();
+      const customerName = `${order.receiverName || ''} ${order.userEmail || ''} ${order.customerName || ''}`.toLowerCase();
+      const phone = String(order.receiverPhone || order.customerPhone || '').replace(/\s+/g, '');
+
+      const matchesId =
+        orderId.includes(term) ||
+        (cleanIdTerm && orderId.includes(cleanIdTerm)) ||
+        `#${orderId}` === term;
+
+      return (
+        matchesId ||
+        customerName.includes(term) ||
+        (cleanPhoneTerm && phone.includes(cleanPhoneTerm))
+      );
     });
-  }, [orders, searchTerm]);
+  }, [orders, searchTerm, startDate, endDate]);
 
   // Handler khi thay đổi bộ lọc trạng thái -> Đặt lại về trang 1
   const handleStatusFilterChange = (newStatus) => {
@@ -174,6 +208,26 @@ const AdminOrders = () => {
   // Handler khi thay đổi tìm kiếm -> Reset về trang 1
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  // Handler khi thay đổi khoảng ngày đặt hàng -> Reset về trang 1
+  const handleStartDateChange = (e) => {
+    const val = e.target.value;
+    setStartDate(val);
+    if (val && endDate && val > endDate) {
+      setEndDate(val);
+    }
+    setCurrentPage(1);
+  };
+
+  const handleEndDateChange = (e) => {
+    const val = e.target.value;
+    setEndDate(val);
+    if (val && startDate && val < startDate) {
+      setStartDate(val);
+    }
+    setCurrentPage(1);
   };
 
   // Handler khi thay đổi sắp xếp
@@ -202,6 +256,8 @@ const AdminOrders = () => {
   const handleResetFilter = () => {
     setSearchTerm('');
     setStatusFilter('');
+    setStartDate('');
+    setEndDate('');
     setSortBy('id');
     setSortDir('desc');
     setCurrentPage(1);
@@ -530,6 +586,85 @@ const AdminOrders = () => {
           </select>
         </div>
 
+        {/* Bộ lọc theo khoảng ngày đặt hàng */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
+            paddingTop: '0.25rem'
+          }}
+        >
+          <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#475569' }}>
+            📅 Lọc theo ngày đặt hàng:
+          </span>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="order-filter-start-date" style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Từ ngày:
+            </label>
+            <input
+              id="order-filter-start-date"
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={handleStartDateChange}
+              style={{
+                padding: '0.42rem 0.65rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.84rem',
+                color: '#0f172a',
+                backgroundColor: '#ffffff',
+                outline: 'none'
+              }}
+            />
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="order-filter-end-date" style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Đến ngày:
+            </label>
+            <input
+              id="order-filter-end-date"
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={handleEndDateChange}
+              style={{
+                padding: '0.42rem 0.65rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.84rem',
+                color: '#0f172a',
+                backgroundColor: '#ffffff',
+                outline: 'none'
+              }}
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setCurrentPage(1);
+              }}
+              style={{
+                background: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: '#475569',
+                cursor: 'pointer'
+              }}
+            >
+              ✕ Xóa lọc ngày
+            </button>
+          )}
+        </div>
+
         {/* Thống kê kết quả & Nút đặt lại bộ lọc */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <span style={{ color: '#64748b' }}>
@@ -537,8 +672,11 @@ const AdminOrders = () => {
             {statusFilter && (
               <span> (Trạng thái: <strong>{ORDER_STATUS_LABELS[statusFilter] || statusFilter}</strong>)</span>
             )}
+            {(startDate || endDate) && (
+              <span> (Ngày đặt: <strong>{startDate || '...'} → {endDate || '...'}</strong>)</span>
+            )}
           </span>
-          {(searchTerm || statusFilter || sortBy !== 'id') && (
+          {(searchTerm || statusFilter || startDate || endDate || sortBy !== 'id') && (
             <button
               type="button"
               onClick={handleResetFilter}
@@ -577,9 +715,9 @@ const AdminOrders = () => {
             <p style={{ fontSize: '0.875rem', margin: '0 0 1rem' }}>
               {statusFilter
                 ? `Không tìm thấy đơn hàng nào ở trạng thái "${ORDER_STATUS_LABELS[statusFilter] || statusFilter}".`
-                : 'Thử thay đổi từ khóa tìm kiếm hoặc đặt lại bộ lọc.'}
+                : 'Thử thay đổi từ khóa tìm kiếm, khoảng ngày đặt hoặc đặt lại bộ lọc.'}
             </p>
-            {(searchTerm || statusFilter) && (
+            {(searchTerm || statusFilter || startDate || endDate) && (
               <button
                 type="button"
                 onClick={handleResetFilter}

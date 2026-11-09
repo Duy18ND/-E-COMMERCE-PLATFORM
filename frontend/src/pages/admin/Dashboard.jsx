@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import orderService from '../../services/orderService';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -126,6 +126,9 @@ const Dashboard = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  // Chống Race Condition khi Admin đổi bộ lọc thời gian liên tục
+  const requestIdRef = useRef(0);
+
   const applyPresetRange = (preset) => {
     setRangePreset(preset);
     const now = new Date();
@@ -161,13 +164,18 @@ const Dashboard = () => {
       return;
     }
 
+    const currentRequestId = ++requestIdRef.current;
     setLoading(true);
     setError('');
+
     try {
       const [statsRes, ordersRes] = await Promise.allSettled([
         orderService.getOrderStats({ startDate, endDate }),
         orderService.getRealOrdersForDashboard(100)
       ]);
+
+      // Bỏ qua response cũ nếu đã có request mới hơn được gửi đi
+      if (currentRequestId !== requestIdRef.current) return;
 
       if (statsRes.status === 'rejected') {
         throw (
@@ -183,13 +191,18 @@ const Dashboard = () => {
         setRealOrders([]);
       }
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) return;
+      setStatsData(null);
+      setRealOrders([]);
       setError(
         err?.response?.data?.message ||
           err?.message ||
           'Không thể kết nối đến máy chủ thống kê. Vui lòng thử lại.'
       );
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [startDate, endDate]);
 

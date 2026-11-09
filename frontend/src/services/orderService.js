@@ -564,60 +564,51 @@ export const orderService = {
   },
 
   // Admin xem toàn bộ đơn hàng có phân trang & lọc trạng thái (GET /api/v1/admin/orders)
-  getAllOrders: async (params) => {
-    try {
-      const response = await api.get('/admin/orders', { params });
+  // Không tự thay thế lỗi API bằng dữ liệu mock để UI hiển thị chính xác Error State & nút Thử lại.
+  getAllOrders: async (params = {}) => {
+    const response = await api.get('/admin/orders', { params });
 
-      // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
-      if (response && Array.isArray(response.content)) {
-        return {
-          content: response.content,
-          totalElements: response.totalElements ?? response.content.length,
-          totalPages: response.totalPages ?? 1,
-          pageNumber: response.pageNumber ?? 0,
-          pageSize: response.pageSize ?? 10,
-          last: response.last ?? true
-        };
-      }
-
-      // Nếu Backend trả về mảng trực tiếp
-      if (Array.isArray(response)) {
-        const page = params?.page || 0;
-        const size = params?.size || 10;
-        return {
-          content: response,
-          totalElements: response.length,
-          totalPages: Math.max(1, Math.ceil(response.length / size)),
-          pageNumber: page,
-          pageSize: size,
-          last: true
-        };
-      }
-
-      return response;
-    } catch (err) {
-      // Fallback lưu trữ cục bộ nếu không kết nối được máy chủ Backend
-      let orders = getStoredOrders();
-      if (params?.status) {
-        orders = orders.filter((o) => o.status === params.status);
-      }
-
-      const page = params?.page || 0;
-      const size = params?.size || 10;
-      const totalElements = orders.length;
-      const totalPages = Math.max(1, Math.ceil(totalElements / size));
-      const startIndex = page * size;
-      const content = orders.slice(startIndex, startIndex + size);
-
+    // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
+    if (response && Array.isArray(response.content)) {
+      const normalizedContent = response.content
+        .map((item) => normalizeOrderFromBackend(item) || item)
+        .filter(Boolean);
       return {
-        content,
-        totalElements,
-        totalPages,
-        pageNumber: page,
-        pageSize: size,
-        last: page >= totalPages - 1
+        content: normalizedContent,
+        totalElements: response.totalElements ?? normalizedContent.length,
+        totalPages: response.totalPages ?? 1,
+        pageNumber: response.pageNumber ?? (params?.page || 0),
+        pageSize: response.pageSize ?? (params?.size || 10),
+        last: response.last ?? true
       };
     }
+
+    // Nếu Backend trả về mảng trực tiếp
+    if (Array.isArray(response)) {
+      const page = params?.page || 0;
+      const size = params?.size || 10;
+      const normalizedContent = response
+        .map((item) => normalizeOrderFromBackend(item) || item)
+        .filter(Boolean);
+      return {
+        content: normalizedContent,
+        totalElements: normalizedContent.length,
+        totalPages: Math.max(1, Math.ceil(normalizedContent.length / size)),
+        pageNumber: page,
+        pageSize: size,
+        last: true
+      };
+    }
+
+    // Xử lý an toàn khi response rỗng hoặc null
+    return {
+      content: [],
+      totalElements: 0,
+      totalPages: 1,
+      pageNumber: params?.page || 0,
+      pageSize: params?.size || 10,
+      last: true
+    };
   },
 
   // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId} hoặc /api/v1/admin/orders/{orderId})

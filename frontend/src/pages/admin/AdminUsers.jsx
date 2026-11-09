@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import userService, { formatCustomerAddress } from '../../services/userService';
 import useAuth from '../../hooks/useAuth';
 import useToast from '../../hooks/useToast';
@@ -110,23 +110,46 @@ const AdminUsers = () => {
     nextStatus: 'LOCKED'
   });
 
+  // Chống Race Condition khi làm mới hoặc thay đổi điều kiện truy vấn liên tục
+  const requestIdRef = useRef(0);
+
   // Tải danh sách khách hàng từ API Backend (GET /api/v1/admin/customers)
   const loadUsers = useCallback(async () => {
+    const currentRequestId = ++requestIdRef.current;
     setLoading(true);
     setError('');
+
+    const sortParams =
+      sortOption === 'oldest'
+        ? { sortBy: 'createdAt', sortDir: 'asc' }
+        : sortOption === 'name_asc'
+          ? { sortBy: 'fullName', sortDir: 'asc' }
+          : sortOption === 'name_desc'
+            ? { sortBy: 'fullName', sortDir: 'desc' }
+            : sortOption === 'id_asc'
+              ? { sortBy: 'id', sortDir: 'asc' }
+              : sortOption === 'id_desc'
+                ? { sortBy: 'id', sortDir: 'desc' }
+                : { sortBy: 'createdAt', sortDir: 'desc' };
+
     try {
-      const data = await userService.getAllUsers();
+      const data = await userService.getAllUsers(sortParams);
+      if (currentRequestId !== requestIdRef.current) return;
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) return;
+      setUsers([]);
       setError(
         err?.response?.data?.message ||
           err?.message ||
           'Không thể tải danh sách khách hàng từ máy chủ.'
       );
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [sortOption]);
 
   useEffect(() => {
     loadUsers();
@@ -180,6 +203,9 @@ const AdminUsers = () => {
       }
       if (sortOption === 'name_asc') {
         return (a.name || '').localeCompare(b.name || '', 'vi');
+      }
+      if (sortOption === 'name_desc') {
+        return (b.name || '').localeCompare(a.name || '', 'vi');
       }
       if (sortOption === 'oldest') {
         const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -583,6 +609,7 @@ const AdminUsers = () => {
           <option value="id_desc">Sắp xếp: ID giảm dần</option>
           <option value="id_asc">Sắp xếp: ID tăng dần</option>
           <option value="name_asc">Sắp xếp: Họ tên A → Z</option>
+          <option value="name_desc">Sắp xếp: Họ tên Z → A</option>
         </select>
 
         {/* Tổng kết quả & nút Đặt lại */}
