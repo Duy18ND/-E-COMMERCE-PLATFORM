@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import userService from '../../services/userService';
+import userService, { formatCustomerAddress } from '../../services/userService';
 import useAuth from '../../hooks/useAuth';
 import useToast from '../../hooks/useToast';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -27,9 +27,9 @@ const fmtDateTime = (str) => {
   return d.toLocaleString('vi-VN');
 };
 
-/** Badge hiển thị trạng thái ACTIVE / LOCKED (Yêu cầu 14) */
+/** Badge hiển thị trạng thái ACTIVE / LOCKED */
 const UserStatusBadge = ({ status }) => {
-  const isLocked = status === 'LOCKED';
+  const isLocked = status === 'LOCKED' || status === 'BLOCKED';
   return (
     <span
       style={{
@@ -73,7 +73,7 @@ const UserRoleBadge = ({ role }) => {
       }}
     >
       <span>{isAdmin ? '🛡️' : '👤'}</span>
-      <span>{isAdmin ? 'ADMIN' : 'USER'}</span>
+      <span>{isAdmin ? 'ADMIN' : 'KHÁCH HÀNG'}</span>
     </span>
   );
 };
@@ -87,28 +87,30 @@ const AdminUsers = () => {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Tìm kiếm & Bộ lọc (Yêu cầu 4, 5, 6)
+  // Tìm kiếm, Bộ lọc & Sắp xếp
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [sortOption, setSortOption] = useState('newest');
 
-  // Phân trang (Yêu cầu 10)
+  // Phân trang
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Modal Chi tiết tài khoản (Yêu cầu 9)
+  // Modal Chi tiết khách hàng
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailUser, setDetailUser] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
 
-  // Confirm Dialog Khóa / Mở khóa tài khoản (Yêu cầu 7)
+  // Confirm Dialog Khóa / Mở khóa tài khoản
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
     targetUser: null,
     nextStatus: 'LOCKED'
   });
 
-  // Tải danh sách tài khoản từ Mock Service
+  // Tải danh sách khách hàng từ API Backend (GET /api/v1/admin/customers)
   const loadUsers = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -116,7 +118,11 @@ const AdminUsers = () => {
       const data = await userService.getAllUsers();
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message || 'Không thể tải danh sách tài khoản.');
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể tải danh sách khách hàng từ máy chủ.'
+      );
     } finally {
       setLoading(false);
     }
@@ -126,31 +132,66 @@ const AdminUsers = () => {
     loadUsers();
   }, [loadUsers]);
 
-  // Thống kê phía trên danh sách (Yêu cầu 15)
+  // Thống kê tổng quan khách hàng & tài khoản
   const stats = useMemo(() => {
-    const total = users.length;
+    const customers = users.filter((u) => u.role !== 'ADMIN');
+    const totalCustomers = customers.length;
+    const totalAll = users.length;
     const active = users.filter((u) => u.status === 'ACTIVE').length;
-    const locked = users.filter((u) => u.status === 'LOCKED').length;
+    const locked = users.filter((u) => u.status === 'LOCKED' || u.status === 'BLOCKED').length;
     const admins = users.filter((u) => u.role === 'ADMIN').length;
-    return { total, active, locked, admins };
+    return { totalCustomers, totalAll, active, locked, admins };
   }, [users]);
 
-  // Lọc danh sách theo Họ tên, Email, Vai trò, Trạng thái
+  // Tìm kiếm theo ID, Họ tên, Email, Số điện thoại + Lọc Vai trò, Trạng thái + Sắp xếp
   const filteredUsers = useMemo(() => {
-    const keyword = searchTerm.trim().toLowerCase();
+    const rawKeyword = searchTerm.trim().toLowerCase();
+    const cleanIdKeyword = rawKeyword.replace(/^#/, '');
+    const cleanPhoneKeyword = rawKeyword.replace(/\s+/g, '');
 
-    return users.filter((item) => {
+    const filtered = users.filter((item) => {
+      const idStr = String(item.id ?? '').toLowerCase();
       const fullName = (item.name || item.fullName || '').toLowerCase();
       const email = (item.email || '').toLowerCase();
+      const phone = (item.phone && item.phone !== 'Chưa cập nhật' ? item.phone : '')
+        .replace(/\s+/g, '')
+        .toLowerCase();
 
       const matchSearch =
-        !keyword || fullName.includes(keyword) || email.includes(keyword);
+        !rawKeyword ||
+        idStr.includes(cleanIdKeyword) ||
+        `#${idStr}`.includes(rawKeyword) ||
+        fullName.includes(rawKeyword) ||
+        email.includes(rawKeyword) ||
+        (cleanPhoneKeyword && phone.includes(cleanPhoneKeyword));
+
       const matchRole = roleFilter === 'ALL' || item.role === roleFilter;
       const matchStatus = statusFilter === 'ALL' || item.status === statusFilter;
 
       return matchSearch && matchRole && matchStatus;
     });
-  }, [users, searchTerm, roleFilter, statusFilter]);
+
+    return [...filtered].sort((a, b) => {
+      if (sortOption === 'id_asc') {
+        return Number(a.id || 0) - Number(b.id || 0);
+      }
+      if (sortOption === 'id_desc') {
+        return Number(b.id || 0) - Number(a.id || 0);
+      }
+      if (sortOption === 'name_asc') {
+        return (a.name || '').localeCompare(b.name || '', 'vi');
+      }
+      if (sortOption === 'oldest') {
+        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tA - tB || Number(a.id || 0) - Number(b.id || 0);
+      }
+      // Mặc định: newest
+      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tB - tA || Number(b.id || 0) - Number(a.id || 0);
+    });
+  }, [users, searchTerm, roleFilter, statusFilter, sortOption]);
 
   // Dữ liệu phân trang
   const paginatedUsers = useMemo(() => {
@@ -162,36 +203,53 @@ const AdminUsers = () => {
     setSearchTerm('');
     setRoleFilter('ALL');
     setStatusFilter('ALL');
+    setSortOption('newest');
     setCurrentPage(1);
   };
 
-  // Xem chi tiết tài khoản (kèm thông tin đơn hàng Mock)
+  // Xem chi tiết khách hàng từ API thật:
+  // GET /api/v1/admin/customers/{id} & GET /api/v1/admin/orders/customer/{userId}
   const handleOpenDetail = async (targetUser) => {
+    if (!targetUser) return;
     setIsDetailOpen(true);
     setDetailLoading(true);
-    setDetailUser({ ...targetUser, orders: [], orderCount: 0, totalSpent: 0 });
+    setDetailError('');
+    setDetailUser({
+      ...targetUser,
+      orders: [],
+      orderCount: 0,
+      completedOrderCount: 0,
+      cancelledOrderCount: 0,
+      totalSpent: 0
+    });
+
     try {
       const fullDetail = await userService.getUserById(targetUser.id);
       setDetailUser(fullDetail);
     } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Không thể tải thông tin chi tiết khách hàng từ máy chủ.';
+      setDetailError(msg);
       showToast({
         type: 'error',
-        title: 'Lỗi tải chi tiết',
-        message: err.message || 'Không thể tải thông tin chi tiết tài khoản.'
+        title: 'Lỗi tải chi tiết khách hàng',
+        message: msg
       });
     } finally {
       setDetailLoading(false);
     }
   };
 
-  // Mở Confirm Dialog trước khi Khóa / Mở khóa tài khoản USER
+  // Mở Confirm Dialog trước khi Khóa / Mở khóa tài khoản
   const handleRequestToggleStatus = (targetUser) => {
     if (!targetUser) return;
 
     const currentAdminEmail = (currentAdmin?.email || '').trim().toLowerCase();
     const isSelf =
       currentAdminEmail &&
-      targetUser.email.toLowerCase() === currentAdminEmail;
+      (targetUser.email || '').toLowerCase() === currentAdminEmail;
 
     if (isSelf || targetUser.role === 'ADMIN') {
       showToast({
@@ -210,7 +268,7 @@ const AdminUsers = () => {
     });
   };
 
-  // Xác nhận Khóa / Mở khóa trong Confirm Dialog
+  // Xác nhận Khóa / Mở khóa qua PUT /api/v1/admin/customers/{id}/status
   const handleConfirmStatusChange = async () => {
     const { targetUser, nextStatus } = confirmState;
     if (!targetUser) return;
@@ -219,16 +277,14 @@ const AdminUsers = () => {
     try {
       const updated =
         nextStatus === 'LOCKED'
-          ? await userService.lockUser(targetUser.id, currentAdmin?.email)
-          : await userService.unlockUser(targetUser.id, currentAdmin?.email);
+          ? await userService.lockUser(targetUser.id)
+          : await userService.unlockUser(targetUser.id);
 
-      // Cập nhật ngay trên state danh sách mà không xóa tài khoản
       setUsers((prev) =>
-        prev.map((u) => (String(u.id) === String(updated.id) ? { ...u, ...updated } : u))
+        prev.map((u) => (String(u.id) === String(targetUser.id) ? { ...u, ...updated } : u))
       );
 
-      // Nếu đang mở Modal Chi tiết của chính user này thì cập nhật luôn
-      if (detailUser && String(detailUser.id) === String(updated.id)) {
+      if (detailUser && String(detailUser.id) === String(targetUser.id)) {
         setDetailUser((prev) => (prev ? { ...prev, status: updated.status } : null));
       }
 
@@ -239,21 +295,29 @@ const AdminUsers = () => {
         title: nextStatus === 'LOCKED' ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản',
         message:
           nextStatus === 'LOCKED'
-            ? `Tài khoản "${updated.name}" (${updated.email}) đã chuyển sang trạng thái Đã khóa.`
-            : `Tài khoản "${updated.name}" (${updated.email}) đã chuyển lại trạng thái Đang hoạt động.`
+            ? `Khách hàng "${targetUser.name}" (#${targetUser.id}) đã chuyển sang trạng thái Đã khóa.`
+            : `Khách hàng "${targetUser.name}" (#${targetUser.id}) đã chuyển lại trạng thái Đang hoạt động.`
       });
     } catch (err) {
       showToast({
         type: 'error',
-        title: 'Không thể cập nhật',
-        message: err.message || 'Đã xảy ra lỗi khi cập nhật trạng thái tài khoản.'
+        title: 'Không thể cập nhật trạng thái',
+        message:
+          err?.response?.data?.message ||
+          err?.message ||
+          'Đã xảy ra lỗi khi cập nhật trạng thái tài khoản.'
       });
     } finally {
       setActionLoading(false);
     }
   };
 
-  const currentAdminEmail = (currentAdmin?.email || 'admin@test.com').trim().toLowerCase();
+  const currentAdminEmail = (currentAdmin?.email || '').trim().toLowerCase();
+  const hasActiveFilter =
+    Boolean(searchTerm.trim()) ||
+    roleFilter !== 'ALL' ||
+    statusFilter !== 'ALL' ||
+    sortOption !== 'newest';
 
   return (
     <div className="admin-users-page">
@@ -273,10 +337,10 @@ const AdminUsers = () => {
             className="page-title"
             style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#0f172a' }}
           >
-            Quản lý Tài khoản
+            Quản lý Khách hàng & Tài khoản
           </h1>
           <p style={{ margin: '0.35rem 0 0', color: '#64748b', fontSize: '0.95rem' }}>
-            Tra cứu thông tin thành viên, phân quyền vai trò và kiểm soát trạng thái hoạt động
+            Tra cứu thông tin khách hàng, lịch sử mua hàng, địa chỉ nhận hàng và kiểm soát trạng thái tài khoản
           </p>
         </div>
 
@@ -289,7 +353,7 @@ const AdminUsers = () => {
             border: '1px solid #cbd5e1',
             borderRadius: '8px',
             padding: '0.55rem 1rem',
-            cursor: 'pointer',
+            cursor: loading || actionLoading ? 'not-allowed' : 'pointer',
             fontSize: '0.85rem',
             fontWeight: 600,
             color: '#2563eb',
@@ -299,18 +363,30 @@ const AdminUsers = () => {
           }}
         >
           <span>🔄</span>
-          <span>Làm mới dữ liệu</span>
+          <span>{loading ? 'Đang tải...' : 'Làm mới dữ liệu'}</span>
         </button>
       </div>
 
-      {error && <ErrorMessage message={error} onClose={() => setError('')} />}
+      {error && (
+        <div style={{ marginBottom: '1.25rem' }}>
+          <ErrorMessage message={error} onClose={() => setError('')} />
+        </div>
+      )}
 
-      {/* 2. THỐNG KÊ PHÍA TRÊN DANH SÁCH (Yêu cầu 15) */}
-      <div className="grid-cols-4" style={{ marginBottom: '1.75rem' }}>
+      {/* 2. THỐNG KÊ TỔNG QUAN KHÁCH HÀNG */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          gap: '1rem',
+          marginBottom: '1.75rem'
+        }}
+      >
         {[
           {
-            label: 'Tổng tài khoản',
-            value: stats.total,
+            label: 'Tổng khách hàng',
+            value: stats.totalCustomers,
+            sub: `Tổng tài khoản hệ thống: ${stats.totalAll}`,
             color: '#2563eb',
             bg: '#eff6ff',
             icon: '👥'
@@ -318,6 +394,7 @@ const AdminUsers = () => {
           {
             label: 'Đang hoạt động',
             value: stats.active,
+            sub: 'Tài khoản trạng thái ACTIVE',
             color: '#16a34a',
             bg: '#dcfce7',
             icon: '✅'
@@ -325,13 +402,15 @@ const AdminUsers = () => {
           {
             label: 'Đã khóa',
             value: stats.locked,
+            sub: 'Tài khoản bị khóa tạm thời',
             color: '#dc2626',
             bg: '#fef2f2',
             icon: '🔒'
           },
           {
-            label: 'Tổng Admin',
+            label: 'Tổng Quản trị viên',
             value: stats.admins,
+            sub: 'Tài khoản quyền ADMIN',
             color: '#7c3aed',
             bg: '#ede9fe',
             icon: '🛡️'
@@ -352,15 +431,15 @@ const AdminUsers = () => {
           >
             <div
               style={{
-                width: '44px',
-                height: '44px',
+                width: '46px',
+                height: '46px',
                 borderRadius: '10px',
                 backgroundColor: item.bg,
                 color: item.color,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.3rem',
+                fontSize: '1.35rem',
                 flexShrink: 0
               }}
             >
@@ -380,18 +459,29 @@ const AdminUsers = () => {
               >
                 {item.value}
               </div>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                {item.sub}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* 3. THANH TÌM KIẾM & BỘ LỌC (Yêu cầu 4, 5, 6) */}
+      {/* 3. THANH TÌM KIẾM, BỘ LỌC & SẮP XẾP */}
       <div
-        className="card admin-voucher-filter-bar"
-        style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: '14px' }}
+        className="card"
+        style={{
+          padding: '1rem 1.25rem',
+          marginBottom: '1.5rem',
+          borderRadius: '14px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+          gap: '0.75rem',
+          alignItems: 'center'
+        }}
       >
-        {/* Tìm kiếm theo Họ tên hoặc Email */}
-        <div className="voucher-filter-search" style={{ position: 'relative', minWidth: 0 }}>
+        {/* Tìm kiếm theo ID, Họ tên, Email, Số điện thoại */}
+        <div style={{ position: 'relative', minWidth: 0, gridColumn: 'span 2' }}>
           <span
             style={{
               position: 'absolute',
@@ -410,8 +500,8 @@ const AdminUsers = () => {
               setSearchTerm(e.target.value);
               setCurrentPage(1);
             }}
-            placeholder="Tìm kiếm theo họ tên hoặc địa chỉ email..."
-            aria-label="Tìm kiếm tài khoản theo họ tên hoặc email"
+            placeholder="Tìm theo ID (#1), họ tên, email hoặc số điện thoại..."
+            aria-label="Tìm kiếm khách hàng theo ID, họ tên, email hoặc số điện thoại"
             style={{
               width: '100%',
               padding: '0.55rem 0.75rem 0.55rem 2.1rem',
@@ -426,7 +516,6 @@ const AdminUsers = () => {
 
         {/* Bộ lọc Vai trò: Tất cả / USER / ADMIN */}
         <select
-          className="voucher-filter-select"
           value={roleFilter}
           onChange={(e) => {
             setRoleFilter(e.target.value);
@@ -444,13 +533,12 @@ const AdminUsers = () => {
           }}
         >
           <option value="ALL">Vai trò: Tất cả</option>
-          <option value="USER">👤 USER (Khách hàng)</option>
-          <option value="ADMIN">🛡️ ADMIN (Quản trị viên)</option>
+          <option value="USER">👤 Khách hàng (USER)</option>
+          <option value="ADMIN">🛡️ Quản trị viên (ADMIN)</option>
         </select>
 
         {/* Bộ lọc Trạng thái: Tất cả / Đang hoạt động / Đã khóa */}
         <select
-          className="voucher-filter-select"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
@@ -468,16 +556,41 @@ const AdminUsers = () => {
           }}
         >
           <option value="ALL">Trạng thái: Tất cả</option>
-          <option value="ACTIVE">🟢 Đang hoạt động</option>
-          <option value="LOCKED">🔒 Đã khóa</option>
+          <option value="ACTIVE">🟢 Đang hoạt động (ACTIVE)</option>
+          <option value="LOCKED">🔒 Đã khóa (LOCKED)</option>
+        </select>
+
+        {/* Sắp xếp */}
+        <select
+          value={sortOption}
+          onChange={(e) => {
+            setSortOption(e.target.value);
+            setCurrentPage(1);
+          }}
+          aria-label="Sắp xếp danh sách"
+          style={{
+            width: '100%',
+            padding: '0.55rem 0.85rem',
+            borderRadius: '8px',
+            border: '1px solid #cbd5e1',
+            fontSize: '0.875rem',
+            outline: 'none',
+            backgroundColor: '#ffffff'
+          }}
+        >
+          <option value="newest">Sắp xếp: Mới đăng ký</option>
+          <option value="oldest">Sắp xếp: Đăng ký cũ nhất</option>
+          <option value="id_desc">Sắp xếp: ID giảm dần</option>
+          <option value="id_asc">Sắp xếp: ID tăng dần</option>
+          <option value="name_asc">Sắp xếp: Họ tên A → Z</option>
         </select>
 
         {/* Tổng kết quả & nút Đặt lại */}
         <div
-          className="voucher-filter-total"
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: '0.65rem',
             fontSize: '0.82rem',
             color: '#64748b',
@@ -487,7 +600,7 @@ const AdminUsers = () => {
           <span>
             Hiển thị <strong>{filteredUsers.length}</strong> / {users.length} tài khoản
           </span>
-          {(searchTerm || roleFilter !== 'ALL' || statusFilter !== 'ALL') && (
+          {hasActiveFilter && (
             <button
               type="button"
               onClick={handleResetFilters}
@@ -507,47 +620,62 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      {/* 4. DANH SÁCH TÀI KHOẢN DẠNG TABLE (Yêu cầu 3, 7, 8, 10) */}
+      {/* 4. DANH SÁCH KHÁCH HÀNG DẠNG TABLE */}
       <div className="card" style={{ padding: 0, borderRadius: '14px', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '3rem' }}>
-            <Loading message="Đang tải danh sách tài khoản hệ thống..." />
+            <Loading message="Đang tải danh sách khách hàng từ hệ thống..." />
+          </div>
+        ) : error && users.length === 0 ? (
+          <div style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
+            <div style={{ fontSize: '2.75rem', marginBottom: '0.5rem' }}>⚠️</div>
+            <h3 style={{ margin: '0 0 0.35rem', color: '#0f172a', fontWeight: 700 }}>
+              Không thể tải danh sách khách hàng
+            </h3>
+            <p style={{ fontSize: '0.875rem', margin: '0 0 1rem', color: '#dc2626' }}>
+              {error}
+            </p>
+            <Button variant="primary" size="sm" onClick={loadUsers}>
+              🔄 Thử lại ngay
+            </Button>
           </div>
         ) : filteredUsers.length === 0 ? (
           <div style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
             <div style={{ fontSize: '2.75rem', marginBottom: '0.5rem' }}>👥</div>
             <h3 style={{ margin: '0 0 0.35rem', color: '#0f172a', fontWeight: 700 }}>
-              Không tìm thấy tài khoản phù hợp
+              Không tìm thấy khách hàng phù hợp
             </h3>
             <p style={{ fontSize: '0.875rem', margin: '0 0 1rem' }}>
-              Hãy thử tìm với từ khóa khác hoặc đặt lại bộ lọc vai trò / trạng thái.
+              Hãy thử tìm kiếm bằng ID, họ tên, email, số điện thoại khác hoặc đặt lại bộ lọc.
             </p>
-            <Button variant="outline" size="sm" onClick={handleResetFilters}>
-              Đặt lại bộ lọc
-            </Button>
+            {hasActiveFilter && (
+              <Button variant="outline" size="sm" onClick={handleResetFilters}>
+                Đặt lại bộ lọc
+              </Button>
+            )}
           </div>
         ) : (
           <>
-            <div className="table-wrapper table-responsive">
-              <table className="data-table" style={{ minWidth: '920px' }}>
+            <div className="table-wrapper table-responsive" style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ minWidth: '980px', width: '100%' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ width: '64px', textAlign: 'center' }}>STT</th>
-                    <th style={{ width: '76px' }}>Avatar</th>
+                    <th style={{ width: '90px', textAlign: 'center' }}>ID KH</th>
                     <th>Họ tên</th>
                     <th>Email</th>
-                    <th>Vai trò</th>
-                    <th>Trạng thái</th>
-                    <th>Ngày tạo</th>
+                    <th>Số điện thoại</th>
+                    <th>Ngày đăng ký</th>
+                    <th>Trạng thái tài khoản</th>
                     <th style={{ minWidth: '220px' }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedUsers.map((u, idx) => {
-                    const stt = (currentPage - 1) * itemsPerPage + idx + 1;
-                    const isSelf = u.email.toLowerCase() === currentAdminEmail;
+                  {paginatedUsers.map((u) => {
+                    const isSelf =
+                      currentAdminEmail && (u.email || '').toLowerCase() === currentAdminEmail;
                     const isAdminRole = u.role === 'ADMIN';
-                    const isLocked = u.status === 'LOCKED';
+                    const isLocked = u.status === 'LOCKED' || u.status === 'BLOCKED';
+                    const hasPhone = u.phone && u.phone !== 'Chưa cập nhật';
 
                     return (
                       <tr
@@ -556,84 +684,113 @@ const AdminUsers = () => {
                           backgroundColor: isLocked ? '#fffafa' : undefined
                         }}
                       >
-                        {/* STT */}
+                        {/* ID khách hàng */}
                         <td
                           style={{
                             textAlign: 'center',
-                            fontWeight: 700,
-                            color: '#64748b',
+                            fontWeight: 800,
+                            color: '#1e293b',
                             fontSize: '0.85rem'
                           }}
                         >
-                          {stt}
-                        </td>
-
-                        {/* Avatar */}
-                        <td>
-                          <img
-                            src={u.avatar || FALLBACK_AVATAR}
-                            alt={u.name}
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = FALLBACK_AVATAR;
-                            }}
+                          <span
                             style={{
-                              width: '40px',
-                              height: '40px',
-                              borderRadius: '50%',
-                              objectFit: 'cover',
-                              border: isAdminRole ? '2px solid #7c3aed' : '2px solid #e2e8f0',
-                              display: 'block'
+                              display: 'inline-block',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '6px',
+                              backgroundColor: '#f1f5f9',
+                              border: '1px solid #e2e8f0'
                             }}
-                          />
+                          >
+                            #{u.id}
+                          </span>
                         </td>
 
-                        {/* Họ tên */}
+                        {/* Họ tên + Avatar + Vai trò */}
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>
-                              {u.name}
-                            </span>
-                            {isSelf && (
-                              <span
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <img
+                              src={u.avatar || FALLBACK_AVATAR}
+                              alt={u.name}
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = FALLBACK_AVATAR;
+                              }}
+                              style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '50%',
+                                objectFit: 'cover',
+                                border: isAdminRole ? '2px solid #7c3aed' : '2px solid #e2e8f0',
+                                flexShrink: 0
+                              }}
+                            />
+                            <div style={{ minWidth: 0 }}>
+                              <div
                                 style={{
-                                  fontSize: '0.68rem',
-                                  fontWeight: 700,
-                                  backgroundColor: '#dbeafe',
-                                  color: '#1e40af',
-                                  padding: '1px 6px',
-                                  borderRadius: '9999px'
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.45rem',
+                                  flexWrap: 'wrap'
                                 }}
                               >
-                                Bạn
-                              </span>
-                            )}
-                          </div>
-                          {u.phone && u.phone !== 'Chưa cập nhật' && (
-                            <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
-                              📞 {u.phone}
+                                <span
+                                  style={{
+                                    fontWeight: 700,
+                                    color: '#0f172a',
+                                    fontSize: '0.9rem'
+                                  }}
+                                >
+                                  {u.name}
+                                </span>
+                                {isSelf && (
+                                  <span
+                                    style={{
+                                      fontSize: '0.68rem',
+                                      fontWeight: 700,
+                                      backgroundColor: '#dbeafe',
+                                      color: '#1e40af',
+                                      padding: '1px 6px',
+                                      borderRadius: '9999px'
+                                    }}
+                                  >
+                                    Bạn
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ marginTop: '3px' }}>
+                                <UserRoleBadge role={u.role} />
+                              </div>
                             </div>
-                          )}
+                          </div>
                         </td>
 
                         {/* Email */}
                         <td style={{ color: '#334155', fontWeight: 500, fontSize: '0.875rem' }}>
-                          {u.email}
+                          {u.email || '—'}
                         </td>
 
-                        {/* Vai trò */}
-                        <td>
-                          <UserRoleBadge role={u.role} />
+                        {/* Số điện thoại */}
+                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.875rem' }}>
+                          {hasPhone ? (
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                              📞 {u.phone}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>
+                              Chưa cập nhật
+                            </span>
+                          )}
                         </td>
 
-                        {/* Trạng thái */}
+                        {/* Ngày đăng ký */}
+                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', color: '#475569' }}>
+                          <div>{fmtDate(u.createdAt)}</div>
+                        </td>
+
+                        {/* Trạng thái tài khoản */}
                         <td>
                           <UserStatusBadge status={u.status} />
-                        </td>
-
-                        {/* Ngày tạo */}
-                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', color: '#475569' }}>
-                          {fmtDate(u.createdAt)}
                         </td>
 
                         {/* Thao tác */}
@@ -654,7 +811,7 @@ const AdminUsers = () => {
                                 whiteSpace: 'nowrap'
                               }}
                             >
-                              Xem chi tiết
+                              👁️ Xem chi tiết
                             </button>
 
                             {isAdminRole ? (
@@ -733,14 +890,14 @@ const AdminUsers = () => {
                 setItemsPerPage(size);
                 setCurrentPage(1);
               }}
-              itemsPerPageOptions={[5, 10, 20]}
-              unitName="tài khoản"
+              itemsPerPageOptions={[5, 10, 20, 50]}
+              unitName="khách hàng"
             />
           </>
         )}
       </div>
 
-      {/* 5. CONFIRM DIALOG KHÓA / MỞ KHÓA TÀI KHOẢN (Yêu cầu 7, 12, 13) */}
+      {/* 5. CONFIRM DIALOG KHÓA / MỞ KHÓA TÀI KHOẢN */}
       {confirmState.targetUser && (
         <Modal
           isOpen={confirmState.isOpen}
@@ -750,8 +907,8 @@ const AdminUsers = () => {
           }
           title={
             confirmState.nextStatus === 'LOCKED'
-              ? 'Xác nhận khóa tài khoản'
-              : 'Xác nhận mở khóa tài khoản'
+              ? 'Xác nhận khóa tài khoản khách hàng'
+              : 'Xác nhận mở khóa tài khoản khách hàng'
           }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -783,7 +940,7 @@ const AdminUsers = () => {
               />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>
-                  {confirmState.targetUser.name}
+                  {confirmState.targetUser.name} (#{confirmState.targetUser.id})
                 </div>
                 <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
                   {confirmState.targetUser.email}
@@ -805,7 +962,8 @@ const AdminUsers = () => {
               >
                 ⚠️ Bạn có chắc chắn muốn <strong>Khóa tài khoản</strong> này không?
                 <br />
-                Sau khi khóa, trạng thái tài khoản sẽ chuyển sang <strong>Đã khóa (LOCKED)</strong>. Dữ liệu tài khoản và lịch sử đơn hàng vẫn được bảo toàn nguyên vẹn.
+                Sau khi khóa, trạng thái tài khoản trên hệ thống sẽ chuyển sang{' '}
+                <strong>Đã khóa (BLOCKED)</strong>. Dữ liệu hồ sơ và lịch sử đơn hàng vẫn được bảo toàn.
               </div>
             ) : (
               <div
@@ -821,7 +979,8 @@ const AdminUsers = () => {
               >
                 ✅ Bạn có chắc chắn muốn <strong>Mở khóa tài khoản</strong> này không?
                 <br />
-                Sau khi mở khóa, trạng thái tài khoản sẽ trở lại <strong>Đang hoạt động (ACTIVE)</strong> để người dùng tiếp tục mua sắm.
+                Sau khi mở khóa, trạng thái tài khoản sẽ trở lại{' '}
+                <strong>Đang hoạt động (ACTIVE)</strong> để khách hàng tiếp tục mua sắm.
               </div>
             )}
 
@@ -862,14 +1021,18 @@ const AdminUsers = () => {
         </Modal>
       )}
 
-      {/* 6. MODAL CHI TIẾT TÀI KHOẢN (Yêu cầu 9) */}
+      {/* 6. MODAL CHI TIẾT KHÁCH HÀNG (Lấy từ GET /api/v1/admin/customers/{id} & GET /api/v1/admin/orders/customer/{userId}) */}
       {detailUser && (
         <Modal
           isOpen={isDetailOpen}
           onClose={() => setIsDetailOpen(false)}
-          title={`Chi tiết tài khoản #${detailUser.id}`}
+          title={`Hồ sơ chi tiết khách hàng #${detailUser.id}`}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+            {detailError && (
+              <ErrorMessage message={detailError} onClose={() => setDetailError('')} />
+            )}
+
             {/* Header thông tin cá nhân */}
             <div
               style={{
@@ -922,20 +1085,23 @@ const AdminUsers = () => {
             {/* Lưới thông tin chi tiết */}
             <div className="form-grid-2" style={{ gap: '0.75rem' }}>
               {[
-                { label: 'Mã tài khoản', value: `#${detailUser.id}` },
+                { label: 'ID khách hàng', value: `#${detailUser.id}` },
                 { label: 'Số điện thoại', value: detailUser.phone || 'Chưa cập nhật' },
                 {
                   label: 'Vai trò hệ thống',
                   value: detailUser.role === 'ADMIN' ? 'Quản trị viên (ADMIN)' : 'Khách hàng (USER)'
                 },
                 {
-                  label: 'Trạng thái',
-                  value: detailUser.status === 'LOCKED' ? 'Đã khóa (LOCKED)' : 'Đang hoạt động (ACTIVE)'
+                  label: 'Trạng thái tài khoản',
+                  value:
+                    detailUser.status === 'LOCKED'
+                      ? 'Đã khóa (LOCKED)'
+                      : 'Đang hoạt động (ACTIVE)'
                 },
-                { label: 'Ngày tạo tài khoản', value: fmtDateTime(detailUser.createdAt) },
+                { label: 'Ngày đăng ký', value: fmtDateTime(detailUser.createdAt) },
                 {
                   label: 'Tổng đơn hàng đã đặt',
-                  value: detailLoading ? 'Đang tính...' : `${detailUser.orderCount ?? 0} đơn hàng`
+                  value: detailLoading ? 'Đang tải...' : `${detailUser.orderCount ?? 0} đơn hàng`
                 }
               ].map((info) => (
                 <div
@@ -961,30 +1127,61 @@ const AdminUsers = () => {
                 </div>
               ))}
 
+              {/* Địa chỉ thực tế từ Backend */}
               <div
                 className="col-span-full"
                 style={{
                   backgroundColor: '#f8fafc',
                   borderRadius: '8px',
-                  padding: '0.75rem 0.85rem',
+                  padding: '0.8rem 0.9rem',
                   border: '1px solid #e2e8f0'
                 }}
               >
-                <div style={{ fontSize: '0.74rem', color: '#64748b' }}>Địa chỉ mặc định</div>
+                <div style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>
+                  📍 Địa chỉ nhận hàng thực tế
+                </div>
                 <div
                   style={{
                     fontWeight: 600,
                     color: '#0f172a',
                     fontSize: '0.88rem',
-                    marginTop: '0.2rem'
+                    marginTop: '0.25rem'
                   }}
                 >
-                  {detailUser.address || 'Chưa cập nhật'}
+                  {detailLoading ? 'Đang tải địa chỉ...' : detailUser.address || 'Chưa cập nhật'}
                 </div>
+                {detailUser.defaultAddress?.receiverName && (
+                  <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.2rem' }}>
+                    Người nhận: <strong>{detailUser.defaultAddress.receiverName}</strong>
+                    {detailUser.defaultAddress.phone ? ` • 📞 ${detailUser.defaultAddress.phone}` : ''}
+                  </div>
+                )}
+
+                {Array.isArray(detailUser.addresses) && detailUser.addresses.length > 1 && (
+                  <div
+                    style={{
+                      marginTop: '0.55rem',
+                      paddingTop: '0.5rem',
+                      borderTop: '1px dashed #cbd5e1',
+                      fontSize: '0.78rem',
+                      color: '#475569'
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>
+                      Sổ địa chỉ đã lưu ({detailUser.addresses.length}):
+                    </div>
+                    {detailUser.addresses.map((addr, i) => (
+                      <div key={addr.id || i} style={{ marginBottom: '0.2rem' }}>
+                        • {formatCustomerAddress(addr)}
+                        {addr.isDefault ? ' (Mặc định)' : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Thống kê & Lịch sử đơn hàng của tài khoản (nếu có) */}
+            {/* Thống kê & Lịch sử mua hàng thực tế */}
             <div
               style={{
                 borderTop: '1px solid #e2e8f0',
@@ -998,23 +1195,40 @@ const AdminUsers = () => {
                   justifyContent: 'space-between',
                   flexWrap: 'wrap',
                   gap: '0.5rem',
-                  marginBottom: '0.65rem'
+                  marginBottom: '0.75rem'
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0f172a' }}>
-                  📦 Lịch sử đơn hàng ({detailUser.orderCount ?? 0} đơn)
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
+                    📦 Lịch sử mua hàng ({detailUser.orderCount ?? 0} đơn)
+                  </div>
+                  {!detailLoading && (detailUser.orderCount ?? 0) > 0 && (
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                      Hoàn thành: <strong style={{ color: '#16a34a' }}>{detailUser.completedOrderCount ?? 0}</strong> • Đã hủy:{' '}
+                      <strong style={{ color: '#dc2626' }}>{detailUser.cancelledOrderCount ?? 0}</strong>
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: '0.82rem', color: '#475569' }}>
-                  Tổng chi tiêu:{' '}
-                  <strong style={{ color: '#2563eb' }}>
+                <div
+                  style={{
+                    fontSize: '0.85rem',
+                    color: '#475569',
+                    backgroundColor: '#eff6ff',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid #bfdbfe'
+                  }}
+                >
+                  Tổng chi tiêu thực tế:{' '}
+                  <strong style={{ color: '#2563eb', fontSize: '0.95rem' }}>
                     {formatCurrency(detailUser.totalSpent ?? 0)}
                   </strong>
                 </div>
               </div>
 
               {detailLoading ? (
-                <div style={{ fontSize: '0.85rem', color: '#64748b', padding: '0.5rem 0' }}>
-                  Đang tải dữ liệu đơn hàng...
+                <div style={{ fontSize: '0.85rem', color: '#64748b', padding: '0.75rem 0', textAlign: 'center' }}>
+                  Đang tải lịch sử mua hàng từ máy chủ...
                 </div>
               ) : Array.isArray(detailUser.orders) && detailUser.orders.length > 0 ? (
                 <div
@@ -1022,11 +1236,12 @@ const AdminUsers = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.5rem',
-                    maxHeight: '180px',
-                    overflowY: 'auto'
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    paddingRight: '2px'
                   }}
                 >
-                  {detailUser.orders.slice(0, 5).map((ord) => (
+                  {detailUser.orders.map((ord) => (
                     <div
                       key={ord.id}
                       style={{
@@ -1035,20 +1250,27 @@ const AdminUsers = () => {
                         justifyContent: 'space-between',
                         gap: '0.5rem',
                         flexWrap: 'wrap',
-                        padding: '0.55rem 0.75rem',
+                        padding: '0.6rem 0.8rem',
                         borderRadius: '8px',
                         backgroundColor: '#f8fafc',
                         border: '1px solid #e2e8f0',
                         fontSize: '0.82rem'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <strong style={{ color: '#0f172a' }}>#{ord.id}</strong>
-                        <span style={{ color: '#64748b' }}>{fmtDate(ord.createdAt)}</span>
-                        <OrderStatus status={ord.status} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <strong style={{ color: '#0f172a' }}>Đơn #{ord.id}</strong>
+                          <span style={{ color: '#64748b' }}>{fmtDateTime(ord.createdAt)}</span>
+                          <OrderStatus status={ord.status} />
+                        </div>
+                        {ord.shippingAddress && (
+                          <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                            📍 {ord.shippingAddress}
+                          </div>
+                        )}
                       </div>
-                      <strong style={{ color: '#dc2626' }}>
-                        {formatCurrency(ord.totalAmount || 0)}
+                      <strong style={{ color: '#dc2626', fontSize: '0.88rem' }}>
+                        {formatCurrency(ord.finalAmount ?? ord.totalAmount ?? 0)}
                       </strong>
                     </div>
                   ))}
@@ -1056,15 +1278,16 @@ const AdminUsers = () => {
               ) : (
                 <div
                   style={{
-                    padding: '0.85rem',
+                    padding: '1rem',
                     borderRadius: '8px',
                     backgroundColor: '#f8fafc',
+                    border: '1px dashed #cbd5e1',
                     color: '#64748b',
-                    fontSize: '0.82rem',
+                    fontSize: '0.84rem',
                     textAlign: 'center'
                   }}
                 >
-                  Tài khoản này chưa phát sinh đơn hàng nào trên hệ thống.
+                  Khách hàng này chưa phát sinh đơn hàng nào trên hệ thống.
                 </div>
               )}
             </div>
@@ -1082,7 +1305,7 @@ const AdminUsers = () => {
               }}
             >
               <div>
-                {detailUser.role === 'USER' && (
+                {detailUser.role !== 'ADMIN' && (
                   <Button
                     variant={detailUser.status === 'LOCKED' ? 'primary' : 'danger'}
                     size="sm"

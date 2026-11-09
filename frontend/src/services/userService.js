@@ -1,7 +1,5 @@
 import api from './api.js';
 import { getUser, setUser } from '../utils/auth.js';
-import { MOCK_USERS } from '../mock/mockUsers';
-import orderService from './orderService';
 
 /**
  * Vietnamese phone number validation regex:
@@ -14,110 +12,84 @@ export const isValidVietnamesePhone = (phone) => {
   return VN_PHONE_REGEX.test(phone.trim());
 };
 
-const MOCK_USERS_STORAGE_KEY = 'shopmart_mock_users';
-
 const DEFAULT_AVATAR =
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80';
 
 /**
- * Chuẩn hóa đối tượng user để đảm bảo luôn có đủ các trường:
- * id, name, fullName, email, avatar, role ('USER' | 'ADMIN'), roles, status ('ACTIVE' | 'LOCKED'), createdAt, phone, address
+ * Định dạng đối tượng AddressResponse từ Backend thành chuỗi địa chỉ hiển thị
  */
-export const normalizeMockUser = (u, index = 0) => {
+export const formatCustomerAddress = (addr) => {
+  if (!addr) return 'Chưa cập nhật';
+  if (typeof addr === 'string') {
+    return addr.trim() || 'Chưa cập nhật';
+  }
+  if (addr.fullAddress && String(addr.fullAddress).trim()) {
+    return String(addr.fullAddress).trim();
+  }
+  const parts = [addr.addressLine, addr.ward, addr.district, addr.city]
+    .map((part) => (part ? String(part).trim() : ''))
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : 'Chưa cập nhật';
+};
+
+/**
+ * Chuẩn hóa đối tượng user/customer từ Backend DTO (UserSummaryResponse / UserProfileResponse)
+ */
+export const normalizeUser = (u) => {
   if (!u || typeof u !== 'object') return null;
 
-  const rawRoles = Array.isArray(u.roles) ? u.roles : [];
+  const rawRoles = Array.isArray(u.roles)
+    ? u.roles
+    : u.roles instanceof Set
+      ? Array.from(u.roles)
+      : [];
   const isRoleAdmin =
     u.role === 'ADMIN' ||
     rawRoles.some((r) => String(r).toUpperCase().includes('ADMIN'));
 
   const resolvedRole = isRoleAdmin ? 'ADMIN' : 'USER';
-  const resolvedRoles = isRoleAdmin ? ['ROLE_ADMIN'] : ['ROLE_USER'];
-  const resolvedName = u.name || u.fullName || 'Người dùng ShopMart';
+  const resolvedRoles =
+    rawRoles.length > 0 ? rawRoles : isRoleAdmin ? ['ROLE_ADMIN'] : ['ROLE_USER'];
+  const resolvedName = (u.fullName || u.name || '').trim() || 'Khách hàng';
   const resolvedStatus =
     u.status === 'LOCKED' || u.status === 'BLOCKED' ? 'LOCKED' : 'ACTIVE';
 
+  const rawAddresses = Array.isArray(u.addresses) ? u.addresses : [];
+  const primaryAddressObj =
+    u.defaultAddress ||
+    rawAddresses.find((a) => a && a.isDefault) ||
+    rawAddresses[0] ||
+    null;
+
+  const resolvedAddress =
+    primaryAddressObj
+      ? formatCustomerAddress(primaryAddressObj)
+      : u.address && u.address !== 'Chưa cập nhật'
+        ? String(u.address).trim()
+        : 'Chưa cập nhật';
+
   return {
     ...u,
-    id: u.id ?? index + 1,
+    id: u.id,
     name: resolvedName,
-    fullName: u.fullName || resolvedName,
+    fullName: resolvedName,
     email: u.email || '',
     avatar: u.avatar || u.avatarUrl || DEFAULT_AVATAR,
-    phone: u.phone || 'Chưa cập nhật',
-    address: u.address || 'Chưa cập nhật',
+    phone: u.phone && String(u.phone).trim() ? String(u.phone).trim() : 'Chưa cập nhật',
+    address: resolvedAddress,
+    defaultAddress: primaryAddressObj,
+    addresses: rawAddresses,
     role: resolvedRole,
     roles: resolvedRoles,
     status: resolvedStatus,
-    createdAt: u.createdAt || new Date(Date.now() - index * 86400000 * 3).toISOString()
+    rawStatus: u.status || (resolvedStatus === 'LOCKED' ? 'BLOCKED' : 'ACTIVE'),
+    createdAt: u.createdAt || null,
+    updatedAt: u.updatedAt || null
   };
 };
 
-/**
- * Đọc danh sách tài khoản từ localStorage và hợp nhất với MOCK_USERS mặc định
- */
-export const loadStoredUsers = () => {
-  try {
-    const raw = localStorage.getItem(MOCK_USERS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const existingByEmail = new Map(
-          parsed
-            .filter((item) => item && item.email)
-            .map((item) => [item.email.toLowerCase(), item])
-        );
-
-        const merged = [...parsed];
-        for (const seedUser of MOCK_USERS) {
-          const emailKey = seedUser.email.toLowerCase();
-          if (!existingByEmail.has(emailKey)) {
-            merged.push(seedUser);
-          } else {
-            const idx = merged.findIndex(
-              (item) => item?.email?.toLowerCase() === emailKey
-            );
-            if (idx !== -1) {
-              merged[idx] = {
-                ...seedUser,
-                ...merged[idx],
-                name: merged[idx].name || merged[idx].fullName || seedUser.name,
-                fullName: merged[idx].fullName || merged[idx].name || seedUser.fullName,
-                avatar: merged[idx].avatar || merged[idx].avatarUrl || seedUser.avatar,
-                role: merged[idx].role || seedUser.role,
-                status: merged[idx].status || seedUser.status || 'ACTIVE',
-                createdAt: merged[idx].createdAt || seedUser.createdAt
-              };
-            }
-          }
-        }
-
-        const normalizedList = merged
-          .map((item, idx) => normalizeMockUser(item, idx))
-          .filter(Boolean);
-        persistUsers(normalizedList);
-        return normalizedList;
-      }
-    }
-  } catch (err) {
-    console.warn('Không thể đọc danh sách tài khoản từ localStorage:', err);
-  }
-
-  const initialList = MOCK_USERS.map((item, idx) => normalizeMockUser(item, idx)).filter(Boolean);
-  persistUsers(initialList);
-  return initialList;
-};
-
-export const persistUsers = (users) => {
-  try {
-    localStorage.setItem(MOCK_USERS_STORAGE_KEY, JSON.stringify(users));
-    window.dispatchEvent(new Event('app_users_changed'));
-  } catch (err) {
-    console.warn('Không thể lưu danh sách tài khoản vào localStorage:', err);
-  }
-};
-
-const delay = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
+// Giữ alias tương thích ngược nếu có module khác import
+export const normalizeMockUser = normalizeUser;
 
 const userService = {
   /**
@@ -233,133 +205,201 @@ const userService = {
     return await api.delete(`/users/me/addresses/${id}`);
   },
 
-  /** Lấy toàn bộ danh sách tài khoản (ưu tiên gọi API Backend, fallback Mock Data) */
-  async getAllUsers() {
-    try {
-      const response = await api.get('/admin/users', { params: { page: 0, size: 100 } });
-      const rawList = Array.isArray(response?.content)
-        ? response.content
-        : Array.isArray(response)
-          ? response
-          : [];
-      if (rawList.length > 0) {
-        const normalized = rawList
-          .map((item, idx) => normalizeMockUser(item, idx))
-          .filter(Boolean);
-        persistUsers(normalized);
-        return normalized;
-      }
-    } catch {
-      // Fallback sang localStorage + MOCK_USERS khi Backend chưa chạy
-    }
-    await delay();
-    return loadStoredUsers();
-  },
+  /**
+   * [Task ECOM-145 / ECOM-325]
+   * Lấy danh sách khách hàng có phân trang, tìm kiếm và lọc trạng thái từ Backend
+   * (GET /api/v1/admin/customers)
+   */
+  async getCustomers(params = {}) {
+    const queryParams = {
+      page: params.page ?? 0,
+      size: params.size ?? 100,
+      sortBy: params.sortBy || 'id',
+      sortDir: params.sortDir || 'desc'
+    };
 
-  /** Lấy thông tin chi tiết một tài khoản kèm thống kê đơn hàng từ Mock Orders */
-  async getUserById(id) {
-    await delay(60);
-    const users = loadStoredUsers();
-    const found = users.find((u) => String(u.id) === String(id));
-    if (!found) {
-      throw new Error(`Không tìm thấy tài khoản #${id}`);
+    if (params.keyword && String(params.keyword).trim()) {
+      queryParams.keyword = String(params.keyword).trim();
     }
 
-    const userOrders = await this.getUserOrders(found);
-    const totalSpent = userOrders
-      .filter((o) => o.status !== 'CANCELLED')
-      .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+    if (params.status && params.status !== 'ALL') {
+      queryParams.status =
+        params.status === 'LOCKED' || params.status === 'BLOCKED' ? 'BLOCKED' : 'ACTIVE';
+    }
+
+    const response = await api.get('/admin/customers', { params: queryParams });
+    const rawList = Array.isArray(response?.content)
+      ? response.content
+      : Array.isArray(response)
+        ? response
+        : [];
+
+    const normalizedList = rawList.map((item) => normalizeUser(item)).filter(Boolean);
 
     return {
-      ...found,
+      content: normalizedList,
+      totalElements: Number(response?.totalElements ?? normalizedList.length),
+      totalPages: Number(response?.totalPages ?? 1),
+      page: Number(response?.page ?? queryParams.page),
+      size: Number(response?.size ?? queryParams.size)
+    };
+  },
+
+  /**
+   * Lấy danh sách tài khoản hệ thống từ API thật của Backend:
+   * - Gọi GET /api/v1/admin/customers để lấy danh sách khách hàng
+   * - Kết hợp GET /api/v1/admin/users để bổ sung các tài khoản ADMIN phục vụ bộ lọc vai trò
+   * Tuyệt đối không sử dụng localStorage hay MOCK_USERS.
+   */
+  async getAllUsers(params = {}) {
+    const [customersResult, usersResult] = await Promise.allSettled([
+      this.getCustomers({ page: 0, size: 100, ...params }),
+      api.get('/admin/users', { params: { page: 0, size: 100, sortBy: 'id', sortDir: 'desc' } })
+    ]);
+
+    if (customersResult.status === 'rejected' && usersResult.status === 'rejected') {
+      throw customersResult.reason || usersResult.reason || new Error('Không thể tải danh sách khách hàng từ máy chủ.');
+    }
+
+    const mergedMap = new Map();
+
+    if (customersResult.status === 'fulfilled' && Array.isArray(customersResult.value?.content)) {
+      for (const customer of customersResult.value.content) {
+        if (customer && customer.id != null) {
+          mergedMap.set(String(customer.id), customer);
+        }
+      }
+    }
+
+    if (usersResult.status === 'fulfilled') {
+      const rawUsers = Array.isArray(usersResult.value?.content)
+        ? usersResult.value.content
+        : Array.isArray(usersResult.value)
+          ? usersResult.value
+          : [];
+      for (const rawUser of rawUsers) {
+        const normalized = normalizeUser(rawUser);
+        if (normalized && normalized.id != null && !mergedMap.has(String(normalized.id))) {
+          mergedMap.set(String(normalized.id), normalized);
+        }
+      }
+    }
+
+    return Array.from(mergedMap.values()).sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+  },
+
+  /**
+   * [Task ECOM-145]
+   * Xem chi tiết hồ sơ khách hàng kèm địa chỉ thực tế và lịch sử mua hàng từ Backend:
+   * - GET /api/v1/admin/customers/{id}
+   * - GET /api/v1/admin/orders/customer/{userId}
+   */
+  async getUserById(id) {
+    if (id == null || id === '') {
+      throw new Error('Mã khách hàng không hợp lệ.');
+    }
+
+    const [profileRes, userOrders] = await Promise.all([
+      api.get(`/admin/customers/${id}`),
+      this.getUserOrders(id)
+    ]);
+
+    const normalizedProfile = normalizeUser(profileRes);
+    if (!normalizedProfile) {
+      throw new Error(`Không tìm thấy thông tin khách hàng #${id}`);
+    }
+
+    const REVENUE_EXCLUDED = new Set(['CANCELLED', 'FAILED', 'REFUNDED']);
+    const totalSpent = userOrders
+      .filter((o) => !REVENUE_EXCLUDED.has(String(o.status || '').toUpperCase()))
+      .reduce((sum, o) => sum + Number(o.finalAmount ?? o.totalAmount ?? 0), 0);
+
+    const completedOrderCount = userOrders.filter(
+      (o) => String(o.status || '').toUpperCase() === 'DELIVERED'
+    ).length;
+
+    const cancelledOrderCount = userOrders.filter(
+      (o) => String(o.status || '').toUpperCase() === 'CANCELLED'
+    ).length;
+
+    return {
+      ...normalizedProfile,
       orders: userOrders,
       orderCount: userOrders.length,
+      completedOrderCount,
+      cancelledOrderCount,
       totalSpent
     };
   },
 
-  /** Tìm danh sách đơn hàng của một tài khoản từ dữ liệu Order hiện tại */
-  async getUserOrders(user) {
-    if (!user) return [];
-    try {
-      const allOrdersRes = await orderService.getAllOrders();
-      const allOrders = Array.isArray(allOrdersRes?.content)
-        ? allOrdersRes.content
-        : Array.isArray(allOrdersRes)
-          ? allOrdersRes
-          : [];
-      if (!Array.isArray(allOrders)) return [];
+  /**
+   * [Task ECOM-143 / ECOM-145]
+   * Lấy danh sách lịch sử đơn hàng thực tế của một khách hàng từ Backend:
+   * GET /api/v1/admin/orders/customer/{userId}
+   */
+  async getUserOrders(userOrId) {
+    const userId =
+      userOrId && typeof userOrId === 'object' ? userOrId.id : userOrId;
+    if (userId == null || userId === '') return [];
 
-      const cleanEmail = (user.email || '').trim().toLowerCase();
-      const cleanPhone = (user.phone || '').replace(/\s+/g, '');
+    const response = await api.get(`/admin/orders/customer/${userId}`);
+    const rawOrders = Array.isArray(response?.content)
+      ? response.content
+      : Array.isArray(response)
+        ? response
+        : [];
 
-      return allOrders.filter((order) => {
-        const orderEmail = (order.userEmail || '').trim().toLowerCase();
-        const orderPhone = (order.receiverPhone || '').replace(/\s+/g, '');
-        if (cleanEmail && orderEmail && cleanEmail === orderEmail) return true;
-        if (cleanPhone && cleanPhone !== 'Chưacậpnhật' && orderPhone && cleanPhone === orderPhone) {
-          return true;
-        }
-        return false;
-      });
-    } catch {
-      return [];
-    }
+    return [...rawOrders].sort((a, b) => {
+      const timeA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
   },
 
   /**
-   * Cập nhật trạng thái tài khoản (ACTIVE / LOCKED)
+   * [Task ECOM-145]
+   * Đếm tổng số lượng khách hàng từ Backend (GET /api/v1/admin/customers/count)
    */
-  async updateUserStatus(id, nextStatus, currentAdminEmail = '') {
-    await delay(100);
-    const users = loadStoredUsers();
-    const idx = users.findIndex((u) => String(u.id) === String(id));
-    if (idx === -1) {
-      throw new Error('Không tìm thấy tài khoản cần cập nhật.');
+  async countCustomers() {
+    const count = await api.get('/admin/customers/count');
+    return Number(count ?? 0);
+  },
+
+  /**
+   * [Task ECOM-145]
+   * Cập nhật trạng thái tài khoản khách hàng (PUT /api/v1/admin/customers/{id}/status)
+   */
+  async updateUserStatus(id, nextStatus) {
+    if (id == null || id === '') {
+      throw new Error('Mã khách hàng không hợp lệ.');
     }
 
-    const target = users[idx];
+    const resolvedFrontendStatus =
+      nextStatus === 'LOCKED' || nextStatus === 'BLOCKED' ? 'LOCKED' : 'ACTIVE';
+    const backendStatus = resolvedFrontendStatus === 'LOCKED' ? 'BLOCKED' : 'ACTIVE';
 
-    if (
-      currentAdminEmail &&
-      target.email.toLowerCase() === currentAdminEmail.trim().toLowerCase()
-    ) {
-      throw new Error('Không thể tự khóa hoặc thay đổi trạng thái tài khoản Admin đang đăng nhập.');
-    }
+    const response = await api.put(`/admin/customers/${id}/status`, {
+      status: backendStatus
+    });
 
-    if (target.role === 'ADMIN') {
-      throw new Error('Không được phép khóa tài khoản có vai trò Quản trị viên (ADMIN).');
-    }
-
-    const resolvedStatus = nextStatus === 'LOCKED' ? 'LOCKED' : 'ACTIVE';
-
-    if (Number.isFinite(Number(id))) {
-      try {
-        await api.put(`/admin/users/${id}/status`, {
-          status: resolvedStatus === 'LOCKED' ? 'BLOCKED' : 'ACTIVE'
-        });
-      } catch {
-        // Fallback offline localStorage
+    const normalized = normalizeUser(response);
+    return (
+      normalized || {
+        id,
+        status: resolvedFrontendStatus,
+        rawStatus: backendStatus
       }
-    }
-
-    users[idx] = {
-      ...target,
-      status: resolvedStatus
-    };
-
-    persistUsers(users);
-    return { ...users[idx] };
+    );
   },
 
-  /** Khóa tài khoản USER (chuyển status -> LOCKED) */
-  async lockUser(id, currentAdminEmail = '') {
-    return this.updateUserStatus(id, 'LOCKED', currentAdminEmail);
+  /** Khóa tài khoản khách hàng (chuyển status -> BLOCKED / LOCKED) */
+  async lockUser(id) {
+    return this.updateUserStatus(id, 'LOCKED');
   },
 
-  /** Mở khóa tài khoản USER (chuyển status -> ACTIVE) */
-  async unlockUser(id, currentAdminEmail = '') {
-    return this.updateUserStatus(id, 'ACTIVE', currentAdminEmail);
+  /** Mở khóa tài khoản khách hàng (chuyển status -> ACTIVE) */
+  async unlockUser(id) {
+    return this.updateUserStatus(id, 'ACTIVE');
   }
 };
 

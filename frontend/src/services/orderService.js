@@ -897,25 +897,87 @@ export const orderService = {
     };
   },
 
-  // Admin thống kê dashboard (GET /api/admin/orders/stats)
-  getOrderStats: async () => {
-    try {
-      return await api.get('/admin/orders/stats');
-    } catch (err) {
-      const orders = getStoredOrders();
-      const totalRevenue = orders
-        .filter((o) => o.status !== ORDER_STATUS.CANCELLED)
-        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      const totalOrders = orders.length;
-      const pendingOrders = orders.filter((o) => o.status === ORDER_STATUS.PENDING).length;
-
-      return {
-        totalRevenue,
-        totalOrders,
-        pendingOrders,
-        totalUsers: 154
-      };
+  /**
+   * [Task ECOM-145 / ECOM-326]
+   * Lấy báo cáo thống kê doanh thu & đơn hàng từ Backend:
+   * - Ưu tiên gọi GET /api/v1/admin/statistics (hỗ trợ startDate, endDate định dạng YYYY-MM-DD)
+   * - Fallback sang GET /api/v1/admin/orders/stats nếu không truyền bộ lọc ngày
+   * Tuyệt đối không sử dụng dữ liệu giả hoặc hardcode khi API thất bại.
+   */
+  getOrderStats: async (params = {}) => {
+    const queryParams = {};
+    if (params.startDate && String(params.startDate).trim()) {
+      queryParams.startDate = String(params.startDate).trim();
     }
+    if (params.endDate && String(params.endDate).trim()) {
+      queryParams.endDate = String(params.endDate).trim();
+    }
+
+    let rawStats;
+    try {
+      rawStats = await api.get('/admin/statistics', { params: queryParams });
+    } catch (primaryErr) {
+      if (!queryParams.startDate && !queryParams.endDate) {
+        rawStats = await api.get('/admin/orders/stats');
+      } else {
+        throw primaryErr;
+      }
+    }
+
+    const statusMap =
+      rawStats?.ordersByStatus && typeof rawStats.ordersByStatus === 'object'
+        ? rawStats.ordersByStatus
+        : {};
+
+    const getCount = (key) => Number(statusMap[key] ?? 0);
+
+    const pendingOrders = Number(rawStats?.pendingOrders ?? getCount('PENDING'));
+    const completedOrders = Number(rawStats?.completedOrders ?? getCount('DELIVERED'));
+    const cancelledOrders = Number(rawStats?.cancelledOrders ?? getCount('CANCELLED'));
+    const processingOrders =
+      getCount('PAID') +
+      getCount('CONFIRMED') +
+      getCount('PROCESSING') +
+      getCount('SHIPPING');
+
+    return {
+      totalOrders: Number(rawStats?.totalOrders ?? 0),
+      totalRevenue: Number(rawStats?.totalRevenue ?? 0),
+      ordersByStatus: {
+        PENDING: getCount('PENDING'),
+        PAID: getCount('PAID'),
+        CONFIRMED: getCount('CONFIRMED'),
+        PROCESSING: getCount('PROCESSING'),
+        SHIPPING: getCount('SHIPPING'),
+        DELIVERED: getCount('DELIVERED'),
+        CANCELLED: getCount('CANCELLED'),
+        FAILED: getCount('FAILED'),
+        REFUNDED: getCount('REFUNDED'),
+        ...statusMap
+      },
+      pendingOrders,
+      completedOrders,
+      cancelledOrders,
+      processingOrders,
+      lowStockProductsCount: Number(rawStats?.lowStockProductsCount ?? 0),
+      totalUsers: Number(rawStats?.totalUsers ?? 0)
+    };
+  },
+
+  /**
+   * Lấy danh sách đơn hàng thực tế từ Backend cho Dashboard (GET /api/v1/admin/orders)
+   * Không dùng localStorage fallback để đảm bảo tính chính xác của số liệu thống kê.
+   */
+  getRealOrdersForDashboard: async (size = 100) => {
+    const response = await api.get('/admin/orders', {
+      params: { page: 0, size, sortBy: 'id', sortDir: 'desc' }
+    });
+    const content = Array.isArray(response?.content)
+      ? response.content
+      : Array.isArray(response)
+        ? response
+        : [];
+    return content.map((item) => normalizeOrderFromBackend(item)).filter(Boolean);
   }
 };
 
