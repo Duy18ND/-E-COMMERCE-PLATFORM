@@ -210,5 +210,35 @@ class ReviewControllerTest {
 
         verify(reviewService, times(1)).deleteReview(1L, 100L, 10L, "ROLE_CUSTOMER");
     }
+
+    @Test
+    @DisplayName("[Task ECOM-177 / ECOM-351] POST /api/v1/products/{id}/reviews: Rating ngoài khoảng 1-5 (rating=6) -> Trả về 400 Bad Request")
+    void createReview_InvalidRating_ShouldReturn400() throws Exception {
+        CreateReviewRequest req = new CreateReviewRequest();
+        req.setOrderId(500L);
+        req.setRating(6);
+        req.setComment("Rating vượt mức");
+
+        mockMvc.perform(post("/api/v1/products/1/reviews")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(reviewService);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-177 / ECOM-193] DELETE /api/v1/products/{id}/reviews/{reviewId}: Admin xoá không cần X-User-Id -> Trả về 200 OK")
+    void deleteReview_AdminWithoutUserId_ShouldReturn200() throws Exception {
+        doNothing().when(reviewService).deleteReview(1L, 100L, null, "ROLE_ADMIN");
+
+        mockMvc.perform(delete("/api/v1/products/1/reviews/100")
+                        .header("X-User-Roles", "ROLE_ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(reviewService, times(1)).deleteReview(1L, 100L, null, "ROLE_ADMIN");
+    }
 }
 

@@ -5,11 +5,14 @@ import com.ecommerce.order.dto.request.VoucherRequest;
 import com.ecommerce.order.dto.response.ApplyVoucherResponse;
 import com.ecommerce.order.dto.response.VoucherResponse;
 import com.ecommerce.order.entity.Voucher;
+import com.ecommerce.order.entity.VoucherUsage;
 import com.ecommerce.order.enums.DiscountType;
 import com.ecommerce.order.enums.VoucherStatus;
+import com.ecommerce.order.enums.VoucherUsageStatus;
 import com.ecommerce.order.exception.DuplicateResourceException;
 import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.repository.VoucherRepository;
+import com.ecommerce.order.repository.VoucherUsageRepository;
 import com.ecommerce.order.service.impl.VoucherServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +27,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,6 +45,9 @@ class VoucherServiceTest {
     @Mock
     private VoucherRepository voucherRepository;
 
+    @Mock
+    private VoucherUsageRepository voucherUsageRepository;
+
     @InjectMocks
     private VoucherServiceImpl voucherService;
 
@@ -45,6 +56,7 @@ class VoucherServiceTest {
 
     @BeforeEach
     void setUp() {
+        voucherService.setVoucherUsageRepository(voucherUsageRepository);
         sampleFixedVoucher = Voucher.builder()
                 .id(1L)
                 .code("GIAM50K")
@@ -361,6 +373,128 @@ class VoucherServiceTest {
         voucherService.restoreVoucherUsage("GIAM50K");
 
         verify(voucherRepository, times(1)).decrementUsedQuantityByCode("GIAM50K");
+    }
+
+    // =========================================================================
+    // [Task ECOM-166 / ECOM-167 / ECOM-183 / ECOM-185] Per-User Usage & Concurrency Tests
+    // =========================================================================
+
+    @Test
+    @DisplayName("[Task ECOM-167 / ECOM-185] Chặn dùng trùng: Cùng user áp lại voucher đang có trạng thái APPLIED -> Ném IllegalStateException")
+    void applyVoucher_SameUserAlreadyUsed_ShouldThrowIllegalStateException() {
+        when(voucherRepository.findByCodeIgnoreCase("GIAM50K")).thenReturn(Optional.of(sampleFixedVoucher));
+        when(voucherUsageRepository.existsByVoucherIdAndUserIdAndStatus(1L, 100L, VoucherUsageStatus.APPLIED))
+                .thenReturn(true);
+
+        ApplyVoucherRequest request = ApplyVoucherRequest.builder()
+                .code("GIAM50K")
+                .orderTotal(new BigDecimal("500000.00"))
+                .userId(100L)
+                .build();
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> voucherService.applyVoucher(request));
+
+        assertThat(ex.getMessage()).contains("Bạn đã sử dụng mã giảm giá này rồi");
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-167] Lấy danh sách voucher khả dụng cho user: Tự động lọc bỏ mã mà user đã sử dụng (APPLIED)")
+    void getAvailableVouchersForUser_FiltersAlreadyUsedVouchers() {
+        when(voucherRepository.findAvailableForCustomer(eq(VoucherStatus.ACTIVE), any(LocalDate.class)))
+                .thenReturn(List.of(sampleFixedVoucher, samplePercentVoucher));
+        when(voucherUsageRepository.findByUserIdAndStatus(100L, VoucherUsageStatus.APPLIED))
+                .thenReturn(List.of(VoucherUsage.builder()
+                        .id(10L)
+                        .voucherId(1L)
+                        .voucherCode("GIAM50K")
+                        .userId(100L)
+                        .status(VoucherUsageStatus.APPLIED)
+                        .build()));
+
+        List<VoucherResponse> result = voucherService.getAvailableVouchersForUser(100L);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getCode()).isEqualTo("SALE10");
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-183 / ECOM-185] Khi đơn hàng bị hủy hoặc lỗi thanh toán -> Hoàn lượt về RESTORED và cho phép user dùng lại mã")
+    void restoreVoucherUsageForOrder_TransitionsToRestoredAndAllowsReuse() {
+        VoucherUsage activeUsage = VoucherUsage.builder()
+                .id(55L)
+                .voucherId(1L)
+                .voucherCode("GIAM50K")
+                .userId(100L)
+                .orderId(900L)
+                .discountAmount(new BigDecimal("50000.00"))
+                .status(VoucherUsageStatus.APPLIED)
+                .build();
+
+        when(voucherUsageRepository.findFirstByVoucherCodeIgnoreCaseAndOrderIdAndStatusOrderByIdDesc(
+                "GIAM50K", 900L, VoucherUsageStatus.APPLIED))
+                .thenReturn(Optional.of(activeUsage));
+
+        voucherService.restoreVoucherUsageForOrder("GIAM50K", 100L, 900L);
+
+        assertThat(activeUsage.getStatus()).isEqualTo(VoucherUsageStatus.RESTORED);
+        verify(voucherUsageRepository, times(1)).save(activeUsage);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-183 / ECOM-185] Concurrency: 2 người cùng dùng lượt cuối (99/100) -> Chỉ 1 người thành công, 1 người bị từ chối")
+    void redeemVoucherForOrder_TwoUsersCompetingForLastSlot_OnlyOneSucceeds() throws InterruptedException {
+        sampleFixedVoucher.setQuantity(100);
+        sampleFixedVoucher.setUsedQuantity(99);
+
+        AtomicInteger remainingSlots = new AtomicInteger(1);
+
+        when(voucherRepository.findByCodeIgnoreCase("GIAM50K")).thenReturn(Optional.of(sampleFixedVoucher));
+        when(voucherUsageRepository.existsByVoucherCodeIgnoreCaseAndUserIdAndStatus(
+                eq("GIAM50K"), any(Long.class), eq(VoucherUsageStatus.APPLIED)))
+                .thenReturn(false);
+        when(voucherRepository.incrementUsedQuantityAtomically(eq(1L), any(LocalDate.class)))
+                .thenAnswer(inv -> remainingSlots.getAndDecrement() > 0 ? 1 : 0);
+
+        int threads = 2;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch readyLatch = new CountDownLatch(threads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threads);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threads; i++) {
+            final long userId = 200L + i;
+            final long orderId = 1000L + i;
+            executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startLatch.await();
+                    BigDecimal discount = voucherService.redeemVoucherForOrder(
+                            "GIAM50K", new BigDecimal("500000.00"), userId, orderId);
+                    if (discount.compareTo(new BigDecimal("50000.00")) == 0) {
+                        successCount.incrementAndGet();
+                    }
+                } catch (IllegalStateException ex) {
+                    failureCount.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        readyLatch.await(5, TimeUnit.SECONDS);
+        startLatch.countDown();
+        doneLatch.await(5, TimeUnit.SECONDS);
+        executor.shutdownNow();
+
+        assertThat(successCount.get()).isEqualTo(1);
+        assertThat(failureCount.get()).isEqualTo(1);
+        verify(voucherUsageRepository, times(1)).save(any(VoucherUsage.class));
     }
 }
 

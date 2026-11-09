@@ -13,8 +13,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Entity mapping bảng 'vouchers' trong database 'order_db'.
- * Quản lý mã giảm giá, hạn sử dụng và giới hạn lượt sử dụng.
+ * [Task ECOM-166 / ECOM-339] Entity mapping bảng 'vouchers' trong database 'order_db'.
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+ * Quản lý mã giảm giá, điều kiện tối thiểu, hạn sử dụng và giới hạn lượt sử dụng.
  */
 @Entity
 @Table(name = "vouchers", indexes = {
