@@ -21,7 +21,7 @@ const INITIAL_MOCK_ADMIN_PRODUCTS = [
 ];
 
 const AdminProducts = () => {
-  const { showToast } = useToast();
+  const { showToast, confirmDialog, notify } = useToast();
   const [products, setProducts] = useState(INITIAL_MOCK_ADMIN_PRODUCTS);
   const [loading, setLoading] = useState(true);
 
@@ -142,29 +142,27 @@ const AdminProducts = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-      try {
-        await productService.delete(id);
-        setProducts((prev) => prev.filter((p) => String(p.id) !== String(id)));
-        if (paginatedProducts.length === 1 && currentPage > 1) {
-          setCurrentPage((prev) => prev - 1);
-        }
-        if (showToast) {
-          showToast({
-            type: 'success',
-            title: 'Đã xóa sản phẩm',
-            message: `Sản phẩm #${id} đã được xóa thành công.`
-          });
-        }
-      } catch (err) {
-        if (showToast) {
-          showToast({
-            type: 'error',
-            title: 'Lỗi xóa sản phẩm',
-            message: err.message || 'Không thể xóa sản phẩm.'
-          });
-        }
+    const targetProduct = products.find((p) => String(p.id) === String(id));
+    const productName = targetProduct ? `"${targetProduct.name}"` : `sản phẩm #${id}`;
+
+    const confirmed = await confirmDialog({
+      title: 'Xác nhận xóa sản phẩm',
+      message: `Bạn có chắc chắn muốn xóa ${productName}? Thao tác này sẽ xóa vĩnh viễn và không thể hoàn tác.`,
+      variant: 'danger',
+      confirmText: 'Xóa vĩnh viễn',
+      cancelText: 'Hủy bỏ'
+    });
+    if (!confirmed) return;
+
+    try {
+      await productService.delete(id);
+      setProducts((prev) => prev.filter((p) => String(p.id) !== String(id)));
+      if (paginatedProducts.length === 1 && currentPage > 1) {
+        setCurrentPage((prev) => prev - 1);
       }
+      notify.success(`Đã xóa ${productName} thành công.`);
+    } catch (err) {
+      notify.error(err.message || 'Không thể xóa sản phẩm.');
     }
   };
 

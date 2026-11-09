@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import useNotification from '../../hooks/useNotification';
 import authService from '../../services/authService';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -69,6 +70,7 @@ export const getPasswordStrength = (password) => {
 
 const Register = () => {
   const navigate = useNavigate();
+  const { notify } = useNotification();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -149,6 +151,7 @@ const Register = () => {
       });
 
       setSuccess('Đăng ký tài khoản thành công! Đang chuyển hướng sang trang đăng nhập...');
+      notify.success('Đăng ký tài khoản thành công! Đang chuyển hướng...');
       setTimeout(() => {
         navigate('/login');
       }, 1500);
@@ -156,7 +159,9 @@ const Register = () => {
       if (err.fieldErrors && typeof err.fieldErrors === 'object') {
         setFieldErrors(err.fieldErrors);
       }
-      setError(err.message || 'Đăng ký không thành công. Vui lòng kiểm tra lại thông tin!');
+      const errMsg = err.message || 'Đăng ký không thành công. Vui lòng kiểm tra lại thông tin!';
+      setError(errMsg);
+      notify.error(errMsg);
     } finally {
       setLoading(false);
     }

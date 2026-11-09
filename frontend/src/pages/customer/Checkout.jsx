@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
+import useNotification from '../../hooks/useNotification';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
 import voucherService, { getVoucherStatus, calcDiscount } from '../../services/voucherService';
@@ -237,6 +238,7 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { cartItems, totalItems, totalPrice, totalOriginalPrice, totalDiscount, refreshCart, addToCart } = useCart();
+  const { notify } = useNotification();
 
   const [formData, setFormData] = useState({
     receiverName:   user?.fullName || 'Nguyễn Văn A',
@@ -380,9 +382,12 @@ const Checkout = () => {
       }
 
       await refreshCart();
+      notify.success(`Đặt hàng thành công! Đơn hàng #${createdOrder?.id || ''} đã được ghi nhận.`);
       navigate('/order-success', { state: { orderId: createdOrder?.id, order: createdOrder } });
     } catch (err) {
-      setError(err.message || 'Đặt hàng không thành công. Vui lòng kiểm tra lại thông tin giỏ hàng!');
+      const errMsg = err.message || 'Đặt hàng không thành công. Vui lòng kiểm tra lại thông tin giỏ hàng!';
+      setError(errMsg);
+      notify.error(errMsg);
     } finally {
       setLoading(false);
     }

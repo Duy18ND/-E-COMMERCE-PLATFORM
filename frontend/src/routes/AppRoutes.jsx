@@ -18,6 +18,7 @@ import Checkout from '../pages/customer/Checkout';
 import OrderSuccess from '../pages/customer/OrderSuccess';
 import Orders from '../pages/customer/Orders';
 import OrderDetail from '../pages/customer/OrderDetail';
+import OrderTracking from '../pages/customer/OrderTracking';
 import Vouchers from '../pages/customer/Vouchers';
 import MyVouchers from '../pages/customer/MyVouchers';
 
@@ -60,6 +61,7 @@ const AppRoutes = () => {
           <Route path="/order-success" element={<OrderSuccess />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/orders/:id" element={<OrderDetail />} />
+          <Route path="/orders/:id/tracking" element={<OrderTracking />} />
         </Route>
       </Route>
 

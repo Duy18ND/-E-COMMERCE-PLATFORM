@@ -5,11 +5,14 @@ import { formatCurrency } from '../../utils/formatCurrency';
 import Button from '../../components/common/Button';
 import Modal from '../../components/common/Modal';
 import Pagination from '../../components/admin/Pagination';
+import useNotification from '../../hooks/useNotification';
 
 const AdminSales = () => {
   const navigate = useNavigate();
+  const { notify, confirmDialog } = useNotification();
   const [campaigns, setCampaigns] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -26,8 +29,15 @@ const AdminSales = () => {
 
   // Load campaigns from service
   const loadCampaigns = async () => {
-    const list = await saleService.getAllCampaigns();
-    setCampaigns(Array.isArray(list) ? list : []);
+    setIsLoading(true);
+    try {
+      const list = await saleService.getAllCampaigns();
+      setCampaigns(Array.isArray(list) ? list : []);
+    } catch (err) {
+      notify.error(err?.message || 'Không thể tải danh sách chiến dịch Flash Sale');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -95,31 +105,48 @@ const AdminSales = () => {
       const target = campaigns.find((c) => String(c.id) === String(id));
       await saleService.toggleCampaignStatus(id, target?.status);
       await loadCampaigns();
+      notify.success('Cập nhật trạng thái chiến dịch thành công!');
     } catch (err) {
-      alert(err?.response?.data?.message || err?.message || 'Không thể cập nhật trạng thái chiến dịch');
+      notify.error(err?.response?.data?.message || err?.message || 'Không thể cập nhật trạng thái chiến dịch');
     }
   };
 
   const handleDelete = async (id, name) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa chiến dịch "${name}"? Thao tác này không thể hoàn tác.`)) {
-      try {
-        await saleService.deleteCampaign(id);
-        await loadCampaigns();
-      } catch (err) {
-        alert(err?.response?.data?.message || err?.message || 'Không thể xóa chiến dịch');
-      }
+    const confirmed = await confirmDialog({
+      title: 'Xác nhận xóa chiến dịch',
+      message: `Bạn có chắc chắn muốn xóa chiến dịch "${name}"? Thao tác này sẽ xóa vĩnh viễn và không thể hoàn tác.`,
+      variant: 'danger',
+      confirmText: 'Xóa chiến dịch',
+      cancelText: 'Hủy bỏ'
+    });
+    if (!confirmed) return;
+
+    try {
+      await saleService.deleteCampaign(id);
+      await loadCampaigns();
+      notify.success(`Đã xóa chiến dịch "${name}" thành công!`);
+    } catch (err) {
+      notify.error(err?.response?.data?.message || err?.message || 'Không thể xóa chiến dịch');
     }
   };
 
   const handleExportReport = () => {
-    alert(`Đã xuất báo cáo chiến dịch Flash Sale (${filteredCampaigns.length} bản ghi). File CSV đã được tạo.`);
+    notify.success(`Đã xuất báo cáo chiến dịch Flash Sale (${filteredCampaigns.length} bản ghi). File CSV đã được tạo.`);
   };
 
   const handleResetData = async () => {
-    if (window.confirm('Khôi phục dữ liệu mẫu ban đầu cho toàn bộ chiến dịch Flash Sale?')) {
-      saleService.resetMockData();
-      await loadCampaigns();
-    }
+    const confirmed = await confirmDialog({
+      title: 'Khôi phục dữ liệu mẫu',
+      message: 'Bạn có chắc chắn muốn khôi phục dữ liệu mẫu ban đầu cho toàn bộ chiến dịch Flash Sale?',
+      variant: 'warning',
+      confirmText: 'Khôi phục dữ liệu',
+      cancelText: 'Hủy bỏ'
+    });
+    if (!confirmed) return;
+
+    saleService.resetMockData();
+    await loadCampaigns();
+    notify.success('Đã khôi phục dữ liệu mẫu Flash Sale thành công!');
   };
 
   return (
@@ -383,7 +410,7 @@ const AdminSales = () => {
           </div>
 
           <button
-            onClick={() => alert('Radar Live: Tải lượng hệ thống ổn định, 1,482 phiên active cùng lúc.')}
+            onClick={() => notify.info('Radar Live: Tải lượng hệ thống ổn định, 1,482 phiên active cùng lúc.')}
             style={{
               backgroundColor: '#ffffff',
               border: '1px solid #fed7aa',

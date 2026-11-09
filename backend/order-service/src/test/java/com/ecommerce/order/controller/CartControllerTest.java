@@ -187,6 +187,55 @@ class CartControllerTest {
     }
 
     /**
+     * [Task ECOM-260] Kiểm tra validate dữ liệu khi cập nhật giỏ hàng: số lượng <= 0 -> 400 Bad Request.
+     */
+    @Test
+    @DisplayName("Cập nhật giỏ hàng: Số lượng <= 0 -> 400 Bad Request [ECOM-260]")
+    void updateCartItem_InvalidQuantity_ShouldReturnBadRequest() throws Exception {
+        UpdateCartItemRequest invalidRequest = UpdateCartItemRequest.builder()
+                .quantity(0)
+                .build();
+
+        mockMvc.perform(put("/api/v1/cart/items/100")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    /**
+     * [Task ECOM-260] Kiểm tra phân quyền: Không có header X-User-Id khi cập nhật / xóa -> 403 Forbidden.
+     */
+    @Test
+    @DisplayName("Cập nhật giỏ hàng: Không có header X-User-Id -> 403 Forbidden [ECOM-260]")
+    void updateCartItem_WithoutHeader_ShouldReturnForbidden() throws Exception {
+        UpdateCartItemRequest request = UpdateCartItemRequest.builder().quantity(2).build();
+
+        mockMvc.perform(put("/api/v1/cart/items/100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("Xóa sản phẩm khỏi giỏ: Không có header X-User-Id -> 403 Forbidden [ECOM-260]")
+    void removeCartItem_WithoutHeader_ShouldReturnForbidden() throws Exception {
+        mockMvc.perform(delete("/api/v1/cart/items/100"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("Xóa toàn bộ giỏ: Không có header X-User-Id -> 403 Forbidden [ECOM-260]")
+    void clearCart_WithoutHeader_ShouldReturnForbidden() throws Exception {
+        mockMvc.perform(delete("/api/v1/cart"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    /**
      * [Task ECOM-259] Kiểm tra phản hồi JSON trả về đầy đủ cả totalAmount và totalPrice được tính từ phía Server.
      */
     @Test

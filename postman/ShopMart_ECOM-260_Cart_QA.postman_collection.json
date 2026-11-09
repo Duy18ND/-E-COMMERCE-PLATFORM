@@ -1,0 +1,665 @@
+{
+  "info": {
+    "_postman_id": "ecom-260-cart-qa-collection",
+    "name": "ShopMart - ECOM-260 [BE] QA Test Quản Lý Giỏ Hàng (API, Validation & Access Control)",
+    "description": "Bộ kiểm thử tự động API Backend cho Task ECOM-260 thuộc Feature ECOM-117 & Epic CUSTOMER (Quản lý giỏ hàng). Bao gồm kiểm thử các endpoint xem/thêm/sửa/xóa giỏ hàng, xác thực người dùng, bảo vệ IDOR, validation dữ liệu sai, kiểm tra tồn kho và tính tổng tiền phía server.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "userAId",
+      "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "userBId",
+      "value": "20",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "cartItemId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication Setup",
+      "item": [
+        {
+          "name": "TC-260-AUTH-01: Đăng nhập User A lấy JWT Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@test.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Đăng nhập User A thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.token).to.not.be.empty;",
+                  "    pm.environment.set('tokenUserA', json.data.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Functional Cart API (Happy Path)",
+      "item": [
+        {
+          "name": "TC-260-FUNC-01: Xem giỏ hàng của User A (GET /api/v1/cart)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Xem giỏ hàng trả về 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data).to.have.property('userId');",
+                  "    pm.expect(json.data).to.have.property('totalItems');",
+                  "    pm.expect(json.data).to.have.property('totalAmount');",
+                  "    pm.expect(json.data).to.have.property('totalPrice');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-FUNC-02: Thêm sản phẩm mới vào giỏ (POST /api/v1/cart/items)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Thêm sản phẩm trả về 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.items).to.be.an('array');",
+                  "    pm.expect(json.data.totalItems).to.be.at.least(2);",
+                  "    if (json.data.items.length > 0) {",
+                  "        pm.collectionVariables.set('cartItemId', json.data.items[0].id);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-FUNC-03: Thêm sản phẩm đã có vào giỏ - Kiểm tra cộng dồn số lượng",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cộng dồn số lượng trả về 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.totalItems).to.be.at.least(3);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-FUNC-04: Cập nhật số lượng sản phẩm trong giỏ (PUT /api/v1/cart/items/{itemId})",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 4\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items", "{{cartItemId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cập nhật số lượng trả về 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.totalItems).to.be.at.least(4);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-FUNC-05: Xóa một sản phẩm khỏi giỏ hàng (DELETE /api/v1/cart/items/{itemId})",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items", "{{cartItemId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Xóa sản phẩm trả về 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-FUNC-06: Xóa toàn bộ giỏ hàng (DELETE /api/v1/cart/clear)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/clear",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "clear"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Xóa toàn bộ giỏ hàng trả về 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Validation & Negative Cases",
+      "item": [
+        {
+          "name": "TC-260-VAL-01: Thêm vào giỏ thiếu productId -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Thiếu productId trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Product ID không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-VAL-02: Thêm vào giỏ số lượng quantity = 0 -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Quantity = 0 trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Số lượng phải lớn hơn hoặc bằng 1');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-VAL-03: Thêm vào giỏ số lượng âm quantity < 0 -> 400 Bad Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": -5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Quantity âm trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-VAL-04: Cập nhật số lượng quantity = 0 -> 400 Bad Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items", "1"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cập nhật quantity = 0 trả về 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-VAL-05: Thêm vào giỏ số lượng vượt quá tồn kho -> 409 Conflict",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 1,\n  \"quantity\": 99999\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Vượt quá tồn kho trả về 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('không đủ số lượng tồn kho');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-VAL-06: Thêm vào giỏ sản phẩm không tồn tại -> 404 Not Found",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 99999,\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sản phẩm không tồn tại trả về 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Authorization & IDOR Security",
+      "item": [
+        {
+          "name": "TC-260-SEC-01: Guest gọi API giỏ hàng (Thiếu X-User-Id) -> 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Guest gọi giỏ hàng trả về 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Thiếu X-User-Id');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-SEC-02: Tấn công IDOR - User A cố sửa item giỏ hàng của User B -> 403 Forbidden",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items/999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items", "999"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sửa item của người khác bị chặn với 403 hoặc 404', function () {",
+                  "    pm.expect([403, 404]).to.include(pm.response.code);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-260-SEC-03: Tấn công IDOR - User A cố xóa item giỏ hàng của User B -> 404 Not Found",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{userAId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items/999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items", "999"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Xóa item của người khác bị chặn với 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

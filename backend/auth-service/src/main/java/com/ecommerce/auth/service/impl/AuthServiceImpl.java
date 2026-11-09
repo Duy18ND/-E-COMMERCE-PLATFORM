@@ -7,6 +7,8 @@ import com.ecommerce.auth.dto.response.AuthResponse;
 import com.ecommerce.auth.entity.Role;
 import com.ecommerce.auth.entity.User;
 import com.ecommerce.auth.enums.RoleName;
+import com.ecommerce.auth.enums.UserStatus;
+import com.ecommerce.auth.exception.AccessDeniedException;
 import com.ecommerce.auth.exception.InvalidTokenException;
 import com.ecommerce.auth.exception.ResourceNotFoundException;
 import com.ecommerce.auth.exception.UserAlreadyExistsException;
@@ -124,6 +126,11 @@ public class AuthServiceImpl implements AuthService {
         String email = jwtTokenProvider.getEmailFromToken(refreshToken);
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + email));
+
+        // [Task ECOM-145] Chặn làm mới token đối với tài khoản đã bị khóa (BLOCKED)
+        if (user.getStatus() == UserStatus.BLOCKED) {
+            throw new AccessDeniedException("Tài khoản của bạn đã bị khóa bởi Quản trị viên");
+        }
 
         UserPrincipal userPrincipal = UserPrincipal.create(user);
         String newAccessToken = jwtTokenProvider.generateAccessToken(userPrincipal);

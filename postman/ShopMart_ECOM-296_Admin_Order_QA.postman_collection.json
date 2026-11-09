@@ -1,0 +1,509 @@
+{
+  "info": {
+    "_postman_id": "ecom-296-admin-order-qa-collection",
+    "name": "ShopMart - ECOM-296 [BE] QA Test Quản Trị Đơn Hàng (API, Validation, RBAC)",
+    "description": "Bộ kiểm thử API tự động toàn diện cho Task ECOM-296 thuộc Epic ECOM-289 & Feature ECOM-140 (Quản trị đơn hàng). Bao gồm kiểm thử phân quyền RBAC, danh sách đơn hàng, bộ lọc trạng thái, cập nhật trạng thái theo State Machine, hoàn tồn kho khi hủy đơn, và kiểm thử validation các trường hợp dữ liệu lỗi.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "adminOrderId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Phân quyền & Bảo mật (RBAC & Defense-in-Depth)",
+      "item": [
+        {
+          "name": "TC-296-SEC-01: Guest gọi API Admin (Thiếu header X-User-Roles) -> 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Response body indicates access denied', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Chỉ tài khoản ADMIN mới có quyền');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-SEC-02: User thường (X-User-Roles: ROLE_USER) gọi API Admin -> 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_USER"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Response body indicates access denied', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Chỉ tài khoản ADMIN mới có quyền');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-SEC-03: Bypass Substring giả mạo (X-User-Roles: ROLE_ADMIN_VIEWER) -> 403 Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_ADMIN_VIEWER"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden (Substring attack blocked)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Access denied message returned', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-SEC-04: Đa vai trò hợp lệ (X-User-Roles: ROLE_USER, ROLE_ADMIN) -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Roles",
+                "value": "ROLE_USER, ROLE_ADMIN"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response is successful', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Quản lý danh sách & Lọc đơn hàng (Order Listing & Filter)",
+      "item": [
+        {
+          "name": "TC-296-LIST-01: Lấy danh sách toàn bộ đơn hàng (Không lọc status) -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders?page=0&size=10&sortBy=id&sortDir=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" },
+                { "key": "sortBy", "value": "id" },
+                { "key": "sortDir", "value": "desc" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Paged response format is valid', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data).to.have.property('content');",
+                  "    pm.expect(json.data).to.have.property('totalElements');",
+                  "    pm.expect(json.data).to.have.property('totalPages');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-LIST-02: Lọc danh sách theo trạng thái PENDING -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders?status=PENDING&page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders"],
+              "query": [
+                { "key": "status", "value": "PENDING" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('All returned orders have status PENDING', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    json.data.content.forEach(function(order) {",
+                  "        pm.expect(order.status).to.eql('PENDING');",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-STAT-01: Lấy thống kê Dashboard doanh thu & đơn hàng -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/statistics",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders", "statistics"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Dashboard response contains metrics', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data).to.have.property('totalOrders');",
+                  "    pm.expect(json.data).to.have.property('totalRevenue');",
+                  "    pm.expect(json.data).to.have.property('ordersByStatus');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Cập nhật trạng thái đơn hàng & State Machine",
+      "item": [
+        {
+          "name": "TC-296-STATE-01: Admin duyệt đơn PENDING -> CONFIRMED thành công",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-User-Id", "value": "1" },
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRMED\",\n  \"note\": \"Admin đã xác nhận đơn hàng qua kiểm thử ECOM-296\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{adminOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders", "{{adminOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Order status changed to CONFIRMED', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.status).to.eql('CONFIRMED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-HIST-01: Lấy timeline lịch sử thay đổi trạng thái đơn hàng -> 200 OK",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{adminOrderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders", "{{adminOrderId}}", "history"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('History timeline is an array and contains events', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(Array.isArray(json.data)).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Validation & Xử lý lỗi (Edge Cases)",
+      "item": [
+        {
+          "name": "TC-296-VAL-01: Body thiếu trường status -> 400 Bad Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": null,\n  \"note\": \"Thiếu status\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{adminOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders", "{{adminOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('Error message specifies invalid status', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Trạng thái đơn hàng không được để trống');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-VAL-02: Trường status có giá trị không hợp lệ -> 400 Bad Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INVALID_STATUS_VALUE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{adminOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders", "{{adminOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('Error indicates malformed data', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-VAL-03: Ghi chú note vượt quá 1000 ký tự -> 400 Bad Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRMED\",\n  \"note\": \"QUÁ_1000_KÝ_TỰ_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{adminOrderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders", "{{adminOrderId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('Error message specifies note limit', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Ghi chú không được vượt quá 1000 ký tự');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-296-VAL-04: Cập nhật đơn hàng không tồn tại (ID 999999) -> 404 Not Found",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-User-Roles", "value": "ROLE_ADMIN" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRMED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/999999/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "orders", "999999", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test('Error message specifies order not found', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(false);",
+                  "    pm.expect(json.message).to.include('Không tìm thấy đơn hàng');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

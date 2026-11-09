@@ -8,14 +8,22 @@ import Loading from '../../components/common/Loading';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import { ORDER_STATUS } from '../../utils/constants';
+import useNotification from '../../hooks/useNotification';
+import OrderTimeline from '../../components/order/OrderTimeline';
 
+/**
+ * Trang chi tiết đơn hàng (OrderDetail)
+ * Triển khai theo task ECOM-188 (và ECOM-311/ECOM-308)
+ * [FE] Trang chi tiết đơn: ngày đặt, mã đơn, timeline và trạng thái hiện tại
+ * Hiển thị các mốc có thời gian thực tế, không suy diễn trạng thái chưa cập nhật
+ */
 const OrderDetail = () => {
   const { id } = useParams();
+  const { notify, confirmDialog } = useNotification();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   const fetchOrderDetail = async () => {
     setLoading(true);
@@ -25,7 +33,11 @@ const OrderDetail = () => {
       const data = await orderService.getOrderById(id);
       setOrder(data);
     } catch (err) {
-      setError(err.message || 'Không thể tải chi tiết đơn hàng.');
+      if (err.response?.status === 403) {
+        setError('Bạn không có quyền xem thông tin đơn hàng này (Bảo mật IDOR).');
+      } else {
+        setError(err.message || 'Không thể tải chi tiết đơn hàng.');
+      }
     } finally {
       setLoading(false);
     }
@@ -33,20 +45,33 @@ const OrderDetail = () => {
 
   useEffect(() => {
     fetchOrderDetail();
+    // [Task ECOM-313] Lắng nghe đồng bộ cập nhật trạng thái từ trang Admin (cùng tab, đa tab, focus)
+    if (typeof orderService.subscribeOrderStatusSync === 'function') {
+      return orderService.subscribeOrderStatusSync(() => {
+        fetchOrderDetail();
+      }, id);
+    }
+    return undefined;
   }, [id]);
 
   // Hủy đơn hàng khi đơn còn ở trạng thái PENDING
   const handleCancelOrder = async () => {
-    if (!window.confirm('Bạn có chắc chắn muốn hủy đơn hàng này không?')) return;
+    const confirmed = await confirmDialog({
+      title: 'Xác nhận hủy đơn hàng',
+      message: `Bạn có chắc chắn muốn hủy đơn hàng #${id} không? Thao tác này sẽ hoàn trả tồn kho và không thể hoàn tác.`,
+      variant: 'danger',
+      confirmText: 'Hủy đơn hàng',
+      cancelText: 'Quay lại'
+    });
+    if (!confirmed) return;
+
     setActionLoading(true);
-    setError('');
-    setNotice('');
     try {
       const updated = await orderService.cancelOrder(id);
       setOrder(updated);
-      setNotice('Đơn hàng đã được hủy thành công!');
+      notify.success(`Đơn hàng #${id} đã được hủy thành công!`);
     } catch (err) {
-      setError(err.message || 'Không thể hủy đơn hàng vào lúc này.');
+      notify.error(err.message || 'Không thể hủy đơn hàng vào lúc này.');
     } finally {
       setActionLoading(false);
     }
@@ -55,14 +80,12 @@ const OrderDetail = () => {
   // Thanh toán mô phỏng nếu đơn còn PENDING
   const handleMockPay = async () => {
     setActionLoading(true);
-    setError('');
-    setNotice('');
     try {
       await paymentService.mockPay(id, true);
-      setNotice('Thanh toán thành công! Đang làm mới dữ liệu...');
+      notify.success('Thanh toán thành công! Đang làm mới dữ liệu...');
       await fetchOrderDetail();
     } catch (err) {
-      setError(err.message || 'Thanh toán mô phỏng thất bại.');
+      notify.error(err.message || 'Thanh toán mô phỏng thất bại.');
     } finally {
       setActionLoading(false);
     }
@@ -77,12 +100,47 @@ const OrderDetail = () => {
   }
 
   if (error && !order) {
+    const is403 = error.includes('403') || error.includes('IDOR') || error.includes('quyền xem');
     return (
-      <div className="container page-container">
-        <ErrorMessage message={error} />
-        <Link to="/orders" style={{ color: '#2563eb', fontWeight: 600 }}>
-          &larr; Quay lại danh sách đơn hàng
-        </Link>
+      <div className="container page-container" style={{ padding: '2rem 1rem', maxWidth: '640px', margin: '0 auto' }}>
+        {is403 ? (
+          <div
+            className="card"
+            style={{
+              padding: '2.5rem 2rem',
+              textAlign: 'center',
+              borderRadius: '1rem',
+              border: '1px solid #fee2e2',
+              background: 'linear-gradient(180deg, #fff5f5 0%, #ffffff 100%)'
+            }}
+          >
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🛡️</div>
+            <div style={{ display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '9999px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.75rem', border: '1px solid #fecaca' }}>
+              HTTP 403 Forbidden &bull; IDOR Protection
+            </div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#991b1b', margin: '0 0 0.75rem 0' }}>
+              Quyền truy cập bị từ chối
+            </h2>
+            <p style={{ fontSize: '0.925rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              {error}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <Link to="/orders" style={{ textDecoration: 'none' }}>
+                <Button variant="primary" size="sm">Danh sách đơn hàng của bạn</Button>
+              </Link>
+              <Link to="/" style={{ textDecoration: 'none' }}>
+                <Button variant="secondary" size="sm">Về trang chủ</Button>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+            <ErrorMessage message={error} />
+            <Link to="/orders" style={{ color: '#2563eb', fontWeight: 600 }}>
+              &larr; Quay lại danh sách đơn hàng
+            </Link>
+          </>
+        )}
       </div>
     );
   }
@@ -98,141 +156,217 @@ const OrderDetail = () => {
 
   const items = order.items || [];
   const receiverName = order.receiverName || order.shippingAddress?.fullName || 'Người nhận';
-  const receiverPhone = order.receiverPhone || order.shippingAddress?.phone || 'Chưa cập nhật';
-  const shippingAddress = typeof order.shippingAddress === 'string'
-    ? order.shippingAddress
-    : order.shippingAddress?.address || 'Chưa cập nhật';
-
+  const phone = order.receiverPhone || order.shippingAddress?.phone || '---';
+  const fullAddress = order.shippingAddress?.fullAddress || order.shippingAddress || 'Chưa cung cấp';
   const isPending = order.status === ORDER_STATUS.PENDING;
 
   return (
-    <div className="container page-container">
-      <Link to="/orders" style={{ display: 'inline-block', marginBottom: '1rem', color: '#64748b' }}>
-        &larr; Quay lại danh sách đơn hàng
-      </Link>
-
-      {error && <ErrorMessage message={error} onClose={() => setError('')} />}
-
-      {notice && (
-        <div
+    <div className="container page-container" style={{ paddingBottom: '3rem' }}>
+      {/* Nút quay lại */}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <Link
+          to="/orders"
           style={{
-            padding: '0.75rem 1rem',
-            backgroundColor: '#dcfce7',
-            color: '#166534',
-            borderRadius: '8px',
-            fontSize: '0.875rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            color: '#2563eb',
             fontWeight: 600,
-            marginBottom: '1rem',
-            border: '1px solid #bbf7d0'
+            fontSize: '0.875rem',
+            textDecoration: 'none'
           }}
         >
-          ✓ {notice}
-        </div>
-      )}
+          <span>&larr;</span> Quay lại danh sách đơn hàng
+        </Link>
+      </div>
 
-      <div className="flex-between" style={{ marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      {/* Header chi tiết đơn */}
+      <div
+        className="card"
+        style={{
+          padding: '1.5rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}
+      >
         <div>
-          <h1 className="page-title" style={{ margin: 0 }}>Đơn hàng #{order.id}</h1>
-          <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
-            Ngày đặt: {order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN') : 'Mới đặt'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.35rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+              Đơn hàng #{order.id}
+            </h1>
+            <OrderStatus status={order.status} />
+          </div>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+            Đặt ngày: {order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            }) : '---'}
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
-          <OrderStatus status={order.status} />
 
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={loading || actionLoading}
+            onClick={fetchOrderDetail}
+          >
+            🔄 Làm mới
+          </Button>
+
+          <Link to={`/orders/${order.id}/tracking`} style={{ textDecoration: 'none' }}>
+            <Button variant="outline" size="sm">
+              🚚 Theo dõi kiện hàng
+            </Button>
+          </Link>
+
+          {/* Nút thao tác khách hàng: Hủy đơn hoặc Thanh toán mô phỏng */}
           {isPending && (
             <>
               <Button
-                variant="outline"
-                size="sm"
-                onClick={handleMockPay}
-                disabled={actionLoading}
-              >
-                💳 Thanh toán ngay (Mock)
-              </Button>
-              <Button
                 variant="danger"
                 size="sm"
-                onClick={handleCancelOrder}
                 disabled={actionLoading}
+                onClick={handleCancelOrder}
               >
-                ✕ Hủy đơn hàng
+                {actionLoading ? 'Đang xử lý...' : 'Hủy đơn hàng'}
               </Button>
+
+              {order.paymentMethod === 'MOCK_ONLINE' && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={actionLoading}
+                  onClick={handleMockPay}
+                >
+                  {actionLoading ? 'Đang xử lý...' : 'Thanh toán ngay'}
+                </Button>
+              )}
             </>
           )}
         </div>
       </div>
 
-      <div className="layout-split">
-        {/* Sản phẩm trong đơn */}
-        <div className="card" style={{ minWidth: 0 }}>
-          <h2 style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>Sản phẩm đã đặt ({items.length} món)</h2>
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Sản phẩm</th>
-                  <th>Đơn giá</th>
-                  <th>Số lượng</th>
-                  <th style={{ textAlign: 'right' }}>Thành tiền</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => {
-                  const price = Number(item.priceAtPurchase ?? item.price ?? 0);
-                  const qty = Number(item.quantity ?? 1);
-                  const subTotal = Number(item.subTotal ?? (price * qty));
-                  return (
-                    <tr key={item.itemId || item.id || idx}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          {item.imageUrl && (
-                            <img
-                              src={item.imageUrl}
-                              alt={item.productName || item.name}
-                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }}
-                            />
-                          )}
-                          <span style={{ fontWeight: 600 }}>{item.productName || item.name}</span>
-                        </div>
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{formatCurrency(price)}</td>
-                      <td>{qty}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#2563eb', whiteSpace: 'nowrap' }}>
-                        {formatCurrency(subTotal)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-173 / ECOM-188 / ECOM-311 / ECOM-315) */}
+      <OrderTimeline
+        orderId={order.id}
+        currentStatus={order.status}
+        historyData={order.statusHistories}
+      />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
+        {/* Thông tin giao nhận */}
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+            📍 Thông tin nhận hàng
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
+            <div>
+              <span style={{ color: '#64748b' }}>Người nhận:</span>{' '}
+              <strong style={{ color: '#0f172a' }}>{receiverName}</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748b' }}>Số điện thoại:</span>{' '}
+              <span style={{ color: '#0f172a' }}>{phone}</span>
+            </div>
+            <div>
+              <span style={{ color: '#64748b' }}>Địa chỉ:</span>{' '}
+              <span style={{ color: '#0f172a' }}>{fullAddress}</span>
+            </div>
+            {order.note && (
+              <div>
+                <span style={{ color: '#64748b' }}>Ghi chú:</span>{' '}
+                <span style={{ color: '#0f172a', fontStyle: 'italic' }}>{order.note}</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Thông tin nhận hàng & thanh toán */}
-        <div className="card" style={{ minWidth: 0 }}>
-          <h2 style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>Thông tin giao hàng</h2>
-          <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-            <strong>Người nhận:</strong> {receiverName}
-          </p>
-          <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-            <strong>Số điện thoại:</strong> {receiverPhone}
-          </p>
-          <p style={{ fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-            <strong>Địa chỉ giao:</strong> {shippingAddress}
-          </p>
-          {order.note && (
-            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem', fontStyle: 'italic' }}>
-              <strong>Ghi chú:</strong> {order.note}
-            </p>
-          )}
-
-          <h3 style={{ fontSize: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginBottom: '0.5rem' }}>
-            Tổng kết thanh toán
+        {/* Phương thức thanh toán */}
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+            💳 Thanh toán
           </h3>
-          <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#2563eb', marginTop: '0.5rem' }}>
-            Tổng cộng: {formatCurrency(order.totalAmount || 0)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
+            <div>
+              <span style={{ color: '#64748b' }}>Phương thức:</span>{' '}
+              <strong style={{ color: '#0f172a' }}>
+                {order.paymentMethod === 'MOCK_ONLINE' ? 'Thanh toán trực tuyến (Mô phỏng)' : 'Thanh toán khi nhận hàng (COD)'}
+              </strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748b' }}>Trạng thái thanh toán:</span>{' '}
+              <span style={{ fontWeight: 600, color: order.status === ORDER_STATUS.PAID || order.status === ORDER_STATUS.COMPLETED || order.status === ORDER_STATUS.DELIVERED ? '#16a34a' : '#d97706' }}>
+                {order.status === ORDER_STATUS.PAID || order.status === ORDER_STATUS.COMPLETED || order.status === ORDER_STATUS.DELIVERED ? 'Đã thanh toán' : 'Chưa thanh toán'}
+              </span>
+            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Danh sách sản phẩm */}
+      <div className="card" style={{ padding: '1.25rem' }}>
+        <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+          📦 Sản phẩm đã đặt ({items.length})
+        </h3>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {items.map((item, idx) => (
+            <div
+              key={item.id || idx}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: idx === items.length - 1 ? 0 : '1rem',
+                borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name || item.productName}
+                    style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  />
+                ) : (
+                  <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
+                    🛍️
+                  </div>
+                )}
+                <div>
+                  <h4 style={{ margin: '0 0 0.25rem', fontSize: '0.9rem', fontWeight: 600, color: '#0f172a' }}>
+                    {item.name || item.productName}
+                  </h4>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                    Số lượng: <strong>{item.quantity}</strong> &times; {formatCurrency(item.price || item.priceAtPurchase || 0)}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>
+                {formatCurrency(item.subTotal || ((item.price || item.priceAtPurchase || 0) * item.quantity))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tổng kết tiền */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Tổng số tiền:</span>
+          <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#2563eb' }}>
+            {formatCurrency(order.totalAmount || 0)}
+          </span>
         </div>
       </div>
     </div>

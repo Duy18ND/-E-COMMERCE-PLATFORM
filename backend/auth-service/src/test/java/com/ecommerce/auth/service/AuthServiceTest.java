@@ -215,4 +215,29 @@ class AuthServiceTest {
                 eq(TimeUnit.MILLISECONDS)
         );
     }
+
+    @Test
+    void shouldThrowAccessDeniedWhenRefreshingBlockedAccount() {
+        TokenRefreshRequest request = TokenRefreshRequest.builder()
+                .refreshToken("blocked_user_refresh_token")
+                .build();
+
+        User blockedUser = User.builder()
+                .id(99L)
+                .email("blocked@ecommerce.com")
+                .fullName("Blocked User")
+                .status(com.ecommerce.auth.enums.UserStatus.BLOCKED)
+                .roles(Set.of(Role.builder().id(1L).name(RoleName.ROLE_USER).build()))
+                .build();
+
+        when(jwtTokenProvider.validateToken("blocked_user_refresh_token")).thenReturn(true);
+        when(jwtTokenProvider.getEmailFromToken("blocked_user_refresh_token")).thenReturn("blocked@ecommerce.com");
+        when(userRepository.findByEmail("blocked@ecommerce.com")).thenReturn(Optional.of(blockedUser));
+
+        assertThatThrownBy(() -> authService.refresh(request))
+                .isInstanceOf(com.ecommerce.auth.exception.AccessDeniedException.class)
+                .hasMessageContaining("bị khóa");
+
+        verify(jwtTokenProvider, never()).generateAccessToken(any(UserPrincipal.class));
+    }
 }

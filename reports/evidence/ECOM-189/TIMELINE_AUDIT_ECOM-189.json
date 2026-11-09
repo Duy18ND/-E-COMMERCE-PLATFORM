@@ -1,0 +1,75 @@
+{
+  "auditDate": "2026-11-04T07:15:00.000Z",
+  "orderId": 1001,
+  "ownerUserId": 10,
+  "verifiedBy": "Senior QA Engineer",
+  "timelineIntegrity": "PASS",
+  "chronologicalOrder": "ASCENDING_VERIFIED",
+  "events": [
+    {
+      "step": 1,
+      "id": 1,
+      "orderId": 1001,
+      "status": "PENDING",
+      "statusDescription": "Đơn hàng đã được đặt thành công, đang chờ xác nhận",
+      "previousStatus": null,
+      "action": "ORDER_CREATED",
+      "updatedBy": "CUSTOMER:10",
+      "actorRole": "ROLE_CUSTOMER",
+      "note": "Đơn hàng đã được đặt thành công qua ShopMart Web",
+      "createdAt": "2026-11-04T06:00:00Z"
+    },
+    {
+      "step": 2,
+      "id": 2,
+      "orderId": 1001,
+      "status": "CONFIRMED",
+      "statusDescription": "Đơn hàng đã được xác nhận bởi người bán / quản trị viên",
+      "previousStatus": "PENDING",
+      "action": "ADMIN_STATUS_UPDATE",
+      "updatedBy": "ADMIN:1",
+      "actorRole": "ROLE_ADMIN",
+      "note": "Xác nhận địa chỉ giao hàng hợp lệ",
+      "createdAt": "2026-11-04T06:15:00Z"
+    },
+    {
+      "step": 3,
+      "id": 3,
+      "orderId": 1001,
+      "status": "PROCESSING",
+      "statusDescription": "Đơn hàng đang được chuẩn bị và đóng gói",
+      "previousStatus": "CONFIRMED",
+      "action": "ADMIN_STATUS_UPDATE",
+      "updatedBy": "ADMIN:1",
+      "actorRole": "ROLE_ADMIN",
+      "note": "Sản phẩm đã đóng gói và niêm phong",
+      "createdAt": "2026-11-04T06:30:00Z"
+    },
+    {
+      "step": 4,
+      "id": 4,
+      "orderId": 1001,
+      "status": "SHIPPING",
+      "statusDescription": "Đơn hàng đang trên đường vận chuyển tới địa chỉ nhận hàng",
+      "previousStatus": "PROCESSING",
+      "action": "ADMIN_STATUS_UPDATE",
+      "updatedBy": "ADMIN:1",
+      "actorRole": "ROLE_ADMIN",
+      "note": "Bàn giao đơn vị vận chuyển ViettelPost - Mã vận đơn: VTP12345678",
+      "createdAt": "2026-11-04T06:45:00Z"
+    },
+    {
+      "step": 5,
+      "id": 5,
+      "orderId": 1001,
+      "status": "DELIVERED",
+      "statusDescription": "Đơn hàng đã giao thành công",
+      "previousStatus": "SHIPPING",
+      "action": "ADMIN_STATUS_UPDATE",
+      "updatedBy": "ADMIN:1",
+      "actorRole": "ROLE_ADMIN",
+      "note": "Giao hàng thành công. Khách hàng đã nhận và ký biên nhận",
+      "createdAt": "2026-11-04T07:10:00Z"
+    }
+  ]
+}

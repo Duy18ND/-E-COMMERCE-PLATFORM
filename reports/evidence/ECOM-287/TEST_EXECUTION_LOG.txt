@@ -1,0 +1,74 @@
+===============================================================================
+ECOM-287 TEST EXECUTION SUMMARY REPORT
+===============================================================================
+Date: 04/11/2026
+Tester: QA Team & Backend Engineering
+Component: product-service (Spring Boot + Java 21) & Frontend Contract Harness
+
+-------------------------------------------------------------------------------
+1. JUnit 5 Backend Controller QA Test Suite (InventoryStockApiQATest.java)
+-------------------------------------------------------------------------------
+Test class: com.ecommerce.product.controller.InventoryStockApiQATest
+- FunctionalApiTests:
+  * TC-ECOM-287-01: [Inbound] Admin nhập thêm hàng thành công, cập nhật tồn kho [PASS]
+  * TC-ECOM-287-02: [Inbound] Sản phẩm OUT_OF_STOCK nhập hàng tự chuyển sang ACTIVE [PASS]
+  * TC-ECOM-287-03: [Inbound] Nhập kho không truyền ghi chú (note = null) vẫn hợp lệ [PASS]
+  * TC-ECOM-287-04: [AdjustStock] Admin điều chỉnh tồn kho kiểm kê thành công (> 0) [PASS]
+  * TC-ECOM-287-05: [AdjustStock] Điều chỉnh actualStock = 0 tự động chuyển sang OUT_OF_STOCK [PASS]
+  * TC-ECOM-287-06: [AdjustStock] Điều chỉnh từ 0 lên > 0 tự động khôi phục ACTIVE [PASS]
+  * TC-ECOM-287-07: [StockCheck] Public API kiểm tra tồn kho khi còn đủ hàng [PASS]
+  * TC-ECOM-287-08: [StockCheck] Public API kiểm tra tồn kho khi thiếu hàng (insufficient) [PASS]
+  * TC-ECOM-287-09: [StockCheck] Public API kiểm tra tồn kho khi sản phẩm đã hết hàng [PASS]
+  * TC-ECOM-287-10: [Reserve & Restore] Đặt trước và khôi phục tồn kho thành công [PASS]
+- ValidationNegativeTests:
+  * TC-ECOM-287-11: [Inbound] Chặn khi body rỗng {} (400 Bad Request) [PASS]
+  * TC-ECOM-287-12: [Inbound] Chặn số lượng nhập bằng 0 (quantity = 0) [PASS]
+  * TC-ECOM-287-13: [Inbound] Chặn số lượng nhập âm (quantity < 0) [PASS]
+  * TC-ECOM-287-14: [Inbound] Chặn ghi chú vượt quá 255 ký tự [PASS]
+  * TC-ECOM-287-15: [Inbound] Trả về 404 khi ID sản phẩm không tồn tại [PASS]
+  * TC-ECOM-287-16: [AdjustStock] Chặn khi body rỗng {} (400 Bad Request) [PASS]
+  * TC-ECOM-287-17: [AdjustStock] Chặn tồn kho thực tế âm (actualStock < 0) [PASS]
+  * TC-ECOM-287-18: [AdjustStock] Chặn khi lý do điều chỉnh để trống hoặc toàn khoảng trắng [PASS]
+  * TC-ECOM-287-19: [AdjustStock] Chặn lý do điều chỉnh vượt quá 255 ký tự [PASS]
+  * TC-ECOM-287-20: [AdjustStock] Trả về 404 khi ID sản phẩm không tồn tại [PASS]
+  * TC-ECOM-287-21: [ReserveStock] Trả về 409 Conflict khi tồn kho không đủ [PASS]
+  * TC-ECOM-287-22: [ReserveStock] Chặn danh sách đặt trước rỗng (400 Bad Request) [PASS]
+- AuthorizationAccessControlTests:
+  * TC-ECOM-287-23: [Inbound] Trả về 403 Forbidden khi thiếu header X-User-Roles [PASS]
+  * TC-ECOM-287-24: [Inbound] Trả về 403 Forbidden khi người gọi chỉ có role ROLE_USER [PASS]
+  * TC-ECOM-287-25: [Inbound] Chống giả mạo quyền: ROLE_ADMIN_VIEWER bị chặn 403 [PASS]
+  * TC-ECOM-287-26: [Inbound] Chấp nhận khi tài khoản có nhiều role chứa ROLE_ADMIN [PASS]
+  * TC-ECOM-287-27: [AdjustStock] Trả về 403 Forbidden khi thiếu header X-User-Roles [PASS]
+  * TC-ECOM-287-28: [AdjustStock] Trả về 403 Forbidden khi người gọi là ROLE_USER [PASS]
+  * TC-ECOM-287-29: [AdjustStock] Chống giả mạo: ROLE_SUPERADMIN bị chặn nếu không có ROLE_ADMIN chính xác [PASS]
+  * TC-ECOM-287-30: [AdjustStock] Chấp nhận header có dấu cách: 'ROLE_USER, ROLE_ADMIN' [PASS]
+  * TC-ECOM-287-31: [StockCheck] Public Endpoint không yêu cầu bất kỳ header xác thực nào [PASS]
+
+Total JUnit Tests: 31 | Passed: 31 | Failed: 0 | Duration: 6.882s
+Full Product Service Test Suite: 122 Tests | Passed: 122 | Failed: 0 | Duration: 10.699s
+
+-------------------------------------------------------------------------------
+2. Node.js Contract & Integration Test Suite (inventory_stock_be_qa.test.mjs)
+-------------------------------------------------------------------------------
+- TC-287-BE-01: ProductController khai báo đầy đủ các Endpoint Quản lý tồn kho [PASS]
+- TC-287-BE-02: Cơ chế RBAC kiểm tra quyền ADMIN chặt chẽ (chống bypass role giả mạo) [PASS]
+- TC-287-BE-03: StockInboundRequest DTO định nghĩa ràng buộc validation đầy đủ [PASS]
+- TC-287-BE-04: StockAdjustmentRequest DTO định nghĩa ràng buộc validation đầy đủ [PASS]
+- TC-287-BE-05: GlobalExceptionHandler xử lý đúng các HTTP Status Code chuẩn RESTful [PASS]
+- TC-287-BE-06: ProductServiceImpl xử lý chuyển trạng thái ACTIVE <-> OUT_OF_STOCK chính xác [PASS]
+- TC-287-BE-07: Frontend productService.js tích hợp chuẩn xác với Backend Endpoints [PASS]
+- TC-287-BE-08: Bộ kiểm thử Postman ECOM-287 được khởi tạo đầy đủ các nhóm kiểm thử [PASS]
+
+Total Node Tests: 22 (gồm cả ECOM-283) | Passed: 22 | Failed: 0
+
+-------------------------------------------------------------------------------
+3. Frontend Production Build Check (npm run build)
+-------------------------------------------------------------------------------
+Output:
+✓ 172 modules transformed.
+dist/index.html                   0.71 kB │ gzip:   0.44 kB
+dist/assets/index-oPkXonk2.css   44.48 kB │ gzip:   8.84 kB
+dist/assets/index-07looi4W.js   740.11 kB │ gzip: 197.33 kB
+✓ built in 2.95s
+Build Result: PASS (0 Errors, 0 Warnings)
+===============================================================================
