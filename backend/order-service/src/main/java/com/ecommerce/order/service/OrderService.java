@@ -121,6 +121,15 @@ public interface OrderService {
      * - Tổng số đơn hàng.
      * - Tổng doanh thu (chỉ tính đơn có trạng thái PAID, DELIVERED hoặc hoàn thành).
      * - Số lượng đơn hàng phân theo từng trạng thái.
+     * - Số sản phẩm sắp hết hàng & tổng số khách hàng.
      */
     DashboardResponse getOrderStatistics();
+
+    /**
+     * [Task ECOM-145 / ECOM-326] Lấy thống kê doanh thu và đơn hàng cho Admin theo khoảng thời gian tùy chọn.
+     * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+     */
+    default DashboardResponse getOrderStatistics(java.time.LocalDateTime startDate, java.time.LocalDateTime endDate) {
+        return getOrderStatistics();
+    }
 }

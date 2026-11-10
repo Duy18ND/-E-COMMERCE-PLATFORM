@@ -187,4 +187,92 @@ class AdminCustomerControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").value(150));
     }
+
+    @Test
+    @DisplayName("[ECOM-325] Chống leo thang đặc quyền: ROLE_ADMIN_VIEWER bị từ chối với 403 Forbidden")
+    void getCustomers_SubstringRoleBypass_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/customers")
+                        .header("X-User-Roles", "ROLE_ADMIN_VIEWER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @DisplayName("[ECOM-325] Đa vai trò hợp lệ (ROLE_USER, ROLE_ADMIN) và làm sạch tham số page/size/sortBy an toàn")
+    void getCustomers_MultiRoleAndSanitizedParams_Success() throws Exception {
+        PagedResponse<UserSummaryResponse> emptyPage = PagedResponse.<UserSummaryResponse>builder()
+                .content(List.of())
+                .pageNumber(0)
+                .pageSize(100)
+                .totalElements(0L)
+                .totalPages(0)
+                .last(true)
+                .build();
+
+        org.mockito.ArgumentCaptor<Pageable> pageableCaptor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        when(userService.getCustomers(any(), any(), pageableCaptor.capture())).thenReturn(emptyPage);
+
+        mockMvc.perform(get("/api/v1/admin/customers")
+                        .header("X-User-Roles", "ROLE_USER, ROLE_ADMIN")
+                        .param("page", "-5")
+                        .param("size", "9999")
+                        .param("sortBy", "password"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        Pageable captured = pageableCaptor.getValue();
+        org.assertj.core.api.Assertions.assertThat(captured.getPageNumber()).isEqualTo(0);
+        org.assertj.core.api.Assertions.assertThat(captured.getPageSize()).isEqualTo(100);
+        org.assertj.core.api.Assertions.assertThat(captured.getSort().getOrderFor("id")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("[ECOM-145] Khóa tài khoản ROLE_ADMIN ném IllegalArgumentException -> Trả về 400 Bad Request")
+    void updateCustomerStatus_BlockingAdminAccount_ShouldReturn400() throws Exception {
+        UpdateUserStatusRequest request = new UpdateUserStatusRequest();
+        request.setStatus(UserStatus.BLOCKED);
+
+        when(userService.updateUserStatus(eq(1L), any(UpdateUserStatusRequest.class)))
+                .thenThrow(new IllegalArgumentException("Không thể khóa tài khoản có quyền Quản trị viên (ROLE_ADMIN)"));
+
+        mockMvc.perform(put("/api/v1/admin/customers/1/status")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    @DisplayName("[ECOM-325] Truyền tham số status sai kiểu Enum -> Trả về 400 Bad Request thay vì 500")
+    void getCustomers_InvalidStatusEnum_ShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/customers")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .param("status", "INVALID_STATUS"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    @DisplayName("[ECOM-145] Cập nhật trạng thái với body thiếu trường status (@NotNull) -> Trả về 400 Bad Request")
+    void updateCustomerStatus_NullStatusBody_ShouldReturn400() throws Exception {
+        mockMvc.perform(put("/api/v1/admin/customers/10/status")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    @DisplayName("[ECOM-145] Xem chi tiết khách hàng không tồn tại -> Trả về 404 Not Found")
+    void getCustomerProfile_NotFound_ShouldReturn404() throws Exception {
+        when(userService.getProfile(9999L))
+                .thenThrow(new com.ecommerce.auth.exception.ResourceNotFoundException("Không tìm thấy người dùng với ID: 9999"));
+
+        mockMvc.perform(get("/api/v1/admin/customers/9999")
+                        .header("X-User-Roles", "ROLE_ADMIN"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
 }

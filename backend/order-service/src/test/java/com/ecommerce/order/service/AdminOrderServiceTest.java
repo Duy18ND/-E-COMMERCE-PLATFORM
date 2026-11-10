@@ -453,4 +453,83 @@ class AdminOrderServiceTest {
         assertThat(latestHistory.getActorRole()).isEqualTo("ROLE_ADMIN");
         assertThat(latestHistory.getNote()).isEqualTo("Đã xác nhận đơn hàng");
     }
+
+    @Test
+    @DisplayName("[ECOM-145 / ECOM-326] getOrderStatistics đồng bộ chính xác lowStockProductsCount & totalUsers từ Feign Client")
+    void getOrderStatistics_ShouldAggregateLowStockAndTotalUsersFromClients() {
+        com.ecommerce.order.client.AuthClient mockAuthClient = mock(com.ecommerce.order.client.AuthClient.class);
+        orderService.setAuthClient(mockAuthClient);
+
+        when(orderRepository.countTotalOrders()).thenReturn(25L);
+        when(orderRepository.sumTotalAmountByStatusIn(any())).thenReturn(new BigDecimal("18500000"));
+        when(orderRepository.countOrdersByStatusGroup()).thenReturn(List.<Object[]>of(
+                new Object[]{OrderStatus.PENDING, 3L},
+                new Object[]{OrderStatus.DELIVERED, 20L},
+                new Object[]{OrderStatus.CANCELLED, 2L}
+        ));
+        when(productClient.countLowStockProducts(5)).thenReturn(ApiResponse.success("OK", 6L));
+        when(mockAuthClient.countCustomers()).thenReturn(ApiResponse.success("OK", 88L));
+
+        DashboardResponse stats = orderService.getOrderStatistics();
+
+        assertThat(stats.getTotalOrders()).isEqualTo(25L);
+        assertThat(stats.getTotalRevenue()).isEqualByComparingTo("18500000");
+        assertThat(stats.getPendingOrders()).isEqualTo(3L);
+        assertThat(stats.getCompletedOrders()).isEqualTo(20L);
+        assertThat(stats.getCancelledOrders()).isEqualTo(2L);
+        assertThat(stats.getLowStockProductsCount()).isEqualTo(6L);
+        assertThat(stats.getTotalUsers()).isEqualTo(88L);
+    }
+
+    @Test
+    @DisplayName("[ECOM-145 / ECOM-326] getOrderStatistics fallback an toàn về 0 khi dịch vụ vệ tinh (Feign) gặp sự cố")
+    void getOrderStatistics_WhenDownstreamClientsFail_ShouldFallbackGracefully() {
+        com.ecommerce.order.client.AuthClient mockAuthClient = mock(com.ecommerce.order.client.AuthClient.class);
+        orderService.setAuthClient(mockAuthClient);
+
+        when(orderRepository.countTotalOrders()).thenReturn(10L);
+        when(orderRepository.sumTotalAmountByStatusIn(any())).thenReturn(new BigDecimal("5000000"));
+        when(orderRepository.countOrdersByStatusGroup()).thenReturn(List.of());
+        when(productClient.countLowStockProducts(5)).thenThrow(new RuntimeException("Product service timeout"));
+        when(mockAuthClient.countCustomers()).thenThrow(new RuntimeException("Auth service unavailable"));
+
+        DashboardResponse stats = orderService.getOrderStatistics();
+
+        assertThat(stats.getTotalOrders()).isEqualTo(10L);
+        assertThat(stats.getTotalRevenue()).isEqualByComparingTo("5000000");
+        assertThat(stats.getLowStockProductsCount()).isZero();
+        assertThat(stats.getTotalUsers()).isZero();
+    }
+
+    @Test
+    @DisplayName("[ECOM-326] getOrderStatistics(startDate, endDate) tính toán đúng theo khoảng thời gian và từ chối ngày ngược")
+    void getOrderStatistics_DateRangeAndValidation() {
+        LocalDateTime start = LocalDateTime.of(2026, 10, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 10, 31, 23, 59, 59);
+
+        when(orderRepository.countTotalOrdersBetween(start, end)).thenReturn(8L);
+        when(orderRepository.sumTotalAmountByStatusInAndCreatedAtBetween(any(), eq(start), eq(end)))
+                .thenReturn(new BigDecimal("4200000"));
+        when(orderRepository.countOrdersByStatusGroupBetween(start, end)).thenReturn(List.<Object[]>of(
+                new Object[]{OrderStatus.DELIVERED, 8L}
+        ));
+
+        DashboardResponse stats = orderService.getOrderStatistics(start, end);
+        assertThat(stats.getTotalOrders()).isEqualTo(8L);
+        assertThat(stats.getTotalRevenue()).isEqualByComparingTo("4200000");
+        assertThat(stats.getCompletedOrders()).isEqualTo(8L);
+
+        assertThrows(IllegalArgumentException.class, () -> orderService.getOrderStatistics(end, start));
+    }
+
+    @Test
+    @DisplayName("[ECOM-143] getOrdersByUserId cho phép ROLE_ADMIN có định danh xem lịch sử mua hàng của khách hàng bất kỳ")
+    void getOrdersByUserId_AdminWithAdminId_ShouldSucceed() {
+        when(orderRepository.findByUserIdWithItems(100L)).thenReturn(List.of(sampleOrder));
+
+        List<OrderResponse> orders = orderService.getOrdersByUserId(100L, 1L, "ROLE_ADMIN");
+
+        assertThat(orders).hasSize(1);
+        assertThat(orders.get(0).getUserId()).isEqualTo(100L);
+    }
 }

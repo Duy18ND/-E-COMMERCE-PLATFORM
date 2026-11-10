@@ -12,6 +12,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * [Task ECOM-166 / ECOM-167 / ECOM-183 / ECOM-339] Repository thao tác bảng vouchers.
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+ */
 @Repository
 public interface VoucherRepository extends JpaRepository<Voucher, Long> {
 
@@ -21,7 +25,9 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
 
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
-    @Query("SELECT v FROM Voucher v WHERE v.status = :status AND v.endDate >= :today ORDER BY v.createdAt DESC")
+    @Query("SELECT v FROM Voucher v WHERE v.status = :status " +
+           "AND v.startDate <= :today AND v.endDate >= :today " +
+           "AND v.usedQuantity < v.quantity ORDER BY v.createdAt DESC")
     List<Voucher> findAvailableForCustomer(@Param("status") VoucherStatus status, @Param("today") LocalDate today);
 
     /**

@@ -22,6 +22,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
+import java.util.Set;
 
 /**
  * [Task ECOM-145 / ECOM-325] Quản lý khách hàng toàn hệ thống cho Admin:
@@ -36,6 +37,10 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 @Tag(name = "Admin Customer Controller", description = "Quản lý khách hàng (danh sách, tìm kiếm, khóa/mở khóa tài khoản) cho Admin")
 public class AdminCustomerController {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "email", "fullName", "phone", "status", "createdAt", "updatedAt"
+    );
 
     private final UserService userService;
 
@@ -58,9 +63,8 @@ public class AdminCustomerController {
         if (size <= 0) {
             throw new IllegalArgumentException("Kích thước trang (size) phải lớn hơn 0");
         }
-
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(direction, safeSortBy));
 
         PagedResponse<UserSummaryResponse> response = userService.getCustomers(keyword, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách khách hàng thành công", response));

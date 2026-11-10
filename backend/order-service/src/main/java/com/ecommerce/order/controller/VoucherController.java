@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * [Task ECOM-167 / ECOM-183] Controller tra cứu voucher hợp lệ, kiểm tra áp mã, chặn dùng trùng và quá lượt.
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/vouchers")
@@ -24,17 +28,26 @@ public class VoucherController {
 
     private final VoucherService voucherService;
 
-    @GetMapping("/active")
-    @Operation(summary = "Lấy danh sách voucher đang có hiệu lực [PUBLIC]")
-    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getActiveVouchers() {
-        List<VoucherResponse> response = voucherService.getActiveVouchers();
+    @GetMapping({"", "/active"})
+    @Operation(summary = "Lấy danh sách voucher đang có hiệu lực [PUBLIC / USER]")
+    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getActiveVouchers(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestParam(value = "userId", required = false) Long queryUserId) {
+        Long effectiveUserId = (userId != null) ? userId : queryUserId;
+        List<VoucherResponse> response = (effectiveUserId != null)
+                ? voucherService.getAvailableVouchersForUser(effectiveUserId)
+                : voucherService.getActiveVouchers();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách mã giảm giá thành công", response));
     }
 
     @PostMapping("/apply")
     @Operation(summary = "Kiểm tra và tính số tiền giảm của mã voucher tại bước Checkout")
     public ResponseEntity<ApiResponse<ApplyVoucherResponse>> applyVoucher(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @Valid @RequestBody ApplyVoucherRequest request) {
+        if (userId != null) {
+            request.setUserId(userId);
+        }
         ApplyVoucherResponse response = voucherService.applyVoucher(request);
         return ResponseEntity.ok(ApiResponse.success("Áp dụng mã giảm giá thành công", response));
     }
