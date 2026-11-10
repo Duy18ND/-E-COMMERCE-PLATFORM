@@ -1,7 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import orderService from '../../services/orderService';
+import reviewService, { isOrderCompletedForReview } from '../../services/reviewService';
+import productService from '../../services/productService';
 import OrderItem from '../../components/order/OrderItem';
+import ProductReviewForm from '../../components/product/ProductReviewForm';
 import EmptyState from '../../components/common/EmptyState';
 import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
@@ -26,19 +29,92 @@ const Orders = () => {
   const [activeTab, setActiveTab] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const fetchOrders = async () => {
+  // Map lưu đánh giá của người dùng hiện tại theo productId: { [productId]: ReviewResponse }
+  const [reviewsMap, setReviewsMap] = useState({});
+  // Map lưu hình ảnh sản phẩm thực tế từ Backend product-service: { [productId]: imageUrl }
+  const [productImagesMap, setProductImagesMap] = useState({});
+  // State quản lý Modal đánh giá sản phẩm ngay trên trang Lịch sử mua hàng
+  const [reviewModalState, setReviewModalState] = useState(null);
+
+  const loadUserReviewsAndImagesForOrders = useCallback(async (orderList) => {
+    if (!Array.isArray(orderList) || orderList.length === 0) return;
+
+    const uniqueProductIds = Array.from(
+      new Set(
+        orderList
+          .flatMap((ord) => (Array.isArray(ord.items) ? ord.items : []))
+          .map((item) => item?.productId || item?.id)
+          .filter(Boolean)
+          .map((pid) => String(pid))
+      )
+    );
+
+    if (uniqueProductIds.length === 0) return;
+
+    const reviewEntries = await Promise.all(
+      uniqueProductIds.map(async (pid) => {
+        try {
+          const myRev = await reviewService.getMyReview(pid);
+          return [pid, myRev];
+        } catch {
+          return [pid, null];
+        }
+      })
+    );
+
+    const nextReviewsMap = {};
+    reviewEntries.forEach(([pid, rev]) => {
+      if (rev && rev.id) {
+        nextReviewsMap[String(pid)] = rev;
+      }
+    });
+    setReviewsMap(nextReviewsMap);
+
+    // Tải ảnh sản phẩm thật từ Backend cho các item chưa có imageUrl
+    const imageEntries = await Promise.all(
+      uniqueProductIds.map(async (pid) => {
+        try {
+          const prod = await productService.getById(pid);
+          return [pid, prod?.imageUrl || prod?.image || null];
+        } catch {
+          return [pid, null];
+        }
+      })
+    );
+
+    const nextImagesMap = {};
+    imageEntries.forEach(([pid, imgUrl]) => {
+      if (imgUrl) {
+        nextImagesMap[String(pid)] = imgUrl;
+      }
+    });
+    setProductImagesMap(nextImagesMap);
+  }, []);
+
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       // Gọi API Backend thật: GET /api/v1/orders/my-orders
       const data = await orderService.getMyOrders();
-      setOrders(Array.isArray(data) ? data : []);
+      const orderList = Array.isArray(data) ? data : [];
+      setOrders(orderList);
+      await loadUserReviewsAndImagesForOrders(orderList);
     } catch (err) {
-      setError(err.message || 'Không thể tải danh sách đơn hàng. Vui lòng thử lại!');
+      const status = err?.status || err?.response?.status;
+      if (status === 401) {
+        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem lịch sử đơn hàng.');
+      } else {
+        setError(
+          err?.response?.data?.message ||
+            err?.message ||
+            'Không thể tải danh sách đơn hàng từ máy chủ. Vui lòng thử lại!'
+        );
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadUserReviewsAndImagesForOrders]);
 
   useEffect(() => {
     fetchOrders();
@@ -49,13 +125,67 @@ const Orders = () => {
       });
     }
     return undefined;
-  }, []);
+  }, [fetchOrders]);
+
+  // Mở Modal đánh giá sản phẩm từ danh sách đơn hàng
+  const handleOpenReviewModal = (order, item, existingReview = null) => {
+    if (!order || !item) return;
+    if (!isOrderCompletedForReview(order.status)) {
+      return;
+    }
+    const productId = item.productId || item.id;
+    const currentReview = existingReview || (productId ? reviewsMap[String(productId)] : null) || null;
+    setReviewModalState({
+      order,
+      item,
+      existingReview: currentReview
+    });
+  };
+
+  const handleCloseReviewModal = () => {
+    setReviewModalState(null);
+  };
+
+  // Sau khi gửi đánh giá thành công -> cập nhật ngay trạng thái sản phẩm sang "Đã đánh giá" không cần reload trang
+  const handleReviewSuccess = (savedReview) => {
+    const productId =
+      savedReview?.productId ||
+      reviewModalState?.item?.productId ||
+      reviewModalState?.item?.id;
+
+    if (productId && savedReview) {
+      setReviewsMap((prev) => ({
+        ...prev,
+        [String(productId)]: savedReview
+      }));
+    }
+    setReviewModalState(null);
+  };
+
+  // Nếu Backend báo 409 Conflict (đã đánh giá trước đó), đồng bộ lại đánh giá thật từ Backend
+  const handleDuplicateReviewDetected = async (productId) => {
+    if (!productId) return;
+    try {
+      const existing = await reviewService.getMyReview(productId);
+      if (existing && existing.id) {
+        setReviewsMap((prev) => ({
+          ...prev,
+          [String(productId)]: existing
+        }));
+      }
+    } catch {
+      // Bỏ qua nếu không tải được
+    }
+  };
 
   // Lọc danh sách theo tab trạng thái và từ khóa tìm kiếm
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      // Filter theo trạng thái
-      const matchesTab = activeTab === 'ALL' || order.status === activeTab;
+      // Filter theo trạng thái (Tab COMPLETED khớp cả DELIVERED và COMPLETED từ Backend)
+      const matchesTab =
+        activeTab === 'ALL' ||
+        order.status === activeTab ||
+        (activeTab === ORDER_STATUS.COMPLETED && isOrderCompletedForReview(order.status));
       if (!matchesTab) return false;
 
       // Filter theo từ khóa
@@ -76,6 +206,9 @@ const Orders = () => {
     orders.forEach((o) => {
       if (o.status) {
         map[o.status] = (map[o.status] || 0) + 1;
+        if (o.status === 'DELIVERED') {
+          map[ORDER_STATUS.COMPLETED] = (map[ORDER_STATUS.COMPLETED] || 0) + 1;
+        }
       }
     });
     return map;
@@ -89,6 +222,13 @@ const Orders = () => {
     );
   }
 
+  const activeModalProductId =
+    reviewModalState?.item?.productId || reviewModalState?.item?.id;
+  const activeModalProductImage =
+    reviewModalState?.item?.imageUrl ||
+    reviewModalState?.item?.image ||
+    (activeModalProductId ? productImagesMap[String(activeModalProductId)] : null);
+
   return (
     <div className="container page-container" style={{ paddingBottom: '3rem' }}>
       {/* Header trang */}
@@ -96,7 +236,7 @@ const Orders = () => {
         <div>
           <h1 className="page-title" style={{ margin: '0 0 0.25rem 0' }}>Lịch sử đơn hàng của bạn</h1>
           <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-            Theo dõi tiến độ, chi tiết và trạng thái các đơn hàng đã đặt
+            Theo dõi tiến độ, chi tiết và đánh giá các sản phẩm trong đơn hàng đã hoàn thành
           </p>
         </div>
         <button
@@ -242,8 +382,60 @@ const Orders = () => {
       ) : (
         <div>
           {filteredOrders.map((order) => (
-            <OrderItem key={order.id || order.orderNumber} order={order} />
+            <OrderItem
+              key={order.id || order.orderNumber}
+              order={order}
+              reviewsMap={reviewsMap}
+              productImagesMap={productImagesMap}
+              onOpenReviewModal={handleOpenReviewModal}
+            />
           ))}
+        </div>
+      )}
+
+      {/* MODAL ĐÁNH GIÁ SẢN PHẨM TRONG LỊCH SỬ MUA HÀNG */}
+      {reviewModalState && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Đánh giá sản phẩm đã mua"
+          data-testid="order-history-review-modal"
+          onClick={handleCloseReviewModal}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 1100
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '640px',
+              maxHeight: '92vh',
+              overflowY: 'auto'
+            }}
+          >
+            <ProductReviewForm
+              product={{
+                id: activeModalProductId,
+                name: reviewModalState.item.productName || reviewModalState.item.name,
+                imageUrl: activeModalProductImage
+              }}
+              orderId={reviewModalState.order.id}
+              orderInfo={reviewModalState.order}
+              initialReview={reviewModalState.existingReview}
+              onSuccess={handleReviewSuccess}
+              onCancel={handleCloseReviewModal}
+              onDuplicateDetected={handleDuplicateReviewDetected}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -498,13 +498,12 @@ export const orderService = {
     return await orderService.checkout(orderData);
   },
 
-  // Lịch sử đơn hàng của user đang đăng nhập (GET /api/orders/my-orders)
+  // Lịch sử đơn hàng của user đang đăng nhập (GET /api/v1/orders/my-orders)
   getMyOrders: async () => {
-    try {
-      return await api.get('/orders/my-orders');
-    } catch (err) {
-      return getStoredOrders();
-    }
+    const data = await api.get('/orders/my-orders');
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.content)) return data.content;
+    return [];
   },
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})

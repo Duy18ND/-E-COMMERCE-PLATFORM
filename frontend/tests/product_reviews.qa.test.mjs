@@ -24,6 +24,9 @@ test('ECOM-177 FE QA SUITE: FORM ĐÁNH GIÁ SAO VÀ NỘI DUNG SAU MUA', async 
   const reviewsSectionSrc = readSrc('components/product/ProductReviewsSection.jsx');
   const productDetailSrc = readSrc('pages/customer/ProductDetail.jsx');
   const orderDetailSrc = readSrc('pages/customer/OrderDetail.jsx');
+  const ordersHistorySrc = readSrc('pages/customer/Orders.jsx');
+  const orderItemSrc = readSrc('components/order/OrderItem.jsx');
+  const orderServiceSrc = readSrc('services/orderService.js');
 
   await t.test('TC-REV-01: Người dùng chưa đăng nhập bị chặn đánh giá (NOT_LOGGED_IN)', () => {
     const result = evaluateReviewEligibility({
@@ -256,6 +259,27 @@ test('ECOM-177 FE QA SUITE: FORM ĐÁNH GIÁ SAO VÀ NỘI DUNG SAU MUA', async 
 
     assert.match(productDetailSrc, /<ProductReviewsSection/);
     assert.match(orderDetailSrc, /<ProductReviewForm/);
+  });
+
+  await t.test('TC-REV-11: Trang Lịch sử mua hàng (Orders.jsx & OrderItem.jsx) hiển thị danh sách sản phẩm trong đơn và nút Đánh giá sản phẩm đúng điều kiện', () => {
+    assert.match(orderItemSrc, /items\.map/);
+    assert.match(orderItemSrc, /Đánh giá sản phẩm/);
+    assert.match(orderItemSrc, /Đã đánh giá/);
+    assert.match(orderItemSrc, /order-history-review-btn-/);
+    assert.match(orderItemSrc, /order-history-reviewed-badge-/);
+    assert.match(orderItemSrc, /order-history-review-disabled-/);
+    assert.match(orderItemSrc, /isOrderCompletedForReview\(order\.status\)/);
+  });
+
+  await t.test('TC-REV-12: Trang Lịch sử mua hàng mở Modal đánh giá và cập nhật ngay trạng thái Đã đánh giá không cần reload trang', () => {
+    assert.match(ordersHistorySrc, /<ProductReviewForm/);
+    assert.match(ordersHistorySrc, /data-testid="order-history-review-modal"/);
+    assert.match(ordersHistorySrc, /reviewService\.getMyReview/);
+    assert.match(ordersHistorySrc, /handleReviewSuccess/);
+    assert.match(ordersHistorySrc, /setReviewsMap/);
+    assert.match(ordersHistorySrc, /status === 401/);
+    assert.doesNotMatch(ordersHistorySrc, /localStorage/);
+    assert.match(orderServiceSrc, /api\.get\('\/orders\/my-orders'\)/);
   });
 });
 

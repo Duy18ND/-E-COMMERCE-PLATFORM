@@ -26,7 +26,8 @@ const ProductReviewForm = ({
   eligibleOrders = [],
   initialReview = null,
   onSuccess,
-  onCancel
+  onCancel,
+  onDuplicateDetected
 }) => {
   const { notify } = useNotification();
   const isEditMode = Boolean(initialReview && initialReview.id);
@@ -173,6 +174,9 @@ const ProductReviewForm = ({
         errMsg =
           err?.response?.data?.message ||
           'Bạn đã đánh giá sản phẩm này trước đó. Mỗi khách hàng chỉ được gửi 1 đánh giá cho mỗi sản phẩm.';
+        if (typeof onDuplicateDetected === 'function') {
+          onDuplicateDetected(resolvedProductId);
+        }
       } else if (status === 403) {
         errMsg =
           err?.response?.data?.message ||
