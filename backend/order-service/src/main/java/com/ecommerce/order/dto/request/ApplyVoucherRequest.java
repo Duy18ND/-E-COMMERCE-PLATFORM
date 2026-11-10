@@ -23,7 +23,7 @@ public class ApplyVoucherRequest implements Serializable {
     private String code;
 
     @NotNull(message = "Tổng tiền đơn hàng không được để trống")
-    @DecimalMin(value = "0.00", message = "Tổng tiền đơn hàng không hợp lệ")
+    @DecimalMin(value = "0.00", inclusive = false, message = "Tổng tiền đơn hàng phải lớn hơn 0")
     private BigDecimal orderTotal;
 
     /**

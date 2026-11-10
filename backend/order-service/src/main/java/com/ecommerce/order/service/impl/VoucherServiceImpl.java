@@ -23,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -38,13 +40,26 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class VoucherServiceImpl implements VoucherService {
 
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private final VoucherRepository voucherRepository;
 
     @Autowired(required = false)
     private VoucherUsageRepository voucherUsageRepository;
 
+    private Clock clock = Clock.system(VIETNAM_ZONE);
+
     public void setVoucherUsageRepository(VoucherUsageRepository voucherUsageRepository) {
         this.voucherUsageRepository = voucherUsageRepository;
+    }
+
+    @Autowired(required = false)
+    public void setClock(Clock clock) {
+        this.clock = (clock != null) ? clock : Clock.system(VIETNAM_ZONE);
+    }
+
+    public Clock getClock() {
+        return this.clock;
     }
 
     @Override
@@ -67,6 +82,7 @@ public class VoucherServiceImpl implements VoucherService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VoucherResponse createVoucher(VoucherRequest request) {
+        validateDateRange(request.getStartDate(), request.getEndDate());
         String code = request.getCode().trim().toUpperCase();
         if (voucherRepository.existsByCodeIgnoreCase(code)) {
             throw new DuplicateResourceException("Mã voucher '" + code + "' đã tồn tại trong hệ thống");
@@ -95,6 +111,7 @@ public class VoucherServiceImpl implements VoucherService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VoucherResponse updateVoucher(Long id, VoucherRequest request) {
+        validateDateRange(request.getStartDate(), request.getEndDate());
         Voucher voucher = voucherRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy voucher với ID: " + id));
 
@@ -155,7 +172,7 @@ public class VoucherServiceImpl implements VoucherService {
     @Override
     @Transactional(readOnly = true)
     public List<VoucherResponse> getActiveVouchers() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         return voucherRepository.findAvailableForCustomer(VoucherStatus.ACTIVE, today)
                 .stream()
                 .map(this::mapToVoucherResponse)
@@ -184,8 +201,11 @@ public class VoucherServiceImpl implements VoucherService {
     @Override
     @Transactional(readOnly = true)
     public ApplyVoucherResponse applyVoucher(ApplyVoucherRequest request) {
+        if (request == null || request.getCode() == null || request.getCode().trim().isEmpty()) {
+            throw new IllegalArgumentException("Mã giảm giá không được để trống");
+        }
         String code = request.getCode().trim().toUpperCase();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
 
         Voucher voucher = voucherRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Mã giảm giá không tồn tại: " + code));
@@ -211,7 +231,7 @@ public class VoucherServiceImpl implements VoucherService {
         }
 
         String code = rawCode.trim().toUpperCase();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
 
         Voucher voucher = voucherRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Mã giảm giá không tồn tại: " + code));
@@ -323,7 +343,20 @@ public class VoucherServiceImpl implements VoucherService {
         }
     }
 
+    private void validateDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new IllegalArgumentException("Ngày bắt đầu và ngày kết thúc không được để trống");
+        }
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("Ngày kết thúc phải bằng hoặc sau ngày bắt đầu");
+        }
+    }
+
     private BigDecimal calculateAndValidateDiscount(Voucher voucher, BigDecimal orderTotal, LocalDate today) {
+        if (voucher.getStartDate() == null || voucher.getEndDate() == null
+                || voucher.getEndDate().isBefore(voucher.getStartDate())) {
+            throw new IllegalStateException("Cấu hình thời hạn mã giảm giá không hợp lệ.");
+        }
         if (voucher.getStatus() != VoucherStatus.ACTIVE) {
             throw new IllegalStateException("Mã giảm giá không còn hiệu lực.");
         }
@@ -336,8 +369,12 @@ public class VoucherServiceImpl implements VoucherService {
         if (voucher.getUsedQuantity() >= voucher.getQuantity()) {
             throw new IllegalStateException("Mã giảm giá đã hết lượt sử dụng.");
         }
-        if (orderTotal == null || orderTotal.compareTo(voucher.getMinOrderValue()) < 0) {
-            throw new IllegalStateException("Đơn hàng tối thiểu " + voucher.getMinOrderValue() + "đ để sử dụng mã này.");
+        if (orderTotal == null || orderTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("Tổng tiền đơn hàng phải lớn hơn 0đ để áp dụng mã giảm giá.");
+        }
+        BigDecimal minOrderValue = voucher.getMinOrderValue() != null ? voucher.getMinOrderValue() : BigDecimal.ZERO;
+        if (orderTotal.compareTo(minOrderValue) < 0) {
+            throw new IllegalStateException("Đơn hàng tối thiểu " + minOrderValue + "đ để sử dụng mã này.");
         }
 
         BigDecimal discount;

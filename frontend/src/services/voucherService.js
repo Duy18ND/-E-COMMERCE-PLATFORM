@@ -3,8 +3,8 @@
  * Quản lý Voucher / Mã giảm giá – Kết nối REST API Backend qua API Gateway kèm LocalStorage Fallback.
  * Đồng bộ hai chiều giữa Admin và Customer.
  */
-import api from './api';
-import { INITIAL_VOUCHERS } from '../mock/mockVouchers';
+import api from './api.js';
+import { INITIAL_VOUCHERS } from '../mock/mockVouchers.js';
 
 const STORAGE_VOUCHERS_KEY = 'app_vouchers';
 const STORAGE_SAVED_KEY = 'app_user_saved_vouchers';
@@ -40,38 +40,76 @@ const persistVouchers = (list) => {
 
 const delay = (ms = 100) => new Promise((res) => setTimeout(res, ms));
 
-/** Tính trạng thái hiển thị của voucher */
-export const getVoucherStatus = (voucher) => {
-  if (!voucher) return 'INACTIVE';
-  const now = new Date();
-  const start = new Date(voucher.startDate);
-  const end = new Date(voucher.endDate);
-  end.setHours(23, 59, 59, 999);
+/**
+ * Chuẩn hóa chuỗi ngày YYYY-MM-DD theo múi giờ local (Việt Nam GMT+7) thay vì UTC midnight
+ * để tránh lệch 7 tiếng từ 00:00 đến 06:59 sáng tại Việt Nam.
+ */
+export const parseLocalDateBoundary = (dateInput, isEndOfDay = false) => {
+  if (!dateInput) return new Date(NaN);
+  if (typeof dateInput === 'string') {
+    const match = dateInput.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]) - 1;
+      const day = Number(match[3]);
+      return isEndOfDay
+        ? new Date(year, month, day, 23, 59, 59, 999)
+        : new Date(year, month, day, 0, 0, 0, 0);
+    }
+  }
+  const parsed = new Date(dateInput);
+  if (Number.isNaN(parsed.getTime())) return parsed;
+  if (isEndOfDay) {
+    parsed.setHours(23, 59, 59, 999);
+  } else {
+    parsed.setHours(0, 0, 0, 0);
+  }
+  return parsed;
+};
 
+/** Tính trạng thái hiển thị của voucher */
+export const getVoucherStatus = (voucher, nowInput = null) => {
+  if (!voucher) return 'INACTIVE';
   if (voucher.status === 'INACTIVE') return 'INACTIVE';
+
+  const start = parseLocalDateBoundary(voucher.startDate, false);
+  const end = parseLocalDateBoundary(voucher.endDate, true);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return 'INACTIVE';
+  }
+
+  const now = nowInput instanceof Date ? nowInput : nowInput ? new Date(nowInput) : new Date();
   if (now < start) return 'UPCOMING';
   if (now > end) return 'EXPIRED';
-  if (voucher.usedQuantity >= voucher.quantity) return 'SOLD_OUT';
+  if (Number(voucher.usedQuantity) >= Number(voucher.quantity)) return 'SOLD_OUT';
   return 'ACTIVE';
 };
 
 /** Tính số tiền được giảm dựa trên đơn hàng */
-export const calcDiscount = (voucher, orderTotal) => {
+export const calcDiscount = (voucher, orderTotal, nowInput = null) => {
   if (!voucher) return 0;
-  const status = getVoucherStatus(voucher);
+  if (orderTotal === null || orderTotal === undefined || typeof orderTotal === 'boolean' || orderTotal === '') {
+    return 0;
+  }
+  const numericTotal = Number(orderTotal);
+  if (!Number.isFinite(numericTotal) || numericTotal <= 0) return 0;
+
+  const status = getVoucherStatus(voucher, nowInput);
   if (status !== 'ACTIVE') return 0;
-  if (orderTotal < voucher.minOrderValue) return 0;
+
+  const minOrderValue = Number(voucher.minOrderValue) || 0;
+  if (numericTotal < minOrderValue) return 0;
 
   let discount = 0;
   if (voucher.discountType === 'FIXED') {
-    discount = Number(voucher.discountValue);
+    discount = Number(voucher.discountValue) || 0;
   } else {
-    discount = Math.round((orderTotal * Number(voucher.discountValue)) / 100);
-    if (voucher.maxDiscount) {
+    discount = Math.round((numericTotal * Number(voucher.discountValue)) / 100);
+    if (voucher.maxDiscount != null && Number(voucher.maxDiscount) > 0) {
       discount = Math.min(discount, Number(voucher.maxDiscount));
     }
   }
-  return Math.min(discount, orderTotal);
+  return Math.max(0, Math.min(discount, numericTotal));
 };
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -108,6 +146,9 @@ const voucherService = {
 
   /** Tạo voucher mới (Admin) */
   async create(data) {
+    if (!data?.startDate || !data?.endDate || String(data.endDate) < String(data.startDate)) {
+      throw new Error('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
+    }
     try {
       const created = await api.post('/admin/vouchers', {
         code: data.code.toUpperCase().trim(),
@@ -164,6 +205,9 @@ const voucherService = {
 
   /** Cập nhật voucher (Admin) */
   async update(id, data) {
+    if (!data?.startDate || !data?.endDate || String(data.endDate) < String(data.startDate)) {
+      throw new Error('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
+    }
     try {
       const updated = await api.put(`/admin/vouchers/${id}`, {
         code: data.code.toUpperCase().trim(),
@@ -332,10 +376,21 @@ const voucherService = {
 
   /** Áp dụng voucher theo mã tại Checkout */
   async applyCode(code, orderTotal) {
+    if (!code || !String(code).trim()) {
+      throw new Error('Mã giảm giá không được để trống.');
+    }
+    if (orderTotal === null || orderTotal === undefined || typeof orderTotal === 'boolean' || orderTotal === '') {
+      throw new Error('Tổng tiền đơn hàng không được để trống.');
+    }
+    const numericTotal = Number(orderTotal);
+    if (!Number.isFinite(numericTotal) || numericTotal <= 0) {
+      throw new Error('Tổng tiền đơn hàng phải lớn hơn 0đ để áp dụng mã giảm giá.');
+    }
+
     try {
       const res = await api.post('/vouchers/apply', {
         code: code.trim().toUpperCase(),
-        orderTotal: Number(orderTotal)
+        orderTotal: numericTotal
       });
       if (res && res.voucher) {
         return {
@@ -361,13 +416,14 @@ const voucherService = {
     if (status === 'SOLD_OUT') throw new Error('Mã giảm giá đã hết lượt sử dụng.');
     if (status === 'INACTIVE') throw new Error('Mã giảm giá không còn hiệu lực.');
 
-    if (orderTotal < v.minOrderValue) {
+    const minOrderValue = Number(v.minOrderValue) || 0;
+    if (numericTotal < minOrderValue) {
       throw new Error(
-        `Đơn hàng tối thiểu ${v.minOrderValue.toLocaleString('vi-VN')}đ để sử dụng mã này.`
+        `Đơn hàng tối thiểu ${minOrderValue.toLocaleString('vi-VN')}đ để sử dụng mã này.`
       );
     }
 
-    const discountAmount = calcDiscount(v, orderTotal);
+    const discountAmount = calcDiscount(v, numericTotal);
     return { voucher: v, discountAmount };
   }
 };

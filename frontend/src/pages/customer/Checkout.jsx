@@ -5,7 +5,7 @@ import useCart from '../../hooks/useCart';
 import useNotification from '../../hooks/useNotification';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
-import voucherService, { getVoucherStatus, calcDiscount } from '../../services/voucherService';
+import voucherService, { getVoucherStatus, calcDiscount, parseLocalDateBoundary } from '../../services/voucherService';
 import { PAYMENT_METHOD, PAYMENT_METHOD_LABELS } from '../../utils/constants';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -16,7 +16,7 @@ import ErrorMessage from '../../components/common/ErrorMessage';
 const fmtMoney = (n) => Number(n).toLocaleString('vi-VN') + 'đ';
 const fmtDate  = (str) => {
   if (!str) return '';
-  const d = new Date(str);
+  const d = parseLocalDateBoundary(str, false);
   return isNaN(d) ? str : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 };
 
@@ -99,15 +99,16 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {savedVouchers.map((v) => {
                 const status     = getVoucherStatus(v);
-                const canApply   = status === 'ACTIVE' && orderTotal >= v.minOrderValue;
+                const minOrder   = Number(v.minOrderValue || 0);
+                const canApply   = status === 'ACTIVE' && orderTotal > 0 && orderTotal >= minOrder;
                 const discount   = calcDiscount(v, orderTotal);
                 const isSelected = v.id === appliedVoucherId;
 
                 let disabledReason = null;
                 if (status !== 'ACTIVE') {
                   disabledReason = status === 'EXPIRED' ? 'Đã hết hạn' : status === 'SOLD_OUT' ? 'Hết lượt dùng' : 'Không khả dụng';
-                } else if (orderTotal < v.minOrderValue) {
-                  disabledReason = `Cần đơn tối thiểu ${fmtMoney(v.minOrderValue)}`;
+                } else if (orderTotal <= 0 || orderTotal < minOrder) {
+                  disabledReason = `Cần đơn tối thiểu ${fmtMoney(minOrder)}`;
                 }
 
                 return (
@@ -315,16 +316,28 @@ const Checkout = () => {
       return;
     }
     const discountAmount = calcDiscount(v, totalPrice);
+    if (discountAmount <= 0 || totalPrice <= 0 || totalPrice < Number(v.minOrderValue || 0)) {
+      setAppliedVoucher(null);
+      setPickerOpen(false);
+      return;
+    }
     setAppliedVoucher({ voucher: v, discountAmount });
     setPickerOpen(false);
   };
 
   const handleRemoveVoucher = () => setAppliedVoucher(null);
 
-  // Recalculate if cart total changes
+  // Recalculate if cart total changes (and auto-invalidate if order drops below minOrderValue)
   useEffect(() => {
     if (appliedVoucher) {
-      const newDiscount = calcDiscount(appliedVoucher.voucher, totalPrice);
+      const v = appliedVoucher.voucher;
+      const status = getVoucherStatus(v);
+      const minOrder = Number(v?.minOrderValue || 0);
+      if (!v || status !== 'ACTIVE' || totalPrice <= 0 || totalPrice < minOrder) {
+        setAppliedVoucher(null);
+        return;
+      }
+      const newDiscount = calcDiscount(v, totalPrice);
       setAppliedVoucher((prev) => prev ? { ...prev, discountAmount: newDiscount } : null);
     }
   }, [totalPrice]);
