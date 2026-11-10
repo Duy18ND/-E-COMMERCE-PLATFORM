@@ -63,6 +63,10 @@ public class AdminCustomerController {
         if (size <= 0) {
             throw new IllegalArgumentException("Kích thước trang (size) phải lớn hơn 0");
         }
+
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 100);
+        String safeSortBy = (sortBy != null && ALLOWED_SORT_FIELDS.contains(sortBy.trim())) ? sortBy.trim() : "id";
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(direction, safeSortBy));
 

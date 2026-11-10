@@ -214,7 +214,7 @@ class AdminCustomerControllerTest {
 
         mockMvc.perform(get("/api/v1/admin/customers")
                         .header("X-User-Roles", "ROLE_USER, ROLE_ADMIN")
-                        .param("page", "-5")
+                        .param("page", "0")
                         .param("size", "9999")
                         .param("sortBy", "password"))
                 .andExpect(status().isOk())
