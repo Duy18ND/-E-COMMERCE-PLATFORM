@@ -8,7 +8,7 @@ import productService from '../../services/productService';
 import saleService from '../../services/saleService';
 import FlashCountdown from '../../components/sale/FlashCountdown';
 import Loading from '../../components/common/Loading';
-import ProductReviewsSection from '../../components/product/ProductReviewsSection';
+import ProductReviewsSection, { renderRatingStars } from '../../components/product/ProductReviewsSection';
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -31,6 +31,7 @@ const ProductDetail = () => {
   useEffect(() => {
     setLoading(true);
     setQuantity(1);
+    setReviewMeta({ averageRating: 0, totalReviews: 0 });
     productService
       .getById(id)
       .then(async (data) => {
@@ -498,23 +499,24 @@ const ProductDetail = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.82rem', color: '#64748b', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
                 <a
                   href="#product-reviews-section"
+                  data-testid="product-header-rating-link"
                   style={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '0.25rem',
-                    color: '#eab308',
+                    gap: '0.35rem',
+                    color: '#0f172a',
                     fontWeight: 700,
                     textDecoration: 'none'
                   }}
                 >
-                  <span>★</span>
-                  <span>
+                  {renderRatingStars(reviewMeta.totalReviews > 0 ? reviewMeta.averageRating : 0, '0.95rem')}
+                  <span style={{ color: '#b45309', fontWeight: 800 }}>
                     {reviewMeta.totalReviews > 0
-                      ? Number(reviewMeta.averageRating).toFixed(1)
-                      : 'Chưa có'}
+                      ? `${Number(reviewMeta.averageRating).toFixed(1)}/5 sao`
+                      : '0.0/5 sao'}
                   </span>
                   <span style={{ color: '#64748b', fontWeight: 500 }}>
-                    ({reviewMeta.totalReviews} đánh giá thực tế)
+                    ({reviewMeta.totalReviews} lượt đánh giá)
                   </span>
                 </a>
                 <span>•</span>

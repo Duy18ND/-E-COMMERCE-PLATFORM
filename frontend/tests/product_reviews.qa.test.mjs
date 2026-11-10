@@ -8,6 +8,8 @@ import {
   validateReviewInput,
   normalizeReviewSummary,
   normalizeReview,
+  calculateStarDistribution,
+  filterAndSortReviews,
   isOrderCompletedForReview,
   MAX_REVIEW_COMMENT_LENGTH
 } from '../src/services/reviewService.js';
@@ -280,6 +282,77 @@ test('ECOM-177 FE QA SUITE: FORM ĐÁNH GIÁ SAO VÀ NỘI DUNG SAU MUA', async 
     assert.match(ordersHistorySrc, /status === 401/);
     assert.doesNotMatch(ordersHistorySrc, /localStorage/);
     assert.match(orderServiceSrc, /api\.get\('\/orders\/my-orders'\)/);
+  });
+
+  await t.test('TC-REV-13: Khu vực tổng quan đánh giá tại trang Chi tiết sản phẩm (Điểm trung bình, tổng lượt, phân bổ 1-5 sao & không sinh dữ liệu giả khi rỗng)', () => {
+    // Khi sản phẩm chưa có đánh giá -> tất cả bằng 0, không có số liệu giả
+    const emptyStats = calculateStarDistribution([], null, 0);
+    assert.deepEqual(emptyStats.counts, { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 });
+    assert.deepEqual(emptyStats.percentages, { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 });
+    assert.equal(emptyStats.totalCounted, 0);
+
+    // Khi sản phẩm có nhiều đánh giá thực tế
+    const sampleReviews = [
+      { id: 1, rating: 5 },
+      { id: 2, rating: 5 },
+      { id: 3, rating: 4 },
+      { id: 4, rating: 3 },
+      { id: 5, rating: 1 }
+    ];
+    const stats = calculateStarDistribution(sampleReviews, null, 5);
+    assert.deepEqual(stats.counts, { 5: 2, 4: 1, 3: 1, 2: 0, 1: 1 });
+    assert.deepEqual(stats.percentages, { 5: 40, 4: 20, 3: 20, 2: 0, 1: 20 });
+
+    assert.match(reviewsSectionSrc, /data-testid="review-overview-box"/);
+    assert.match(reviewsSectionSrc, /data-testid="review-average-rating"/);
+    assert.match(reviewsSectionSrc, /data-testid="review-total-count"/);
+    assert.match(reviewsSectionSrc, /data-testid="review-star-breakdown"/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`rating-bar-\$\{star\}`\}/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`rating-count-\$\{star\}`\}/);
+  });
+
+  await t.test('TC-REV-14: Bộ lọc theo số sao (5, 4, 3, 2, 1 sao, Tất cả) và sắp xếp (Mới nhất, Cũ nhất, Số sao cao/thấp)', () => {
+    const reviewsList = [
+      { id: 1, rating: 4, comment: 'Khá tốt', createdAt: '2026-10-01T08:00:00' },
+      { id: 2, rating: 5, comment: 'Tuyệt vời', createdAt: '2026-10-03T10:00:00' },
+      { id: 3, rating: 2, comment: 'Chưa ưng', createdAt: '2026-10-02T09:00:00' },
+      { id: 4, rating: 5, comment: 'Rất hài lòng', createdAt: '2026-10-04T12:00:00' }
+    ];
+
+    // Lọc 5 sao
+    const fiveStarOnly = filterAndSortReviews(reviewsList, { starFilter: 5, sortBy: 'createdAt,desc' });
+    assert.equal(fiveStarOnly.length, 2);
+    assert.deepEqual(fiveStarOnly.map((r) => r.id), [4, 2]);
+
+    // Sắp xếp cũ nhất (createdAt,asc)
+    const oldestFirst = filterAndSortReviews(reviewsList, { starFilter: 0, sortBy: 'createdAt,asc' });
+    assert.deepEqual(oldestFirst.map((r) => r.id), [1, 3, 2, 4]);
+
+    // Sắp xếp số sao cao nhất (rating,desc)
+    const highestRating = filterAndSortReviews(reviewsList, { starFilter: 0, sortBy: 'rating,desc' });
+    assert.equal(highestRating[0].rating, 5);
+    assert.equal(highestRating[highestRating.length - 1].rating, 2);
+
+    // Sắp xếp số sao thấp nhất (rating,asc)
+    const lowestRating = filterAndSortReviews(reviewsList, { starFilter: 0, sortBy: 'rating,asc' });
+    assert.equal(lowestRating[0].rating, 2);
+    assert.equal(lowestRating[lowestRating.length - 1].rating, 5);
+
+    assert.match(reviewsSectionSrc, /data-testid="star-filter-all"/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`star-filter-\$\{star\}`\}/);
+    assert.match(reviewsSectionSrc, /data-testid="review-sort-select"/);
+  });
+
+  await t.test('TC-REV-15: Danh sách bình luận hiển thị đủ thông tin (tác giả, nhãn đã mua, ngày, sao, nội dung) kèm Phân trang & Load More', () => {
+    assert.match(reviewsSectionSrc, /data-testid=\{`review-author-\$\{review\.id\}`\}/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`verified-purchase-badge-\$\{review\.id\}`\}/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`review-date-\$\{review\.id\}`\}/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`review-rating-\$\{review\.id\}`\}/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`review-comment-\$\{review\.id\}`\}/);
+    assert.match(reviewsSectionSrc, /data-testid="reviews-pagination"/);
+    assert.match(reviewsSectionSrc, /data-testid="reviews-load-more-button"/);
+    assert.match(reviewsSectionSrc, /data-testid=\{`reviews-page-btn-\$\{pageNum\}`\}/);
+    assert.match(productDetailSrc, /data-testid="product-header-rating-link"/);
   });
 });
 

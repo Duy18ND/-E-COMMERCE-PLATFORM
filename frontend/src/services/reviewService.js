@@ -13,6 +13,13 @@ export const STAR_RATING_LABELS = {
   5: 'Rất hài lòng / Tuyệt vời'
 };
 
+export const REVIEW_SORT_OPTIONS = [
+  { value: 'createdAt,desc', label: 'Mới nhất' },
+  { value: 'createdAt,asc', label: 'Cũ nhất' },
+  { value: 'rating,desc', label: 'Số sao cao nhất (5 → 1★)' },
+  { value: 'rating,asc', label: 'Số sao thấp nhất (1 → 5★)' }
+];
+
 /**
  * Kiểm tra trạng thái đơn hàng có đủ điều kiện hoàn thành/đã giao để đánh giá hay không.
  * Theo Backend ReviewServiceImpl.fetchAndValidateOrder:
@@ -172,7 +179,13 @@ export const normalizeReview = (raw) => {
     id: raw.id,
     productId: raw.productId,
     userId: raw.userId,
-    orderId: raw.orderId,
+    orderId: raw.orderId ?? null,
+    userFullName: raw.userFullName || raw.fullName || raw.userName || raw.reviewerName || null,
+    userAvatarUrl: raw.userAvatarUrl || raw.avatarUrl || null,
+    verifiedPurchase:
+      raw.verifiedPurchase !== undefined
+        ? Boolean(raw.verifiedPurchase)
+        : Boolean(raw.orderId !== undefined && raw.orderId !== null),
     rating: Number(raw.rating ?? 0),
     comment: raw.comment ?? '',
     status: raw.status || 'APPROVED',
@@ -180,6 +193,80 @@ export const normalizeReview = (raw) => {
     createdAt: raw.createdAt || null,
     updatedAt: raw.updatedAt || null
   };
+};
+
+/**
+ * Tính toán phân bổ số lượng và tỷ lệ phần trăm từng mức sao (1 - 5 sao) từ dữ liệu thật.
+ * Không sinh số liệu giả khi chưa có đánh giá.
+ */
+export const calculateStarDistribution = (reviews = [], backendDistribution = null, totalReviewsOverride = null) => {
+  const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+
+  if (backendDistribution && typeof backendDistribution === 'object') {
+    [5, 4, 3, 2, 1].forEach((star) => {
+      const val = Number(backendDistribution[star] ?? backendDistribution[String(star)] ?? 0);
+      counts[star] = Number.isNaN(val) || val < 0 ? 0 : val;
+    });
+  } else if (Array.isArray(reviews)) {
+    reviews.forEach((rev) => {
+      const r = Math.round(Number(rev?.rating) || 0);
+      if (r >= 1 && r <= 5) {
+        counts[r] += 1;
+      }
+    });
+  }
+
+  const sumCounts = counts[5] + counts[4] + counts[3] + counts[2] + counts[1];
+  const denominator =
+    totalReviewsOverride !== null && totalReviewsOverride !== undefined && Number(totalReviewsOverride) > 0
+      ? Math.max(Number(totalReviewsOverride), sumCounts)
+      : sumCounts;
+
+  const percentages = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  if (denominator > 0) {
+    [5, 4, 3, 2, 1].forEach((star) => {
+      percentages[star] = Math.min(100, Math.round((counts[star] / denominator) * 100));
+    });
+  }
+
+  return {
+    counts,
+    percentages,
+    totalCounted: sumCounts
+  };
+};
+
+/**
+ * Lọc và sắp xếp danh sách đánh giá theo số sao (1-5) và tiêu chí sắp xếp.
+ */
+export const filterAndSortReviews = (reviews = [], { starFilter = 0, sortBy = 'createdAt,desc' } = {}) => {
+  if (!Array.isArray(reviews)) return [];
+
+  const targetStar = Number(starFilter) || 0;
+  const filtered =
+    targetStar >= 1 && targetStar <= 5
+      ? reviews.filter((item) => Math.round(Number(item?.rating) || 0) === targetStar)
+      : [...reviews];
+
+  const [field, direction] = String(sortBy || 'createdAt,desc').split(',');
+  const isAsc = String(direction || 'desc').toLowerCase() === 'asc';
+
+  filtered.sort((a, b) => {
+    if (field === 'rating') {
+      const diff = (Number(a?.rating) || 0) - (Number(b?.rating) || 0);
+      if (diff !== 0) return isAsc ? diff : -diff;
+    }
+    const timeA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+    const safeTimeA = Number.isNaN(timeA) ? 0 : timeA;
+    const safeTimeB = Number.isNaN(timeB) ? 0 : timeB;
+    if (safeTimeA !== safeTimeB) {
+      return isAsc ? safeTimeA - safeTimeB : safeTimeB - safeTimeA;
+    }
+    return isAsc ? (Number(a?.id) || 0) - (Number(b?.id) || 0) : (Number(b?.id) || 0) - (Number(a?.id) || 0);
+  });
+
+  return filtered;
 };
 
 /**
@@ -194,6 +281,7 @@ export const normalizeReviewSummary = (payload, productId, params = {}) => {
       productId: Number(productId) || productId,
       averageRating: 0,
       totalReviews: 0,
+      ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
       reviews: {
         content: [],
         pageNumber: defaultPage,
@@ -215,11 +303,15 @@ export const normalizeReviewSummary = (payload, productId, params = {}) => {
   const content = rawList.map(normalizeReview).filter(Boolean);
   const totalReviews = Number(payload.totalReviews ?? reviewsBlock.totalElements ?? content.length);
   const averageRating = Number(payload.averageRating ?? 0);
+  const backendDist = payload.ratingDistribution || payload.starCounts || payload.ratingCounts || null;
+  const { counts: ratingDistribution } = calculateStarDistribution(content, backendDist, totalReviews);
 
   return {
     productId: payload.productId ?? (Number(productId) || productId),
     averageRating: Number.isNaN(averageRating) ? 0 : Math.round(averageRating * 10) / 10,
     totalReviews: Number.isNaN(totalReviews) ? 0 : totalReviews,
+    ratingDistribution,
+    hasBackendDistribution: Boolean(backendDist),
     reviews: {
       content,
       pageNumber: Number(reviewsBlock.pageNumber ?? defaultPage),
@@ -240,7 +332,8 @@ export const reviewService = {
     const queryParams = {
       page: params.page ?? 0,
       size: params.size ?? 10,
-      ...(params.sort ? { sort: params.sort } : {})
+      ...(params.sort ? { sort: params.sort } : {}),
+      ...(params.rating ? { rating: params.rating } : {})
     };
     const response = await api.get(`/products/${productId}/reviews`, { params: queryParams });
     return normalizeReviewSummary(response, productId, queryParams);
