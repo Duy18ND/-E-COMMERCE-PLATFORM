@@ -334,25 +334,167 @@ const setStoredOrders = (orders) => {
   }
 };
 
+const ORDER_PRICE_OVERRIDES_KEY = 'shopmart_order_price_overrides';
+
+const saveOrderPriceOverride = (orderObj) => {
+  if (!orderObj || orderObj.id == null) return;
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const raw = localStorage.getItem(ORDER_PRICE_OVERRIDES_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    map[String(orderObj.id)] = {
+      originalAmount: Number(orderObj.originalAmount ?? orderObj.subtotalAmount ?? orderObj.totalAmount ?? 0),
+      subtotalAmount: Number(orderObj.subtotalAmount ?? orderObj.totalAmount ?? 0),
+      productDiscountAmount: Number(orderObj.productDiscountAmount ?? 0),
+      discountAmount: Number(orderObj.discountAmount ?? 0),
+      voucherCode: orderObj.voucherCode || null,
+      totalAmount: Number(orderObj.totalAmount ?? 0)
+    };
+    localStorage.setItem(ORDER_PRICE_OVERRIDES_KEY, JSON.stringify(map));
+  } catch (e) {
+    // Bỏ qua lỗi lưu trữ
+  }
+};
+
+const applyOrderPriceOverride = (orderObj) => {
+  if (!orderObj || typeof orderObj !== 'object') return orderObj;
+  let result = { ...orderObj };
+  try {
+    if (typeof localStorage !== 'undefined' && result.id != null) {
+      const raw = localStorage.getItem(ORDER_PRICE_OVERRIDES_KEY);
+      const map = raw ? JSON.parse(raw) : null;
+      const ov = map?.[String(result.id)];
+      if (ov) {
+        const sub = Number(result.subtotalAmount || ov.subtotalAmount || 0);
+        const disc = Math.max(Number(result.discountAmount || 0), Number(ov.discountAmount || 0));
+        const prodDisc = Math.max(Number(result.productDiscountAmount || 0), Number(ov.productDiscountAmount || 0));
+        const orig = Math.max(Number(result.originalAmount || 0), Number(ov.originalAmount || 0), sub + prodDisc);
+        const discountedTotal = sub > 0 ? Math.max(0, sub - disc) : Number(ov.totalAmount ?? result.totalAmount ?? 0);
+        const finalTotal =
+          Number(ov.totalAmount) > 0 && Number(ov.totalAmount) < Number(result.totalAmount || Infinity)
+            ? Number(ov.totalAmount)
+            : discountedTotal;
+        result = {
+          ...result,
+          originalAmount: orig,
+          subtotalAmount: sub > 0 ? sub : Number(result.totalAmount || 0),
+          productDiscountAmount: prodDisc,
+          discountAmount: disc,
+          voucherCode: result.voucherCode || ov.voucherCode || null,
+          totalAmount: finalTotal
+        };
+      }
+    }
+  } catch (e) {
+    // Bỏ qua lỗi đọc override
+  }
+
+  // Luôn đảm bảo nếu đơn có subtotalAmount và discountAmount > 0 thì totalAmount đã trừ discountAmount
+  if (result.subtotalAmount != null && Number(result.discountAmount) > 0) {
+    const expectedTotal = Math.max(0, Number(result.subtotalAmount) - Number(result.discountAmount));
+    if (Number(result.totalAmount) > expectedTotal) {
+      result.totalAmount = expectedTotal;
+    }
+  }
+  return result;
+};
+
 export const orderService = {
   // Tạo đơn hàng từ giỏ hàng hiện tại (POST /api/orders/checkout)
-  checkout: async ({ receiverName, receiverPhone, shippingAddress, note, paymentMethod, voucherCode }) => {
+  checkout: async ({
+    receiverName,
+    receiverPhone,
+    shippingAddress,
+    note,
+    paymentMethod,
+    voucherId = null,
+    voucherCode = null,
+    discountAmount = 0,
+    subtotalAmount = null,
+    originalAmount = null,
+    productDiscountAmount = 0,
+    finalTotal = null
+  }) => {
+    const normalizedVoucherCode =
+      typeof voucherCode === 'string' && voucherCode.trim() ? voucherCode.trim().toUpperCase() : null;
+
     try {
-      return await api.post('/orders/checkout', {
+      const apiOrder = await api.post('/orders/checkout', {
         receiverName,
         receiverPhone,
         shippingAddress,
         note: note || '',
         paymentMethod,
-        voucherCode: voucherCode || null
+        voucherCode: normalizedVoucherCode
       });
+
+      if (apiOrder && typeof apiOrder === 'object') {
+        const effectiveSubtotal =
+          subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
+            ? Number(subtotalAmount)
+            : Number(apiOrder.subtotalAmount ?? apiOrder.totalAmount ?? 0);
+        const effectiveDiscount = Math.min(
+          effectiveSubtotal,
+          Math.max(Number(apiOrder.discountAmount ?? 0), Math.max(0, Number(discountAmount) || 0))
+        );
+        const effectiveProductDiscount = Math.max(0, Number(productDiscountAmount) || 0);
+        const computedFinal =
+          finalTotal !== null && finalTotal !== undefined && Number(finalTotal) >= 0 && effectiveSubtotal > 0
+            ? Math.min(Number(finalTotal), Math.max(0, effectiveSubtotal - effectiveDiscount))
+            : Math.max(0, effectiveSubtotal - effectiveDiscount);
+        const backendTotal = Number(apiOrder.totalAmount ?? computedFinal);
+        const resolvedTotal =
+          effectiveSubtotal > 0 && (effectiveDiscount > 0 || effectiveProductDiscount > 0)
+            ? Math.min(backendTotal > 0 ? backendTotal : computedFinal, computedFinal)
+            : backendTotal;
+        const resolvedOriginal = Math.max(
+          Number(originalAmount ?? 0),
+          effectiveSubtotal + effectiveProductDiscount,
+          Number(apiOrder.subtotalAmount ?? resolvedTotal)
+        );
+
+        const normalizedOrder = {
+          ...apiOrder,
+          voucherId: voucherId ?? apiOrder.voucherId ?? null,
+          voucherCode: apiOrder.voucherCode || normalizedVoucherCode,
+          originalAmount: resolvedOriginal,
+          subtotalAmount: effectiveSubtotal,
+          productDiscountAmount: effectiveProductDiscount,
+          discountAmount: effectiveDiscount,
+          totalAmount: resolvedTotal
+        };
+        saveOrderPriceOverride(normalizedOrder);
+        return normalizedOrder;
+      }
+      return apiOrder;
     } catch (err) {
       // Fallback Mock Order Creation: Cho phép test xác nhận đơn hàng 100% không bị lỗi
       const cartData = await cartService.getCart();
       const orders = getStoredOrders();
 
       const newId = Math.floor(1004 + Math.random() * 8990);
-      const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
+      const isOnlinePay = paymentMethod === 'MOCK_ONLINE' || (Boolean(paymentMethod) && paymentMethod !== 'COD');
+
+      const rawCartSubtotal = Number(cartData?.totalPrice ?? cartData?.totalAmount) || 32490000;
+      const resolvedSubtotal =
+        subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
+          ? Number(subtotalAmount)
+          : rawCartSubtotal;
+      const resolvedDiscountAmount = Math.min(
+        resolvedSubtotal,
+        Math.max(0, Number(discountAmount) || 0)
+      );
+      const resolvedProductDiscount = Math.max(
+        0,
+        Number(productDiscountAmount) || Number(cartData?.totalDiscount) || 0
+      );
+      const resolvedOriginalAmount = Math.max(
+        Number(originalAmount) || 0,
+        Number(cartData?.totalOriginalPrice) || 0,
+        resolvedSubtotal + resolvedProductDiscount
+      );
+      // Đảm bảo totalAmount luôn bằng Math.max(0, subtotalAmount - discountAmount), không bao giờ lấy giá gốc
+      const resolvedTotalAmount = Math.max(0, resolvedSubtotal - resolvedDiscountAmount);
 
       const createdAtIso = new Date().toISOString();
       const createdOrder = {
@@ -363,10 +505,15 @@ export const orderService = {
         shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
         note: note || '',
         paymentMethod: paymentMethod || 'COD',
-        voucherCode: voucherCode || null,
+        voucherId: voucherId || null,
+        voucherCode: normalizedVoucherCode,
+        originalAmount: resolvedOriginalAmount,
+        subtotalAmount: resolvedSubtotal,
+        productDiscountAmount: resolvedProductDiscount,
+        discountAmount: resolvedDiscountAmount,
         // Đơn Online mới tạo giữ trạng thái PENDING chờ khách quét mã QR thanh toán
         status: isOnlinePay ? ORDER_STATUS.PENDING : ORDER_STATUS.PENDING,
-        totalAmount: cartData.totalPrice || 32490000,
+        totalAmount: resolvedTotalAmount,
         createdAt: createdAtIso,
         statusHistories: [
           {
@@ -388,8 +535,9 @@ export const orderService = {
               productId: i.productId,
               name: i.name,
               productName: i.name,
-              priceAtPurchase: i.price,
-              price: i.price,
+              originalPrice: i.originalPrice ?? i.price,
+              priceAtPurchase: i.salePrice ?? i.unitPrice ?? i.price,
+              price: i.salePrice ?? i.unitPrice ?? i.price,
               quantity: i.quantity,
               subTotal: i.subTotal,
               imageUrl: i.imageUrl
@@ -400,6 +548,7 @@ export const orderService = {
                 productId: 'fs-1',
                 name: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
                 productName: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
+                originalPrice: 49990000,
                 priceAtPurchase: 32490000,
                 price: 32490000,
                 quantity: 1,
@@ -409,9 +558,10 @@ export const orderService = {
             ]
       };
 
-      // Lưu vào danh sách đơn
+      // Lưu vào danh sách đơn và bảng tra cứu giá đã giảm
       orders.unshift(createdOrder);
       setStoredOrders(orders);
+      saveOrderPriceOverride(createdOrder);
 
       // Dọn sạch giỏ sau khi đặt hàng thành công
       await cartService.clearCart();
@@ -428,28 +578,30 @@ export const orderService = {
   // Lịch sử đơn hàng của user đang đăng nhập (GET /api/orders/my-orders)
   getMyOrders: async () => {
     try {
-      return await api.get('/orders/my-orders');
+      const list = await api.get('/orders/my-orders');
+      return Array.isArray(list) ? list.map(applyOrderPriceOverride) : list;
     } catch (err) {
-      return getStoredOrders();
+      return getStoredOrders().map(applyOrderPriceOverride);
     }
   },
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})
   getOrderById: async (id) => {
     const applyQrOverrideIfNeeded = (orderObj) => {
-      if (!orderObj || orderObj.status !== ORDER_STATUS.PENDING) return orderObj;
+      const withPrice = applyOrderPriceOverride(orderObj);
+      if (!withPrice || withPrice.status !== ORDER_STATUS.PENDING) return withPrice;
       try {
         if (typeof window !== 'undefined' && window.sessionStorage) {
           const raw = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
           const overrides = raw ? JSON.parse(raw) : null;
-          const ov = overrides?.[String(orderObj.id ?? id)];
+          const ov = overrides?.[String(withPrice.id ?? id)];
           if (ov && ov.status) {
-            const histories = Array.isArray(orderObj.statusHistories) ? orderObj.statusHistories : [];
+            const histories = Array.isArray(withPrice.statusHistories) ? withPrice.statusHistories : [];
             const hasEntry = histories.some((h) => h.status === ov.status);
             return {
-              ...orderObj,
+              ...withPrice,
               status: ov.status,
-              updatedAt: ov.updatedAt || orderObj.updatedAt,
+              updatedAt: ov.updatedAt || withPrice.updatedAt,
               statusHistories: hasEntry || !ov.historyEntry ? histories : [...histories, ov.historyEntry]
             };
           }
@@ -457,7 +609,7 @@ export const orderService = {
       } catch (e) {
         // Bỏ qua lỗi đọc sessionStorage
       }
-      return orderObj;
+      return withPrice;
     };
 
     try {

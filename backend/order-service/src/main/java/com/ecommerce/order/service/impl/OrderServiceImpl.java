@@ -147,6 +147,9 @@ public class OrderServiceImpl implements OrderService {
             if (voucherService != null) {
                 voucherService.validateUserCanUseVoucher(appliedVoucherCode, request.getUserId());
                 discountAmount = voucherService.redeemVoucherForOrder(appliedVoucherCode, subtotalAmount);
+                if (discountAmount == null) {
+                    discountAmount = BigDecimal.ZERO;
+                }
             }
         }
 
@@ -195,7 +198,13 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
-        log.info("Order created successfully with id: {}, totalAmount: {}", savedOrder.getId(), savedOrder.getTotalAmount());
+        if (savedOrder != null) {
+            savedOrder.setSubtotalAmount(subtotalAmount);
+            savedOrder.setDiscountAmount(discountAmount);
+            savedOrder.setTotalAmount(finalTotalAmount);
+        }
+        log.info("Order created successfully with id: {}, subtotalAmount: {}, discountAmount: {}, totalAmount: {}",
+                savedOrder.getId(), subtotalAmount, discountAmount, savedOrder.getTotalAmount());
 
         // [Task ECOM-166 / ECOM-167 / ECOM-183] Lưu bản ghi voucher_usages (chặn dùng trùng và phục vụ hoàn lượt khi hủy/lỗi thanh toán)
         if (appliedVoucherCode != null && voucherService != null && savedOrder != null) {

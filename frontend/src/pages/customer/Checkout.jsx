@@ -366,34 +366,50 @@ const Checkout = () => {
 
     setLoading(true);
     try {
-      // Tạo đơn hàng – kèm thông tin voucher để sẵn sàng tích hợp Backend
+      // Tạo đơn hàng – kèm đầy đủ thông tin tạm tính (đã áp giá Flash Sale) và giảm giá Voucher
       const createdOrder = await orderService.checkout({
-        receiverName:    formData.receiverName.trim(),
-        receiverPhone:   formData.receiverPhone.trim(),
-        shippingAddress: fullShippingAddress,
-        note:            formData.note ? formData.note.trim() : '',
-        paymentMethod:   formData.paymentMethod,
-        // Voucher info – Backend có thể đọc trường này sau
-        voucherId:       appliedVoucher?.voucher?.id     ?? null,
-        voucherCode:     appliedVoucher?.voucher?.code   ?? null,
-        discountAmount:  appliedVoucher?.discountAmount  ?? 0
+        receiverName:          formData.receiverName.trim(),
+        receiverPhone:         formData.receiverPhone.trim(),
+        shippingAddress:       fullShippingAddress,
+        note:                  formData.note ? formData.note.trim() : '',
+        paymentMethod:         formData.paymentMethod,
+        subtotalAmount:        totalPrice,
+        originalAmount:        totalOriginalPrice > totalPrice ? totalOriginalPrice : totalPrice,
+        productDiscountAmount: totalDiscount,
+        voucherId:             appliedVoucher?.voucher?.id     ?? null,
+        voucherCode:           appliedVoucher?.voucher?.code   ?? null,
+        discountAmount:        voucherDiscount,
+        finalTotal
       });
+
+      const resolvedSubtotal = Number(createdOrder?.subtotalAmount || totalPrice || 0);
+      const resolvedVoucherDiscount = Math.max(Number(createdOrder?.discountAmount || 0), voucherDiscount);
+      const resolvedPayableTotal =
+        finalTotal >= 0 && totalPrice > 0
+          ? finalTotal
+          : Math.max(0, resolvedSubtotal - resolvedVoucherDiscount);
+      const normalizedCreatedOrder = {
+        ...createdOrder,
+        originalAmount:        Math.max(Number(createdOrder?.originalAmount || 0), totalOriginalPrice || resolvedSubtotal),
+        subtotalAmount:        resolvedSubtotal,
+        productDiscountAmount: Math.max(Number(createdOrder?.productDiscountAmount || 0), totalDiscount || 0),
+        voucherCode:           createdOrder?.voucherCode || appliedVoucher?.voucher?.code || null,
+        discountAmount:        resolvedVoucherDiscount,
+        totalAmount:           resolvedPayableTotal
+      };
 
       await refreshCart();
 
       // Thanh toán trực tuyến (khác COD): giữ đơn PENDING và mở màn hình quét mã QR thay vì chuyển trang ngay
       const isOnlinePayment = formData.paymentMethod !== PAYMENT_METHOD.COD;
-      if (isOnlinePayment && createdOrder?.id && createdOrder?.status !== 'PAID') {
-        setQrOrder({
-          ...createdOrder,
-          totalAmount: createdOrder.totalAmount ?? finalTotal
-        });
-        notify.success(`Đặt hàng thành công! Vui lòng quét mã QR để thanh toán đơn hàng #${createdOrder.id}.`);
+      if (isOnlinePayment && normalizedCreatedOrder?.id && normalizedCreatedOrder?.status !== 'PAID') {
+        setQrOrder(normalizedCreatedOrder);
+        notify.success(`Đặt hàng thành công! Vui lòng quét mã QR để thanh toán đơn hàng #${normalizedCreatedOrder.id}.`);
         return;
       }
 
-      notify.success(`Đặt hàng thành công! Đơn hàng #${createdOrder?.id || ''} đã được ghi nhận.`);
-      navigate('/order-success', { state: { orderId: createdOrder?.id, order: createdOrder } });
+      notify.success(`Đặt hàng thành công! Đơn hàng #${normalizedCreatedOrder?.id || ''} đã được ghi nhận.`);
+      navigate('/order-success', { state: { orderId: normalizedCreatedOrder?.id, order: normalizedCreatedOrder } });
     } catch (err) {
       const errMsg = err.message || 'Đặt hàng không thành công. Vui lòng kiểm tra lại thông tin giỏ hàng!';
       setError(errMsg);

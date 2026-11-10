@@ -104,11 +104,107 @@ const calculateCartResponse = (items) => {
   };
 };
 
+const CART_PRICE_HINTS_KEY = 'shopmart_cart_price_hints';
+
+const savePriceHint = (productId, customProduct) => {
+  if (!productId || !customProduct) return;
+  const sale = Number(customProduct.salePrice ?? customProduct.flashSalePrice ?? 0);
+  const orig = Number(customProduct.originalPrice ?? customProduct.price ?? 0);
+  if (sale > 0 && orig > sale) {
+    try {
+      const raw = localStorage.getItem(CART_PRICE_HINTS_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      map[String(productId)] = { originalPrice: orig, salePrice: sale };
+      localStorage.setItem(CART_PRICE_HINTS_KEY, JSON.stringify(map));
+    } catch (e) {
+      // Bỏ qua lỗi localStorage
+    }
+  }
+};
+
+const getPriceHint = (productId) => {
+  if (!productId) return null;
+  try {
+    const raw = localStorage.getItem(CART_PRICE_HINTS_KEY);
+    if (raw) {
+      const map = JSON.parse(raw);
+      if (map?.[String(productId)]) return map[String(productId)];
+    }
+  } catch (e) {
+    // Bỏ qua lỗi đọc localStorage
+  }
+  const matched = INITIAL_FLASH_PRODUCTS.find((p) => String(p.id) === String(productId));
+  if (matched && Number(matched.salePrice) > 0 && Number(matched.price) > Number(matched.salePrice)) {
+    return { originalPrice: Number(matched.price), salePrice: Number(matched.salePrice) };
+  }
+  return null;
+};
+
+const enrichServerCart = (cartData) => {
+  if (!cartData || !Array.isArray(cartData.items)) return cartData;
+  const enrichedItems = cartData.items.map((item) => {
+    const hint = getPriceHint(item.productId);
+    const serverPrice = Number(item.price ?? item.unitPrice ?? 0);
+    const serverOriginal = Number(item.originalPrice ?? serverPrice);
+    const serverSale = item.salePrice != null ? Number(item.salePrice) : null;
+
+    if (serverSale != null && serverSale > 0 && serverSale < serverOriginal) {
+      const qty = Number(item.quantity || 1);
+      return {
+        ...item,
+        originalPrice: serverOriginal,
+        salePrice: serverSale,
+        price: serverSale,
+        unitPrice: serverSale,
+        subTotal: serverSale * qty,
+        originalSubTotal: serverOriginal * qty,
+        isFlashSale: true
+      };
+    }
+
+    if (hint && hint.salePrice > 0 && (serverPrice <= 0 || hint.salePrice < serverPrice)) {
+      const qty = Number(item.quantity || 1);
+      const orig = Math.max(serverOriginal, hint.originalPrice);
+      return {
+        ...item,
+        originalPrice: orig,
+        salePrice: hint.salePrice,
+        price: hint.salePrice,
+        unitPrice: hint.salePrice,
+        subTotal: hint.salePrice * qty,
+        originalSubTotal: orig * qty,
+        isFlashSale: true
+      };
+    }
+    return item;
+  });
+
+  const totalPrice = enrichedItems.reduce(
+    (sum, i) => sum + Number(i.subTotal ?? Number(i.price || 0) * Number(i.quantity || 1)),
+    0
+  );
+  const totalOriginalPrice = enrichedItems.reduce(
+    (sum, i) =>
+      sum + Number(i.originalSubTotal ?? Number(i.originalPrice || i.price || 0) * Number(i.quantity || 1)),
+    0
+  );
+  const totalDiscount = Math.max(0, totalOriginalPrice - totalPrice);
+
+  return {
+    ...cartData,
+    items: enrichedItems,
+    totalPrice,
+    totalAmount: totalPrice,
+    totalOriginalPrice,
+    totalDiscount
+  };
+};
+
 export const cartService = {
   getCart: async () => {
     try {
       const data = await api.get('/cart');
-      return data;
+      return enrichServerCart(data);
     } catch (err) {
       // Fallback về local mock cart
       const items = getLocalCart();
@@ -117,11 +213,13 @@ export const cartService = {
   },
 
   addItem: async (productId, quantity = 1, customProduct = null) => {
+    savePriceHint(productId, customProduct);
     try {
-      return await api.post('/cart/items', {
+      const data = await api.post('/cart/items', {
         productId: Number(productId),
         quantity: Number(quantity)
       });
+      return enrichServerCart(data);
     } catch (err) {
       // Mock fallback: Thêm vào local cart
       const items = getLocalCart();
@@ -162,9 +260,10 @@ export const cartService = {
 
   updateItem: async (itemId, quantity) => {
     try {
-      return await api.put(`/cart/items/${itemId}`, {
+      const data = await api.put(`/cart/items/${itemId}`, {
         quantity: Number(quantity)
       });
+      return enrichServerCart(data);
     } catch (err) {
       let items = getLocalCart();
       const qty = Number(quantity);
@@ -190,7 +289,8 @@ export const cartService = {
 
   removeItem: async (itemId) => {
     try {
-      return await api.delete(`/cart/items/${itemId}`);
+      const data = await api.delete(`/cart/items/${itemId}`);
+      return enrichServerCart(data);
     } catch (err) {
       let items = getLocalCart();
       items = items.filter((i) => String(i.id) !== String(itemId) && String(i.itemId) !== String(itemId));
