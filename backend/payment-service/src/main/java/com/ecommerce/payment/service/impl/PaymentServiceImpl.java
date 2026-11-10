@@ -64,14 +64,16 @@ public class PaymentServiceImpl implements PaymentService {
             return mapToPaymentResponse(savedCodPayment);
         }
 
-        // 3. Luồng xử lý riêng cho MOCK_ONLINE
+        // 3. Luồng thanh toán trực tuyến (MOCK_ONLINE / VNPAY / MOMO / BANK_TRANSFER / QR_CODE ...)
         return processMockOnlinePayment(event, existingPaymentOpt);
     }
 
     /**
-     * Luồng xử lý tự động cho phương thức thanh toán trực tuyến giả lập (MOCK_ONLINE):
-     * - Nếu amount > 50,000,000 VND -> Giả lập thanh toán THẤT BẠI, kích hoạt Saga Rollback.
-     * - Ngược lại -> Giả lập THÀNH CÔNG, sinh transactionCode và phát sự kiện payment-success.
+     * Luồng xử lý cho các phương thức thanh toán trực tuyến (MOCK_ONLINE, VNPAY, MOMO, BANK_TRANSFER, QR_CODE...):
+     * - Nếu amount > 50,000,000 VND -> Chặn hạn mức chống gian lận: tự động THẤT BẠI, kích hoạt Saga Rollback.
+     * - Ngược lại -> Chỉ lưu bản ghi Payment ở trạng thái PENDING (chờ khách quét mã VietQR).
+     *   KHÔNG tự động phát payment-success: việc chuyển sang SUCCESS / FAILED do người dùng xác nhận
+     *   trên màn hình QR thông qua API POST /api/v1/payments/mock-pay/{orderId} (xem {@link #mockPay}).
      */
     private PaymentResponse processMockOnlinePayment(OrderCreatedEvent event, Optional<Payment> existingPaymentOpt) {
         Payment payment = existingPaymentOpt.orElseGet(() -> Payment.builder()
@@ -81,6 +83,13 @@ public class PaymentServiceImpl implements PaymentService {
                 .status(PaymentStatus.PENDING)
                 .build());
 
+        // Đồng bộ lại số tiền / phương thức theo đơn hàng (trường hợp bản ghi PENDING được tạo sớm bởi mock-pay)
+        if (event.getTotalAmount() != null) {
+            payment.setAmount(event.getTotalAmount());
+        }
+        if (event.getPaymentMethod() != null) {
+            payment.setPaymentMethod(event.getPaymentMethod());
+        }
         payment.setStatus(PaymentStatus.PENDING);
         Payment savedPendingPayment = paymentRepository.save(payment);
         log.info("[Saga Step] Saved initial PENDING payment record with id: {} for orderId: {}",
@@ -103,26 +112,12 @@ public class PaymentServiceImpl implements PaymentService {
             kafkaPaymentProducer.sendPaymentFailed(failedEvent);
 
             return mapToPaymentResponse(finalizedFailedPayment);
-        } else {
-            String transactionCode = generateTransactionCode();
-            savedPendingPayment.setStatus(PaymentStatus.SUCCESS);
-            savedPendingPayment.setTransactionCode(transactionCode);
-            Payment finalizedSuccessPayment = paymentRepository.save(savedPendingPayment);
-
-            log.info("[Saga Step] Payment SUCCESS for orderId {}: transactionCode={}",
-                    event.getOrderId(), transactionCode);
-
-            // Bắn event payment-success qua Kafka cho order-service hoàn tất đơn hàng
-            PaymentSuccessEvent successEvent = PaymentSuccessEvent.builder()
-                    .orderId(event.getOrderId())
-                    .paymentId(finalizedSuccessPayment.getId())
-                    .transactionCode(transactionCode)
-                    .timestamp(LocalDateTime.now())
-                    .build();
-            kafkaPaymentProducer.sendPaymentSuccess(successEvent);
-
-            return mapToPaymentResponse(finalizedSuccessPayment);
         }
+
+        // Trong hạn mức: giữ nguyên PENDING, chờ khách quét mã QR và xác nhận qua API mock-pay
+        log.info("[Saga Step] Online orderId {} (method={}, amount={}) is PENDING, awaiting QR payment confirmation via /mock-pay.",
+                event.getOrderId(), savedPendingPayment.getPaymentMethod(), event.getTotalAmount());
+        return mapToPaymentResponse(savedPendingPayment);
     }
 
     @Override
@@ -145,6 +140,19 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (payment.getStatus() == PaymentStatus.SUCCESS) {
             log.info("[Mock Pay] Đơn hàng ID {} đã được thanh toán thành công trước đó", orderId);
+            return mapToPaymentResponse(payment);
+        }
+
+        // Giao dịch đã thất bại (vượt hạn mức / khách hủy) -> Saga Rollback đã hoàn kho & hoàn Voucher.
+        // Không cho phép xác nhận thành công lại để tránh đơn FAILED bị chuyển sang PAID, và không bắn lại
+        // payment-failed để tránh hoàn kho 2 lần.
+        if (payment.getStatus() == PaymentStatus.FAILED) {
+            if (isSuccess) {
+                log.warn("[Mock Pay] Đơn hàng ID {} đã thanh toán thất bại trước đó, từ chối xác nhận thành công", orderId);
+                throw new IllegalStateException("Giao dịch của đơn hàng #" + orderId
+                        + " đã thất bại hoặc bị hủy trước đó, không thể xác nhận thanh toán lại. Vui lòng đặt đơn hàng mới.");
+            }
+            log.info("[Mock Pay] Đơn hàng ID {} đã ở trạng thái FAILED trước đó, bỏ qua (idempotent)", orderId);
             return mapToPaymentResponse(payment);
         }
 

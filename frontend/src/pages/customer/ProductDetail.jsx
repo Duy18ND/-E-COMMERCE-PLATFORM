@@ -8,6 +8,7 @@ import productService from '../../services/productService';
 import saleService from '../../services/saleService';
 import FlashCountdown from '../../components/sale/FlashCountdown';
 import Loading from '../../components/common/Loading';
+import ProductReviewsSection from '../../components/product/ProductReviewsSection';
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -25,6 +26,7 @@ const ProductDetail = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [reviewMeta, setReviewMeta] = useState({ averageRating: 0, totalReviews: 0 });
 
   useEffect(() => {
     setLoading(true);
@@ -494,11 +496,27 @@ const ProductDetail = () => {
 
               {/* Rating & Sold count */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.82rem', color: '#64748b', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#eab308', fontWeight: 700 }}>
+                <a
+                  href="#product-reviews-section"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    color: '#eab308',
+                    fontWeight: 700,
+                    textDecoration: 'none'
+                  }}
+                >
                   <span>★</span>
-                  <span>{product.rating || 4.9}</span>
-                  <span style={{ color: '#64748b', fontWeight: 500 }}>({product.reviewCount || 128} đánh giá thực tế)</span>
-                </div>
+                  <span>
+                    {reviewMeta.totalReviews > 0
+                      ? Number(reviewMeta.averageRating).toFixed(1)
+                      : 'Chưa có'}
+                  </span>
+                  <span style={{ color: '#64748b', fontWeight: 500 }}>
+                    ({reviewMeta.totalReviews} đánh giá thực tế)
+                  </span>
+                </a>
                 <span>•</span>
                 <div style={{ color: '#dc2626', fontWeight: 600 }}>
                   🔥 Đã bán {sold} chiếc trong đợt sale
@@ -1000,6 +1018,9 @@ const ProductDetail = () => {
             </div>
           </div>
         </div>
+
+        {/* 4. KHU VỰC ĐÁNH GIÁ & NHẬN XÉT SẢN PHẨM SAU MUA (TÍCH HỢP BACKEND API) */}
+        <ProductReviewsSection product={product} onSummaryChange={setReviewMeta} />
       </div>
     </div>
   );

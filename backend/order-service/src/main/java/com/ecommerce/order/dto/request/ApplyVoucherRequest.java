@@ -25,5 +25,15 @@ public class ApplyVoucherRequest implements Serializable {
     @NotNull(message = "Tổng tiền đơn hàng không được để trống")
     @DecimalMin(value = "0.00", message = "Tổng tiền đơn hàng không hợp lệ")
     private BigDecimal orderTotal;
+
+    /**
+     * [Task ECOM-167] ID người dùng áp mã (tùy chọn, được truyền từ header X-User-Id hoặc body để chặn dùng trùng).
+     */
+    private Long userId;
+
+    public ApplyVoucherRequest(String code, BigDecimal orderTotal) {
+        this.code = code;
+        this.orderTotal = orderTotal;
+    }
 }
 

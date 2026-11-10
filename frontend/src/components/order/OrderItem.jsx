@@ -64,7 +64,14 @@ const OrderItem = ({ order }) => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {(order.status === 'DELIVERED' || order.status === 'COMPLETED') && (
+            <Link to={`/orders/${order.id || order.orderNumber}`}>
+              <Button variant="primary" size="sm">
+                ⭐ Đánh giá
+              </Button>
+            </Link>
+          )}
           <Link to={`/orders/${order.id || order.orderNumber}/tracking`}>
             <Button variant="secondary" size="sm">
               Theo dõi

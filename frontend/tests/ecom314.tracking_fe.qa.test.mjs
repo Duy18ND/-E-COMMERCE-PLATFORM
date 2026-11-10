@@ -73,7 +73,7 @@ describe('ECOM-314: [FE] QA TEST - UI, RESPONSIVE, LỖI VÀ TÍCH HỢP (THEO D
   });
 
   test('TC-314-06: [Responsive Layout] OrderTimeline hỗ trợ chuyển đổi bố cục ngang (Desktop) sang bố cục dọc (Mobile <= 640px)', () => {
-    const content = fs.readFileSync(orderTimelineFile, 'utf8');
+    const content = fs.readFileSync(orderTimelineFile, 'utf8').replace(/\r\n/g, '\n');
     assert.ok(content.includes('@media (max-width: 640px)'), 'Phải có media query cho màn hình nhỏ <= 640px');
     assert.ok(content.includes('.order-stepper-track {\n            flex-direction: column !important;'), 'Stepper phải chuyển thành cột dọc trên mobile');
     assert.ok(content.includes('.order-stepper-node {\n            flex-direction: row !important;'), 'Node trong stepper xếp ngang gọn gàng trên mobile');

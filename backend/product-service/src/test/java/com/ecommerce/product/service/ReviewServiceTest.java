@@ -376,4 +376,30 @@ class ReviewServiceTest {
         assertThat(response.getContent()).hasSize(1);
         verify(reviewRepository, times(1)).findAll(any(Pageable.class));
     }
+
+    @Test
+    @DisplayName("[Task ECOM-177] getReviewsByProduct: Khi chưa có đánh giá nào (avgRating = null) -> Trả về averageRating = 0.0 an toàn")
+    void getReviewsByProduct_WhenAverageRatingNull_ShouldReturnZero() {
+        when(productRepository.existsById(1L)).thenReturn(true);
+        when(reviewRepository.findByProductIdAndStatus(eq(1L), eq(ReviewStatus.APPROVED), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(reviewRepository.calculateAverageRatingByProductId(1L)).thenReturn(null);
+        when(reviewRepository.countByProductIdAndStatus(1L, ReviewStatus.APPROVED)).thenReturn(0L);
+
+        ReviewSummaryResponse summary = reviewService.getReviewsByProduct(1L, PageRequest.of(0, 10));
+
+        assertThat(summary).isNotNull();
+        assertThat(summary.getAverageRating()).isEqualTo(0.0);
+        assertThat(summary.getTotalReviews()).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-177 / ECOM-193] deleteReview: Admin xoá review khi userId = null vẫn thành công")
+    void deleteReview_WhenAdminWithNullUserId_ShouldSucceed() {
+        when(reviewRepository.findById(99L)).thenReturn(Optional.of(sampleReview));
+
+        reviewService.deleteReview(1L, 99L, null, "ROLE_ADMIN");
+
+        verify(reviewRepository, times(1)).delete(sampleReview);
+    }
 }

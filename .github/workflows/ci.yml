@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ master ]
   push:
-    branches: [ devops-phuong ]
+    branches: [ devops-phuong, master ]
   workflow_dispatch:
 
 permissions:

@@ -243,5 +243,81 @@ class VoucherControllerTest {
 
         verifyNoInteractions(voucherService);
     }
+
+    @Test
+    @DisplayName("[Task ECOM-167] Customer: GET /api/v1/vouchers/active kèm X-User-Id -> Gọi getAvailableVouchersForUser")
+    void getActiveVouchers_WithUserIdHeader_ShouldCallGetAvailableVouchersForUser() throws Exception {
+        VoucherResponse v = VoucherResponse.builder()
+                .id(2L)
+                .code("SALE10")
+                .status(VoucherStatus.ACTIVE)
+                .build();
+        when(voucherService.getAvailableVouchersForUser(15L)).thenReturn(List.of(v));
+
+        mockMvc.perform(get("/api/v1/vouchers/active")
+                        .header("X-User-Id", 15L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].code").value("SALE10"));
+
+        verify(voucherService, times(1)).getAvailableVouchersForUser(15L);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-167] Customer: GET /api/v1/vouchers/active?userId=25 -> Gọi getAvailableVouchersForUser")
+    void getActiveVouchers_WithUserIdQueryParam_ShouldCallGetAvailableVouchersForUser() throws Exception {
+        VoucherResponse v = VoucherResponse.builder()
+                .id(3L)
+                .code("FREESHIP")
+                .status(VoucherStatus.ACTIVE)
+                .build();
+        when(voucherService.getAvailableVouchersForUser(25L)).thenReturn(List.of(v));
+
+        mockMvc.perform(get("/api/v1/vouchers/active")
+                        .param("userId", "25"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].code").value("FREESHIP"));
+
+        verify(voucherService, times(1)).getAvailableVouchersForUser(25L);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-167] Security: POST /api/v1/vouchers/apply có X-User-Id luôn ghi đè userId giả mạo trong body")
+    void applyVoucher_WithHeaderAndSpoofedBodyUserId_ShouldOverrideWithHeaderUserId() throws Exception {
+        ApplyVoucherRequest spoofedRequest = ApplyVoucherRequest.builder()
+                .code("SAVE10")
+                .orderTotal(new BigDecimal("300000.00"))
+                .userId(999L)
+                .build();
+
+        ApplyVoucherResponse response = ApplyVoucherResponse.builder()
+                .voucher(VoucherResponse.builder().id(1L).code("SAVE10").build())
+                .discountAmount(new BigDecimal("30000.00"))
+                .finalAmount(new BigDecimal("270000.00"))
+                .build();
+
+        when(voucherService.applyVoucher(any(ApplyVoucherRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/vouchers/apply")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(spoofedRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(voucherService).applyVoucher(argThat(req -> Long.valueOf(10L).equals(req.getUserId())));
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-339] Admin: GET /api/v1/admin/vouchers với ROLE_ADMIN_VIEWER (substring bypass) -> Trả về 403 Forbidden")
+    void getAllVouchers_WithRoleAdminViewer_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/vouchers")
+                        .header("X-User-Roles", "ROLE_ADMIN_VIEWER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verifyNoInteractions(voucherService);
+    }
 }
 
