@@ -35,7 +35,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
      * Chỉ tăng khi voucher đang ACTIVE, còn trong thời hạn và usedQuantity < quantity.
      * Trả về số dòng cập nhật (1 = thành công, 0 = thất bại / hết lượt).
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Voucher v SET v.usedQuantity = v.usedQuantity + 1 " +
            "WHERE v.id = :id AND v.status = 'ACTIVE' " +
            "AND v.startDate <= :today AND v.endDate >= :today " +
@@ -45,7 +45,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
     /**
      * Hoàn lại 1 lượt sử dụng khi đơn hàng bị hủy hoặc thanh toán thất bại.
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Voucher v SET v.usedQuantity = v.usedQuantity - 1 " +
            "WHERE UPPER(v.code) = UPPER(:code) AND v.usedQuantity > 0")
     int decrementUsedQuantityByCode(@Param("code") String code);

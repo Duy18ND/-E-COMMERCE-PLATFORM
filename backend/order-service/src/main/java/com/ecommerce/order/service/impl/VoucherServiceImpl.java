@@ -20,6 +20,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -29,6 +31,8 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +52,14 @@ public class VoucherServiceImpl implements VoucherService {
     private VoucherUsageRepository voucherUsageRepository;
 
     private Clock clock = Clock.system(VIETNAM_ZONE);
+
+    /**
+     * [Task ECOM-185] Khóa đồng bộ theo cặp (voucherCode, userId) và tập theo dõi giao dịch đang xử lý (in-flight)
+     * để ngăn chặn 1 người dùng gửi nhiều request đồng thời vượt giới hạn sử dụng cá nhân (TOCTOU race condition).
+     */
+    private final ConcurrentHashMap<String, ReentrantLock> userVoucherLocks = new ConcurrentHashMap<>();
+    private final Set<String> inFlightUserVouchers = ConcurrentHashMap.newKeySet();
+    private final ConcurrentHashMap<String, ReentrantLock> orderRestoreLocks = new ConcurrentHashMap<>();
 
     public void setVoucherUsageRepository(VoucherUsageRepository voucherUsageRepository) {
         this.voucherUsageRepository = voucherUsageRepository;
@@ -252,6 +264,22 @@ public class VoucherServiceImpl implements VoucherService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BigDecimal redeemVoucherForOrder(String rawCode, BigDecimal subtotalAmount, Long userId, Long orderId) {
+        if (rawCode == null || rawCode.trim().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        if (userId != null) {
+            String key = rawCode.trim().toUpperCase() + "#" + userId;
+            ReentrantLock lock = userVoucherLocks.computeIfAbsent(key, k -> new ReentrantLock());
+            lock.lock();
+            try {
+                validateUserCanUseVoucher(rawCode, userId);
+                BigDecimal discount = redeemVoucherForOrder(rawCode, subtotalAmount);
+                recordVoucherUsage(rawCode, userId, orderId, discount);
+                return discount;
+            } finally {
+                lock.unlock();
+            }
+        }
         validateUserCanUseVoucher(rawCode, userId);
         BigDecimal discount = redeemVoucherForOrder(rawCode, subtotalAmount);
         recordVoucherUsage(rawCode, userId, orderId, discount);
@@ -265,10 +293,27 @@ public class VoucherServiceImpl implements VoucherService {
             return;
         }
         String code = rawCode.trim().toUpperCase();
-        if (voucherUsageRepository.existsByVoucherCodeIgnoreCaseAndUserIdAndStatus(
-                code, userId, VoucherUsageStatus.APPLIED)) {
-            log.warn("Duplicate voucher usage blocked for userId={}, code={}", userId, code);
-            throw new IllegalStateException("Bạn đã sử dụng mã giảm giá này rồi.");
+        String userVoucherKey = code + "#" + userId;
+        ReentrantLock lock = userVoucherLocks.computeIfAbsent(userVoucherKey, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            if (inFlightUserVouchers.contains(userVoucherKey)
+                    || voucherUsageRepository.existsByVoucherCodeIgnoreCaseAndUserIdAndStatus(
+                            code, userId, VoucherUsageStatus.APPLIED)) {
+                log.warn("Duplicate voucher usage blocked for userId={}, code={}", userId, code);
+                throw new IllegalStateException("Bạn đã sử dụng mã giảm giá này rồi.");
+            }
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                inFlightUserVouchers.add(userVoucherKey);
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        inFlightUserVouchers.remove(userVoucherKey);
+                    }
+                });
+            }
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -313,28 +358,36 @@ public class VoucherServiceImpl implements VoucherService {
             return;
         }
         String code = voucherCode.trim().toUpperCase();
-        Optional<VoucherUsage> usageOpt = Optional.empty();
-        if (orderId != null) {
-            usageOpt = voucherUsageRepository.findFirstByVoucherCodeIgnoreCaseAndOrderIdAndStatusOrderByIdDesc(
-                    code, orderId, VoucherUsageStatus.APPLIED);
+        String lockKey = code + "#" + (orderId != null ? "ORDER:" + orderId : "USER:" + userId);
+        ReentrantLock lock = orderRestoreLocks.computeIfAbsent(lockKey, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            Optional<VoucherUsage> usageOpt = Optional.empty();
+            if (orderId != null) {
+                usageOpt = voucherUsageRepository.findFirstByVoucherCodeIgnoreCaseAndOrderIdAndStatusOrderByIdDesc(
+                        code, orderId, VoucherUsageStatus.APPLIED);
+            } else if (userId != null) {
+                usageOpt = voucherUsageRepository.findFirstByVoucherCodeIgnoreCaseAndUserIdAndStatusOrderByIdDesc(
+                        code, userId, VoucherUsageStatus.APPLIED);
+            }
+            usageOpt.ifPresent(usage -> {
+                usage.setStatus(VoucherUsageStatus.RESTORED);
+                voucherUsageRepository.save(usage);
+                log.info("Restored voucher_usages record id={} to RESTORED for code={}, userId={}, orderId={}",
+                        usage.getId(), code, userId, orderId);
+            });
+        } finally {
+            lock.unlock();
         }
-        if (usageOpt.isEmpty() && userId != null) {
-            usageOpt = voucherUsageRepository.findFirstByVoucherCodeIgnoreCaseAndUserIdAndStatusOrderByIdDesc(
-                    code, userId, VoucherUsageStatus.APPLIED);
-        }
-        usageOpt.ifPresent(usage -> {
-            usage.setStatus(VoucherUsageStatus.RESTORED);
-            voucherUsageRepository.save(usage);
-            log.info("Restored voucher_usages record id={} to RESTORED for code={}, userId={}, orderId={}",
-                    usage.getId(), code, userId, orderId);
-        });
     }
 
     private void validateUserNotAlreadyUsed(Voucher voucher, Long userId) {
         if (userId == null || voucherUsageRepository == null) {
             return;
         }
-        boolean alreadyUsed = (voucher.getId() != null && voucherUsageRepository.existsByVoucherIdAndUserIdAndStatus(
+        String userVoucherKey = voucher.getCode().trim().toUpperCase() + "#" + userId;
+        boolean alreadyUsed = inFlightUserVouchers.contains(userVoucherKey)
+                || (voucher.getId() != null && voucherUsageRepository.existsByVoucherIdAndUserIdAndStatus(
                 voucher.getId(), userId, VoucherUsageStatus.APPLIED))
                 || voucherUsageRepository.existsByVoucherCodeIgnoreCaseAndUserIdAndStatus(
                 voucher.getCode(), userId, VoucherUsageStatus.APPLIED);
