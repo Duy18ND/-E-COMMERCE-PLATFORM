@@ -1,0 +1,640 @@
+{
+	"info": {
+		"_postman_id": "c1d4e2f3-9a8b-4c5d-ae6f-7b8c9d0e1f2a",
+		"name": "ShopMart Complete REST API Collection (Microservices & Gateway)",
+		"description": "Bộ Postman Collection đầy đủ 100% cho toàn bộ nền tảng ShopMart E-Commerce Platform.\nĐịnh tuyến qua API Gateway cổng 8080 (hoặc Nginx cổng 80).\nBao gồm 8 nhóm chức năng: Auth, Users, Products, Categories, Cart, Orders, Payments, Admin.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Authentication & Users",
+			"item": [
+				{
+					"name": "Register New Customer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fullName\": \"Nguyen Van A\",\n  \"email\": \"customer@shopmart.com\",\n  \"password\": \"Customer@123\",\n  \"phone\": \"0987654321\",\n  \"address\": \"123 Nguyen Trai, Ha Noi\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.token) {",
+									"    pm.collectionVariables.set('user_token', jsonData.data.token);",
+									"    pm.collectionVariables.set('userId', jsonData.data.userId || '1');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@shopmart.com\",\n  \"password\": \"Customer@123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.token) {",
+									"    pm.collectionVariables.set('admin_token', jsonData.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@shopmart.com\",\n  \"password\": \"Admin@123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Get User Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/users/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "users", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fullName\": \"Nguyen Van A Updated\",\n  \"phone\": \"0912345678\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/users/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "users", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Get User Addresses",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/users/addresses",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "users", "addresses"]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/logout",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "logout"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Products & Catalog",
+			"item": [
+				{
+					"name": "Get Product List (Public / Guest)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products?page=0&size=10&sort=id,desc",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products"],
+							"query": [
+								{ "key": "page", "value": "0" },
+								{ "key": "size", "value": "10" },
+								{ "key": "sort", "value": "id,desc" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Product Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/{{productId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "{{productId}}"]
+						}
+					}
+				},
+				{
+					"name": "Search Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/search?keyword=iPhone&page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "search"],
+							"query": [
+								{ "key": "keyword", "value": "iPhone" },
+								{ "key": "page", "value": "0" },
+								{ "key": "size", "value": "10" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Check Product Stock",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/{{productId}}/stock",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "{{productId}}", "stock"]
+						}
+					}
+				},
+				{
+					"name": "Get Categories List",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/categories",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "categories"]
+						}
+					}
+				},
+				{
+					"name": "Get Active Flash Sale",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/flash-sales/active",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "flash-sales", "active"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Shopping Cart",
+			"item": [
+				{
+					"name": "Get User Cart",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/cart",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "cart"]
+						}
+					}
+				},
+				{
+					"name": "Add Item to Cart",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/cart/items",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "cart", "items"]
+						}
+					}
+				},
+				{
+					"name": "Update Cart Item Quantity",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"quantity\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "cart", "items", "{{cartItemId}}"]
+						}
+					}
+				},
+				{
+					"name": "Remove Item from Cart",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "cart", "items", "{{cartItemId}}"]
+						}
+					}
+				},
+				{
+					"name": "Clear Cart",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/cart",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "cart"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Checkout & Orders",
+			"item": [
+				{
+					"name": "Checkout Order",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.id) {",
+									"    pm.collectionVariables.set('orderId', jsonData.data.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"items\": [\n    {\n      \"productId\": {{productId}},\n      \"quantity\": 1,\n      \"unitPrice\": 10000000\n    }\n  ],\n  \"shippingAddress\": \"123 Nguyen Trai, Thanh Xuan, Ha Noi\",\n  \"receiverName\": \"Nguyen Van A\",\n  \"receiverPhone\": \"0987654321\",\n  \"paymentMethod\": \"COD\",\n  \"note\": \"Giao gio hanh chinh\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders/checkout",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders", "checkout"]
+						}
+					}
+				},
+				{
+					"name": "Get User Orders History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders?page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders"],
+							"query": [
+								{ "key": "page", "value": "0" },
+								{ "key": "size", "value": "10" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Order Detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders", "{{orderId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Order Tracking Timeline",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/timeline",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders", "{{orderId}}", "timeline"]
+						}
+					}
+				},
+				{
+					"name": "Get Order Status Audit History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/status-history",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders", "{{orderId}}", "status-history"]
+						}
+					}
+				},
+				{
+					"name": "Cancel Order (Customer)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"Khach hang doi y muon dat lai san pham khac\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders", "{{orderId}}", "cancel"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Payment (Mock Online & Status)",
+			"item": [
+				{
+					"name": "Confirm Mock Payment (Success)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"success\": true,\n  \"note\": \"Thanh toan the tin dung mo phong thanh cong\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/payments/mock-pay/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "payments", "mock-pay", "{{orderId}}"]
+						}
+					}
+				},
+				{
+					"name": "Confirm Mock Payment (Failed / Reject)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"success\": false,\n  \"note\": \"Nguoi dung tu choi xac thuc OTP\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/payments/mock-pay/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "payments", "mock-pay", "{{orderId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Payment Info by Order ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{user_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/payments/order/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "payments", "order", "{{orderId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Admin Management",
+			"item": [
+				{
+					"name": "Admin Create Product",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{admin_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Samsung Galaxy S24 Ultra\",\n  \"description\": \"Flagship Android 2024\",\n  \"price\": 29990000,\n  \"stock\": 50,\n  \"categoryId\": 1,\n  \"imageUrl\": \"https://images.unsplash.com/photo-1610945415295-d9bbf067e59c\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products"]
+						}
+					}
+				},
+				{
+					"name": "Admin Update Stock",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{admin_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"stock\": 100\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/{{productId}}/stock",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "{{productId}}", "stock"]
+						}
+					}
+				},
+				{
+					"name": "Admin List All Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{admin_token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/orders?page=0&size=20&status=PENDING",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "admin", "orders"],
+							"query": [
+								{ "key": "page", "value": "0" },
+								{ "key": "size", "value": "20" },
+								{ "key": "status", "value": "PENDING" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Admin Update Order Status (Approve / Transition)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{admin_token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"CONFIRMED\",\n  \"note\": \"Admin da duyet don hang hop le\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "admin", "orders", "{{orderId}}", "status"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "7. System & Healthcheck",
+			"item": [
+				{
+					"name": "Nginx / Gateway Healthcheck",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/actuator/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["actuator", "health"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "user_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "productId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "cartItemId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "orderId",
+			"value": "1",
+			"type": "string"
+		}
+	]
+}

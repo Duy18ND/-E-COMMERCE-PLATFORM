@@ -354,6 +354,7 @@ export const orderService = {
       const newId = Math.floor(1004 + Math.random() * 8990);
       const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
 
+      const createdAtIso = new Date().toISOString();
       const createdOrder = {
         id: newId,
         receiverName: receiverName || 'Khách hàng ShopMart',
@@ -363,9 +364,24 @@ export const orderService = {
         note: note || '',
         paymentMethod: paymentMethod || 'COD',
         voucherCode: voucherCode || null,
-        status: isOnlinePay ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING,
+        // Đơn Online mới tạo giữ trạng thái PENDING chờ khách quét mã QR thanh toán
+        status: isOnlinePay ? ORDER_STATUS.PENDING : ORDER_STATUS.PENDING,
         totalAmount: cartData.totalPrice || 32490000,
-        createdAt: new Date().toISOString(),
+        createdAt: createdAtIso,
+        statusHistories: [
+          {
+            id: Date.now(),
+            orderId: newId,
+            status: ORDER_STATUS.PENDING,
+            statusDescription: STATUS_DESCRIPTIONS[ORDER_STATUS.PENDING] || 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
+            previousStatus: null,
+            action: 'CREATE_ORDER',
+            updatedBy: 'Khách hàng',
+            actorRole: 'ROLE_USER',
+            note: note || 'Đơn hàng được khởi tạo thành công',
+            createdAt: createdAtIso
+          }
+        ],
         items: (cartData.items && cartData.items.length > 0)
           ? cartData.items.map((i) => ({
               id: i.id || i.itemId,
@@ -420,8 +436,33 @@ export const orderService = {
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})
   getOrderById: async (id) => {
+    const applyQrOverrideIfNeeded = (orderObj) => {
+      if (!orderObj || orderObj.status !== ORDER_STATUS.PENDING) return orderObj;
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          const raw = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
+          const overrides = raw ? JSON.parse(raw) : null;
+          const ov = overrides?.[String(orderObj.id ?? id)];
+          if (ov && ov.status) {
+            const histories = Array.isArray(orderObj.statusHistories) ? orderObj.statusHistories : [];
+            const hasEntry = histories.some((h) => h.status === ov.status);
+            return {
+              ...orderObj,
+              status: ov.status,
+              updatedAt: ov.updatedAt || orderObj.updatedAt,
+              statusHistories: hasEntry || !ov.historyEntry ? histories : [...histories, ov.historyEntry]
+            };
+          }
+        }
+      } catch (e) {
+        // Bỏ qua lỗi đọc sessionStorage
+      }
+      return orderObj;
+    };
+
     try {
-      return await api.get(`/orders/${id}`);
+      const data = await api.get(`/orders/${id}`);
+      return applyQrOverrideIfNeeded(data);
     } catch (err) {
       if (err.response?.status === 403) {
         throw err;
@@ -431,7 +472,7 @@ export const orderService = {
       if (!found) {
         throw new Error(`Không tìm thấy đơn hàng #${id}`);
       }
-      return found;
+      return applyQrOverrideIfNeeded(found);
     }
   },
 
@@ -594,29 +635,68 @@ export const orderService = {
       }
 
       const baseTime = new Date(order.createdAt || Date.now()).getTime();
-      const mockHistories = [
-        {
-          id: 1,
-          orderId: order.id,
-          status: ORDER_STATUS.PENDING,
-          statusDescription: 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
-          previousStatus: null,
-          action: 'CREATE_ORDER',
-          updatedBy: order.userEmail || 'Khách hàng',
-          actorRole: 'ROLE_USER',
-          note: order.note || 'Đặt hàng qua website ShopMart',
-          createdAt: new Date(baseTime).toISOString()
-        }
-      ];
+      const initialPendingRecord = {
+        id: 1,
+        orderId: order.id,
+        status: ORDER_STATUS.PENDING,
+        statusDescription: 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
+        previousStatus: null,
+        action: 'CREATE_ORDER',
+        updatedBy: order.userEmail || 'Khách hàng',
+        actorRole: 'ROLE_USER',
+        note: order.note || 'Đơn hàng được khởi tạo thành công',
+        createdAt: new Date(baseTime).toISOString()
+      };
 
+      // Nếu đơn hàng đã có nhật ký thực tế (order.statusHistories), trả về trực tiếp để không trộn lẫn các bước giả lập
+      if (Array.isArray(order.statusHistories) && order.statusHistories.length > 0) {
+        const hasPending = order.statusHistories.some((h) => h.status === ORDER_STATUS.PENDING);
+        const realHistories = hasPending
+          ? [...order.statusHistories]
+          : [initialPendingRecord, ...order.statusHistories];
+        return realHistories.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      }
+
+      const mockHistories = [initialPendingRecord];
       const status = order.status;
-      if (status === ORDER_STATUS.PAID || status === ORDER_STATUS.CONFIRMED || status === ORDER_STATUS.PROCESSING || status === ORDER_STATUS.SHIPPING || status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.COMPLETED) {
+
+      if (
+        order.paymentMethod === 'MOCK_ONLINE' &&
+        (status === ORDER_STATUS.PAID ||
+          status === ORDER_STATUS.CONFIRMED ||
+          status === ORDER_STATUS.PROCESSING ||
+          status === ORDER_STATUS.SHIPPING ||
+          status === ORDER_STATUS.DELIVERED ||
+          status === ORDER_STATUS.COMPLETED)
+      ) {
+        mockHistories.push({
+          id: 15,
+          orderId: order.id,
+          status: ORDER_STATUS.PAID,
+          statusDescription: 'Đã thanh toán thành công qua cổng thanh toán',
+          previousStatus: ORDER_STATUS.PENDING,
+          action: 'PAYMENT_SUCCESS',
+          updatedBy: 'PAYMENT_SERVICE',
+          actorRole: 'SYSTEM',
+          note: 'Khách hàng xác nhận đã quét mã QR thành công',
+          createdAt: new Date(baseTime + 2 * 60000).toISOString()
+        });
+      }
+
+      // Chỉ tạo mốc CONFIRMED khi đơn thực sự đã được Admin xác nhận (từ CONFIRMED trở đi, KHÔNG tự gán khi mới PAID)
+      if (
+        status === ORDER_STATUS.CONFIRMED ||
+        status === ORDER_STATUS.PROCESSING ||
+        status === ORDER_STATUS.SHIPPING ||
+        status === ORDER_STATUS.DELIVERED ||
+        status === ORDER_STATUS.COMPLETED
+      ) {
         mockHistories.push({
           id: 2,
           orderId: order.id,
           status: ORDER_STATUS.CONFIRMED,
           statusDescription: 'Đơn hàng đã được xác nhận bởi người bán / quản trị viên',
-          previousStatus: ORDER_STATUS.PENDING,
+          previousStatus: order.paymentMethod === 'MOCK_ONLINE' ? ORDER_STATUS.PAID : ORDER_STATUS.PENDING,
           action: 'CONFIRM_ORDER',
           updatedBy: 'ADMIN:1',
           actorRole: 'ROLE_ADMIN',

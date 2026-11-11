@@ -15,6 +15,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
@@ -69,9 +71,9 @@ class PaymentServiceTest {
     class ProcessOrderPaymentTests {
 
         @Test
-        @DisplayName("Should process payment successfully when amount <= 50,000,000 VND")
-        void testProcessPayment_Success() {
-            // Given: Đơn hàng 15.000.000 VND
+        @DisplayName("Online <= 50,000,000 VND: chỉ lưu Payment PENDING chờ quét QR, KHÔNG tự động bắn payment-success")
+        void testProcessPayment_OnlineWithinLimit_StaysPendingAwaitingQr() {
+            // Given: Đơn hàng MOCK_ONLINE 15.000.000 VND
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.empty());
             when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
                 Payment p = invocation.getArgument(0);
@@ -88,16 +90,95 @@ class PaymentServiceTest {
             // Then
             assertThat(response).isNotNull();
             assertThat(response.getOrderId()).isEqualTo(101L);
-            assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
-            assertThat(response.getTransactionCode()).isNotNull().startsWith("TXN-");
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(response.getTransactionCode()).isNull();
+            assertThat(response.getAmount()).isEqualByComparingTo("15000000");
+            assertThat(response.getPaymentMethod()).isEqualTo("MOCK_ONLINE");
 
-            // Verify Kafka event published
-            verify(kafkaPaymentProducer, times(1)).sendPaymentSuccess(successEventCaptor.capture());
+            // Không phát bất kỳ sự kiện Kafka nào — chờ người dùng xác nhận qua /mock-pay
+            verify(paymentRepository, times(1)).save(any(Payment.class));
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
             verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
 
-            PaymentSuccessEvent publishedEvent = successEventCaptor.getValue();
-            assertThat(publishedEvent.getOrderId()).isEqualTo(101L);
-            assertThat(publishedEvent.getTransactionCode()).isEqualTo(response.getTransactionCode());
+        @ParameterizedTest(name = "Phương thức {0} trong hạn mức -> PENDING chờ quét QR")
+        @ValueSource(strings = {"VNPAY", "MOMO", "BANK_TRANSFER", "QR_CODE"})
+        @DisplayName("Các phương thức online khác (VNPAY, MOMO, BANK_TRANSFER, QR_CODE) cũng giữ PENDING")
+        void testProcessPayment_OtherOnlineMethods_StayPending(String method) {
+            validOrderEvent.setPaymentMethod(method);
+            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.empty());
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
+
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(response.getPaymentMethod()).isEqualTo(method);
+            assertThat(response.getTransactionCode()).isNull();
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
+
+        @Test
+        @DisplayName("COD: lưu Payment PENDING, không bắn sự kiện Kafka")
+        void testProcessPayment_Cod_StaysPending() {
+            validOrderEvent.setPaymentMethod("COD");
+            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.empty());
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
+
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(response.getPaymentMethod()).isEqualTo("COD");
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
+
+        @Test
+        @DisplayName("Bản ghi PENDING tạo sớm bởi mock-pay (amount = 0) được đồng bộ lại số tiền theo đơn hàng")
+        void testProcessPayment_ExistingPending_RefreshesAmount() {
+            Payment earlyPending = Payment.builder()
+                    .id(5L)
+                    .orderId(101L)
+                    .amount(BigDecimal.ZERO)
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(earlyPending));
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
+
+            assertThat(response.getId()).isEqualTo(5L);
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(response.getAmount()).isEqualByComparingTo("15000000");
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+        }
+
+        @Test
+        @DisplayName("Luồng QR đầy đủ: processOrderPayment -> PENDING, sau đó mockPay(true) -> SUCCESS + payment-success")
+        void testProcessPayment_ThenMockPay_CompletesQrFlow() {
+            Payment[] store = new Payment[1];
+            when(paymentRepository.findByOrderId(101L)).thenAnswer(invocation -> Optional.ofNullable(store[0]));
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
+                Payment p = invocation.getArgument(0);
+                if (p.getId() == null) {
+                    p.setId(7L);
+                }
+                store[0] = p;
+                return p;
+            });
+
+            PaymentResponse pending = paymentService.processOrderPayment(validOrderEvent);
+            assertThat(pending.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+
+            PaymentResponse paid = paymentService.mockPay(101L, true);
+
+            assertThat(paid.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+            assertThat(paid.getTransactionCode()).isNotNull().startsWith("TXN-");
+            verify(kafkaPaymentProducer, times(1)).sendPaymentSuccess(successEventCaptor.capture());
+            assertThat(successEventCaptor.getValue().getOrderId()).isEqualTo(101L);
+            assertThat(successEventCaptor.getValue().getPaymentId()).isEqualTo(7L);
         }
 
         @Test
@@ -323,6 +404,48 @@ class PaymentServiceTest {
             assertThat(response.getTransactionCode()).isNotNull().startsWith("TXN-");
             verify(paymentRepository, atLeastOnce()).save(any(Payment.class));
             verify(kafkaPaymentProducer, times(1)).sendPaymentSuccess(any(PaymentSuccessEvent.class));
+        }
+
+        @Test
+        @DisplayName("mockPay - Giao dịch đã FAILED: từ chối xác nhận thành công (409) để tránh đơn đã rollback bị chuyển PAID")
+        void testMockPay_AlreadyFailed_RejectsSuccess() {
+            Payment payment = Payment.builder()
+                    .id(4L)
+                    .orderId(104L)
+                    .amount(new BigDecimal("2000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.FAILED)
+                    .build();
+
+            when(paymentRepository.findByOrderId(104L)).thenReturn(Optional.of(payment));
+
+            assertThatThrownBy(() -> paymentService.mockPay(104L, true))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("104");
+            verify(paymentRepository, never()).save(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
+
+        @Test
+        @DisplayName("mockPay - Giao dịch đã FAILED: hủy lại là idempotent, không bắn payment-failed lần 2 (tránh hoàn kho 2 lần)")
+        void testMockPay_AlreadyFailed_CancelAgain_Idempotent() {
+            Payment payment = Payment.builder()
+                    .id(5L)
+                    .orderId(105L)
+                    .amount(new BigDecimal("2000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.FAILED)
+                    .build();
+
+            when(paymentRepository.findByOrderId(105L)).thenReturn(Optional.of(payment));
+
+            PaymentResponse response = paymentService.mockPay(105L, false);
+
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.FAILED);
+            verify(paymentRepository, never()).save(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
         }
     }
 }
