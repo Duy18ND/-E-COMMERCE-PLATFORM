@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getToken, setToken, getRefreshToken, setRefreshToken, clearAuth } from '../utils/auth';
+import { getToken, setToken, getRefreshToken, setRefreshToken, clearAuth } from '../utils/auth.js';
 
 const BASE_API_URL =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
