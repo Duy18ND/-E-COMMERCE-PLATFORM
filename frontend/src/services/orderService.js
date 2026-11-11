@@ -407,31 +407,24 @@ export const orderService = {
     shippingAddress,
     note,
     paymentMethod,
-<<<<<<< HEAD
     onlinePaymentProvider = null,
     onlinePaymentProviderLabel = null,
     couponCode = null,
     voucherCode = null,
     voucherId = null,
-    subtotal,
-    discountAmount = 0,
-    shippingFee = 0,
-    totalAmount
-  } = {}) => {
-    const resolvedCouponCode = couponCode || voucherCode || null;
-    const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
-=======
-    voucherId = null,
-    voucherCode = null,
-    discountAmount = 0,
+    subtotal = null,
     subtotalAmount = null,
     originalAmount = null,
     productDiscountAmount = 0,
+    discountAmount = 0,
+    shippingFee = 0,
+    totalAmount = null,
     finalTotal = null
-  }) => {
+  } = {}) => {
+    const rawCouponCode = couponCode || voucherCode || null;
     const normalizedVoucherCode =
-      typeof voucherCode === 'string' && voucherCode.trim() ? voucherCode.trim().toUpperCase() : null;
->>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
+      typeof rawCouponCode === 'string' && rawCouponCode.trim() ? rawCouponCode.trim().toUpperCase() : null;
+    const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
 
     try {
       const apiOrder = await api.post('/orders/checkout', {
@@ -440,80 +433,64 @@ export const orderService = {
         shippingAddress,
         note: note || '',
         paymentMethod,
-<<<<<<< HEAD
-        onlinePaymentProvider: isOnlinePay ? onlinePaymentProvider : null,
-        onlinePaymentProviderLabel: isOnlinePay ? onlinePaymentProviderLabel : null,
-        couponCode: resolvedCouponCode,
-        voucherCode: resolvedCouponCode,
-        voucherId,
-        subtotal,
-        discountAmount,
-        shippingFee,
-        totalAmount
-      });
-
-      // Nếu Backend chưa lưu thông tin giảm giá thì chuẩn hóa theo giá trị tại thời điểm checkout
-      if (apiOrder && typeof apiOrder === 'object') {
-        const orderSubtotal = Number(subtotal ?? apiOrder.subtotal ?? apiOrder.totalAmount ?? 0);
-        const orderDiscount = Math.max(0, Number(discountAmount ?? apiOrder.discountAmount ?? 0) || 0);
-        const orderShipping = Math.max(0, Number(shippingFee ?? apiOrder.shippingFee ?? 0) || 0);
-        const orderTotal = Math.max(0, orderSubtotal - orderDiscount) + orderShipping;
-
-        return {
-          ...apiOrder,
-          onlinePaymentProvider: apiOrder.onlinePaymentProvider ?? (isOnlinePay ? onlinePaymentProvider : null),
-          onlinePaymentProviderLabel: apiOrder.onlinePaymentProviderLabel ?? (isOnlinePay ? onlinePaymentProviderLabel : null),
-          paidAt: apiOrder.paidAt ?? (isOnlinePay ? new Date().toISOString() : null),
-          couponCode: apiOrder.couponCode ?? resolvedCouponCode,
-          voucherCode: apiOrder.voucherCode ?? resolvedCouponCode,
-          voucherId: apiOrder.voucherId ?? voucherId,
-          subtotal: orderSubtotal,
-          discountAmount: orderDiscount,
-          shippingFee: orderShipping,
-          totalAmount: orderTotal
-        };
-=======
         voucherCode: normalizedVoucherCode
       });
 
+      // Nếu Backend chưa lưu đủ thông tin giảm giá/thanh toán thì chuẩn hóa theo giá trị tại thời điểm checkout
       if (apiOrder && typeof apiOrder === 'object') {
         const effectiveSubtotal =
-          subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
-            ? Number(subtotalAmount)
-            : Number(apiOrder.subtotalAmount ?? apiOrder.totalAmount ?? 0);
+          subtotal !== null && subtotal !== undefined && Number(subtotal) >= 0
+            ? Number(subtotal)
+            : subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
+              ? Number(subtotalAmount)
+              : Number(apiOrder.subtotal ?? apiOrder.subtotalAmount ?? apiOrder.totalAmount ?? 0);
         const effectiveDiscount = Math.min(
           effectiveSubtotal,
-          Math.max(Number(apiOrder.discountAmount ?? 0), Math.max(0, Number(discountAmount) || 0))
+          Math.max(Number(apiOrder.discountAmount ?? 0) || 0, Math.max(0, Number(discountAmount) || 0))
         );
-        const effectiveProductDiscount = Math.max(0, Number(productDiscountAmount) || 0);
+        const effectiveShipping = Math.max(0, Number(shippingFee ?? apiOrder.shippingFee ?? 0) || 0);
+        const effectiveProductDiscount = Math.max(
+          0,
+          Number(productDiscountAmount ?? apiOrder.productDiscountAmount ?? 0) || 0
+        );
         const computedFinal =
           finalTotal !== null && finalTotal !== undefined && Number(finalTotal) >= 0 && effectiveSubtotal > 0
-            ? Math.min(Number(finalTotal), Math.max(0, effectiveSubtotal - effectiveDiscount))
-            : Math.max(0, effectiveSubtotal - effectiveDiscount);
+            ? Math.min(Number(finalTotal), Math.max(0, effectiveSubtotal - effectiveDiscount)) + effectiveShipping
+            : totalAmount !== null && totalAmount !== undefined && Number(totalAmount) >= 0 && effectiveSubtotal > 0
+              ? Math.min(Number(totalAmount), Math.max(0, effectiveSubtotal - effectiveDiscount) + effectiveShipping)
+              : Math.max(0, effectiveSubtotal - effectiveDiscount) + effectiveShipping;
         const backendTotal = Number(apiOrder.totalAmount ?? computedFinal);
         const resolvedTotal =
-          effectiveSubtotal > 0 && (effectiveDiscount > 0 || effectiveProductDiscount > 0)
-            ? Math.min(backendTotal > 0 ? backendTotal : computedFinal, computedFinal)
-            : backendTotal;
+          effectiveShipping > 0
+            ? computedFinal
+            : effectiveSubtotal > 0 && (effectiveDiscount > 0 || effectiveProductDiscount > 0)
+              ? Math.min(backendTotal > 0 ? backendTotal : computedFinal, computedFinal)
+              : backendTotal;
         const resolvedOriginal = Math.max(
           Number(originalAmount ?? 0),
           effectiveSubtotal + effectiveProductDiscount,
-          Number(apiOrder.subtotalAmount ?? resolvedTotal)
+          Number(apiOrder.originalAmount ?? apiOrder.subtotalAmount ?? resolvedTotal)
         );
 
         const normalizedOrder = {
           ...apiOrder,
+          onlinePaymentProvider: apiOrder.onlinePaymentProvider ?? (isOnlinePay ? onlinePaymentProvider : null),
+          onlinePaymentProviderLabel:
+            apiOrder.onlinePaymentProviderLabel ?? (isOnlinePay ? onlinePaymentProviderLabel : null),
+          paidAt: apiOrder.paidAt ?? (apiOrder.status === ORDER_STATUS.PAID ? new Date().toISOString() : null),
+          couponCode: apiOrder.couponCode ?? normalizedVoucherCode,
+          voucherCode: apiOrder.voucherCode ?? normalizedVoucherCode,
           voucherId: voucherId ?? apiOrder.voucherId ?? null,
-          voucherCode: apiOrder.voucherCode || normalizedVoucherCode,
           originalAmount: resolvedOriginal,
+          subtotal: effectiveSubtotal,
           subtotalAmount: effectiveSubtotal,
           productDiscountAmount: effectiveProductDiscount,
           discountAmount: effectiveDiscount,
+          shippingFee: effectiveShipping,
           totalAmount: resolvedTotal
         };
         saveOrderPriceOverride(normalizedOrder);
         return normalizedOrder;
->>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
       }
       return apiOrder;
     } catch (err) {
@@ -524,27 +501,6 @@ export const orderService = {
       const newId = Math.floor(1004 + Math.random() * 8990);
       const isOnlinePay = paymentMethod === 'MOCK_ONLINE' || (Boolean(paymentMethod) && paymentMethod !== 'COD');
 
-      const rawCartSubtotal = Number(cartData?.totalPrice ?? cartData?.totalAmount) || 32490000;
-      const resolvedSubtotal =
-        subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
-          ? Number(subtotalAmount)
-          : rawCartSubtotal;
-      const resolvedDiscountAmount = Math.min(
-        resolvedSubtotal,
-        Math.max(0, Number(discountAmount) || 0)
-      );
-      const resolvedProductDiscount = Math.max(
-        0,
-        Number(productDiscountAmount) || Number(cartData?.totalDiscount) || 0
-      );
-      const resolvedOriginalAmount = Math.max(
-        Number(originalAmount) || 0,
-        Number(cartData?.totalOriginalPrice) || 0,
-        resolvedSubtotal + resolvedProductDiscount
-      );
-      // Đảm bảo totalAmount luôn bằng Math.max(0, subtotalAmount - discountAmount), không bao giờ lấy giá gốc
-      const resolvedTotalAmount = Math.max(0, resolvedSubtotal - resolvedDiscountAmount);
-
       const createdAtIso = new Date().toISOString();
       const orderItems =
         cartData.items && cartData.items.length > 0
@@ -553,10 +509,11 @@ export const orderService = {
             productId: i.productId,
             name: i.name,
             productName: i.name,
-            priceAtPurchase: i.price,
-            price: i.price,
+            originalPrice: i.originalPrice ?? i.price,
+            priceAtPurchase: i.salePrice ?? i.unitPrice ?? i.price,
+            price: i.salePrice ?? i.unitPrice ?? i.price,
             quantity: i.quantity,
-            subTotal: i.subTotal ?? Number(i.price || 0) * Number(i.quantity || 1),
+            subTotal: i.subTotal ?? Number(i.salePrice ?? i.unitPrice ?? i.price ?? 0) * Number(i.quantity || 1),
             imageUrl: i.imageUrl
           }))
           : [
@@ -565,6 +522,7 @@ export const orderService = {
               productId: 'fs-1',
               name: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
               productName: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
+              originalPrice: 49990000,
               priceAtPurchase: 32490000,
               price: 32490000,
               quantity: 1,
@@ -579,12 +537,24 @@ export const orderService = {
       );
 
       // Tính đúng công thức: totalAmount = subtotal - discountAmount + shippingFee
+      const rawCartSubtotal = Number(cartData?.totalPrice ?? cartData?.totalAmount ?? itemsSubtotal) || 32490000;
       const resolvedSubtotal =
-        subtotal !== undefined && subtotal !== null
+        subtotal !== null && subtotal !== undefined
           ? Math.max(0, Number(subtotal) || 0)
-          : Math.max(0, Number(cartData.totalPrice || itemsSubtotal || 0));
-      const resolvedDiscountAmount = Math.max(0, Number(discountAmount ?? 0) || 0);
+          : subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
+            ? Number(subtotalAmount)
+            : rawCartSubtotal;
+      const resolvedDiscountAmount = Math.min(resolvedSubtotal, Math.max(0, Number(discountAmount ?? 0) || 0));
       const resolvedShippingFee = Math.max(0, Number(shippingFee ?? 0) || 0);
+      const resolvedProductDiscount = Math.max(
+        0,
+        Number(productDiscountAmount) || Number(cartData?.totalDiscount) || 0
+      );
+      const resolvedOriginalAmount = Math.max(
+        Number(originalAmount) || 0,
+        Number(cartData?.totalOriginalPrice) || 0,
+        resolvedSubtotal + resolvedProductDiscount
+      );
       const resolvedTotalAmount = Math.max(0, resolvedSubtotal - resolvedDiscountAmount) + resolvedShippingFee;
 
       const createdOrder = {
@@ -595,27 +565,19 @@ export const orderService = {
         shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
         note: note || '',
         paymentMethod: paymentMethod || 'COD',
-<<<<<<< HEAD
         onlinePaymentProvider: isOnlinePay ? (onlinePaymentProvider || 'MOMO') : null,
         onlinePaymentProviderLabel: isOnlinePay ? (onlinePaymentProviderLabel || 'Ví điện tử MoMo') : null,
         status: ORDER_STATUS.PENDING,
         paidAt: null,
-        couponCode: resolvedCouponCode,
-        voucherCode: resolvedCouponCode,
-        voucherId: voucherId ?? null,
-        subtotal: resolvedSubtotal,
-        discountAmount: resolvedDiscountAmount,
-        shippingFee: resolvedShippingFee,
-=======
-        voucherId: voucherId || null,
+        couponCode: normalizedVoucherCode,
         voucherCode: normalizedVoucherCode,
+        voucherId: voucherId ?? null,
         originalAmount: resolvedOriginalAmount,
+        subtotal: resolvedSubtotal,
         subtotalAmount: resolvedSubtotal,
         productDiscountAmount: resolvedProductDiscount,
         discountAmount: resolvedDiscountAmount,
-        // Đơn Online mới tạo giữ trạng thái PENDING chờ khách quét mã QR thanh toán
-        status: isOnlinePay ? ORDER_STATUS.PENDING : ORDER_STATUS.PENDING,
->>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
+        shippingFee: resolvedShippingFee,
         totalAmount: resolvedTotalAmount,
         createdAt: createdAtIso,
         statusHistories: [
@@ -632,43 +594,10 @@ export const orderService = {
             createdAt: createdAtIso
           }
         ],
-<<<<<<< HEAD
         items: orderItems
       };
 
-      // Lưu vào danh sách đơn (localStorage key: shopmart_orders_mock)
-=======
-        items: (cartData.items && cartData.items.length > 0)
-          ? cartData.items.map((i) => ({
-              id: i.id || i.itemId,
-              productId: i.productId,
-              name: i.name,
-              productName: i.name,
-              originalPrice: i.originalPrice ?? i.price,
-              priceAtPurchase: i.salePrice ?? i.unitPrice ?? i.price,
-              price: i.salePrice ?? i.unitPrice ?? i.price,
-              quantity: i.quantity,
-              subTotal: i.subTotal,
-              imageUrl: i.imageUrl
-            }))
-          : [
-              {
-                id: 'item-demo',
-                productId: 'fs-1',
-                name: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-                productName: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-                originalPrice: 49990000,
-                priceAtPurchase: 32490000,
-                price: 32490000,
-                quantity: 1,
-                subTotal: 32490000,
-                imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80'
-              }
-            ]
-      };
-
-      // Lưu vào danh sách đơn và bảng tra cứu giá đã giảm
->>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
+      // Lưu vào danh sách đơn (localStorage key: shopmart_orders_mock) và bảng tra cứu giá đã giảm
       orders.unshift(createdOrder);
       setStoredOrders(orders);
       saveOrderPriceOverride(createdOrder);
@@ -687,19 +616,9 @@ export const orderService = {
 
   // Lịch sử đơn hàng của user đang đăng nhập (GET /api/v1/orders/my-orders)
   getMyOrders: async () => {
-<<<<<<< HEAD
-    const data = await api.get('/orders/my-orders');
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.content)) return data.content;
-    return [];
-=======
-    try {
-      const list = await api.get('/orders/my-orders');
-      return Array.isArray(list) ? list.map(applyOrderPriceOverride) : list;
-    } catch (err) {
-      return getStoredOrders().map(applyOrderPriceOverride);
-    }
->>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
+    const list = await api.get('/orders/my-orders');
+    const arr = Array.isArray(list) ? list : Array.isArray(list?.content) ? list.content : [];
+    return arr.map(applyOrderPriceOverride);
   },
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})
