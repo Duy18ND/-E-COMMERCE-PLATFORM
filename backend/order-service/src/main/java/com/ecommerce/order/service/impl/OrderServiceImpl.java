@@ -57,6 +57,43 @@ public class OrderServiceImpl implements OrderService {
         this.authClient = authClient;
     }
 
+    /**
+     * [Task ECOM-185] Khóa đồng bộ theo orderId để ngăn chặn nhiều request đồng thời cùng hủy hoặc cập nhật 1 đơn hàng
+     * gây hoàn kho hoặc hoàn lượt sử dụng Voucher lặp nhiều lần (race condition).
+     */
+    private final java.util.concurrent.ConcurrentHashMap<Long, java.util.concurrent.locks.ReentrantLock> orderLocks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private java.util.concurrent.locks.ReentrantLock acquireOrderLock(Long orderId) {
+        if (orderId == null) {
+            return null;
+        }
+        java.util.concurrent.locks.ReentrantLock lock = orderLocks.computeIfAbsent(
+                orderId, id -> new java.util.concurrent.locks.ReentrantLock());
+        lock.lock();
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()
+                && lock.getHoldCount() == 1) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCompletion(int status) {
+                            while (lock.isHeldByCurrentThread()) {
+                                lock.unlock();
+                            }
+                        }
+                    });
+        }
+        return lock;
+    }
+
+    private void releaseOrderLockIfNoTransaction(java.util.concurrent.locks.ReentrantLock lock) {
+        if (lock != null
+                && !org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()
+                && lock.isHeldByCurrentThread()) {
+            lock.unlock();
+        }
+    }
+
     private static final int DEFAULT_LOW_STOCK_THRESHOLD = 5;
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
@@ -137,7 +174,7 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(itemTotal);
         }
 
-        // 1b. Áp mã giảm giá Voucher (nếu có) trước khi bảo lưu tồn kho
+        // 1b. [Task ECOM-167 / ECOM-183] Áp mã giảm giá Voucher (nếu có): chặn dùng trùng, giữ lượt nguyên tử trước khi bảo lưu tồn kho
         BigDecimal subtotalAmount = totalAmount;
         BigDecimal discountAmount = BigDecimal.ZERO;
         String appliedVoucherCode = null;
@@ -145,7 +182,11 @@ public class OrderServiceImpl implements OrderService {
         if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
             appliedVoucherCode = request.getVoucherCode().trim().toUpperCase();
             if (voucherService != null) {
+                voucherService.validateUserCanUseVoucher(appliedVoucherCode, request.getUserId());
                 discountAmount = voucherService.redeemVoucherForOrder(appliedVoucherCode, subtotalAmount);
+                if (discountAmount == null) {
+                    discountAmount = BigDecimal.ZERO;
+                }
             }
         }
 
@@ -194,7 +235,18 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
-        log.info("Order created successfully with id: {}, totalAmount: {}", savedOrder.getId(), savedOrder.getTotalAmount());
+        if (savedOrder != null) {
+            savedOrder.setSubtotalAmount(subtotalAmount);
+            savedOrder.setDiscountAmount(discountAmount);
+            savedOrder.setTotalAmount(finalTotalAmount);
+        }
+        log.info("Order created successfully with id: {}, subtotalAmount: {}, discountAmount: {}, totalAmount: {}",
+                savedOrder.getId(), subtotalAmount, discountAmount, savedOrder.getTotalAmount());
+
+        // [Task ECOM-166 / ECOM-167 / ECOM-183] Lưu bản ghi voucher_usages (chặn dùng trùng và phục vụ hoàn lượt khi hủy/lỗi thanh toán)
+        if (appliedVoucherCode != null && voucherService != null && savedOrder != null) {
+            voucherService.recordVoucherUsage(appliedVoucherCode, savedOrder.getUserId(), savedOrder.getId(), discountAmount);
+        }
 
         // [Task ECOM-171 / ECOM-187] Ghi nhận mốc lịch sử đầu tiên khi đơn hàng vừa được khởi tạo
         recordStatusHistory(savedOrder, OrderStatus.PENDING, null, "ORDER_CREATED",
@@ -269,9 +321,14 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(rollbackFor = Exception.class)
     public OrderResponse cancelOrder(Long orderId) {
         log.info("Processing internal (system) cancelOrder for orderId: {}", orderId);
-        Order order = orderRepository.findByIdWithItems(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
-        return cancelPendingOrderAndRestoreStock(order);
+        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(orderId);
+        try {
+            Order order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
+            return cancelPendingOrderAndRestoreStock(order);
+        } finally {
+            releaseOrderLockIfNoTransaction(lock);
+        }
     }
 
     @Override
@@ -284,15 +341,20 @@ public class OrderServiceImpl implements OrderService {
             throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
         }
 
-        Order order = orderRepository.findByIdWithItems(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
+        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(orderId);
+        try {
+            Order order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
 
-        // Chống IDOR: chỉ chủ sở hữu mới được hủy đơn
-        if (!userId.equals(order.getUserId())) {
-            throw new AccessDeniedException("Bạn không có quyền hủy đơn hàng này");
+            // Chống IDOR: chỉ chủ sở hữu mới được hủy đơn
+            if (!userId.equals(order.getUserId())) {
+                throw new AccessDeniedException("Bạn không có quyền hủy đơn hàng này");
+            }
+
+            return cancelPendingOrderAndRestoreStock(order);
+        } finally {
+            releaseOrderLockIfNoTransaction(lock);
         }
-
-        return cancelPendingOrderAndRestoreStock(order);
     }
 
     /**
@@ -305,20 +367,6 @@ public class OrderServiceImpl implements OrderService {
             throw new IllegalStateException("Chỉ có thể hủy đơn hàng ở trạng thái PENDING. Trạng thái hiện tại: " + order.getStatus());
         }
 
-        order.setStatus(OrderStatus.CANCELLED);
-        Order updatedOrder = orderRepository.save(order);
-        log.info("Order status updated to CANCELLED for orderId: {}", orderId);
-
-        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử trạng thái khi khách hàng hủy đơn hàng
-        recordStatusHistory(updatedOrder, OrderStatus.CANCELLED, OrderStatus.PENDING, "ORDER_CANCELLED",
-                order.getUserId() != null ? "CUSTOMER:" + order.getUserId() : "CUSTOMER",
-                "ROLE_CUSTOMER", "Khách hàng hủy đơn hàng");
-
-        // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
-        if (order.getVoucherCode() != null && voucherService != null) {
-            voucherService.restoreVoucherUsage(order.getVoucherCode());
-        }
-
         List<StockReservationItem> restoreItems = order.getOrderItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -328,6 +376,21 @@ public class OrderServiceImpl implements OrderService {
 
         log.info("Calling ProductClient restoreStock for orderId {}: {}", orderId, restoreItems);
         productClient.restoreStock(restoreItems);
+
+        order.setStatus(OrderStatus.CANCELLED);
+        Order updatedOrder = orderRepository.save(order);
+        log.info("Order status updated to CANCELLED for orderId: {}", orderId);
+
+        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử trạng thái khi khách hàng hủy đơn hàng
+        recordStatusHistory(updatedOrder, OrderStatus.CANCELLED, OrderStatus.PENDING, "ORDER_CANCELLED",
+                order.getUserId() != null ? "CUSTOMER:" + order.getUserId() : "CUSTOMER",
+                "ROLE_CUSTOMER", "Khách hàng hủy đơn hàng");
+
+        // [Task ECOM-183 / ECOM-185] Hoàn lại lượt sử dụng Voucher và mở khóa voucher_usages nếu đơn hàng có áp dụng
+        if (order.getVoucherCode() != null && voucherService != null) {
+            voucherService.restoreVoucherUsage(order.getVoucherCode());
+            voucherService.restoreVoucherUsageForOrder(order.getVoucherCode(), order.getUserId(), order.getId());
+        }
 
         return mapToOrderResponse(updatedOrder);
     }
@@ -430,45 +493,51 @@ public class OrderServiceImpl implements OrderService {
         log.warn("[Saga Step] Handling payment failed for orderId: {}. Reason: {}",
                 event.getOrderId(), event.getReason());
 
-        Order order = orderRepository.findByIdWithItems(event.getOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
-
-        if (order.getStatus() == OrderStatus.FAILED || order.getStatus() == OrderStatus.CANCELLED) {
-            log.warn("[Saga Step] Order {} is already in terminal status: {}. Skipping duplicate failure handling.",
-                    event.getOrderId(), order.getStatus());
-            return;
-        }
-
-        OrderStatus previousStatus = order.getStatus();
-        order.setStatus(OrderStatus.FAILED);
-        Order savedOrder = orderRepository.save(order);
-        log.info("[Saga Step] Order status updated to FAILED for orderId: {}", event.getOrderId());
-
-        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thất bại
-        recordStatusHistory(savedOrder, OrderStatus.FAILED, previousStatus, "PAYMENT_FAILED",
-                "PAYMENT_SERVICE", "SYSTEM", "Thanh toán thất bại: " + event.getReason());
-
-        // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
-        if (order.getVoucherCode() != null && voucherService != null) {
-            voucherService.restoreVoucherUsage(order.getVoucherCode());
-        }
-
-        List<StockReservationItem> restoreItems = order.getOrderItems().stream()
-                .map(item -> StockReservationItem.builder()
-                        .productId(item.getProductId())
-                        .quantity(item.getQuantity())
-                        .build())
-                .toList();
-
-        log.info("[Saga Rollback] Initiating compensating transaction: restoring stock for orderId {} with items: {}",
-                event.getOrderId(), restoreItems);
+        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(event.getOrderId());
         try {
-            productClient.restoreStock(restoreItems);
-            log.info("[Saga Rollback] Successfully restored stock for orderId: {}", event.getOrderId());
-        } catch (Exception ex) {
-            log.error("[Saga Rollback Error] Failed to restore stock for orderId {}: {}",
-                    event.getOrderId(), ex.getMessage(), ex);
-            throw ex;
+            Order order = orderRepository.findByIdWithItems(event.getOrderId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
+
+            if (order.getStatus() == OrderStatus.FAILED || order.getStatus() == OrderStatus.CANCELLED) {
+                log.warn("[Saga Step] Order {} is already in terminal status: {}. Skipping duplicate failure handling.",
+                        event.getOrderId(), order.getStatus());
+                return;
+            }
+
+            List<StockReservationItem> restoreItems = order.getOrderItems().stream()
+                    .map(item -> StockReservationItem.builder()
+                            .productId(item.getProductId())
+                            .quantity(item.getQuantity())
+                            .build())
+                    .toList();
+
+            log.info("[Saga Rollback] Initiating compensating transaction: restoring stock for orderId {} with items: {}",
+                    event.getOrderId(), restoreItems);
+            try {
+                productClient.restoreStock(restoreItems);
+                log.info("[Saga Rollback] Successfully restored stock for orderId: {}", event.getOrderId());
+            } catch (Exception ex) {
+                log.error("[Saga Rollback Error] Failed to restore stock for orderId {}: {}",
+                        event.getOrderId(), ex.getMessage(), ex);
+                throw ex;
+            }
+
+            OrderStatus previousStatus = order.getStatus();
+            order.setStatus(OrderStatus.FAILED);
+            Order savedOrder = orderRepository.save(order);
+            log.info("[Saga Step] Order status updated to FAILED for orderId: {}", event.getOrderId());
+
+            // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thất bại
+            recordStatusHistory(savedOrder, OrderStatus.FAILED, previousStatus, "PAYMENT_FAILED",
+                    "PAYMENT_SERVICE", "SYSTEM", "Thanh toán thất bại: " + event.getReason());
+
+            // [Task ECOM-183 / ECOM-185] Hoàn lại lượt sử dụng Voucher và mở khóa voucher_usages nếu đơn hàng có áp dụng
+            if (order.getVoucherCode() != null && voucherService != null) {
+                voucherService.restoreVoucherUsage(order.getVoucherCode());
+                voucherService.restoreVoucherUsageForOrder(order.getVoucherCode(), order.getUserId(), order.getId());
+            }
+        } finally {
+            releaseOrderLockIfNoTransaction(lock);
         }
     }
 
@@ -506,54 +575,60 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus, String updatedBy, String actorRole, String note) {
         log.info("Admin updating order status for orderId: {} to {}, updatedBy: {}, note: {}", orderId, newStatus, updatedBy, note);
 
-        Order order = orderRepository.findByIdWithItems(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
+        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(orderId);
+        try {
+            Order order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
 
-        OrderStatus currentStatus = order.getStatus();
+            OrderStatus currentStatus = order.getStatus();
 
-        if (currentStatus == newStatus) {
-            log.info("Order {} is already in status {}. No transition needed.", orderId, newStatus);
-            return mapToOrderResponse(order);
+            if (currentStatus == newStatus) {
+                log.info("Order {} is already in status {}. No transition needed.", orderId, newStatus);
+                return mapToOrderResponse(order);
+            }
+
+            Set<OrderStatus> allowedNext = ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Collections.emptySet());
+            if (!allowedNext.contains(newStatus)) {
+                throw new IllegalStateException(String.format("Không thể chuyển trạng thái đơn hàng từ %s sang %s", currentStatus, newStatus));
+            }
+
+            // Nếu chuyển sang CANCELLED, bắt buộc phải gọi FeignClient ProductClient.restoreStock để hoàn lại kho trước khi cập nhật DB
+            if (newStatus == OrderStatus.CANCELLED) {
+                List<StockReservationItem> restoreItems = order.getOrderItems().stream()
+                        .map(item -> StockReservationItem.builder()
+                                .productId(item.getProductId())
+                                .quantity(item.getQuantity())
+                                .build())
+                        .toList();
+
+                log.info("Calling ProductClient restoreStock on CANCELLED for orderId {}: {}", orderId, restoreItems);
+                productClient.restoreStock(restoreItems);
+
+                // [Task ECOM-183 / ECOM-185] Hoàn lại lượt sử dụng Voucher và mở khóa voucher_usages nếu đơn hàng có áp dụng
+                if (order.getVoucherCode() != null && voucherService != null) {
+                    voucherService.restoreVoucherUsage(order.getVoucherCode());
+                    voucherService.restoreVoucherUsageForOrder(order.getVoucherCode(), order.getUserId(), order.getId());
+                }
+            }
+
+            order.setStatus(newStatus);
+            Order savedOrder = orderRepository.save(order);
+            log.info("Order status updated successfully from {} to {} for orderId: {}", currentStatus, newStatus, orderId);
+
+            // [Task ECOM-187 / ECOM-317] Ghi nhận lịch sử trạng thái kèm người cập nhật và ghi chú
+            String logNote = (note != null && !note.trim().isEmpty())
+                    ? note.trim()
+                    : String.format("Admin cập nhật trạng thái đơn hàng từ %s sang %s", currentStatus, newStatus);
+
+            recordStatusHistory(savedOrder, newStatus, currentStatus, "ADMIN_STATUS_UPDATE",
+                    updatedBy != null ? updatedBy : "ADMIN",
+                    actorRole != null ? actorRole : "ROLE_ADMIN",
+                    logNote);
+
+            return mapToOrderResponse(savedOrder);
+        } finally {
+            releaseOrderLockIfNoTransaction(lock);
         }
-
-        Set<OrderStatus> allowedNext = ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Collections.emptySet());
-        if (!allowedNext.contains(newStatus)) {
-            throw new IllegalStateException(String.format("Không thể chuyển trạng thái đơn hàng từ %s sang %s", currentStatus, newStatus));
-        }
-
-        // Nếu chuyển sang CANCELLED, bắt buộc phải gọi FeignClient ProductClient.restoreStock để hoàn lại kho
-        if (newStatus == OrderStatus.CANCELLED) {
-            // Hoàn lại lượt sử dụng Voucher nếu đơn hàng có áp dụng
-        if (order.getVoucherCode() != null && voucherService != null) {
-            voucherService.restoreVoucherUsage(order.getVoucherCode());
-        }
-
-        List<StockReservationItem> restoreItems = order.getOrderItems().stream()
-                    .map(item -> StockReservationItem.builder()
-                            .productId(item.getProductId())
-                            .quantity(item.getQuantity())
-                            .build())
-                    .toList();
-
-            log.info("Calling ProductClient restoreStock on CANCELLED for orderId {}: {}", orderId, restoreItems);
-            productClient.restoreStock(restoreItems);
-        }
-
-        order.setStatus(newStatus);
-        Order savedOrder = orderRepository.save(order);
-        log.info("Order status updated successfully from {} to {} for orderId: {}", currentStatus, newStatus, orderId);
-
-        // [Task ECOM-187 / ECOM-317] Ghi nhận lịch sử trạng thái kèm người cập nhật và ghi chú
-        String logNote = (note != null && !note.trim().isEmpty())
-                ? note.trim()
-                : String.format("Admin cập nhật trạng thái đơn hàng từ %s sang %s", currentStatus, newStatus);
-
-        recordStatusHistory(savedOrder, newStatus, currentStatus, "ADMIN_STATUS_UPDATE",
-                updatedBy != null ? updatedBy : "ADMIN",
-                actorRole != null ? actorRole : "ROLE_ADMIN",
-                logNote);
-
-        return mapToOrderResponse(savedOrder);
     }
 
     /**

@@ -60,7 +60,7 @@ public class GlobalExceptionHandler {
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
                 .error("Bad Request")
-                .message(ex.getMessage())
+                .message(ex.getMessage() != null ? ex.getMessage() : "Tham số yêu cầu không hợp lệ")
                 .path(request.getRequestURI())
                 .build();
 

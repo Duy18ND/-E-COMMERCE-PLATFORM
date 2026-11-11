@@ -38,13 +38,13 @@ const QUICK_FILTER_TABS = [
 // Quy trình chuyển đổi trạng thái đồng bộ với State Machine trong OrderServiceImpl Backend
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [
-    { target: ORDER_STATUS.PAID, label: '✓ Đã thanh toán', variant: 'primary' },
-    { target: ORDER_STATUS.CONFIRMED, label: '✓ Xác nhận đơn', variant: 'primary' },
+    { target: ORDER_STATUS.CONFIRMED, label: '✓ Duyệt / Xác nhận đơn', variant: 'primary' },
+    { target: ORDER_STATUS.PAID, label: '💳 Xác nhận đã thu tiền', variant: 'primary', onlineOnly: true },
     { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
   ],
   [ORDER_STATUS.PAID]: [
-    { target: ORDER_STATUS.CONFIRMED, label: '✓ Xác nhận đơn', variant: 'primary' },
-    { target: ORDER_STATUS.PROCESSING, label: '📦 Chuẩn bị hàng', variant: 'primary' },
+    { target: ORDER_STATUS.CONFIRMED, label: '✓ Duyệt / Xác nhận đơn', variant: 'primary' },
+    { target: ORDER_STATUS.PROCESSING, label: '📦 Chuẩn bị hàng ngay', variant: 'primary' },
     { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
   ],
   [ORDER_STATUS.CONFIRMED]: [
@@ -683,7 +683,24 @@ const AdminOrders = () => {
 
                         {/* 6. Trạng thái đơn hàng */}
                         <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                          <OrderStatus status={order.status} />
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                            <OrderStatus status={order.status} />
+                            {order.status === ORDER_STATUS.PAID && (
+                              <span style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 600 }}>
+                                ⏳ Chờ Shop duyệt đơn
+                              </span>
+                            )}
+                            {order.status === ORDER_STATUS.PENDING && (
+                              <span style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: 600 }}>
+                                {order.paymentMethod === 'MOCK_ONLINE' ? '⏳ Chờ khách TT / Duyệt' : '⏳ Chờ Shop duyệt đơn'}
+                              </span>
+                            )}
+                            {order.status === ORDER_STATUS.CONFIRMED && (
+                              <span style={{ fontSize: '0.7rem', color: '#0369a1', fontWeight: 600 }}>
+                                ✓ Shop đã duyệt
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 7. Thao tác xem chi tiết & chuyển trạng thái */}
@@ -715,7 +732,9 @@ const AdminOrders = () => {
                             </button>
 
                             {/* Các nút chuyển trạng thái theo quy trình */}
-                            {allowedTransitions.map((trans) => (
+                            {allowedTransitions
+                              .filter((trans) => !trans.onlineOnly || order.paymentMethod === 'MOCK_ONLINE')
+                              .map((trans) => (
                               <button
                                 key={trans.target}
                                 type="button"

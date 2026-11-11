@@ -15,8 +15,8 @@ export const INITIAL_VOUCHERS = [
     minOrderValue: 200000,
     quantity: 500,
     usedQuantity: 64,
-    startDate: '2026-10-01',
-    endDate: '2026-12-31',
+    startDate: '2026-01-01',
+    endDate: '2027-12-31',
     status: 'ACTIVE'
   },
   {
@@ -30,8 +30,8 @@ export const INITIAL_VOUCHERS = [
     minOrderValue: 500000,
     quantity: 300,
     usedQuantity: 128,
-    startDate: '2026-10-15',
-    endDate: '2026-11-30',
+    startDate: '2026-01-01',
+    endDate: '2027-12-31',
     status: 'ACTIVE'
   },
   {
@@ -45,8 +45,8 @@ export const INITIAL_VOUCHERS = [
     minOrderValue: 300000,
     quantity: 1000,
     usedQuantity: 285,
-    startDate: '2026-10-20',
-    endDate: '2026-11-25',
+    startDate: '2026-01-01',
+    endDate: '2027-12-31',
     status: 'ACTIVE'
   },
   {
@@ -60,8 +60,8 @@ export const INITIAL_VOUCHERS = [
     minOrderValue: 1000000,
     quantity: 250,
     usedQuantity: 198,
-    startDate: '2026-10-01',
-    endDate: '2026-11-15',
+    startDate: '2026-01-01',
+    endDate: '2027-12-31',
     status: 'ACTIVE'
   },
   {
@@ -75,8 +75,8 @@ export const INITIAL_VOUCHERS = [
     minOrderValue: 150000,
     quantity: 1500,
     usedQuantity: 620,
-    startDate: '2026-10-01',
-    endDate: '2026-12-31',
+    startDate: '2026-01-01',
+    endDate: '2027-12-31',
     status: 'ACTIVE'
   },
   {
@@ -90,8 +90,8 @@ export const INITIAL_VOUCHERS = [
     minOrderValue: 800000,
     quantity: 400,
     usedQuantity: 73,
-    startDate: '2026-10-01',
-    endDate: '2026-12-31',
+    startDate: '2026-01-01',
+    endDate: '2027-12-31',
     status: 'ACTIVE'
   }
 ];

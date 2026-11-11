@@ -74,7 +74,13 @@ public class ProductServiceImpl implements ProductService {
         Specification<Product> spec = ProductSpecification.filterBy(filterRequest, resolvedCategoryName);
         Page<Product> page = productRepository.findAll(spec, pageable);
 
-        Page<ProductResponse> dtoPage = page.map(ProductResponse::fromEntity);
+        Page<ProductResponse> dtoPage = page.map(product -> {
+            ProductResponse response = ProductResponse.fromEntity(product);
+            if (flashSaleService != null && product.getId() != null) {
+                response.setActiveFlashSale(flashSaleService.getActiveFlashSaleForProduct(product.getId()));
+            }
+            return response;
+        });
         return PagedResponse.fromPage(dtoPage);
     }
 
@@ -375,7 +381,13 @@ public class ProductServiceImpl implements ProductService {
         } else {
             page = productRepository.findByStatus(ProductStatus.ACTIVE, pageable);
         }
-        Page<ProductResponse> dtoPage = page.map(ProductResponse::fromEntity);
+        Page<ProductResponse> dtoPage = page.map(product -> {
+            ProductResponse response = ProductResponse.fromEntity(product);
+            if (flashSaleService != null && product.getId() != null) {
+                response.setActiveFlashSale(flashSaleService.getActiveFlashSaleForProduct(product.getId()));
+            }
+            return response;
+        });
         return PagedResponse.fromPage(dtoPage);
     }
 

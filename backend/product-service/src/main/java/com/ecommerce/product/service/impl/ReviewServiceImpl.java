@@ -28,7 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
 
 /**
- * Triển khai nghiệp vụ đánh giá sản phẩm và kiểm duyệt:
+ * [Task ECOM-177] Triển khai nghiệp vụ đánh giá sản phẩm và kiểm duyệt:
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
  * 1. Sản phẩm phải tồn tại.
  * 2. Đơn hàng phải ở trạng thái DELIVERED và thuộc về userId.
  * 3. Đơn hàng phải chứa productId.
@@ -65,12 +66,13 @@ public class ReviewServiceImpl implements ReviewService {
         OrderDetailResponse order = fetchAndValidateOrder(request.getOrderId(), userId, productId);
 
         // 4. Tạo và lưu đánh giá (mặc định APPROVED)
+        String sanitizedComment = request.getComment() != null ? request.getComment().trim() : null;
         ProductReview review = ProductReview.builder()
                 .productId(productId)
                 .userId(userId)
                 .orderId(order.getId())
                 .rating(request.getRating())
-                .comment(request.getComment())
+                .comment(sanitizedComment)
                 .status(ReviewStatus.APPROVED)
                 .build();
 
@@ -99,7 +101,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         review.setRating(request.getRating());
-        review.setComment(request.getComment());
+        review.setComment(request.getComment() != null ? request.getComment().trim() : null);
 
         ProductReview updated = reviewRepository.save(review);
         log.info("Review id={} updated successfully", reviewId);
@@ -123,7 +125,7 @@ public class ReviewServiceImpl implements ReviewService {
         boolean isAdmin = userRoles != null && Arrays.stream(userRoles.split(","))
                 .map(String::trim)
                 .anyMatch("ROLE_ADMIN"::equals);
-        boolean isOwner = review.getUserId().equals(userId);
+        boolean isOwner = userId != null && review.getUserId().equals(userId);
 
         if (!isAdmin && !isOwner) {
             throw new AccessDeniedException("Bạn không có quyền xoá đánh giá này");
@@ -146,13 +148,14 @@ public class ReviewServiceImpl implements ReviewService {
         Page<ProductReview> reviewPage = reviewRepository.findByProductIdAndStatus(productId, ReviewStatus.APPROVED, pageable);
         Double avgRating = reviewRepository.calculateAverageRatingByProductId(productId);
         long totalReviews = reviewRepository.countByProductIdAndStatus(productId, ReviewStatus.APPROVED);
+        double safeAverageRating = avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : 0.0;
 
         Page<ReviewResponse> responsePage = reviewPage.map(this::mapToReviewResponse);
         PagedResponse<ReviewResponse> pagedResponse = PagedResponse.fromPage(responsePage);
 
         return ReviewSummaryResponse.builder()
                 .productId(productId)
-                .averageRating(Math.round(avgRating * 10.0) / 10.0)
+                .averageRating(safeAverageRating)
                 .totalReviews(totalReviews)
                 .reviews(pagedResponse)
                 .build();

@@ -142,22 +142,67 @@ sudo crontab -e
 
 ---
 
-## 7. QUY TRÌNH SAO LƯU VÀ PHỤC HỒI DỮ LIỆU MYSQL
+## 7. QUY TRÌNH SAO LƯU, PHỤC HỒI DỮ LIỆU & DIỄN TẬP KHẮC PHỤC SỰ CỐ (ECOM-153 & ECOM-154)
 
-### 7.1. Sao lưu thủ công trước khi bảo trì:
+Hệ thống ShopMart sử dụng bộ công cụ tự động hóa chuyên biệt tại `scripts/backup/` (`backup.sh`, `restore.sh`, `verify-backup.sh`). Dữ liệu được nén trực tiếp `.sql.gz` và áp dụng chính sách tự động xóa sau 7 ngày.
+
+### 7.1. Cấp quyền thực thi các script trên VPS:
 ```bash
-cd /opt/shopmart
-source .env
-BACKUP_FILE="backups/manual_backup_$(date +%Y%m%d_%H%M%S).sql"
-docker exec ecommerce-mysql mysqldump -u root -p"${MYSQL_ROOT_PASSWORD}" --all-databases > "${BACKUP_FILE}"
-echo "Đã tạo bản sao lưu tại ${BACKUP_FILE}"
+chmod +x /opt/shopmart/scripts/backup/*.sh
 ```
 
-### 7.2. Phục hồi dữ liệu khi có sự cố:
+### 7.2. Tạo bản sao lưu tức thời (Trước khi deploy hoặc bảo trì hệ thống):
 ```bash
-source .env
-docker exec -i ecommerce-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" < backups/ten_file_backup.sql
-echo "Đã phục hồi cơ sở dữ liệu thành công."
+cd /opt/shopmart
+# Sao lưu toàn bộ 4 database (auth_db, product_db, order_db, payment_db)
+./scripts/backup/backup.sh
+
+# Hoặc sao lưu một database cụ thể (ví dụ: order_db)
+./scripts/backup/backup.sh -d order_db
+```
+File sao lưu sẽ được tạo trong `/opt/shopmart/backups/mysql_backup_YYYY-MM-DD_HH-MM-SS.sql.gz`.
+
+### 7.3. Thiết lập lịch sao lưu tự động định kỳ (Cronjob):
+Chạy sao lưu tự động vào lúc **02:00 sáng hàng ngày**:
+```bash
+sudo crontab -u deploy -e
+# Thêm dòng sau:
+0 2 * * * /opt/shopmart/scripts/backup/backup.sh -r 7 >> /var/log/shopmart_backup.log 2>&1
+```
+
+### 7.4. Kiểm tra tính toàn vẹn của bản sao lưu (Verify):
+```bash
+./scripts/backup/verify-backup.sh /opt/shopmart/backups/mysql_backup_YYYY-MM-DD_HH-MM-SS.sql.gz
+```
+
+### 7.5. Diễn tập Phục hồi An toàn (Disaster Recovery Drill - ECOM-154):
+> [!IMPORTANT]
+> **Quy tắc an toàn sống còn:** Tuyệt đối không phục hồi đè trực tiếp lên cơ sở dữ liệu production đang phục vụ khách hàng khi diễn tập. Sử dụng cơ chế phục hồi vào cơ sở dữ liệu kiểm thử riêng biệt (`auth_db_test`, `product_db_test`).
+
+**Quy trình diễn tập 10 bước chuẩn hóa:**
+1. **Bước 1:** Tạo bản sao lưu snapshot mới nhất:
+   `./scripts/backup/backup.sh -d auth_db`
+2. **Bước 2:** Xác thực tính toàn vẹn của tệp nén sao lưu:
+   `./scripts/backup/verify-backup.sh <file_vua_tao>`
+3. **Bước 3:** Khởi tạo cơ sở dữ liệu diễn tập cô lập:
+   `docker exec -i ecommerce-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS auth_db_test;"`
+4. **Bước 4:** Thực thi phục hồi bản sao lưu vào cơ sở dữ liệu diễn tập:
+   `./scripts/backup/restore.sh -t auth_db_test <file_vua_tao>`
+5. **Bước 5:** Đối soát số lượng bảng và cấu trúc schema giữa `auth_db` và `auth_db_test`:
+   `docker exec -i ecommerce-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW TABLES FROM auth_db_test;"`
+6. **Bước 6:** Truy vấn mẫu kiểm tra tính nhất quán dữ liệu người dùng:
+   `docker exec -i ecommerce-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT id, email, username FROM auth_db_test.users LIMIT 5;"`
+7. **Bước 7:** Kiểm tra tính toàn vẹn khóa ngoại (Foreign Keys) và chỉ mục (Indexes).
+8. **Bước 8:** Ghi nhận nhật ký diễn tập và thời gian hoàn tất (RTO - Recovery Time Objective < 5 phút).
+9. **Bước 9:** Dọn dẹp an toàn cơ sở dữ liệu diễn tập sau khi nghiệm thu:
+   `docker exec -i ecommerce-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "DROP DATABASE IF EXISTS auth_db_test;"`
+10. **Bước 10:** Xác nhận hệ thống chính không bị ảnh hưởng và hoạt động ổn định 100%.
+
+### 7.6. Phục hồi thực tế khi xảy ra sự cố thảm họa (Disaster Recovery):
+Khi xảy ra lỗi mất dữ liệu thực tế và đã có phê duyệt bảo trì:
+```bash
+./scripts/backup/restore.sh /opt/shopmart/backups/mysql_backup_YYYY-MM-DD_HH-MM-SS.sql.gz
+# Nhập 'yes' khi hệ thống yêu cầu xác nhận an toàn
 ```
 
 ---

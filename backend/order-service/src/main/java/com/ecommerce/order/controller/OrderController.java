@@ -32,7 +32,10 @@ public class OrderController {
     @Operation(summary = "Đặt hàng (Checkout)", description = "Lấy userId từ header nội bộ X-User-Id, kiểm tra giá thực tế, trừ kho qua Product Service (Feign), tạo Order PENDING, bắn sự kiện order-created qua Kafka")
     public ResponseEntity<ApiResponse<OrderResponse>> checkout(
             @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @Valid @RequestBody CheckoutRequest request) {
+
+        validateHeaderAuthentication(authenticatedUserId, authorizationHeader);
 
         if (authenticatedUserId != null) {
             request.setUserId(authenticatedUserId);
@@ -56,7 +59,10 @@ public class OrderController {
     @Operation(summary = "Tạo đơn hàng từ giỏ", description = "Lấy các sản phẩm trong giỏ hàng hiện tại của người dùng, kiểm tra tồn kho, tạo đơn hàng và làm trống giỏ hàng")
     public ResponseEntity<ApiResponse<OrderResponse>> createOrderFromCart(
             @RequestHeader(value = "X-User-Id", required = false) Long authenticatedUserId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @Valid @RequestBody CheckoutRequest request) {
+
+        validateHeaderAuthentication(authenticatedUserId, authorizationHeader);
 
         if (authenticatedUserId != null) {
             request.setUserId(authenticatedUserId);
@@ -146,8 +152,17 @@ public class OrderController {
 
     // ─── Helper ───────────────────────────────────────────────────────────────
 
+    private void validateHeaderAuthentication(Long authenticatedUserId, String authorizationHeader) {
+        if (authenticatedUserId != null && authenticatedUserId <= 0) {
+            throw new AccessDeniedException("Thông tin người dùng xác thực (X-User-Id) không hợp lệ");
+        }
+        if (authorizationHeader != null && !authorizationHeader.trim().isEmpty() && authenticatedUserId == null) {
+            throw new AccessDeniedException("Token xác thực không hợp lệ hoặc đã hết hạn");
+        }
+    }
+
     private void requireAuthenticated(Long authenticatedUserId) {
-        if (authenticatedUserId == null) {
+        if (authenticatedUserId == null || authenticatedUserId <= 0) {
             throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
         }
     }

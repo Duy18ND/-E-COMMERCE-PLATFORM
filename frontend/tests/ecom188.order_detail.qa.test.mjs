@@ -130,7 +130,10 @@ describe('ECOM-188: TRANG CHI TIẾT ĐƠN HÀNG, NGÀY ĐẶT, MÃ ĐƠN, TIMEL
     const content = fs.readFileSync(orderDetailFile, 'utf8');
     assert.ok(content.includes('MOCK_ONLINE'), 'Phải kiểm tra phương thức MOCK_ONLINE');
     assert.ok(content.includes('handleMockPay'), 'Phải có hàm xử lý handleMockPay');
-    assert.ok(content.includes('Thanh toán ngay'), 'Phải có nút Thanh toán ngay');
+    assert.ok(
+      content.includes('Thanh toán QR ngay') || content.includes('Thanh toán ngay'),
+      'Phải có nút Thanh toán QR ngay / Thanh toán ngay'
+    );
   });
 
   test('TC-188-16: Xử lý bảo mật IDOR (HTTP 403 Forbidden) hiển thị thông báo không có quyền xem đơn hàng', () => {

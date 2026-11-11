@@ -12,6 +12,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * [Task ECOM-166 / ECOM-167 / ECOM-183 / ECOM-339] Repository thao tác bảng vouchers.
+ * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
+ */
 @Repository
 public interface VoucherRepository extends JpaRepository<Voucher, Long> {
 
@@ -21,7 +25,9 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
 
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
-    @Query("SELECT v FROM Voucher v WHERE v.status = :status AND v.endDate >= :today ORDER BY v.createdAt DESC")
+    @Query("SELECT v FROM Voucher v WHERE v.status = :status " +
+           "AND v.startDate <= :today AND v.endDate >= :today " +
+           "AND v.usedQuantity < v.quantity ORDER BY v.createdAt DESC")
     List<Voucher> findAvailableForCustomer(@Param("status") VoucherStatus status, @Param("today") LocalDate today);
 
     /**
@@ -29,7 +35,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
      * Chỉ tăng khi voucher đang ACTIVE, còn trong thời hạn và usedQuantity < quantity.
      * Trả về số dòng cập nhật (1 = thành công, 0 = thất bại / hết lượt).
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Voucher v SET v.usedQuantity = v.usedQuantity + 1 " +
            "WHERE v.id = :id AND v.status = 'ACTIVE' " +
            "AND v.startDate <= :today AND v.endDate >= :today " +
@@ -39,7 +45,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
     /**
      * Hoàn lại 1 lượt sử dụng khi đơn hàng bị hủy hoặc thanh toán thất bại.
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Voucher v SET v.usedQuantity = v.usedQuantity - 1 " +
            "WHERE UPPER(v.code) = UPPER(:code) AND v.usedQuantity > 0")
     int decrementUsedQuantityByCode(@Param("code") String code);

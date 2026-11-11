@@ -36,6 +36,28 @@ const STANDARD_STEPS = [
   }
 ];
 
+// Bước thanh toán trực tuyến (hiển thị tách biệt với bước Shop xác nhận đơn khi đơn có đi qua trạng thái PAID)
+const PAID_STEP = {
+  key: ORDER_STATUS.PAID,
+  title: 'Đã thanh toán',
+  icon: '💳',
+  description: 'Khách hàng đã thanh toán thành công, chờ cửa hàng xác nhận đơn'
+};
+
+// Nhãn hành động rõ nghĩa trong Nhật ký trạng thái chi tiết (tránh nhầm lẫn giữa "Chờ xác nhận" và "Đã xác nhận")
+const AUDIT_EVENT_TITLES = {
+  [ORDER_STATUS.PENDING]: 'Đặt hàng thành công · Chờ Shop xác nhận',
+  [ORDER_STATUS.PAID]: 'Đã thanh toán thành công · Chờ Shop xác nhận đơn',
+  [ORDER_STATUS.CONFIRMED]: 'Shop đã xác nhận đơn hàng (Đã xác nhận)',
+  [ORDER_STATUS.PROCESSING]: 'Đang chuẩn bị & đóng gói hàng',
+  [ORDER_STATUS.SHIPPING]: 'Đang bàn giao & vận chuyển',
+  [ORDER_STATUS.DELIVERED]: 'Giao hàng thành công (Hoàn thành)',
+  [ORDER_STATUS.COMPLETED]: 'Giao hàng thành công (Hoàn thành)',
+  [ORDER_STATUS.CANCELLED]: 'Đơn hàng đã hủy',
+  [ORDER_STATUS.FAILED]: 'Thanh toán / Xử lý thất bại',
+  [ORDER_STATUS.REFUNDED]: 'Đã hoàn tiền cho khách hàng'
+};
+
 // Thứ tự cấp bậc của các trạng thái chuẩn
 const STEP_ORDER_INDEX = {
   [ORDER_STATUS.PENDING]: 0,
@@ -142,18 +164,36 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
   const isRefunded = activeStatus === ORDER_STATUS.REFUNDED;
   const isTerminated = isCancelled || isFailed || isRefunded;
 
+  // Nếu đơn hàng có bước PAID (thanh toán trực tuyến / đã thu tiền trước khi duyệt),
+  // hiển thị tách biệt bước "💳 Đã thanh toán" và bước "📋 Đã xác nhận" để cả Khách hàng & Admin
+  // không bị nhầm giữa "Khách đã trả tiền" và "Shop đã duyệt đơn".
+  const hasPaidStep =
+    activeStatus === ORDER_STATUS.PAID ||
+    history.some((h) => h.status === ORDER_STATUS.PAID);
+
+  const baseSteps = hasPaidStep
+    ? [STANDARD_STEPS[0], PAID_STEP, ...STANDARD_STEPS.slice(1)]
+    : [...STANDARD_STEPS];
+
+  const getStepIdxInBase = (st) => {
+    const normalized = st === ORDER_STATUS.COMPLETED ? ORDER_STATUS.DELIVERED : st;
+    const idx = baseSteps.findIndex((s) => s.key === normalized);
+    return idx !== -1 ? idx : STEP_ORDER_INDEX[st];
+  };
+
   // Tính toán các bước hiển thị trên Stepper
-  let stepperSteps = [...STANDARD_STEPS];
+  let stepperSteps = [...baseSteps];
   if (isCancelled) {
     // Nếu đơn hàng bị hủy, giữ các bước đã hoàn thành và gắn bước HỦY ở cuối
     const lastValidIndex = history.reduce((maxIdx, item) => {
-      if (item.status !== ORDER_STATUS.CANCELLED && STEP_ORDER_INDEX[item.status] !== undefined) {
-        return Math.max(maxIdx, STEP_ORDER_INDEX[item.status]);
+      const idx = getStepIdxInBase(item.status);
+      if (item.status !== ORDER_STATUS.CANCELLED && idx !== undefined) {
+        return Math.max(maxIdx, idx);
       }
       return maxIdx;
     }, 0);
 
-    stepperSteps = STANDARD_STEPS.slice(0, lastValidIndex + 1);
+    stepperSteps = baseSteps.slice(0, lastValidIndex + 1);
     stepperSteps.push({
       key: ORDER_STATUS.CANCELLED,
       title: 'Đơn hàng đã hủy',
@@ -163,13 +203,14 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
     });
   } else if (isFailed) {
     const lastValidIndex = history.reduce((maxIdx, item) => {
-      if (item.status !== ORDER_STATUS.FAILED && STEP_ORDER_INDEX[item.status] !== undefined) {
-        return Math.max(maxIdx, STEP_ORDER_INDEX[item.status]);
+      const idx = getStepIdxInBase(item.status);
+      if (item.status !== ORDER_STATUS.FAILED && idx !== undefined) {
+        return Math.max(maxIdx, idx);
       }
       return maxIdx;
     }, 0);
 
-    stepperSteps = STANDARD_STEPS.slice(0, lastValidIndex + 1);
+    stepperSteps = baseSteps.slice(0, lastValidIndex + 1);
     stepperSteps.push({
       key: ORDER_STATUS.FAILED,
       title: 'Xử lý thất bại',
@@ -187,16 +228,16 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
   }
 
   // Xác định chỉ số bước hiện tại trong chuỗi Stepper
-  const currentStepIndex = stepperSteps.findIndex((s) => s.key === activeStatus);
+  const normalizedActive = activeStatus === ORDER_STATUS.COMPLETED ? ORDER_STATUS.DELIVERED : activeStatus;
+  const currentStepIndex = stepperSteps.findIndex((s) => s.key === normalizedActive);
   const activeIndex = currentStepIndex !== -1
     ? currentStepIndex
     : (STEP_ORDER_INDEX[activeStatus] !== undefined ? STEP_ORDER_INDEX[activeStatus] : 0);
 
-  // Lấy thời điểm hoàn thành của một bước từ mảng history (chỉ lấy mốc có thời gian thực tế)
+  // Lấy thời điểm hoàn thành của một bước từ mảng history (chỉ lấy mốc có thời gian thực tế của đúng bước đó)
   const getStepCompletedTime = (stepKey) => {
     const found = history.find(
       (h) => h.status === stepKey ||
-        (stepKey === ORDER_STATUS.CONFIRMED && h.status === ORDER_STATUS.PAID) ||
         (stepKey === ORDER_STATUS.DELIVERED && h.status === ORDER_STATUS.COMPLETED)
     );
     return found ? formatTimelineDate(found.createdAt) : null;
@@ -601,8 +642,8 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
           >
             {history.map((record, rIdx) => {
               const isLast = rIdx === history.length - 1;
-              const statusLabel = ORDER_STATUS_LABELS[record.status] || record.status;
-              const isRecordCancelled = record.status === ORDER_STATUS.CANCELLED;
+              const statusLabel = AUDIT_EVENT_TITLES[record.status] || ORDER_STATUS_LABELS[record.status] || record.status;
+              const isRecordCancelled = record.status === ORDER_STATUS.CANCELLED || record.status === ORDER_STATUS.FAILED;
               const isRecordDelivered = record.status === ORDER_STATUS.DELIVERED || record.status === ORDER_STATUS.COMPLETED;
 
               return (
