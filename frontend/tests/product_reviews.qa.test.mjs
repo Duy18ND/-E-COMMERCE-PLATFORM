@@ -9,9 +9,14 @@ import {
   validateReviewInput,
   normalizeReviewSummary,
   normalizeReview,
+  normalizeAdminReviewsPage,
   calculateStarDistribution,
+  calculateAdminReviewStats,
   filterAndSortReviews,
+  filterAdminReviews,
   isOrderCompletedForReview,
+  REVIEW_MODERATION_STATUS,
+  VIOLATION_REASON_PRESETS,
   MAX_REVIEW_COMMENT_LENGTH
 } from '../src/services/reviewService.js';
 
@@ -30,6 +35,10 @@ test('ECOM-177 FE QA SUITE: FORM ĐÁNH GIÁ SAO VÀ NỘI DUNG SAU MUA', async 
   const ordersHistorySrc = readSrc('pages/customer/Orders.jsx');
   const orderItemSrc = readSrc('components/order/OrderItem.jsx');
   const orderServiceSrc = readSrc('services/orderService.js');
+  const adminReviewsSrc = readSrc('pages/admin/AdminReviews.jsx');
+  const appRoutesSrc = readSrc('routes/AppRoutes.jsx');
+  const adminSidebarSrc = readSrc('components/admin/AdminSidebar.jsx');
+  const adminHeaderSrc = readSrc('components/admin/AdminHeader.jsx');
 
   await t.test('TC-REV-01: Người dùng chưa đăng nhập bị chặn đánh giá (NOT_LOGGED_IN)', () => {
     const result = evaluateReviewEligibility({
@@ -487,6 +496,181 @@ test('ECOM-177 FE QA SUITE: FORM ĐÁNH GIÁ SAO VÀ NỘI DUNG SAU MUA', async 
     assert.match(orderDetailSrc, /order-item-review-error-/);
     assert.match(orderDetailSrc, /order-item-reviewed-badge-/);
     assert.match(orderDetailSrc, /order-item-review-btn-/);
+  });
+
+  await t.test('TC-REV-17: [ADMIN] Định tuyến /admin/reviews được bảo vệ bởi AdminRoute và gắn trên Sidebar + Header Admin', () => {
+    assert.match(appRoutesSrc, /<Route element=\{<AdminRoute \/>\}>[\s\S]*path="\/admin\/reviews"[\s\S]*<AdminReviews \/>/);
+    assert.match(adminSidebarSrc, /path:\s*'\/admin\/reviews'/);
+    assert.match(adminHeaderSrc, /to="\/admin\/reviews"/);
+    assert.match(adminReviewsSrc, /!isAuthenticated \|\| !isAdmin/);
+  });
+
+  await t.test('TC-REV-18: [ADMIN] Dashboard thống kê tính chính xác Tổng đánh giá, Chờ duyệt, Đã duyệt, Đã ẩn và Điểm TB từ API thật', () => {
+    const emptyStats = calculateAdminReviewStats([]);
+    assert.deepEqual(emptyStats, {
+      totalReviews: 0,
+      pendingReviews: 0,
+      approvedReviews: 0,
+      hiddenReviews: 0,
+      averageRating: 0
+    });
+
+    const sample = [
+      { id: 1, rating: 5, status: REVIEW_MODERATION_STATUS.APPROVED },
+      { id: 2, rating: 4, status: REVIEW_MODERATION_STATUS.APPROVED },
+      { id: 3, rating: 1, status: REVIEW_MODERATION_STATUS.HIDDEN, hiddenReason: 'Spam hoặc quảng cáo' },
+      { id: 4, rating: 3, status: REVIEW_MODERATION_STATUS.PENDING }
+    ];
+    const stats = calculateAdminReviewStats(sample);
+    assert.deepEqual(stats, {
+      totalReviews: 4,
+      pendingReviews: 1,
+      approvedReviews: 2,
+      hiddenReviews: 1,
+      averageRating: 3.3
+    });
+
+    assert.match(adminReviewsSrc, /admin-reviews-kpi-total/);
+    assert.match(adminReviewsSrc, /admin-reviews-kpi-pending/);
+    assert.match(adminReviewsSrc, /admin-reviews-kpi-approved/);
+    assert.match(adminReviewsSrc, /admin-reviews-kpi-hidden/);
+    assert.match(adminReviewsSrc, /admin-reviews-kpi-avg/);
+  });
+
+  await t.test('TC-REV-19: [ADMIN] Chuẩn hóa PagedResponse từ GET /api/v1/admin/reviews và Tìm kiếm / Lọc / Phân trang Admin', () => {
+    const paged = normalizeAdminReviewsPage({
+      content: [
+        {
+          id: 10,
+          productId: 101,
+          userId: 5,
+          orderId: 500,
+          rating: 5,
+          comment: 'MacBook Pro quá ngon',
+          status: 'APPROVED',
+          createdAt: '2026-11-01T10:00:00'
+        },
+        {
+          id: 11,
+          productId: 102,
+          userId: 8,
+          orderId: 501,
+          rating: 2,
+          comment: 'Quảng cáo link spam kiếm tiền',
+          status: 'HIDDEN',
+          hiddenReason: 'Spam hoặc quảng cáo',
+          createdAt: '2026-11-05T15:30:00'
+        },
+        {
+          id: 12,
+          productId: 101,
+          userId: 9,
+          orderId: 502,
+          rating: 4,
+          comment: 'Giao hàng đúng hẹn',
+          status: 'PENDING',
+          createdAt: '2026-11-10T09:00:00'
+        }
+      ],
+      pageNumber: 0,
+      pageSize: 20,
+      totalElements: 3,
+      totalPages: 1,
+      last: true
+    });
+
+    assert.equal(paged.content.length, 3);
+    assert.equal(paged.totalElements, 3);
+
+    const enriched = paged.content.map((r) => ({
+      ...r,
+      productName: r.productId === 101 ? 'MacBook Pro 14 M3' : 'iPhone 16 Pro Max',
+      customerName: r.userId === 5 ? 'Nguyễn Văn A' : r.userId === 8 ? 'Trần Spam' : 'Lê Thị C'
+    }));
+
+    // Tìm theo tên sản phẩm
+    const byProd = filterAdminReviews(enriched, { productQuery: 'macbook' });
+    assert.equal(byProd.length, 2);
+
+    // Tìm theo tên khách hàng
+    const byCust = filterAdminReviews(enriched, { customerQuery: 'Trần Spam' });
+    assert.equal(byCust.length, 1);
+    assert.equal(byCust[0].id, 11);
+
+    // Lọc theo số sao
+    const byRating = filterAdminReviews(enriched, { ratingFilter: 5 });
+    assert.deepEqual(byRating.map((r) => r.id), [10]);
+
+    // Lọc theo trạng thái kiểm duyệt
+    const byHidden = filterAdminReviews(enriched, { statusFilter: REVIEW_MODERATION_STATUS.HIDDEN });
+    assert.deepEqual(byHidden.map((r) => r.id), [11]);
+
+    // Lọc theo khoảng thời gian & sắp xếp cũ nhất
+    const byDateOldest = filterAdminReviews(enriched, {
+      startDate: '2026-11-04',
+      endDate: '2026-11-11',
+      sortBy: 'createdAt,asc'
+    });
+    assert.deepEqual(byDateOldest.map((r) => r.id), [11, 12]);
+
+    assert.match(adminReviewsSrc, /<Pagination/);
+    assert.match(adminReviewsSrc, /data-testid="admin-review-detail-modal"/);
+  });
+
+  await t.test('TC-REV-20: [ADMIN] Chức năng Duyệt, Ẩn vi phạm (6 nhóm lý do), Hiện lại đánh giá và Modal xác nhận', () => {
+    assert.equal(VIOLATION_REASON_PRESETS.length, 6);
+    assert.ok(VIOLATION_REASON_PRESETS.includes('Nội dung xúc phạm, thô tục'));
+    assert.ok(VIOLATION_REASON_PRESETS.includes('Spam hoặc quảng cáo'));
+    assert.ok(VIOLATION_REASON_PRESETS.includes('Nội dung không liên quan sản phẩm'));
+    assert.ok(VIOLATION_REASON_PRESETS.includes('Chứa thông tin cá nhân nhạy cảm'));
+    assert.ok(VIOLATION_REASON_PRESETS.includes('Đánh giá giả mạo hoặc gian lận'));
+    assert.ok(VIOLATION_REASON_PRESETS.includes('Vi phạm chính sách hệ thống'));
+
+    assert.match(reviewServiceSrc, /api\.get\('\/admin\/reviews'/);
+    assert.match(reviewServiceSrc, /api\.patch\(`\/admin\/reviews\/\$\{reviewId\}\/moderate`/);
+    assert.match(reviewServiceSrc, /api\.put\(`\/admin\/reviews\/\$\{reviewId\}\/status`/);
+
+    assert.match(adminReviewsSrc, /data-testid="admin-moderation-cancel-btn"/);
+    assert.match(adminReviewsSrc, /data-testid="admin-moderation-confirm-btn"/);
+    assert.match(adminReviewsSrc, /data-testid="admin-hide-reason-select"/);
+    assert.match(adminReviewsSrc, /data-testid="admin-hide-custom-reason-input"/);
+    assert.match(adminReviewsSrc, /data-testid="admin-moderation-error"/);
+    assert.match(adminReviewsSrc, /disabled=\{submittingModeration\}/);
+  });
+
+  await t.test('TC-REV-21: [SYNC & NO MOCK] Đánh giá HIDDEN/PENDING bị loại khỏi danh sách công khai khách hàng & Admin không dùng mock/localStorage', () => {
+    const publicSummary = normalizeReviewSummary(
+      {
+        productId: 101,
+        averageRating: 5.0,
+        totalReviews: 1,
+        reviews: {
+          content: [
+            { id: 1, productId: 101, userId: 10, orderId: 1, rating: 5, comment: 'Rất tốt', status: 'APPROVED' },
+            { id: 2, productId: 101, userId: 11, orderId: 2, rating: 1, comment: 'Spam ẩn', status: 'HIDDEN' },
+            { id: 3, productId: 101, userId: 12, orderId: 3, rating: 4, comment: 'Chờ duyệt', status: 'PENDING' }
+          ],
+          pageNumber: 0,
+          pageSize: 10,
+          totalElements: 1,
+          totalPages: 1,
+          last: true
+        }
+      },
+      101
+    );
+
+    assert.equal(publicSummary.reviews.content.length, 1);
+    assert.equal(publicSummary.reviews.content[0].id, 1);
+
+    // Đồng bộ sự kiện kiểm duyệt trên trang chi tiết sản phẩm khách hàng
+    assert.match(reviewsSectionSrc, /subscribeReviewModerationSync/);
+    assert.match(reviewsSectionSrc, /data-testid="my-review-hidden-notice"/);
+    assert.match(reviewServiceSrc, /notifyReviewModerationSync/);
+
+    // Không dùng mock data hay localStorage trên AdminReviews.jsx
+    assert.doesNotMatch(adminReviewsSrc, /localStorage/);
+    assert.doesNotMatch(adminReviewsSrc, /mockData|MOCK_/);
   });
 });
 

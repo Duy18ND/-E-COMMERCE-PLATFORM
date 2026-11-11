@@ -20,6 +20,105 @@ export const REVIEW_SORT_OPTIONS = [
   { value: 'rating,asc', label: 'Số sao thấp nhất (1 → 5★)' }
 ];
 
+export const REVIEW_MODERATION_STATUS = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  HIDDEN: 'HIDDEN'
+};
+
+export const MAX_HIDDEN_REASON_LENGTH = 255;
+
+export const VIOLATION_REASON_PRESETS = [
+  'Nội dung xúc phạm, thô tục',
+  'Spam hoặc quảng cáo',
+  'Nội dung không liên quan sản phẩm',
+  'Chứa thông tin cá nhân nhạy cảm',
+  'Đánh giá giả mạo hoặc gian lận',
+  'Vi phạm chính sách hệ thống'
+];
+
+const REVIEW_SYNC_EVENT = 'shopmart:review-moderation-sync';
+const REVIEW_SYNC_CHANNEL = 'shopmart_review_moderation_channel';
+
+/**
+ * Phát tín hiệu đồng bộ khi Admin duyệt / ẩn / hiện lại đánh giá
+ * để trang Chi tiết sản phẩm của khách hàng cập nhật tức thì.
+ */
+export const notifyReviewModerationSync = (payload = {}) => {
+  const detail = {
+    ...payload,
+    timestamp: Date.now()
+  };
+
+  try {
+    if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent(REVIEW_SYNC_EVENT, { detail }));
+    }
+  } catch {
+    // Bỏ qua trên môi trường Node test
+  }
+
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel(REVIEW_SYNC_CHANNEL);
+      bc.postMessage(detail);
+      bc.close();
+    }
+  } catch {
+    // Bỏ qua nếu trình duyệt không hỗ trợ BroadcastChannel
+  }
+};
+
+/**
+ * Lắng nghe sự kiện Admin kiểm duyệt đánh giá để đồng bộ giao diện khách hàng.
+ */
+export const subscribeReviewModerationSync = (callback, productIdFilter = null) => {
+  if (typeof callback !== 'function') return () => {};
+
+  const shouldTrigger = (detail) => {
+    if (!productIdFilter) return true;
+    if (!detail || detail.productId === undefined || detail.productId === null) return true;
+    return String(detail.productId) === String(productIdFilter);
+  };
+
+  const handleWindowEvent = (e) => {
+    if (shouldTrigger(e?.detail)) {
+      callback(e?.detail);
+    }
+  };
+
+  let bc = null;
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener(REVIEW_SYNC_EVENT, handleWindowEvent);
+  }
+
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      bc = new BroadcastChannel(REVIEW_SYNC_CHANNEL);
+      bc.onmessage = (msg) => {
+        if (shouldTrigger(msg?.data)) {
+          callback(msg?.data);
+        }
+      };
+    }
+  } catch {
+    bc = null;
+  }
+
+  return () => {
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener(REVIEW_SYNC_EVENT, handleWindowEvent);
+    }
+    if (bc) {
+      try {
+        bc.close();
+      } catch {
+        // Ignore
+      }
+    }
+  };
+};
+
 /**
  * Kiểm tra trạng thái đơn hàng có đủ điều kiện hoàn thành/đã giao để đánh giá hay không.
  * Theo Backend ReviewServiceImpl.fetchAndValidateOrder:
@@ -418,7 +517,11 @@ export const normalizeReviewSummary = (payload, productId, params = {}) => {
       ? payload.content
       : [];
 
-  const content = rawList.map(normalizeReview).filter(Boolean);
+  const allNormalized = rawList.map(normalizeReview).filter(Boolean);
+  // Chỉ hiển thị công khai các đánh giá có trạng thái APPROVED (ẩn tuyệt đối HIDDEN và PENDING)
+  const content = allNormalized.filter(
+    (item) => !item.status || String(item.status).toUpperCase() === REVIEW_MODERATION_STATUS.APPROVED
+  );
   const totalReviews = Number(payload.totalReviews ?? reviewsBlock.totalElements ?? content.length);
   const averageRating = Number(payload.averageRating ?? 0);
   const backendDist = payload.ratingDistribution || payload.starCounts || payload.ratingCounts || null;
@@ -439,6 +542,206 @@ export const normalizeReviewSummary = (payload, productId, params = {}) => {
       last: Boolean(reviewsBlock.last ?? true)
     }
   };
+};
+
+/**
+ * Chuẩn hóa dữ liệu phân trang PagedResponse<ReviewResponse> dành cho Admin từ GET /api/v1/admin/reviews
+ */
+export const normalizeAdminReviewsPage = (payload, params = {}) => {
+  const defaultPage = Number(params?.page ?? 0);
+  const defaultSize = Number(params?.size ?? 20);
+
+  if (!payload) {
+    return {
+      content: [],
+      pageNumber: defaultPage,
+      pageSize: defaultSize,
+      totalElements: 0,
+      totalPages: 0,
+      last: true
+    };
+  }
+
+  const rawList = Array.isArray(payload.content)
+    ? payload.content
+    : Array.isArray(payload)
+      ? payload
+      : [];
+
+  const content = rawList.map(normalizeReview).filter(Boolean);
+  const totalElements = Number(payload.totalElements ?? content.length);
+  const totalPages = Number(
+    payload.totalPages ?? (totalElements > 0 ? Math.ceil(totalElements / defaultSize) : 0)
+  );
+
+  return {
+    content,
+    pageNumber: Number(payload.pageNumber ?? defaultPage),
+    pageSize: Number(payload.pageSize ?? defaultSize),
+    totalElements: Number.isNaN(totalElements) ? content.length : totalElements,
+    totalPages: Number.isNaN(totalPages) ? 1 : totalPages,
+    last: Boolean(payload.last ?? true)
+  };
+};
+
+/**
+ * Tính toán các chỉ số thống kê KPI đánh giá dành cho Admin từ danh sách dữ liệu thực tế của API:
+ * - Tổng số đánh giá (totalReviews)
+ * - Đánh giá chờ duyệt (pendingReviews)
+ * - Đánh giá đã duyệt (approvedReviews)
+ * - Đánh giá đã ẩn (hiddenReviews)
+ * - Điểm đánh giá trung bình (averageRating)
+ */
+export const calculateAdminReviewStats = (reviews = []) => {
+  if (!Array.isArray(reviews) || reviews.length === 0) {
+    return {
+      totalReviews: 0,
+      pendingReviews: 0,
+      approvedReviews: 0,
+      hiddenReviews: 0,
+      averageRating: 0
+    };
+  }
+
+  let pendingReviews = 0;
+  let approvedReviews = 0;
+  let hiddenReviews = 0;
+  let ratingSum = 0;
+  let validRatingCount = 0;
+
+  reviews.forEach((rev) => {
+    if (!rev) return;
+    const status = String(rev.status || 'APPROVED').toUpperCase();
+    if (status === REVIEW_MODERATION_STATUS.PENDING) {
+      pendingReviews += 1;
+    } else if (status === REVIEW_MODERATION_STATUS.HIDDEN) {
+      hiddenReviews += 1;
+    } else {
+      approvedReviews += 1;
+    }
+
+    const r = Number(rev.rating);
+    if (!Number.isNaN(r) && r >= 1 && r <= 5) {
+      ratingSum += r;
+      validRatingCount += 1;
+    }
+  });
+
+  const averageRating =
+    validRatingCount > 0 ? Math.round((ratingSum / validRatingCount) * 10) / 10 : 0;
+
+  return {
+    totalReviews: reviews.length,
+    pendingReviews,
+    approvedReviews,
+    hiddenReviews,
+    averageRating
+  };
+};
+
+/**
+ * Lọc và sắp xếp danh sách đánh giá cho Admin theo:
+ * - Tên sản phẩm (productSearch) / Tên khách hàng (customerSearch) / Từ khóa chung (searchTerm)
+ * - Số sao (ratingFilter: 0 | 1..5)
+ * - Trạng thái kiểm duyệt (statusFilter: 'ALL' | 'PENDING' | 'APPROVED' | 'HIDDEN')
+ * - Khoảng thời gian (startDate, endDate định dạng YYYY-MM-DD)
+ * - Sắp xếp (sortBy: 'createdAt,desc' | 'createdAt,asc' | 'rating,desc' | 'rating,asc')
+ */
+export const filterAdminReviews = (
+  reviews = [],
+  {
+    searchTerm = '',
+    productQuery = '',
+    customerQuery = '',
+    ratingFilter = 0,
+    statusFilter = 'ALL',
+    startDate = '',
+    endDate = '',
+    sortBy = 'createdAt,desc'
+  } = {}
+) => {
+  if (!Array.isArray(reviews)) return [];
+
+  const term = String(searchTerm || '').trim().toLowerCase();
+  const prodTerm = String(productQuery || '').trim().toLowerCase();
+  const custTerm = String(customerQuery || '').trim().toLowerCase();
+  const targetRating = Number(ratingFilter) || 0;
+  const targetStatus = String(statusFilter || 'ALL').trim().toUpperCase();
+
+  const startMs = startDate ? new Date(`${startDate}T00:00:00`).getTime() : null;
+  const endMs = endDate ? new Date(`${endDate}T23:59:59.999`).getTime() : null;
+
+  const filtered = reviews.filter((rev) => {
+    if (!rev) return false;
+
+    // 1. Lọc theo trạng thái kiểm duyệt
+    if (targetStatus !== 'ALL') {
+      const revStatus = String(rev.status || 'APPROVED').toUpperCase();
+      if (revStatus !== targetStatus) return false;
+    }
+
+    // 2. Lọc theo số sao (1..5)
+    if (targetRating >= 1 && targetRating <= 5) {
+      if (Math.round(Number(rev.rating) || 0) !== targetRating) return false;
+    }
+
+    // 3. Lọc theo khoảng thời gian
+    if ((startMs && !Number.isNaN(startMs)) || (endMs && !Number.isNaN(endMs))) {
+      if (!rev.createdAt) return false;
+      const revMs = new Date(rev.createdAt).getTime();
+      if (Number.isNaN(revMs)) return false;
+      if (startMs && !Number.isNaN(startMs) && revMs < startMs) return false;
+      if (endMs && !Number.isNaN(endMs) && revMs > endMs) return false;
+    }
+
+    const productNameStr = String(
+      rev.productName || rev.product?.name || `Sản phẩm #${rev.productId}`
+    ).toLowerCase();
+    const customerNameStr = String(
+      rev.customerName || rev.userFullName || `Khách hàng #${rev.userId}`
+    ).toLowerCase();
+    const customerEmailStr = String(rev.customerEmail || '').toLowerCase();
+    const commentStr = String(rev.comment || '').toLowerCase();
+    const idStr = String(rev.id || '').toLowerCase();
+    const productIdStr = String(rev.productId || '').toLowerCase();
+    const userIdStr = String(rev.userId || '').toLowerCase();
+
+    // 4. Tìm kiếm riêng theo tên sản phẩm (nếu nhập)
+    if (prodTerm) {
+      if (!productNameStr.includes(prodTerm) && !productIdStr.includes(prodTerm)) {
+        return false;
+      }
+    }
+
+    // 5. Tìm kiếm riêng theo tên khách hàng (nếu nhập)
+    if (custTerm) {
+      if (
+        !customerNameStr.includes(custTerm) &&
+        !customerEmailStr.includes(custTerm) &&
+        !userIdStr.includes(custTerm)
+      ) {
+        return false;
+      }
+    }
+
+    // 6. Tìm kiếm tổng hợp (tên sản phẩm, tên khách hàng, ID đánh giá, bình luận)
+    if (term) {
+      const matched =
+        productNameStr.includes(term) ||
+        customerNameStr.includes(term) ||
+        customerEmailStr.includes(term) ||
+        commentStr.includes(term) ||
+        idStr.includes(term) ||
+        productIdStr.includes(term) ||
+        userIdStr.includes(term);
+      if (!matched) return false;
+    }
+
+    return true;
+  });
+
+  // 7. Sắp xếp
+  return filterAndSortReviews(filtered, { starFilter: 0, sortBy });
 };
 
 export const reviewService = {
@@ -537,7 +840,93 @@ export const reviewService = {
    * Endpoint: DELETE /api/v1/products/{productId}/reviews/{reviewId}
    */
   deleteReview: async (productId, reviewId) => {
-    return await api.delete(`/products/${productId}/reviews/${reviewId}`);
+    const res = await api.delete(`/products/${productId}/reviews/${reviewId}`);
+    notifyReviewModerationSync({ reviewId, productId, action: 'DELETED' });
+    return res;
+  },
+
+  /**
+   * [ADMIN] Lấy danh sách toàn bộ đánh giá hệ thống để kiểm duyệt
+   * Endpoint: GET /api/v1/admin/reviews
+   * Query params: page, size, sort, status (APPROVED | HIDDEN)
+   */
+  getAdminReviews: async (params = { page: 0, size: 100, sort: 'createdAt,desc' }) => {
+    const normalizedStatus = params.status ? String(params.status).trim().toUpperCase() : null;
+    // Backend ReviewStatus enum hỗ trợ APPROVED và HIDDEN
+    const backendSupportedStatus =
+      normalizedStatus === REVIEW_MODERATION_STATUS.APPROVED ||
+      normalizedStatus === REVIEW_MODERATION_STATUS.HIDDEN
+        ? normalizedStatus
+        : undefined;
+
+    const queryParams = {
+      page: params.page ?? 0,
+      size: params.size ?? 100,
+      sort: params.sort || 'createdAt,desc',
+      ...(backendSupportedStatus ? { status: backendSupportedStatus } : {})
+    };
+
+    const response = await api.get('/admin/reviews', { params: queryParams });
+    return normalizeAdminReviewsPage(response, queryParams);
+  },
+
+  /**
+   * [ADMIN] Kiểm duyệt đánh giá: Duyệt (APPROVED), Ẩn đánh giá vi phạm (HIDDEN) hoặc Hiện lại (APPROVED)
+   * Endpoint chính: PATCH /api/v1/admin/reviews/{reviewId}/moderate
+   * Endpoint alias trên Backend: PUT /api/v1/admin/reviews/{reviewId}/status
+   * Request body: { status: 'APPROVED' | 'HIDDEN', reason?: string (max 255) }
+   */
+  moderateAdminReview: async (reviewId, { status, reason = null } = {}) => {
+    if (reviewId === undefined || reviewId === null || String(reviewId).trim() === '') {
+      throw new Error('Mã đánh giá (reviewId) không hợp lệ.');
+    }
+
+    const targetStatus = String(status || '').trim().toUpperCase();
+    if (
+      targetStatus !== REVIEW_MODERATION_STATUS.APPROVED &&
+      targetStatus !== REVIEW_MODERATION_STATUS.HIDDEN
+    ) {
+      throw new Error('Trạng thái kiểm duyệt chỉ chấp nhận APPROVED (Đã duyệt) hoặc HIDDEN (Đã ẩn).');
+    }
+
+    const trimmedReason =
+      targetStatus === REVIEW_MODERATION_STATUS.HIDDEN && typeof reason === 'string'
+        ? reason.trim()
+        : null;
+
+    if (targetStatus === REVIEW_MODERATION_STATUS.HIDDEN && !trimmedReason) {
+      throw new Error('Vui lòng chọn hoặc nhập lý do ẩn đánh giá vi phạm.');
+    }
+
+    if (trimmedReason && trimmedReason.length > MAX_HIDDEN_REASON_LENGTH) {
+      throw new Error(`Lý do ẩn không được vượt quá ${MAX_HIDDEN_REASON_LENGTH} ký tự.`);
+    }
+
+    const payload = {
+      status: targetStatus,
+      reason: trimmedReason
+    };
+
+    let response;
+    try {
+      response = await api.patch(`/admin/reviews/${reviewId}/moderate`, payload);
+    } catch (err) {
+      const httpStatus = err?.status || err?.response?.status;
+      // Nếu proxy/gateway chặn PATCH (405 Method Not Allowed), gọi sang alias PUT chính thức của Backend
+      if (httpStatus === 405) {
+        response = await api.put(`/admin/reviews/${reviewId}/status`, payload);
+      } else {
+        throw err;
+      }
+    }
+
+    const normalized = normalizeReview(response);
+    notifyReviewModerationSync({
+      reviewId: normalized?.id ?? reviewId,
+      productId: normalized?.productId,
+      status: normalized?.status ?? targetStatus
+    });
+    return normalized;
   }
 };
 

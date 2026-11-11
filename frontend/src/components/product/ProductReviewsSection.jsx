@@ -6,6 +6,8 @@ import reviewService, {
   evaluateReviewEligibility,
   calculateStarDistribution,
   filterAndSortReviews,
+  subscribeReviewModerationSync,
+  REVIEW_MODERATION_STATUS,
   STAR_RATING_LABELS,
   REVIEW_SORT_OPTIONS
 } from '../../services/reviewService';
@@ -258,6 +260,31 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
   useEffect(() => {
     fetchUserReviewEligibility();
   }, [fetchUserReviewEligibility]);
+
+  // Đồng bộ tự động với Admin Reviews (qua BroadcastChannel / CustomEvent khi Admin duyệt hoặc ẩn đánh giá)
+  useEffect(() => {
+    const unsubscribe = subscribeReviewModerationSync(() => {
+      fetchProductReviews(currentPage, sortBy);
+      fetchUserReviewEligibility();
+    }, productId);
+
+    const handleVisibilityRefresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchProductReviews(currentPage, sortBy);
+      }
+    };
+
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', handleVisibilityRefresh);
+    }
+
+    return () => {
+      unsubscribe();
+      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+      }
+    };
+  }, [productId, currentPage, sortBy, fetchProductReviews, fetchUserReviewEligibility]);
 
   // Đánh giá điều kiện gửi review của user hiện tại
   const eligibility = useMemo(() => {
@@ -715,7 +742,10 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span
                         style={{
-                          backgroundColor: '#16a34a',
+                          backgroundColor:
+                            String(myReview.status || '').toUpperCase() === REVIEW_MODERATION_STATUS.HIDDEN
+                              ? '#dc2626'
+                              : '#16a34a',
                           color: '#ffffff',
                           fontWeight: 700,
                           fontSize: '0.75rem',
@@ -723,7 +753,9 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                           borderRadius: '9999px'
                         }}
                       >
-                        ✓ Đánh giá của bạn
+                        {String(myReview.status || '').toUpperCase() === REVIEW_MODERATION_STATUS.HIDDEN
+                          ? '🙈 Đánh giá của bạn (Đã bị Admin ẩn)'
+                          : '✓ Đánh giá của bạn'}
                       </span>
                       <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>
                         Đơn hàng #{myReview.orderId}
@@ -784,6 +816,24 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                   <p style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b', lineHeight: 1.5 }}>
                     {myReview.comment || '(Không có nội dung nhận xét)'}
                   </p>
+                  {String(myReview.status || '').toUpperCase() === REVIEW_MODERATION_STATUS.HIDDEN && (
+                    <div
+                      data-testid="my-review-hidden-notice"
+                      style={{
+                        marginTop: '0.6rem',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '8px',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        color: '#b91c1c',
+                        fontSize: '0.8rem',
+                        fontWeight: 600
+                      }}
+                    >
+                      ⚠️ Đánh giá này đã bị Quản trị viên ẩn khỏi trang công khai
+                      {myReview.hiddenReason ? ` (Lý do: ${myReview.hiddenReason})` : ''}.
+                    </div>
+                  )}
                 </>
               ) : (
                 <ProductReviewForm

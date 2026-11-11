@@ -746,6 +746,7 @@ const OrderDetail = () => {
           })}
         </div>
 
+<<<<<<< HEAD
         {/* Tổng kết thanh toán */}
         <div
           style={{
@@ -793,6 +794,32 @@ const OrderDetail = () => {
             <span>Tổng số tiền:</span>
             <span style={{ color: '#2563eb', fontSize: '1.35rem', fontWeight: 800 }}>
               {formatCurrency(order.totalAmount ?? totalAmount)}
+=======
+        {/* Tổng kết tiền */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {(Number(order.discountAmount) > 0 || Number(order.productDiscountAmount) > 0) && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem', color: '#64748b' }}>
+                <span>Tạm tính:</span>
+                <span>{formatCurrency(order.subtotalAmount || order.totalAmount || 0)}</span>
+              </div>
+              {Number(order.discountAmount) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem', color: '#16a34a', fontWeight: 700 }}>
+                  <span>🎫 Giảm giá Voucher {order.voucherCode ? `(${order.voucherCode})` : ''}:</span>
+                  <span>-{formatCurrency(order.discountAmount)}</span>
+                </div>
+              )}
+            </>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Tổng số tiền:</span>
+            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#2563eb' }}>
+              {formatCurrency(
+                order.subtotalAmount && Number(order.discountAmount) > 0
+                  ? Math.max(0, Math.min(Number(order.totalAmount || order.subtotalAmount), Number(order.subtotalAmount) - Number(order.discountAmount)))
+                  : (order.totalAmount || 0)
+              )}
+>>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
             </span>
           </div>
         </div>

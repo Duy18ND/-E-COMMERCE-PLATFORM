@@ -5,6 +5,7 @@ import useCart from '../../hooks/useCart';
 import useNotification from '../../hooks/useNotification';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
+<<<<<<< HEAD
 import voucherService, { getVoucherStatus, calcDiscount } from '../../services/voucherService';
 import {
   PAYMENT_METHOD,
@@ -12,6 +13,10 @@ import {
   ONLINE_PAYMENT_PROVIDERS,
   ONLINE_PAYMENT_METHODS_LIST
 } from '../../utils/constants';
+=======
+import voucherService, { getVoucherStatus, calcDiscount, parseLocalDateBoundary } from '../../services/voucherService';
+import { PAYMENT_METHOD, PAYMENT_METHOD_LABELS } from '../../utils/constants';
+>>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import CartSummary from '../../components/cart/CartSummary';
@@ -22,7 +27,7 @@ import QrPaymentModal from '../../components/order/QrPaymentModal';
 const fmtMoney = (n) => Number(n).toLocaleString('vi-VN') + 'đ';
 const fmtDate  = (str) => {
   if (!str) return '';
-  const d = new Date(str);
+  const d = parseLocalDateBoundary(str, false);
   return isNaN(d) ? str : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 };
 
@@ -105,15 +110,16 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {savedVouchers.map((v) => {
                 const status     = getVoucherStatus(v);
-                const canApply   = status === 'ACTIVE' && orderTotal >= v.minOrderValue;
+                const minOrder   = Number(v.minOrderValue || 0);
+                const canApply   = status === 'ACTIVE' && orderTotal > 0 && orderTotal >= minOrder;
                 const discount   = calcDiscount(v, orderTotal);
                 const isSelected = v.id === appliedVoucherId;
 
                 let disabledReason = null;
                 if (status !== 'ACTIVE') {
                   disabledReason = status === 'EXPIRED' ? 'Đã hết hạn' : status === 'SOLD_OUT' ? 'Hết lượt dùng' : 'Không khả dụng';
-                } else if (orderTotal < v.minOrderValue) {
-                  disabledReason = `Cần đơn tối thiểu ${fmtMoney(v.minOrderValue)}`;
+                } else if (orderTotal <= 0 || orderTotal < minOrder) {
+                  disabledReason = `Cần đơn tối thiểu ${fmtMoney(minOrder)}`;
                 }
 
                 return (
@@ -323,6 +329,7 @@ const Checkout = () => {
       setPickerOpen(false);
       return;
     }
+<<<<<<< HEAD
     const currentSubtotal = Number(totalPrice) || 0;
     const currentShippingFee = 0;
     const currentDiscount = calcDiscount(v, currentSubtotal);
@@ -336,13 +343,23 @@ const Checkout = () => {
       shippingFee: currentShippingFee,
       totalAmount: currentTotal
     });
+=======
+    const discountAmount = calcDiscount(v, totalPrice);
+    if (discountAmount <= 0 || totalPrice <= 0 || totalPrice < Number(v.minOrderValue || 0)) {
+      setAppliedVoucher(null);
+      setPickerOpen(false);
+      return;
+    }
+    setAppliedVoucher({ voucher: v, discountAmount });
+>>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
     setPickerOpen(false);
   };
 
   const handleRemoveVoucher = () => setAppliedVoucher(null);
 
-  // Recalculate if cart total changes
+  // Recalculate if cart total changes (and auto-invalidate if order drops below minOrderValue)
   useEffect(() => {
+<<<<<<< HEAD
     if (appliedVoucher?.voucher) {
       const currentSubtotal = Number(totalPrice) || 0;
       const currentShippingFee = 0;
@@ -361,6 +378,18 @@ const Checkout = () => {
             }
           : null
       );
+=======
+    if (appliedVoucher) {
+      const v = appliedVoucher.voucher;
+      const status = getVoucherStatus(v);
+      const minOrder = Number(v?.minOrderValue || 0);
+      if (!v || status !== 'ACTIVE' || totalPrice <= 0 || totalPrice < minOrder) {
+        setAppliedVoucher(null);
+        return;
+      }
+      const newDiscount = calcDiscount(v, totalPrice);
+      setAppliedVoucher((prev) => prev ? { ...prev, discountAmount: newDiscount } : null);
+>>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
     }
   }, [totalPrice]);
 
@@ -413,6 +442,7 @@ const Checkout = () => {
 
     setLoading(true);
     try {
+<<<<<<< HEAD
       if (isOnlineMethod) {
         // Mô phỏng loading ngắn xử lý cổng thanh toán trực tuyến
         await new Promise((resolve) => setTimeout(resolve, 800));
@@ -434,21 +464,51 @@ const Checkout = () => {
         discountAmount,
         shippingFee,
         totalAmount
+=======
+      // Tạo đơn hàng – kèm đầy đủ thông tin tạm tính (đã áp giá Flash Sale) và giảm giá Voucher
+      const createdOrder = await orderService.checkout({
+        receiverName:          formData.receiverName.trim(),
+        receiverPhone:         formData.receiverPhone.trim(),
+        shippingAddress:       fullShippingAddress,
+        note:                  formData.note ? formData.note.trim() : '',
+        paymentMethod:         formData.paymentMethod,
+        subtotalAmount:        totalPrice,
+        originalAmount:        totalOriginalPrice > totalPrice ? totalOriginalPrice : totalPrice,
+        productDiscountAmount: totalDiscount,
+        voucherId:             appliedVoucher?.voucher?.id     ?? null,
+        voucherCode:           appliedVoucher?.voucher?.code   ?? null,
+        discountAmount:        voucherDiscount,
+        finalTotal
+>>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
       });
+
+      const resolvedSubtotal = Number(createdOrder?.subtotalAmount || totalPrice || 0);
+      const resolvedVoucherDiscount = Math.max(Number(createdOrder?.discountAmount || 0), voucherDiscount);
+      const resolvedPayableTotal =
+        finalTotal >= 0 && totalPrice > 0
+          ? finalTotal
+          : Math.max(0, resolvedSubtotal - resolvedVoucherDiscount);
+      const normalizedCreatedOrder = {
+        ...createdOrder,
+        originalAmount:        Math.max(Number(createdOrder?.originalAmount || 0), totalOriginalPrice || resolvedSubtotal),
+        subtotalAmount:        resolvedSubtotal,
+        productDiscountAmount: Math.max(Number(createdOrder?.productDiscountAmount || 0), totalDiscount || 0),
+        voucherCode:           createdOrder?.voucherCode || appliedVoucher?.voucher?.code || null,
+        discountAmount:        resolvedVoucherDiscount,
+        totalAmount:           resolvedPayableTotal
+      };
 
       await refreshCart();
 
       // Thanh toán trực tuyến (khác COD): giữ đơn PENDING và mở màn hình quét mã QR thay vì chuyển trang ngay
       const isOnlinePayment = formData.paymentMethod !== PAYMENT_METHOD.COD;
-      if (isOnlinePayment && createdOrder?.id && createdOrder?.status !== 'PAID') {
-        setQrOrder({
-          ...createdOrder,
-          totalAmount: createdOrder.totalAmount ?? finalTotal
-        });
-        notify.success(`Đặt hàng thành công! Vui lòng quét mã QR để thanh toán đơn hàng #${createdOrder.id}.`);
+      if (isOnlinePayment && normalizedCreatedOrder?.id && normalizedCreatedOrder?.status !== 'PAID') {
+        setQrOrder(normalizedCreatedOrder);
+        notify.success(`Đặt hàng thành công! Vui lòng quét mã QR để thanh toán đơn hàng #${normalizedCreatedOrder.id}.`);
         return;
       }
 
+<<<<<<< HEAD
       notify.success(`Đặt hàng thành công! Đơn hàng #${createdOrder?.id || ''} đã được ghi nhận.`);
       navigate('/order-success', {
         state: {
@@ -460,6 +520,10 @@ const Checkout = () => {
           amountPaid: totalAmount
         }
       });
+=======
+      notify.success(`Đặt hàng thành công! Đơn hàng #${normalizedCreatedOrder?.id || ''} đã được ghi nhận.`);
+      navigate('/order-success', { state: { orderId: normalizedCreatedOrder?.id, order: normalizedCreatedOrder } });
+>>>>>>> 66febed1bf13bbcaffc195ff31cc3de36fd7c0d1
     } catch (err) {
       const errMsg = err.message || 'Đặt hàng không thành công. Vui lòng kiểm tra lại thông tin giỏ hàng!';
       setError(errMsg);
