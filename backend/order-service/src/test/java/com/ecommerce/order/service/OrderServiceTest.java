@@ -806,14 +806,16 @@ class OrderServiceTest {
         assertThat(response.getDiscountAmount()).isEqualByComparingTo(new BigDecimal("50.00"));
         assertThat(response.getTotalAmount()).isEqualByComparingTo(new BigDecimal("2000.00"));
 
+        verify(voucherService, times(1)).validateUserCanUseVoucher("GIAM50K", 1L);
         verify(voucherService, times(1)).redeemVoucherForOrder(eq("GIAM50K"), eq(new BigDecimal("2050.00")));
+        verify(voucherService, times(1)).recordVoucherUsage("GIAM50K", 1L, 99L, new BigDecimal("50.00"));
         verify(kafkaOrderProducer, times(1)).sendOrderCreatedEvent(argThat(event ->
                 event.getTotalAmount().compareTo(new BigDecimal("2000.00")) == 0
         ));
     }
 
     @Test
-    @DisplayName("[VOUCHER] Hủy đơn hàng có áp mã voucher: Gọi restoreVoucherUsage để hoàn lại lượt dùng")
+    @DisplayName("[Task ECOM-183] Hủy đơn hàng có áp mã voucher: Gọi restoreVoucherUsage và restoreVoucherUsageForOrder để hoàn lại lượt dùng")
     void cancelOrder_WithVoucherCode_ShouldRestoreVoucherUsage() {
         samplePendingOrder.setVoucherCode("GIAM50K");
         when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
@@ -822,10 +824,11 @@ class OrderServiceTest {
         orderService.cancelOrder(1L, 1L);
 
         verify(voucherService, times(1)).restoreVoucherUsage("GIAM50K");
+        verify(voucherService, times(1)).restoreVoucherUsageForOrder("GIAM50K", 1L, 1L);
     }
 
     @Test
-    @DisplayName("[VOUCHER] Thanh toán thất bại (Saga rollback): Gọi restoreVoucherUsage để hoàn lại lượt dùng")
+    @DisplayName("[Task ECOM-183] Thanh toán thất bại (Saga rollback): Gọi restoreVoucherUsage và restoreVoucherUsageForOrder để hoàn lại lượt dùng")
     void handlePaymentFailed_WithVoucherCode_ShouldRestoreVoucherUsage() {
         samplePendingOrder.setVoucherCode("SALE10");
         when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
@@ -839,5 +842,21 @@ class OrderServiceTest {
         orderService.handlePaymentFailed(event);
 
         verify(voucherService, times(1)).restoreVoucherUsage("SALE10");
+        verify(voucherService, times(1)).restoreVoucherUsageForOrder("SALE10", 1L, 1L);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-183] Admin cập nhật trạng thái CANCELLED cho đơn hàng có voucher: Hoàn lại lượt voucher")
+    void updateOrderStatus_CancelledWithVoucher_ShouldRestoreVoucherUsage() {
+        samplePendingOrder.setVoucherCode("GIAM50K");
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderStatusHistoryRepository.save(any(com.ecommerce.order.entity.OrderStatusHistory.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderService.updateOrderStatus(1L, OrderStatus.CANCELLED, "ADMIN:1", "ROLE_ADMIN", "Admin hủy đơn do hết hàng");
+
+        verify(voucherService, times(1)).restoreVoucherUsage("GIAM50K");
+        verify(voucherService, times(1)).restoreVoucherUsageForOrder("GIAM50K", 1L, 1L);
     }
 }
