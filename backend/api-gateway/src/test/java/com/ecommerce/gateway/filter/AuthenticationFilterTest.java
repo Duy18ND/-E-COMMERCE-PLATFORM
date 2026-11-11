@@ -146,4 +146,72 @@ class AuthenticationFilterTest {
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
+
+    @Test
+    @DisplayName("[ECOM-181] Should overwrite client-spoofed X-User-Id header with actual userId from JWT on review creation")
+    void testOverwriteSpoofedUserIdHeaderOnReviewCreation() {
+        String token = createToken(42L, "customer42@ecommerce.com", List.of("ROLE_CUSTOMER"), 60000L);
+
+        MockServerHttpRequest request = MockServerHttpRequest.post("/api/v1/products/1/reviews")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header("X-User-Id", "999")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        AtomicReference<ServerWebExchange> mutatedExchangeRef = new AtomicReference<>();
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
+            mutatedExchangeRef.set(invocation.getArgument(0));
+            return Mono.empty();
+        });
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(mutatedExchangeRef.get()).isNotNull();
+        HttpHeaders headers = mutatedExchangeRef.get().getRequest().getHeaders();
+        assertThat(headers.getFirst("X-User-Id")).isEqualTo("42");
+        assertThat(headers.getFirst("X-User-Roles")).isEqualTo("ROLE_CUSTOMER");
+    }
+
+    @Test
+    @DisplayName("[ECOM-193] Should overwrite client-spoofed X-User-Roles: ROLE_ADMIN header with actual JWT roles on admin review API")
+    void testOverwriteSpoofedAdminRoleHeaderOnAdminReviewEndpoint() {
+        String customerToken = createToken(42L, "customer42@ecommerce.com", List.of("ROLE_CUSTOMER"), 60000L);
+
+        MockServerHttpRequest request = MockServerHttpRequest.patch("/api/v1/admin/reviews/100/moderate")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                .header("X-User-Roles", "ROLE_ADMIN")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        AtomicReference<ServerWebExchange> mutatedExchangeRef = new AtomicReference<>();
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
+            mutatedExchangeRef.set(invocation.getArgument(0));
+            return Mono.empty();
+        });
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(mutatedExchangeRef.get()).isNotNull();
+        HttpHeaders headers = mutatedExchangeRef.get().getRequest().getHeaders();
+        assertThat(headers.getFirst("X-User-Roles")).isEqualTo("ROLE_CUSTOMER");
+    }
+
+    @Test
+    @DisplayName("[ECOM-181 / ECOM-193] Should return 401 Unauthorized when Bearer token is empty")
+    void testEmptyBearerToken() {
+        MockServerHttpRequest request = MockServerHttpRequest.post("/api/v1/products/1/reviews")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer    ")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
 }
