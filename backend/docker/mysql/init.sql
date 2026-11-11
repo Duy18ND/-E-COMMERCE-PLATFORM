@@ -206,6 +206,16 @@ CREATE TABLE IF NOT EXISTS vouchers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng mã giảm giá voucher cho đơn hàng';
 
+INSERT IGNORE INTO vouchers (id, code, name, description, discount_type, discount_value, max_discount, min_order_value, quantity, used_quantity, start_date, end_date, status) VALUES
+(1, 'GIAM20K',    'Giảm 20K đơn đầu ngày',           'Giảm 20.000đ cho đơn hàng từ 200.000đ',                  'FIXED',   20000.00,  NULL,      200000.00,  500,  0, '2026-01-01', '2027-12-31', 'ACTIVE'),
+(2, 'GIAM50K',    'Ưu đãi mua sắm 50K',              'Giảm 50.000đ cho đơn hàng từ 500.000đ',                  'FIXED',   50000.00,  NULL,      500000.00,  300,  0, '2026-01-01', '2027-12-31', 'ACTIVE'),
+(3, 'SALE10',     'Siêu sale công nghệ 10%',         'Giảm 10% tối đa 100.000đ cho đơn từ 300.000đ',           'PERCENT', 10.00,     100000.00, 300000.00,  1000, 0, '2026-01-01', '2027-12-31', 'ACTIVE'),
+(4, 'TECHVIP',    'Đặc quyền Tech VIP 15%',          'Giảm 15% tối đa 300.000đ cho đơn từ 1.000.000đ',         'PERCENT', 15.00,     300000.00, 1000000.00, 250,  0, '2026-01-01', '2027-12-31', 'ACTIVE'),
+(5, 'FREESHIP',   'Miễn phí vận chuyển toàn quốc',   'Giảm 30.000đ phí giao hàng cho đơn từ 150.000đ',         'FIXED',   30000.00,  NULL,      150000.00,  1500, 0, '2026-01-01', '2027-12-31', 'ACTIVE'),
+(6, 'WELCOME100', 'Chào mừng thành viên mới',        'Giảm ngay 100.000đ cho đơn hàng đầu tiên từ 800.000đ',   'FIXED',   100000.00, NULL,      800000.00,  400,  0, '2026-01-01', '2027-12-31', 'ACTIVE'),
+(7, 'WELCOME50',  'Voucher chào mừng 50K',           'Giảm 50.000đ cho đơn hàng từ 200.000đ',                  'FIXED',   50000.00,  NULL,      200000.00,  500,  0, '2026-01-01', '2027-12-31', 'ACTIVE'),
+(8, 'VIP20',      'Ưu đãi thành viên VIP 20%',       'Giảm 20% tối đa 200.000đ cho đơn từ 500.000đ',           'PERCENT', 20.00,     200000.00, 500000.00,  300,  0, '2026-01-01', '2027-12-31', 'ACTIVE');
+
 -- [Task ECOM-166 / ECOM-167 / ECOM-183] Bảng lưu lịch sử sử dụng voucher của từng người dùng theo đơn hàng
 -- Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
 CREATE TABLE IF NOT EXISTS voucher_usages (

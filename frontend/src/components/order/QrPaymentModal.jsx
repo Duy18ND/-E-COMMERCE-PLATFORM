@@ -124,7 +124,15 @@ const QrPaymentModal = ({
   const timersRef = useRef([]);
 
   const orderId = order?.id;
-  const amount = order?.totalAmount ?? 0;
+  const rawSubtotal = Number(order?.subtotalAmount ?? 0);
+  const voucherDiscount = Math.max(0, Number(order?.discountAmount ?? 0));
+  const rawTotal = Number(order?.totalAmount ?? 0);
+  // Đảm bảo số tiền cần thanh toán luôn là số tiền ĐÃ TRỪ giảm giá (Flash Sale + Voucher)
+  const payableAmount =
+    rawSubtotal > 0 && voucherDiscount > 0
+      ? Math.max(0, Math.min(rawTotal > 0 ? rawTotal : rawSubtotal - voucherDiscount, rawSubtotal - voucherDiscount))
+      : rawTotal;
+  const amount = payableAmount;
   const transferContent = `THANH TOAN DON #${orderId}`;
   const busy = phase === 'confirming' || phase === 'cancelling';
   const finished = phase === 'success' || phase === 'failed';
@@ -410,7 +418,7 @@ const QrPaymentModal = ({
             <div style={infoRowStyle}>
               <span style={infoLabelStyle}>Số tiền</span>
               <span style={{ ...infoValueStyle, color: '#dc2626', fontSize: '1.05rem', fontWeight: 900 }}>
-                {formatCurrency(Number(amount) || 0)}
+                {formatCurrency(Number(payableAmount) || 0)}
               </span>
             </div>
             <div style={{ ...infoRowStyle, borderBottom: 'none' }}>
