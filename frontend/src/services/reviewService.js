@@ -138,6 +138,124 @@ export const evaluateReviewEligibility = ({
 };
 
 /**
+ * Kiểm tra điều kiện hiển thị nút "Đánh giá sản phẩm" cho từng sản phẩm trong một đơn hàng cụ thể
+ * tại trang Lịch sử mua hàng (Orders.jsx / OrderItem.jsx) và Chi tiết đơn hàng (OrderDetail.jsx):
+ * 1. Người dùng phải đăng nhập (isAuthenticated && user).
+ * 2. Đơn hàng phải tồn tại và có trạng thái đã giao thành công (DELIVERED / COMPLETED).
+ *    - Nếu đơn đang chờ xác nhận (PENDING/CONFIRMED/PAID/PROCESSING), đang vận chuyển (SHIPPING),
+ *      đã hủy (CANCELLED) hoặc thất bại (FAILED) -> KHÔNG hiển thị nút đánh giá.
+ * 3. Sản phẩm phải thuộc đơn hàng đó (orderContainsProduct(order, productId)).
+ * 4. Nếu đang kiểm tra trạng thái đánh giá từ API (checkingReviews === true) -> Hiển thị loading, KHÔNG hiển thị nút đánh giá sớm.
+ * 5. Nếu API kiểm tra trạng thái đánh giá bị lỗi (reviewCheckError) -> Hiển thị lỗi/thử lại, KHÔNG hiển thị nút sai điều kiện.
+ * 6. Nếu sản phẩm đã được người dùng đánh giá (existingReview?.id) -> Ẩn nút đánh giá, hiển thị trạng thái "Đã đánh giá", chặn đánh giá lần 2.
+ * 7. Chỉ khi thỏa mãn toàn bộ điều kiện trên -> canShowReviewButton = true.
+ */
+export const evaluateOrderItemReviewEligibility = ({
+  isAuthenticated = false,
+  user = null,
+  order = null,
+  productId = null,
+  existingReview = null,
+  checkingReviews = false,
+  reviewCheckError = ''
+} = {}) => {
+  if (!isAuthenticated || !user) {
+    return {
+      canShowReviewButton: false,
+      canOpenReviewForm: false,
+      isReviewed: false,
+      isLoading: false,
+      isError: false,
+      reason: 'NOT_LOGGED_IN'
+    };
+  }
+
+  if (!order || !isOrderCompletedForReview(order.status)) {
+    return {
+      canShowReviewButton: false,
+      canOpenReviewForm: false,
+      isReviewed: false,
+      isLoading: false,
+      isError: false,
+      reason: 'ORDER_NOT_DELIVERED'
+    };
+  }
+
+  const currentUserId = user.userId ?? user.id ?? null;
+  if (
+    currentUserId !== null &&
+    currentUserId !== undefined &&
+    order.userId !== null &&
+    order.userId !== undefined &&
+    String(order.userId) !== String(currentUserId)
+  ) {
+    return {
+      canShowReviewButton: false,
+      canOpenReviewForm: false,
+      isReviewed: false,
+      isLoading: false,
+      isError: false,
+      reason: 'ORDER_NOT_OWNED'
+    };
+  }
+
+  if (productId === undefined || productId === null || !orderContainsProduct(order, productId)) {
+    return {
+      canShowReviewButton: false,
+      canOpenReviewForm: false,
+      isReviewed: false,
+      isLoading: false,
+      isError: false,
+      reason: 'PRODUCT_NOT_IN_ORDER'
+    };
+  }
+
+  if (checkingReviews) {
+    return {
+      canShowReviewButton: false,
+      canOpenReviewForm: false,
+      isReviewed: false,
+      isLoading: true,
+      isError: false,
+      reason: 'CHECKING_REVIEW_STATUS'
+    };
+  }
+
+  if (reviewCheckError) {
+    return {
+      canShowReviewButton: false,
+      canOpenReviewForm: false,
+      isReviewed: false,
+      isLoading: false,
+      isError: true,
+      reason: 'REVIEW_STATUS_API_ERROR',
+      errorMessage: reviewCheckError
+    };
+  }
+
+  if (existingReview && existingReview.id) {
+    return {
+      canShowReviewButton: false,
+      canOpenReviewForm: false,
+      isReviewed: true,
+      isLoading: false,
+      isError: false,
+      existingReview,
+      reason: 'ALREADY_REVIEWED'
+    };
+  }
+
+  return {
+    canShowReviewButton: true,
+    canOpenReviewForm: true,
+    isReviewed: false,
+    isLoading: false,
+    isError: false,
+    reason: 'ELIGIBLE'
+  };
+};
+
+/**
  * Kiểm tra tính hợp lệ của dữ liệu Form đánh giá trước khi gửi API.
  */
 export const validateReviewInput = ({ rating, comment, orderId, requireOrderId = true } = {}) => {

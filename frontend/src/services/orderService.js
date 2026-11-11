@@ -539,12 +539,7 @@ export const orderService = {
       if (err.response?.status === 403) {
         throw err;
       }
-      const orders = getStoredOrders();
-      const found = orders.find((o) => String(o.id) === String(id));
-      if (!found) {
-        throw new Error(`Không tìm thấy đơn hàng #${id}`);
-      }
-      return applyQrOverrideIfNeeded(found);
+      throw err;
     }
   },
 

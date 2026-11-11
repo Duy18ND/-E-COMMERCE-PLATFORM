@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
-import { isOrderCompletedForReview } from '../../services/reviewService';
+import {
+  isOrderCompletedForReview,
+  evaluateOrderItemReviewEligibility
+} from '../../services/reviewService';
 import OrderStatus from './OrderStatus';
 import Button from '../common/Button';
 
@@ -9,7 +12,12 @@ const DEFAULT_PRODUCT_THUMB =
 
 const OrderItem = ({
   order,
+  isAuthenticated = false,
+  user = null,
   reviewsMap = {},
+  checkingReviews = false,
+  reviewCheckErrorsMap = {},
+  onRetryCheckReviews,
   productImagesMap = {},
   onOpenReviewModal
 }) => {
@@ -25,7 +33,7 @@ const OrderItem = ({
       : Number(order.totalAmount ?? order.totalPrice ?? 0);
 
   const items = Array.isArray(order.items) ? order.items : [];
-  const isOrderEligibleForReview = isOrderCompletedForReview(order.status);
+  const isOrderDelivered = isOrderCompletedForReview(order.status);
 
   return (
     <div
@@ -102,7 +110,7 @@ const OrderItem = ({
         </div>
       </div>
 
-      {/* Danh sách sản phẩm trong đơn hàng & Nút Đánh giá sản phẩm */}
+      {/* Danh sách sản phẩm trong đơn hàng & Khu vực Đánh giá sản phẩm (chỉ xuất hiện khi đủ điều kiện) */}
       {items.length > 0 && (
         <div
           data-testid={`order-history-items-${order.id || order.orderNumber}`}
@@ -113,7 +121,7 @@ const OrderItem = ({
           }}
         >
           {items.map((item, idx) => {
-            const productId = item.productId || item.id;
+            const productId = item.productId ?? item.id;
             const productName = item.productName || item.name || `Sản phẩm #${productId || idx + 1}`;
             const unitPrice = Number(item.priceAtPurchase ?? item.price ?? 0);
             const quantity = Number(item.quantity ?? 1);
@@ -124,7 +132,22 @@ const OrderItem = ({
               (productId ? productImagesMap[String(productId)] : null) ||
               DEFAULT_PRODUCT_THUMB;
 
-            const existingReview = productId ? reviewsMap[String(productId)] : null;
+            const existingReview =
+              productId !== undefined && productId !== null ? reviewsMap[String(productId)] : null;
+            const reviewCheckError =
+              productId !== undefined && productId !== null
+                ? reviewCheckErrorsMap[String(productId)] || ''
+                : '';
+
+            const itemEligibility = evaluateOrderItemReviewEligibility({
+              isAuthenticated,
+              user,
+              order,
+              productId,
+              existingReview,
+              checkingReviews: isOrderDelivered && checkingReviews,
+              reviewCheckError
+            });
 
             return (
               <div
@@ -186,8 +209,8 @@ const OrderItem = ({
                       </span>
                     </div>
 
-                    {/* Hiển thị chi tiết đánh giá nếu người dùng đã đánh giá sản phẩm này */}
-                    {existingReview && (
+                    {/* Hiển thị chi tiết đánh giá nếu sản phẩm đã được đánh giá */}
+                    {itemEligibility.isReviewed && existingReview && (
                       <div
                         data-testid={`order-history-review-summary-${productId}`}
                         style={{
@@ -220,17 +243,59 @@ const OrderItem = ({
                   </div>
                 </div>
 
-                {/* Khu vực nút Đánh giá sản phẩm / Trạng thái Đã đánh giá */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {existingReview ? (
-                    <>
+                {/* Khu vực hiển thị trạng thái / nút Đánh giá sản phẩm (CHỈ xuất hiện khi đơn đã giao thành công) */}
+                {isOrderDelivered && isAuthenticated && user && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {itemEligibility.isLoading ? (
+                      <span
+                        data-testid={`order-history-review-loading-${productId}`}
+                        style={{
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          color: '#64748b',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '8px',
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0'
+                        }}
+                      >
+                        ⏳ Đang kiểm tra trạng thái đánh giá...
+                      </span>
+                    ) : itemEligibility.isError ? (
+                      <div
+                        data-testid={`order-history-review-error-${productId}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}
+                      >
+                        <span style={{ fontSize: '0.76rem', color: '#dc2626', fontWeight: 600 }}>
+                          ⚠️ Chưa xác minh được trạng thái đánh giá
+                        </span>
+                        {typeof onRetryCheckReviews === 'function' && (
+                          <button
+                            type="button"
+                            onClick={onRetryCheckReviews}
+                            style={{
+                              padding: '0.3rem 0.65rem',
+                              borderRadius: '6px',
+                              border: '1px solid #fca5a5',
+                              backgroundColor: '#fef2f2',
+                              color: '#b91c1c',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Thử lại
+                          </button>
+                        )}
+                      </div>
+                    ) : itemEligibility.isReviewed ? (
                       <span
                         data-testid={`order-history-reviewed-badge-${productId}`}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '0.3rem',
-                          padding: '0.35rem 0.75rem',
+                          padding: '0.38rem 0.8rem',
                           borderRadius: '9999px',
                           backgroundColor: '#dcfce7',
                           color: '#166534',
@@ -242,77 +307,34 @@ const OrderItem = ({
                         <span>✓</span>
                         <span>Đã đánh giá</span>
                       </span>
-
-                      {typeof onOpenReviewModal === 'function' && (
-                        <button
-                          type="button"
-                          data-testid={`order-history-edit-review-btn-${productId}`}
-                          onClick={() => onOpenReviewModal(order, item, existingReview)}
-                          style={{
-                            padding: '0.38rem 0.75rem',
-                            borderRadius: '8px',
-                            border: '1px solid #cbd5e1',
-                            backgroundColor: '#ffffff',
-                            color: '#334155',
-                            fontSize: '0.78rem',
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ✏️ Sửa đánh giá
-                        </button>
-                      )}
-                    </>
-                  ) : isOrderEligibleForReview ? (
-                    <button
-                      type="button"
-                      data-testid={`order-history-review-btn-${productId}`}
-                      onClick={() =>
-                        typeof onOpenReviewModal === 'function' && onOpenReviewModal(order, item, null)
-                      }
-                      style={{
-                        padding: '0.45rem 0.9rem',
-                        borderRadius: '8px',
-                        border: '1px solid #f59e0b',
-                        backgroundColor: '#fffbeb',
-                        color: '#b45309',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        boxShadow: '0 1px 2px rgba(245, 158, 11, 0.12)'
-                      }}
-                    >
-                      <span>⭐</span>
-                      <span>Đánh giá sản phẩm</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                      data-testid={`order-history-review-disabled-${productId}`}
-                      title="Chỉ có thể đánh giá sản phẩm khi đơn hàng đã giao thành công (DELIVERED / COMPLETED)"
-                      style={{
-                        padding: '0.42rem 0.85rem',
-                        borderRadius: '8px',
-                        border: '1px solid #e2e8f0',
-                        backgroundColor: '#f1f5f9',
-                        color: '#94a3b8',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        cursor: 'not-allowed',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.35rem'
-                      }}
-                    >
-                      <span>🔒</span>
-                      <span>Đánh giá sản phẩm (Chờ hoàn thành đơn)</span>
-                    </button>
-                  )}
-                </div>
+                    ) : itemEligibility.canShowReviewButton ? (
+                      <button
+                        type="button"
+                        data-testid={`order-history-review-btn-${productId}`}
+                        onClick={() =>
+                          typeof onOpenReviewModal === 'function' && onOpenReviewModal(order, item)
+                        }
+                        style={{
+                          padding: '0.45rem 0.9rem',
+                          borderRadius: '8px',
+                          border: '1px solid #f59e0b',
+                          backgroundColor: '#fffbeb',
+                          color: '#b45309',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          boxShadow: '0 1px 2px rgba(245, 158, 11, 0.12)'
+                        }}
+                      >
+                        <span>⭐</span>
+                        <span>Đánh giá sản phẩm</span>
+                      </button>
+                    ) : null}
+                  </div>
+                )}
               </div>
             );
           })}

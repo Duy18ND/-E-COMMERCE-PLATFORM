@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useAuth from '../../hooks/useAuth';
 import orderService from '../../services/orderService';
-import reviewService, { isOrderCompletedForReview } from '../../services/reviewService';
+import reviewService, {
+  isOrderCompletedForReview,
+  evaluateOrderItemReviewEligibility
+} from '../../services/reviewService';
 import productService from '../../services/productService';
 import OrderItem from '../../components/order/OrderItem';
 import ProductReviewForm from '../../components/product/ProductReviewForm';
@@ -23,6 +27,7 @@ const FILTER_TABS = [
 
 const Orders = () => {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,65 +36,114 @@ const Orders = () => {
 
   // Map lưu đánh giá của người dùng hiện tại theo productId: { [productId]: ReviewResponse }
   const [reviewsMap, setReviewsMap] = useState({});
+  // Trạng thái đang kiểm tra điều kiện đánh giá từ API GET /products/{id}/reviews/me
+  const [checkingReviews, setCheckingReviews] = useState(false);
+  // Map lưu lỗi kiểm tra trạng thái đánh giá theo productId: { [productId]: errorMessage }
+  const [reviewCheckErrorsMap, setReviewCheckErrorsMap] = useState({});
   // Map lưu hình ảnh sản phẩm thực tế từ Backend product-service: { [productId]: imageUrl }
   const [productImagesMap, setProductImagesMap] = useState({});
   // State quản lý Modal đánh giá sản phẩm ngay trên trang Lịch sử mua hàng
   const [reviewModalState, setReviewModalState] = useState(null);
 
-  const loadUserReviewsAndImagesForOrders = useCallback(async (orderList) => {
-    if (!Array.isArray(orderList) || orderList.length === 0) return;
-
-    const uniqueProductIds = Array.from(
-      new Set(
-        orderList
-          .flatMap((ord) => (Array.isArray(ord.items) ? ord.items : []))
-          .map((item) => item?.productId || item?.id)
-          .filter(Boolean)
-          .map((pid) => String(pid))
-      )
-    );
-
-    if (uniqueProductIds.length === 0) return;
-
-    const reviewEntries = await Promise.all(
-      uniqueProductIds.map(async (pid) => {
-        try {
-          const myRev = await reviewService.getMyReview(pid);
-          return [pid, myRev];
-        } catch {
-          return [pid, null];
-        }
-      })
-    );
-
-    const nextReviewsMap = {};
-    reviewEntries.forEach(([pid, rev]) => {
-      if (rev && rev.id) {
-        nextReviewsMap[String(pid)] = rev;
+  const loadUserReviewsAndImagesForOrders = useCallback(
+    async (orderList) => {
+      if (!Array.isArray(orderList) || orderList.length === 0) {
+        setReviewsMap({});
+        setReviewCheckErrorsMap({});
+        setCheckingReviews(false);
+        return;
       }
-    });
-    setReviewsMap(nextReviewsMap);
 
-    // Tải ảnh sản phẩm thật từ Backend cho các item chưa có imageUrl
-    const imageEntries = await Promise.all(
-      uniqueProductIds.map(async (pid) => {
+      const allProductIds = Array.from(
+        new Set(
+          orderList
+            .flatMap((ord) => (Array.isArray(ord.items) ? ord.items : []))
+            .map((item) => item?.productId ?? item?.id)
+            .filter((pid) => pid !== undefined && pid !== null)
+            .map((pid) => String(pid))
+        )
+      );
+
+      const deliveredProductIds = Array.from(
+        new Set(
+          orderList
+            .filter((ord) => isOrderCompletedForReview(ord?.status))
+            .flatMap((ord) => (Array.isArray(ord.items) ? ord.items : []))
+            .map((item) => item?.productId ?? item?.id)
+            .filter((pid) => pid !== undefined && pid !== null)
+            .map((pid) => String(pid))
+        )
+      );
+
+      // 1. Kiểm tra trạng thái đánh giá thực tế từ API cho các sản phẩm thuộc đơn hàng đã giao thành công
+      if (isAuthenticated && user && deliveredProductIds.length > 0) {
+        setCheckingReviews(true);
+        setReviewCheckErrorsMap({});
+
         try {
-          const prod = await productService.getById(pid);
-          return [pid, prod?.imageUrl || prod?.image || null];
-        } catch {
-          return [pid, null];
-        }
-      })
-    );
+          const reviewResults = await Promise.all(
+            deliveredProductIds.map(async (pid) => {
+              try {
+                const myRev = await reviewService.getMyReview(pid);
+                return { pid, review: myRev, error: '' };
+              } catch (err) {
+                return {
+                  pid,
+                  review: null,
+                  error:
+                    err?.response?.data?.message ||
+                    err?.message ||
+                    'Không thể kiểm tra trạng thái đánh giá từ máy chủ.'
+                };
+              }
+            })
+          );
 
-    const nextImagesMap = {};
-    imageEntries.forEach(([pid, imgUrl]) => {
-      if (imgUrl) {
-        nextImagesMap[String(pid)] = imgUrl;
+          const nextReviewsMap = {};
+          const nextErrorsMap = {};
+          reviewResults.forEach(({ pid, review, error: revErr }) => {
+            if (revErr) {
+              nextErrorsMap[String(pid)] = revErr;
+            } else if (review && review.id) {
+              nextReviewsMap[String(pid)] = review;
+            }
+          });
+
+          setReviewsMap(nextReviewsMap);
+          setReviewCheckErrorsMap(nextErrorsMap);
+        } finally {
+          setCheckingReviews(false);
+        }
+      } else {
+        setReviewsMap({});
+        setReviewCheckErrorsMap({});
+        setCheckingReviews(false);
       }
-    });
-    setProductImagesMap(nextImagesMap);
-  }, []);
+
+      // 2. Tải ảnh sản phẩm thật từ Backend cho các item trong đơn hàng
+      if (allProductIds.length > 0) {
+        const imageEntries = await Promise.all(
+          allProductIds.map(async (pid) => {
+            try {
+              const prod = await productService.getById(pid);
+              return [pid, prod?.imageUrl || prod?.image || null];
+            } catch {
+              return [pid, null];
+            }
+          })
+        );
+
+        const nextImagesMap = {};
+        imageEntries.forEach(([pid, imgUrl]) => {
+          if (imgUrl) {
+            nextImagesMap[String(pid)] = imgUrl;
+          }
+        });
+        setProductImagesMap(nextImagesMap);
+      }
+    },
+    [isAuthenticated, user]
+  );
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -127,18 +181,35 @@ const Orders = () => {
     return undefined;
   }, [fetchOrders]);
 
-  // Mở Modal đánh giá sản phẩm từ danh sách đơn hàng
-  const handleOpenReviewModal = (order, item, existingReview = null) => {
+  // Mở Modal đánh giá sản phẩm (CHỈ cho phép mở khi thỏa mãn đầy đủ điều kiện đánh giá sau giao hàng)
+  const handleOpenReviewModal = (order, item) => {
     if (!order || !item) return;
-    if (!isOrderCompletedForReview(order.status)) {
+    const productId = item.productId ?? item.id;
+    const existingReview =
+      productId !== undefined && productId !== null ? reviewsMap[String(productId)] : null;
+    const reviewCheckError =
+      productId !== undefined && productId !== null
+        ? reviewCheckErrorsMap[String(productId)] || ''
+        : '';
+
+    const eligibility = evaluateOrderItemReviewEligibility({
+      isAuthenticated,
+      user,
+      order,
+      productId,
+      existingReview,
+      checkingReviews,
+      reviewCheckError
+    });
+
+    if (!eligibility.canOpenReviewForm) {
       return;
     }
-    const productId = item.productId || item.id;
-    const currentReview = existingReview || (productId ? reviewsMap[String(productId)] : null) || null;
+
     setReviewModalState({
       order,
       item,
-      existingReview: currentReview
+      existingReview: null
     });
   };
 
@@ -149,15 +220,20 @@ const Orders = () => {
   // Sau khi gửi đánh giá thành công -> cập nhật ngay trạng thái sản phẩm sang "Đã đánh giá" không cần reload trang
   const handleReviewSuccess = (savedReview) => {
     const productId =
-      savedReview?.productId ||
-      reviewModalState?.item?.productId ||
+      savedReview?.productId ??
+      reviewModalState?.item?.productId ??
       reviewModalState?.item?.id;
 
-    if (productId && savedReview) {
+    if (productId !== undefined && productId !== null && savedReview) {
       setReviewsMap((prev) => ({
         ...prev,
         [String(productId)]: savedReview
       }));
+      setReviewCheckErrorsMap((prev) => {
+        const next = { ...prev };
+        delete next[String(productId)];
+        return next;
+      });
     }
     setReviewModalState(null);
   };
@@ -172,6 +248,7 @@ const Orders = () => {
           ...prev,
           [String(productId)]: existing
         }));
+        setReviewModalState(null);
       }
     } catch {
       // Bỏ qua nếu không tải được
@@ -223,7 +300,7 @@ const Orders = () => {
   }
 
   const activeModalProductId =
-    reviewModalState?.item?.productId || reviewModalState?.item?.id;
+    reviewModalState?.item?.productId ?? reviewModalState?.item?.id;
   const activeModalProductImage =
     reviewModalState?.item?.imageUrl ||
     reviewModalState?.item?.image ||
@@ -385,7 +462,12 @@ const Orders = () => {
             <OrderItem
               key={order.id || order.orderNumber}
               order={order}
+              isAuthenticated={isAuthenticated}
+              user={user}
               reviewsMap={reviewsMap}
+              checkingReviews={checkingReviews}
+              reviewCheckErrorsMap={reviewCheckErrorsMap}
+              onRetryCheckReviews={() => loadUserReviewsAndImagesForOrders(orders)}
               productImagesMap={productImagesMap}
               onOpenReviewModal={handleOpenReviewModal}
             />

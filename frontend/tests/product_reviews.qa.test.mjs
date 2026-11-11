@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   evaluateReviewEligibility,
+  evaluateOrderItemReviewEligibility,
   validateReviewInput,
   normalizeReviewSummary,
   normalizeReview,
@@ -269,7 +270,9 @@ test('ECOM-177 FE QA SUITE: FORM ĐÁNH GIÁ SAO VÀ NỘI DUNG SAU MUA', async 
     assert.match(orderItemSrc, /Đã đánh giá/);
     assert.match(orderItemSrc, /order-history-review-btn-/);
     assert.match(orderItemSrc, /order-history-reviewed-badge-/);
-    assert.match(orderItemSrc, /order-history-review-disabled-/);
+    assert.match(orderItemSrc, /order-history-review-loading-/);
+    assert.match(orderItemSrc, /order-history-review-error-/);
+    assert.match(orderItemSrc, /evaluateOrderItemReviewEligibility/);
     assert.match(orderItemSrc, /isOrderCompletedForReview\(order\.status\)/);
   });
 
@@ -353,6 +356,137 @@ test('ECOM-177 FE QA SUITE: FORM ĐÁNH GIÁ SAO VÀ NỘI DUNG SAU MUA', async 
     assert.match(reviewsSectionSrc, /data-testid="reviews-load-more-button"/);
     assert.match(reviewsSectionSrc, /data-testid=\{`reviews-page-btn-\$\{pageNum\}`\}/);
     assert.match(productDetailSrc, /data-testid="product-header-rating-link"/);
+  });
+
+  await t.test('TC-REV-16: Kiểm tra 7 kịch bản hiển thị nút Đánh giá sản phẩm sau giao hàng (evaluateOrderItemReviewEligibility)', () => {
+    const mockUser = { id: 10, fullName: 'Nguyễn Văn A' };
+    const baseItems = [{ id: 1, productId: 101, productName: 'MacBook Pro 14' }];
+
+    // 1. Đơn hàng đang chờ xác nhận (PENDING / CONFIRMED) -> Không có nút đánh giá
+    for (const st of ['PENDING', 'CONFIRMED', 'PAID', 'PROCESSING']) {
+      const resPending = evaluateOrderItemReviewEligibility({
+        isAuthenticated: true,
+        user: mockUser,
+        order: { id: 9001, userId: 10, status: st, items: baseItems },
+        productId: 101,
+        existingReview: null,
+        checkingReviews: false,
+        reviewCheckError: ''
+      });
+      assert.equal(resPending.canShowReviewButton, false);
+      assert.equal(resPending.canOpenReviewForm, false);
+      assert.equal(resPending.reason, 'ORDER_NOT_DELIVERED');
+    }
+
+    // 2. Đơn hàng đang vận chuyển (SHIPPING) -> Không có nút đánh giá
+    const resShipping = evaluateOrderItemReviewEligibility({
+      isAuthenticated: true,
+      user: mockUser,
+      order: { id: 9002, userId: 10, status: 'SHIPPING', items: baseItems },
+      productId: 101,
+      existingReview: null,
+      checkingReviews: false,
+      reviewCheckError: ''
+    });
+    assert.equal(resShipping.canShowReviewButton, false);
+    assert.equal(resShipping.canOpenReviewForm, false);
+    assert.equal(resShipping.reason, 'ORDER_NOT_DELIVERED');
+
+    // 3. Đơn hàng đã giao thành công (DELIVERED) & chưa đánh giá -> Có nút đánh giá
+    const resDelivered = evaluateOrderItemReviewEligibility({
+      isAuthenticated: true,
+      user: mockUser,
+      order: { id: 9003, userId: 10, status: 'DELIVERED', items: baseItems },
+      productId: 101,
+      existingReview: null,
+      checkingReviews: false,
+      reviewCheckError: ''
+    });
+    assert.equal(resDelivered.canShowReviewButton, true);
+    assert.equal(resDelivered.canOpenReviewForm, true);
+    assert.equal(resDelivered.reason, 'ELIGIBLE');
+
+    // 4. Sản phẩm đã đánh giá -> Ẩn nút đánh giá, hiển thị Đã đánh giá, không thể đánh giá lần hai
+    const resAlreadyReviewed = evaluateOrderItemReviewEligibility({
+      isAuthenticated: true,
+      user: mockUser,
+      order: { id: 9003, userId: 10, status: 'DELIVERED', items: baseItems },
+      productId: 101,
+      existingReview: { id: 77, productId: 101, rating: 5, comment: 'Tuyệt vời' },
+      checkingReviews: false,
+      reviewCheckError: ''
+    });
+    assert.equal(resAlreadyReviewed.canShowReviewButton, false);
+    assert.equal(resAlreadyReviewed.canOpenReviewForm, false);
+    assert.equal(resAlreadyReviewed.isReviewed, true);
+    assert.equal(resAlreadyReviewed.reason, 'ALREADY_REVIEWED');
+
+    // 5. Đơn hàng đã hủy (CANCELLED) hoặc thất bại (FAILED) -> Không có nút đánh giá
+    for (const st of ['CANCELLED', 'FAILED']) {
+      const resCancelled = evaluateOrderItemReviewEligibility({
+        isAuthenticated: true,
+        user: mockUser,
+        order: { id: 9004, userId: 10, status: st, items: baseItems },
+        productId: 101,
+        existingReview: null,
+        checkingReviews: false,
+        reviewCheckError: ''
+      });
+      assert.equal(resCancelled.canShowReviewButton, false);
+      assert.equal(resCancelled.canOpenReviewForm, false);
+      assert.equal(resCancelled.reason, 'ORDER_NOT_DELIVERED');
+    }
+
+    // 6. Người dùng chưa đăng nhập -> Không thể thực hiện đánh giá
+    const resUnauth = evaluateOrderItemReviewEligibility({
+      isAuthenticated: false,
+      user: null,
+      order: { id: 9003, userId: 10, status: 'DELIVERED', items: baseItems },
+      productId: 101,
+      existingReview: null,
+      checkingReviews: false,
+      reviewCheckError: ''
+    });
+    assert.equal(resUnauth.canShowReviewButton, false);
+    assert.equal(resUnauth.canOpenReviewForm, false);
+    assert.equal(resUnauth.reason, 'NOT_LOGGED_IN');
+
+    // 7a. API chưa tải xong (checkingReviews = true) -> Không hiển thị nút sai điều kiện
+    const resLoading = evaluateOrderItemReviewEligibility({
+      isAuthenticated: true,
+      user: mockUser,
+      order: { id: 9003, userId: 10, status: 'DELIVERED', items: baseItems },
+      productId: 101,
+      existingReview: null,
+      checkingReviews: true,
+      reviewCheckError: ''
+    });
+    assert.equal(resLoading.canShowReviewButton, false);
+    assert.equal(resLoading.canOpenReviewForm, false);
+    assert.equal(resLoading.isLoading, true);
+    assert.equal(resLoading.reason, 'CHECKING_REVIEW_STATUS');
+
+    // 7b. API kiểm tra trạng thái đánh giá bị lỗi -> Không hiển thị nút sai điều kiện
+    const resApiError = evaluateOrderItemReviewEligibility({
+      isAuthenticated: true,
+      user: mockUser,
+      order: { id: 9003, userId: 10, status: 'DELIVERED', items: baseItems },
+      productId: 101,
+      existingReview: null,
+      checkingReviews: false,
+      reviewCheckError: 'Network Error'
+    });
+    assert.equal(resApiError.canShowReviewButton, false);
+    assert.equal(resApiError.canOpenReviewForm, false);
+    assert.equal(resApiError.isError, true);
+    assert.equal(resApiError.reason, 'REVIEW_STATUS_API_ERROR');
+
+    // Kiểm tra tích hợp trên OrderDetail.jsx
+    assert.match(orderDetailSrc, /evaluateOrderItemReviewEligibility/);
+    assert.match(orderDetailSrc, /order-item-review-loading-/);
+    assert.match(orderDetailSrc, /order-item-review-error-/);
+    assert.match(orderDetailSrc, /order-item-reviewed-badge-/);
+    assert.match(orderDetailSrc, /order-item-review-btn-/);
   });
 });
 

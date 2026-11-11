@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
+import useAuth from '../../hooks/useAuth';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -12,7 +13,10 @@ import useNotification from '../../hooks/useNotification';
 import OrderTimeline from '../../components/order/OrderTimeline';
 import QrPaymentModal from '../../components/order/QrPaymentModal';
 import ProductReviewForm from '../../components/product/ProductReviewForm';
-import reviewService, { isOrderCompletedForReview } from '../../services/reviewService';
+import reviewService, {
+  isOrderCompletedForReview,
+  evaluateOrderItemReviewEligibility
+} from '../../services/reviewService';
 
 // Số lần thử đồng bộ lại trạng thái đơn (mỗi 1 giây) sau khi xác nhận thanh toán QR, chờ Kafka cập nhật
 const MAX_PAYMENT_SYNC_ATTEMPTS = 8;
@@ -26,6 +30,7 @@ const MAX_PAYMENT_SYNC_ATTEMPTS = 8;
 const OrderDetail = () => {
   const { id } = useParams();
   const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
   const { notify, confirmDialog } = useNotification();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +43,8 @@ const OrderDetail = () => {
 
   // State đánh giá sản phẩm sau mua ngay tại trang Chi tiết đơn hàng
   const [itemReviewsMap, setItemReviewsMap] = useState({});
+  const [checkingReviews, setCheckingReviews] = useState(false);
+  const [reviewCheckErrorsMap, setReviewCheckErrorsMap] = useState({});
   const [reviewModalItem, setReviewModalItem] = useState(null);
 
   const fetchOrderDetail = async ({ silent = false } = {}) => {
@@ -54,12 +61,18 @@ const OrderDetail = () => {
           const overrides = rawOverrides ? JSON.parse(rawOverrides) : {};
           const override = overrides[String(id)];
           if (override?.status) {
+            if (isOrderCompletedForReview(override.status)) {
+              setCheckingReviews(true);
+            }
             setOrder({ ...data, status: override.status });
             return;
           }
         } catch (e) {
           // Bỏ qua lỗi đọc sessionStorage
         }
+      }
+      if (isOrderCompletedForReview(data?.status)) {
+        setCheckingReviews(true);
       }
       setOrder(data);
     } catch (err) {
@@ -85,46 +98,72 @@ const OrderDetail = () => {
     return undefined;
   }, [id]);
 
-  // Tải thông tin đánh giá hiện có của người dùng cho từng sản phẩm trong đơn hàng
-  useEffect(() => {
-    if (!order || !Array.isArray(order.items) || order.items.length === 0) return;
-    let isMounted = true;
+  // Tải thông tin đánh giá hiện có của người dùng cho từng sản phẩm trong đơn hàng đã giao thành công
+  const loadExistingItemReviews = useCallback(async () => {
+    if (!order || !Array.isArray(order.items) || order.items.length === 0) {
+      setCheckingReviews(false);
+      return;
+    }
+    if (!isOrderCompletedForReview(order.status) || !isAuthenticated || !user) {
+      setItemReviewsMap({});
+      setReviewCheckErrorsMap({});
+      setCheckingReviews(false);
+      return;
+    }
 
-    const loadExistingItemReviews = async () => {
-      const productIds = [
-        ...new Set(
-          order.items
-            .map((it) => it?.productId)
-            .filter((pid) => pid !== undefined && pid !== null)
-        )
-      ];
-      if (productIds.length === 0) return;
+    const productIds = [
+      ...new Set(
+        order.items
+          .map((it) => it?.productId ?? it?.id)
+          .filter((pid) => pid !== undefined && pid !== null)
+      )
+    ];
+    if (productIds.length === 0) {
+      setCheckingReviews(false);
+      return;
+    }
 
-      const entries = await Promise.all(
+    setCheckingReviews(true);
+    setReviewCheckErrorsMap({});
+
+    try {
+      const results = await Promise.all(
         productIds.map(async (pid) => {
           try {
             const rev = await reviewService.getMyReview(pid);
-            return [String(pid), rev];
-          } catch {
-            return [String(pid), null];
+            return { pid: String(pid), rev, error: '' };
+          } catch (err) {
+            return {
+              pid: String(pid),
+              rev: null,
+              error:
+                err?.response?.data?.message ||
+                err?.message ||
+                'Không thể kiểm tra trạng thái đánh giá.'
+            };
           }
         })
       );
 
-      if (isMounted) {
-        const nextMap = {};
-        entries.forEach(([pid, rev]) => {
-          if (rev) nextMap[pid] = rev;
-        });
-        setItemReviewsMap(nextMap);
-      }
-    };
+      const nextMap = {};
+      const nextErrMap = {};
+      results.forEach(({ pid, rev, error: revErr }) => {
+        if (revErr) {
+          nextErrMap[pid] = revErr;
+        } else if (rev && rev.id) {
+          nextMap[pid] = rev;
+        }
+      });
+      setItemReviewsMap(nextMap);
+      setReviewCheckErrorsMap(nextErrMap);
+    } finally {
+      setCheckingReviews(false);
+    }
+  }, [order, isAuthenticated, user]);
 
+  useEffect(() => {
     loadExistingItemReviews();
-    return () => {
-      isMounted = false;
-    };
-  }, [order]);
+  }, [loadExistingItemReviews]);
 
   // Sau khi xác nhận thanh toán QR: đồng bộ lại trạng thái đơn mỗi 1 giây cho tới khi Kafka cập nhật
   // (PENDING -> PAID / FAILED) hoặc hết số lần thử, tránh hiển thị trạng thái PENDING cũ.
@@ -549,6 +588,20 @@ const OrderDetail = () => {
               resolvedProductId !== undefined && resolvedProductId !== null
                 ? itemReviewsMap[String(resolvedProductId)]
                 : null;
+            const reviewCheckError =
+              resolvedProductId !== undefined && resolvedProductId !== null
+                ? reviewCheckErrorsMap[String(resolvedProductId)] || ''
+                : '';
+
+            const itemEligibility = evaluateOrderItemReviewEligibility({
+              isAuthenticated,
+              user,
+              order: { ...order, status: effectiveStatus },
+              productId: resolvedProductId,
+              existingReview,
+              checkingReviews: canReviewOrderItems && checkingReviews,
+              reviewCheckError
+            });
 
             return (
               <div
@@ -599,55 +652,78 @@ const OrderDetail = () => {
                     {formatCurrency(item.subTotal || ((item.price || item.priceAtPurchase || 0) * item.quantity))}
                   </div>
 
-                  {/* Nút Đánh giá sản phẩm sau mua (chỉ mở khi đơn hàng đã hoàn thành/đã giao) */}
-                  {canReviewOrderItems && resolvedProductId && (
-                    existingReview ? (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span
-                          style={{
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            color: '#92400e',
-                            backgroundColor: '#fef3c7',
-                            border: '1px solid #fde68a',
-                            padding: '0.25rem 0.55rem',
-                            borderRadius: '6px'
-                          }}
-                        >
-                          ★ {existingReview.rating}/5 Đã đánh giá
+                  {/* Khu vực Đánh giá sản phẩm sau mua (CHỈ hiển thị khi đơn hàng đã giao thành công & người dùng đã đăng nhập) */}
+                  {canReviewOrderItems && isAuthenticated && user && resolvedProductId && (
+                    itemEligibility.isLoading ? (
+                      <span
+                        data-testid={`order-item-review-loading-${resolvedProductId}`}
+                        style={{
+                          fontSize: '0.76rem',
+                          fontWeight: 600,
+                          color: '#64748b',
+                          padding: '0.3rem 0.65rem',
+                          borderRadius: '6px',
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0'
+                        }}
+                      >
+                        ⏳ Đang kiểm tra trạng thái đánh giá...
+                      </span>
+                    ) : itemEligibility.isError ? (
+                      <div
+                        data-testid={`order-item-review-error-${resolvedProductId}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}
+                      >
+                        <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                          ⚠️ Lỗi kiểm tra đánh giá
                         </span>
                         <button
                           type="button"
-                          onClick={() =>
-                            setReviewModalItem({
-                              item: { ...item, id: resolvedProductId, productId: resolvedProductId },
-                              existingReview
-                            })
-                          }
+                          onClick={loadExistingItemReviews}
                           style={{
-                            padding: '0.35rem 0.7rem',
+                            padding: '0.28rem 0.6rem',
                             borderRadius: '6px',
-                            border: '1px solid #2563eb',
-                            backgroundColor: '#ffffff',
-                            color: '#2563eb',
-                            fontSize: '0.78rem',
+                            border: '1px solid #fca5a5',
+                            backgroundColor: '#fef2f2',
+                            color: '#b91c1c',
+                            fontSize: '0.75rem',
                             fontWeight: 700,
                             cursor: 'pointer'
                           }}
                         >
-                          ✏️ Sửa đánh giá
+                          Thử lại
                         </button>
                       </div>
-                    ) : (
+                    ) : itemEligibility.isReviewed ? (
+                      <span
+                        data-testid={`order-item-reviewed-badge-${resolvedProductId}`}
+                        style={{
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: '#166534',
+                          backgroundColor: '#dcfce7',
+                          border: '1px solid #86efac',
+                          padding: '0.32rem 0.75rem',
+                          borderRadius: '9999px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}
+                      >
+                        <span>✓</span>
+                        <span>Đã đánh giá ({existingReview.rating}/5 ★)</span>
+                      </span>
+                    ) : itemEligibility.canShowReviewButton ? (
                       <button
                         type="button"
                         data-testid={`order-item-review-btn-${resolvedProductId}`}
-                        onClick={() =>
+                        onClick={() => {
+                          if (!itemEligibility.canOpenReviewForm) return;
                           setReviewModalItem({
                             item: { ...item, id: resolvedProductId, productId: resolvedProductId },
                             existingReview: null
-                          })
-                        }
+                          });
+                        }}
                         style={{
                           padding: '0.4rem 0.85rem',
                           borderRadius: '8px',
@@ -662,7 +738,7 @@ const OrderDetail = () => {
                       >
                         ⭐ Đánh giá sản phẩm
                       </button>
-                    )
+                    ) : null
                   )}
                 </div>
               </div>
@@ -758,6 +834,21 @@ const OrderDetail = () => {
                   [pid]: savedReview
                 }));
                 setReviewModalItem(null);
+              }}
+              onDuplicateDetected={async (dupProductId) => {
+                if (!dupProductId) return;
+                try {
+                  const existing = await reviewService.getMyReview(dupProductId);
+                  if (existing && existing.id) {
+                    setItemReviewsMap((prev) => ({
+                      ...prev,
+                      [String(dupProductId)]: existing
+                    }));
+                    setReviewModalItem(null);
+                  }
+                } catch {
+                  // Bỏ qua nếu không tải được
+                }
               }}
               onCancel={() => setReviewModalItem(null)}
             />
