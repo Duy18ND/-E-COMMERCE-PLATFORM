@@ -98,8 +98,9 @@ const AdminOrders = () => {
   const [statusNote, setStatusNote] = useState('');
   const [statusFormError, setStatusFormError] = useState('');
 
-  // Race condition guard ref
+  // Race condition guard refs
   const requestIdRef = useRef(0);
+  const detailRequestIdRef = useRef(0);
 
   // Tải danh sách đơn hàng từ Backend GET /api/v1/admin/orders
   const fetchOrders = useCallback(async () => {
@@ -139,8 +140,14 @@ const AdminOrders = () => {
       }
     } catch (err) {
       if (currentRequestId === requestIdRef.current) {
-        setError(err.message || 'Không thể tải danh sách đơn hàng từ máy chủ. Vui lòng thử lại!');
+        setError(
+          err?.response?.data?.message ||
+            err?.message ||
+            'Không thể tải danh sách đơn hàng từ máy chủ. Vui lòng thử lại!'
+        );
         setOrders([]);
+        setTotalElements(0);
+        setTotalPages(1);
       }
     } finally {
       if (currentRequestId === requestIdRef.current) {
@@ -265,6 +272,7 @@ const AdminOrders = () => {
 
   // Mở modal xem chi tiết đơn hàng
   const handleViewDetail = async (orderSummary) => {
+    const currentDetailRequestId = ++detailRequestIdRef.current;
     setSelectedOrder(orderSummary);
     setDetailLoading(true);
     setDetailError('');
@@ -272,20 +280,31 @@ const AdminOrders = () => {
     try {
       // Gọi API lấy dữ liệu chi tiết đầy đủ (items, timeline histories)
       const fullDetail = await orderService.getAdminOrderById(orderSummary.id);
+      if (currentDetailRequestId !== detailRequestIdRef.current) return;
       if (fullDetail) {
         setSelectedOrder(fullDetail);
       }
     } catch (err) {
-      setDetailError(err.message || 'Không thể lấy đầy đủ chi tiết đơn hàng từ API.');
+      if (currentDetailRequestId === detailRequestIdRef.current) {
+        setDetailError(
+          err?.response?.data?.message ||
+            err?.message ||
+            'Không thể lấy đầy đủ chi tiết đơn hàng từ API.'
+        );
+      }
     } finally {
-      setDetailLoading(false);
+      if (currentDetailRequestId === detailRequestIdRef.current) {
+        setDetailLoading(false);
+      }
     }
   };
 
   // Đóng modal xem chi tiết
   const handleCloseDetail = useCallback(() => {
     if (actionLoading) return;
+    detailRequestIdRef.current += 1;
     setSelectedOrder(null);
+    setDetailLoading(false);
     setDetailError('');
     setStatusNote('');
     setStatusFormError('');
@@ -329,13 +348,14 @@ const AdminOrders = () => {
     setActionLoading(true);
     try {
       const updatedOrder = await orderService.updateOrderStatus(orderId, targetStatus, customNote);
+      const resolvedStatus = updatedOrder?.status || targetStatus;
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, ...updatedOrder, status: targetStatus } : o))
+        prev.map((o) => (String(o.id) === String(orderId) ? { ...o, ...updatedOrder, status: resolvedStatus } : o))
       );
       // Nếu đang mở modal của đơn hàng này thì cập nhật luôn cả lịch sử timeline
-      if (selectedOrder && selectedOrder.id === orderId) {
+      if (selectedOrder && String(selectedOrder.id) === String(orderId)) {
         let refreshedHistories = updatedOrder?.statusHistories;
-        if (!refreshedHistories) {
+        if (!Array.isArray(refreshedHistories) || refreshedHistories.length === 0) {
           try {
             refreshedHistories = await orderService.getOrderStatusHistory(orderId);
           } catch {
@@ -345,14 +365,16 @@ const AdminOrders = () => {
         setSelectedOrder((prev) => ({
           ...prev,
           ...updatedOrder,
-          status: targetStatus,
+          status: resolvedStatus,
           statusHistories: refreshedHistories || prev.statusHistories
         }));
       }
       notify.success(`Cập nhật đơn hàng #${orderId} sang "${actionLabel}" thành công!`);
       return true;
     } catch (err) {
-      notify.error(`Lỗi khi cập nhật trạng thái đơn hàng: ${err.message}`);
+      notify.error(
+        `Lỗi khi cập nhật trạng thái đơn hàng: ${err?.response?.data?.message || err?.message || 'Vui lòng thử lại'}`
+      );
       return false;
     } finally {
       setActionLoading(false);
@@ -704,6 +726,33 @@ const AdminOrders = () => {
         {loading ? (
           <div style={{ padding: '3.5rem 1rem' }}>
             <Loading message="Đang tải dữ liệu đơn hàng từ máy chủ..." />
+          </div>
+        ) : error && orders.length === 0 ? (
+          /* API ERROR STATE */
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#dc2626' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+            <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#991b1b', margin: '0 0 0.5rem' }}>
+              Không thể tải danh sách đơn hàng từ máy chủ
+            </p>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 1.25rem' }}>
+              {error}
+            </p>
+            <button
+              type="button"
+              onClick={fetchOrders}
+              style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.55rem 1.25rem',
+                borderRadius: '6px',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Thử lại kết nối
+            </button>
           </div>
         ) : displayedOrders.length === 0 ? (
           /* EMPTY STATE */

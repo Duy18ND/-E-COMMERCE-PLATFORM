@@ -399,6 +399,130 @@ const applyOrderPriceOverride = (orderObj) => {
   return result;
 };
 
+const toFiniteNumber = (value, fallback = 0) => {
+  if (value === null || value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeOrderDate = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (Array.isArray(value) && value.length >= 3) {
+    const [year, month, day, hour = 0, minute = 0, second = 0, nano = 0] = value;
+    const dateObj = new Date(
+      Number(year),
+      Math.max(0, Number(month || 1) - 1),
+      Number(day || 1),
+      Number(hour || 0),
+      Number(minute || 0),
+      Number(second || 0),
+      Math.floor(Number(nano || 0) / 1e6)
+    );
+    return Number.isNaN(dateObj.getTime()) ? null : dateObj.toISOString();
+  }
+  if (typeof value === 'number') {
+    const dateObj = new Date(value);
+    return Number.isNaN(dateObj.getTime()) ? null : dateObj.toISOString();
+  }
+  const str = String(value).trim();
+  return str || null;
+};
+
+const normalizeOrderStatus = (status) => {
+  if (status === null || status === undefined) return '';
+  const upper = String(status).trim().toUpperCase();
+  if (!upper) return '';
+  if (upper === 'COMPLETED') return ORDER_STATUS.DELIVERED;
+  return upper;
+};
+
+const normalizeOrderItemFromBackend = (item) => {
+  if (!item || typeof item !== 'object') return null;
+  const quantity = Math.max(1, Math.trunc(toFiniteNumber(item.quantity, 1)));
+  const priceAtPurchase = toFiniteNumber(item.priceAtPurchase ?? item.unitPrice ?? item.price, 0);
+  const price = toFiniteNumber(item.price ?? item.priceAtPurchase ?? item.unitPrice, priceAtPurchase);
+  const computedSubTotal = priceAtPurchase * quantity;
+  const subTotal =
+    item.subTotal !== null && item.subTotal !== undefined
+      ? toFiniteNumber(item.subTotal, computedSubTotal)
+      : computedSubTotal;
+
+  return {
+    ...item,
+    id: item.id ?? null,
+    productId: item.productId ?? null,
+    productName: item.productName || item.name || '',
+    name: item.name || item.productName || '',
+    quantity,
+    priceAtPurchase,
+    price,
+    subTotal
+  };
+};
+
+const normalizeStatusHistoryFromBackend = (entry) => {
+  if (!entry || typeof entry !== 'object') return null;
+  return {
+    ...entry,
+    id: entry.id ?? null,
+    orderId: entry.orderId ?? null,
+    status: normalizeOrderStatus(entry.status),
+    previousStatus: entry.previousStatus ? normalizeOrderStatus(entry.previousStatus) : null,
+    createdAt: normalizeOrderDate(entry.createdAt)
+  };
+};
+
+/**
+ * Chuẩn hóa đối tượng đơn hàng trả về từ Backend OrderResponse
+ */
+export const normalizeOrderFromBackend = (rawOrder) => {
+  if (!rawOrder || typeof rawOrder !== 'object') return null;
+
+  const totalAmount = toFiniteNumber(rawOrder.totalAmount ?? rawOrder.finalAmount, 0);
+  const discountAmount = Math.max(0, toFiniteNumber(rawOrder.discountAmount, 0));
+  const subtotalAmount =
+    rawOrder.subtotalAmount !== null && rawOrder.subtotalAmount !== undefined
+      ? toFiniteNumber(rawOrder.subtotalAmount, totalAmount)
+      : rawOrder.subtotal !== null && rawOrder.subtotal !== undefined
+        ? toFiniteNumber(rawOrder.subtotal, totalAmount)
+        : totalAmount;
+  const shippingFee = Math.max(0, toFiniteNumber(rawOrder.shippingFee, 0));
+  const voucherCode = rawOrder.voucherCode ?? rawOrder.couponCode ?? null;
+
+  const rawItems = Array.isArray(rawOrder.items)
+    ? rawOrder.items
+    : Array.isArray(rawOrder.orderItems)
+      ? rawOrder.orderItems
+      : [];
+  const items = rawItems.map(normalizeOrderItemFromBackend).filter(Boolean);
+
+  const rawHistories = Array.isArray(rawOrder.statusHistories) ? rawOrder.statusHistories : [];
+  const statusHistories = rawHistories.map(normalizeStatusHistoryFromBackend).filter(Boolean);
+
+  return {
+    ...rawOrder,
+    id: rawOrder.id ?? null,
+    userId: rawOrder.userId ?? null,
+    receiverName: rawOrder.receiverName ?? rawOrder.customerName ?? '',
+    receiverPhone: rawOrder.receiverPhone ?? rawOrder.customerPhone ?? '',
+    userEmail: rawOrder.userEmail ?? rawOrder.customerEmail ?? '',
+    shippingAddress: rawOrder.shippingAddress ?? '',
+    subtotal: subtotalAmount,
+    subtotalAmount,
+    voucherCode,
+    couponCode: rawOrder.couponCode ?? voucherCode,
+    discountAmount,
+    shippingFee,
+    totalAmount,
+    status: normalizeOrderStatus(rawOrder.status),
+    paymentMethod: rawOrder.paymentMethod ? String(rawOrder.paymentMethod).trim().toUpperCase() : '',
+    createdAt: normalizeOrderDate(rawOrder.createdAt),
+    updatedAt: normalizeOrderDate(rawOrder.updatedAt),
+    items,
+    statusHistories
+  };
+};
+
 export const orderService = {
   // Tạo đơn hàng từ giỏ hàng hiện tại (POST /api/orders/checkout)
   checkout: async ({
@@ -721,7 +845,7 @@ export const orderService = {
     // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
     if (response && Array.isArray(response.content)) {
       const normalizedContent = response.content
-        .map((item) => normalizeOrderFromBackend(item) || item)
+        .map((item) => normalizeOrderFromBackend(item))
         .filter(Boolean);
       return {
         content: normalizedContent,
@@ -738,7 +862,7 @@ export const orderService = {
       const page = params?.page || 0;
       const size = params?.size || 10;
       const normalizedContent = response
-        .map((item) => normalizeOrderFromBackend(item) || item)
+        .map((item) => normalizeOrderFromBackend(item))
         .filter(Boolean);
       return {
         content: normalizedContent,
@@ -761,17 +885,14 @@ export const orderService = {
     };
   },
 
-  // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId} hoặc /api/v1/admin/orders/{orderId})
+  // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId})
   getAdminOrderById: async (id) => {
-    try {
-      return await api.get(`/orders/${id}`);
-    } catch (err) {
-      try {
-        return await api.get(`/admin/orders/${id}`);
-      } catch (adminErr) {
-        return orderService.getOrderById(id);
-      }
+    const data = await api.get(`/orders/${id}`);
+    const normalized = normalizeOrderFromBackend(data);
+    if (!normalized) {
+      throw new Error('Dữ liệu chi tiết đơn hàng từ máy chủ không hợp lệ.');
     }
+    return normalized;
   },
 
   // [Task ECOM-315 / ECOM-311] Lấy lịch sử dòng thời gian trạng thái đơn hàng (Timeline)
@@ -779,13 +900,12 @@ export const orderService = {
   getOrderStatusHistory: async (id) => {
     try {
       const response = await api.get(`/orders/${id}/history`);
-      if (Array.isArray(response)) {
-        return response;
-      }
-      if (response && Array.isArray(response.data)) {
-        return response.data;
-      }
-      return [];
+      const list = Array.isArray(response)
+        ? response
+        : response && Array.isArray(response.data)
+          ? response.data
+          : [];
+      return list.map(normalizeStatusHistoryFromBackend).filter(Boolean);
     } catch (err) {
       // Nếu là lỗi bảo mật 403 (IDOR) thì ném lỗi để UI hiển thị thông báo phân quyền
       if (err.response?.status === 403) {
@@ -795,17 +915,24 @@ export const orderService = {
       // Thử gọi qua endpoint admin nếu người dùng có vai trò Admin
       try {
         const adminRes = await api.get(`/admin/orders/${id}/history`);
-        if (Array.isArray(adminRes)) return adminRes;
-        if (adminRes && Array.isArray(adminRes.data)) return adminRes.data;
+        const adminList = Array.isArray(adminRes)
+          ? adminRes
+          : adminRes && Array.isArray(adminRes.data)
+            ? adminRes.data
+            : [];
+        return adminList.map(normalizeStatusHistoryFromBackend).filter(Boolean);
       } catch (adminErr) {
-        // Tiếp tục xử lý fallback
+        if (adminErr?.response?.status) {
+          throw adminErr;
+        }
+        // Tiếp tục xử lý fallback chỉ khi mất kết nối với máy chủ
       }
 
-      // Fallback Mock History khi chạy offline hoặc Backend chưa có dữ liệu DB
+      // Fallback Mock History khi chạy offline trên dữ liệu mock localStorage
       const orders = getStoredOrders();
       const order = orders.find((o) => String(o.id) === String(id));
       if (!order) {
-        return [];
+        throw err;
       }
 
       const baseTime = new Date(order.createdAt || Date.now()).getTime();
@@ -973,20 +1100,25 @@ export const orderService = {
     note = typeof note === 'string' ? note.trim() : '';
     try {
       const response = await api.put(`/admin/orders/${id}/status`, { status, note });
+      const normalized = normalizeOrderFromBackend(response) || response;
       notifyOrderStatusSync({
         orderId: id,
-        status,
+        status: normalized?.status || status,
         note,
         actorRole: 'ROLE_ADMIN',
         action: 'ADMIN_STATUS_UPDATE'
       });
-      return response;
+      return normalized;
     } catch (err) {
-      if (err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 404) {
+      if (err.response?.status) {
         throw err;
       }
       const nowIso = new Date().toISOString();
       const orders = getStoredOrders();
+      const targetExists = orders.some((o) => String(o.id) === String(id));
+      if (!targetExists) {
+        throw err;
+      }
       const updatedOrders = orders.map((o) => {
         if (String(o.id) === String(id)) {
           const prevStatus = o.status || ORDER_STATUS.PENDING;

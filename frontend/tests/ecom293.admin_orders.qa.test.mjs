@@ -3,6 +3,27 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { register } from 'node:module';
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      export async function resolve(specifier, context, nextResolve) {
+        try {
+          return await nextResolve(specifier, context);
+        } catch (err) {
+          if (specifier.startsWith('.') && !specifier.endsWith('.js')) {
+            return await nextResolve(specifier + '.js', context);
+          }
+          throw err;
+        }
+      }
+    `),
+  import.meta.url
+);
+
+const { default: api } = await import('../src/services/api.js');
+const { default: orderService, normalizeOrderFromBackend } = await import('../src/services/orderService.js');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -158,4 +179,136 @@ test('TC-293-16: Đảm bảo an toàn Lint/CI: Không trùng lặp biến notif
   assert.equal(notifyMatches.length, 1, 'Orders.jsx chỉ khai báo destructuring notify đúng 1 lần');
   assert.match(ordersCode, /await confirmDialog\(/, 'Sử dụng confirmDialog chuẩn của hệ thống');
   assert.doesNotMatch(ordersCode, /window\.(alert|confirm|prompt)\s*\(/, 'Không sử dụng window.alert/confirm/prompt');
+});
+
+test('TC-293-17: normalizeOrderFromBackend chuyển đổi đúng OrderResponse từ Backend (kể cả BigDecimal string & LocalDateTime array)', () => {
+  assert.equal(normalizeOrderFromBackend(null), null);
+  assert.equal(normalizeOrderFromBackend(undefined), null);
+
+  const normalized = normalizeOrderFromBackend({
+    id: 42,
+    userId: 7,
+    receiverName: 'Nguyễn Minh Anh',
+    receiverPhone: '0901234567',
+    shippingAddress: '101 Lê Lợi, Quận 1, TP.HCM',
+    subtotalAmount: '500000.00',
+    voucherCode: 'SALE50K',
+    discountAmount: '50000.00',
+    totalAmount: '450000.00',
+    status: 'confirmed',
+    paymentMethod: 'mock_online',
+    createdAt: [2026, 11, 10, 14, 30, 5],
+    items: [
+      {
+        id: 100,
+        productId: 12,
+        productName: 'Bàn phím cơ Keychron K2',
+        quantity: 2,
+        priceAtPurchase: '250000',
+        subTotal: null
+      }
+    ],
+    statusHistories: [
+      {
+        id: 1,
+        orderId: 42,
+        status: 'pending',
+        previousStatus: null,
+        createdAt: [2026, 11, 10, 14, 0, 0]
+      }
+    ]
+  });
+
+  assert.equal(normalized.id, 42);
+  assert.equal(normalized.status, 'CONFIRMED');
+  assert.equal(normalized.paymentMethod, 'MOCK_ONLINE');
+  assert.equal(normalized.subtotalAmount, 500000);
+  assert.equal(normalized.discountAmount, 50000);
+  assert.equal(normalized.totalAmount, 450000);
+  assert.equal(normalized.voucherCode, 'SALE50K');
+  assert.ok(typeof normalized.createdAt === 'string' && !Number.isNaN(new Date(normalized.createdAt).getTime()));
+  assert.equal(normalized.items.length, 1);
+  assert.equal(normalized.items[0].productName, 'Bàn phím cơ Keychron K2');
+  assert.equal(normalized.items[0].subTotal, 500000);
+  assert.equal(normalized.statusHistories[0].status, 'PENDING');
+});
+
+test('TC-293-18: orderService.getAllOrders và getRealOrdersForDashboard chuẩn hóa dữ liệu thật & ném lỗi thật khi API thất bại (không dùng mock che lỗi)', async () => {
+  const originalGet = api.get;
+  try {
+    api.get = async (url, config) => {
+      assert.equal(url, '/admin/orders');
+      assert.equal(config.params.page, 0);
+      return {
+        content: [
+          {
+            id: 99,
+            receiverName: 'Khách Thực Tế',
+            receiverPhone: '0988777666',
+            totalAmount: 1200000,
+            status: 'PENDING',
+            paymentMethod: 'COD',
+            createdAt: '2026-11-11T09:00:00'
+          }
+        ],
+        totalElements: 1,
+        totalPages: 1,
+        pageNumber: 0,
+        pageSize: 10,
+        last: true
+      };
+    };
+
+    const paged = await orderService.getAllOrders({ page: 0, size: 10, sortBy: 'id', sortDir: 'desc' });
+    assert.equal(paged.content.length, 1);
+    assert.equal(paged.content[0].id, 99);
+    assert.equal(paged.content[0].totalAmount, 1200000);
+    assert.equal(paged.totalElements, 1);
+
+    const dashboardOrders = await orderService.getRealOrdersForDashboard(50);
+    assert.equal(dashboardOrders.length, 1);
+    assert.equal(dashboardOrders[0].status, 'PENDING');
+
+    api.get = async () => {
+      const apiErr = new Error('Máy chủ đang gặp sự cố nội bộ (HTTP 500).');
+      apiErr.response = { status: 500 };
+      throw apiErr;
+    };
+    await assert.rejects(() => orderService.getAllOrders({ page: 0, size: 10 }), /HTTP 500/);
+  } finally {
+    api.get = originalGet;
+  }
+});
+
+test('TC-293-19: orderService.getAdminOrderById & updateOrderStatus không che giấu lỗi HTTP 500 từ Backend', async () => {
+  const originalGet = api.get;
+  const originalPut = api.put;
+  try {
+    api.get = async (url) => {
+      assert.equal(url, '/orders/55');
+      return {
+        id: 55,
+        receiverName: 'Trần Bảo',
+        totalAmount: '750000',
+        status: 'SHIPPING',
+        paymentMethod: 'COD',
+        createdAt: '2026-11-11T08:00:00',
+        items: [{ id: 1, productId: 5, productName: 'Chuột Logitech', quantity: 1, priceAtPurchase: 750000, subTotal: 750000 }]
+      };
+    };
+    const detail = await orderService.getAdminOrderById(55);
+    assert.equal(detail.id, 55);
+    assert.equal(detail.totalAmount, 750000);
+    assert.equal(detail.items[0].productName, 'Chuột Logitech');
+
+    api.put = async () => {
+      const serverErr = new Error('Lỗi hoàn kho từ Product Service (HTTP 500)');
+      serverErr.response = { status: 500 };
+      throw serverErr;
+    };
+    await assert.rejects(() => orderService.updateOrderStatus(55, 'CANCELLED', 'Hết hàng'), /HTTP 500/);
+  } finally {
+    api.get = originalGet;
+    api.put = originalPut;
+  }
 });
