@@ -1,5 +1,14 @@
 import api from './api.js';
-import { getUser, setUser } from '../utils/auth.js';
+import { getToken, getUser, setUser } from '../utils/auth.js';
+
+const isMockUserSession = () => {
+  const isMockEnv =
+    typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.VITE_USE_MOCK_AUTH === 'true';
+  const token = getToken();
+  return Boolean(isMockEnv || (typeof token === 'string' && token.startsWith('mock-')));
+};
 
 /**
  * Vietnamese phone number validation regex:
@@ -97,11 +106,7 @@ const userService = {
    * Lấy thông tin hồ sơ cá nhân của người dùng hiện tại (GET /api/v1/users/profile)
    */
   getProfile: async () => {
-    try {
-      const data = await api.get('/users/profile');
-      return data;
-    } catch (err) {
-      // Fallback: Nếu backend offline hoặc dùng mock
+    if (isMockUserSession()) {
       const savedUser = getUser();
       if (savedUser) {
         return {
@@ -111,11 +116,15 @@ const userService = {
           phone: savedUser.phone || '',
           avatarUrl: savedUser.avatarUrl || '',
           roles: savedUser.roles || ['ROLE_USER'],
-          defaultAddress: savedUser.address ? { fullAddress: savedUser.address } : null
+          defaultAddress: savedUser.address ? { fullAddress: savedUser.address } : null,
+          addresses: []
         };
       }
-      throw err;
+      return null;
     }
+
+    // Chế độ Backend thật: luôn lấy trực tiếp từ API, KHÔNG fallback về localStorage['user'].address giả
+    return await api.get('/users/profile');
   },
 
   /**
@@ -177,8 +186,12 @@ const userService = {
    * Lấy danh sách địa chỉ nhận hàng (GET /api/v1/users/me/addresses)
    */
   getAddresses: async () => {
+    if (isMockUserSession()) {
+      return [];
+    }
     try {
-      return await api.get('/users/me/addresses');
+      const data = await api.get('/users/me/addresses');
+      return Array.isArray(data) ? data : [];
     } catch (err) {
       return [];
     }

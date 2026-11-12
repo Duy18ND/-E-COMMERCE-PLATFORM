@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
 import useNotification from '../../hooks/useNotification';
+import { USE_MOCK_AUTH } from '../../services/authService';
+import userService from '../../services/userService';
+import { getToken } from '../../utils/auth';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
 import voucherService, { getVoucherStatus, calcDiscount, parseLocalDateBoundary } from '../../services/voucherService';
@@ -240,21 +243,89 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
   );
 };
 
+// Pure address mapping helpers (exported for verification)
+
+const normalizeTextSegment = (val) =>
+  String(val || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+/**
+ * Ghép phần địa chỉ chi tiết từ AddressResponse (addressLine, ward, district),
+ * loại bỏ trùng lặp nếu segment cuối trùng với city.
+ */
+export const buildStreetAddressFromDto = (addr) => {
+  if (!addr || typeof addr !== 'object') return '';
+  const cityNorm = normalizeTextSegment(addr.city);
+  const rawParts = [addr.addressLine, addr.ward, addr.district]
+    .map((part) => (part ? String(part).trim() : ''))
+    .filter(Boolean);
+
+  const uniqueParts = [];
+  for (const part of rawParts) {
+    const partNorm = normalizeTextSegment(part);
+    if (cityNorm && partNorm === cityNorm) continue;
+    if (!uniqueParts.some((existing) => normalizeTextSegment(existing) === partNorm)) {
+      uniqueParts.push(part);
+    }
+  }
+  return uniqueParts.join(', ');
+};
+
+/**
+ * Ghép streetAddress và city thành shippingAddress gửi Backend, không ghép tỉnh/thành phố 2 lần.
+ */
+export const composeFullShippingAddress = (streetAddress, city) => {
+  const cleanStreet = String(streetAddress || '').trim().replace(/,+\s*$/, '');
+  const cleanCity = String(city || '').trim();
+  if (!cleanCity) return cleanStreet;
+  if (!cleanStreet) return cleanCity;
+
+  const streetNorm = normalizeTextSegment(cleanStreet);
+  const cityNorm = normalizeTextSegment(cleanCity);
+  const streetSegments = cleanStreet.split(',').map((s) => normalizeTextSegment(s)).filter(Boolean);
+  const lastSegment = streetSegments[streetSegments.length - 1] || '';
+
+  if (
+    streetNorm === cityNorm ||
+    lastSegment === cityNorm ||
+    streetNorm.endsWith(`, ${cityNorm}`)
+  ) {
+    return cleanStreet;
+  }
+  return `${cleanStreet}, ${cleanCity}`;
+};
+
+/**
+ * Ánh xạ dữ liệu nhận hàng từ AddressResponse + Profile thực tế của Backend (không dùng dữ liệu giả).
+ */
+export const mapAddressToCheckoutFields = (addr, profile = null, fallbackUser = null) => ({
+  receiverName: addr?.receiverName || profile?.fullName || fallbackUser?.fullName || '',
+  receiverPhone: addr?.phone || profile?.phone || fallbackUser?.phone || '',
+  streetAddress: addr ? buildStreetAddressFromDto(addr) : '',
+  city: addr?.city ? String(addr.city).trim() : ''
+});
+
 // ─── Main Checkout ─────────────────────────────────────────────────────────────
 const Checkout = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isMockAuth } = useAuth();
   const { cartItems, totalItems, totalPrice, totalOriginalPrice, totalDiscount, refreshCart, addToCart } = useCart();
   const { notify } = useNotification();
 
   const [formData, setFormData] = useState({
-    receiverName:   user?.fullName || 'Nguyễn Văn A',
-    receiverPhone:  user?.phone    || '0912 345 678',
-    streetAddress:  user?.address  || '123 Đường Cầu Giấy, Phường Dịch Vọng',
-    city:           'Hà Nội',
-    note:           'Giao trong giờ hành chính, gọi trước khi giao 15 phút',
+    receiverName:   '',
+    receiverPhone:  '',
+    streetAddress:  '',
+    city:           '',
+    note:           '',
     paymentMethod:  PAYMENT_METHOD.COD
   });
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [addressLoading, setAddressLoading] = useState(false);
+  const userEditedRef = useRef(false);
   const [selectedOnlineMethod, setSelectedOnlineMethod] = useState(ONLINE_PAYMENT_PROVIDERS.MOMO);
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -266,17 +337,84 @@ const Checkout = () => {
 
   // ── QR payment state (đơn thanh toán trực tuyến chờ quét mã VietQR) ───────
   const [qrOrder, setQrOrder] = useState(null);
-  // Pre-fill user info
+
+  // Tải hồ sơ & sổ địa chỉ thực tế từ Backend API khi mở trang Checkout
   useEffect(() => {
-    if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        receiverName:  user.fullName || prev.receiverName,
-        receiverPhone: user.phone    || prev.receiverPhone,
-        streetAddress: user.address  || prev.streetAddress
-      }));
+    let isMounted = true;
+    const token = getToken();
+    const isMockSession = Boolean(
+      USE_MOCK_AUTH || isMockAuth || (typeof token === 'string' && token.startsWith('mock-'))
+    );
+
+    if (isMockSession) {
+      setSavedAddresses([]);
+      setSelectedAddressId('');
+      if (user && !userEditedRef.current) {
+        setFormData((prev) => ({
+          ...prev,
+          receiverName:  user?.fullName || prev.receiverName,
+          receiverPhone: user?.phone    || prev.receiverPhone,
+          streetAddress: user?.address  || prev.streetAddress
+        }));
+      }
+      return undefined;
     }
-  }, [user]);
+
+    const loadCheckoutRecipientData = async () => {
+      setAddressLoading(true);
+      try {
+        const [profileRes, addressesRes] = await Promise.allSettled([
+          userService.getProfile(),
+          userService.getAddresses()
+        ]);
+
+        if (!isMounted) return;
+
+        const profile = profileRes.status === 'fulfilled' ? profileRes.value : null;
+        const apiAddresses =
+          addressesRes.status === 'fulfilled' && Array.isArray(addressesRes.value)
+            ? addressesRes.value
+            : [];
+        const profileAddresses = Array.isArray(profile?.addresses) ? profile.addresses : [];
+        const addressList = apiAddresses.length > 0 ? apiAddresses : profileAddresses;
+
+        setSavedAddresses(addressList);
+
+        const defaultAddr =
+          profile?.defaultAddress ||
+          addressList.find((addr) => Boolean(addr?.isDefault)) ||
+          addressList[0] ||
+          null;
+
+        if (defaultAddr?.id != null) {
+          setSelectedAddressId(String(defaultAddr.id));
+        } else {
+          setSelectedAddressId(addressList.length > 0 ? 'CUSTOM' : '');
+        }
+
+        if (!userEditedRef.current) {
+          const mapped = mapAddressToCheckoutFields(defaultAddr, profile, user);
+          setFormData((prev) => ({
+            ...prev,
+            receiverName:  mapped.receiverName,
+            receiverPhone: mapped.receiverPhone,
+            streetAddress: mapped.streetAddress,
+            city:          mapped.city,
+            note:          prev.note || ''
+          }));
+        }
+      } finally {
+        if (isMounted) {
+          setAddressLoading(false);
+        }
+      }
+    };
+
+    loadCheckoutRecipientData();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.userId, user?.fullName, user?.phone, user?.address, isMockAuth]);
 
   // Load user's saved vouchers on mount and on storage events
   useEffect(() => {
@@ -303,10 +441,42 @@ const Checkout = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'receiverName' || name === 'receiverPhone' || name === 'streetAddress' || name === 'city') {
+      userEditedRef.current = true;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleSelectSavedAddress = (e) => {
+    const nextId = e.target.value;
+    setSelectedAddressId(nextId);
+    userEditedRef.current = true;
+
+    if (!nextId || nextId === 'CUSTOM') {
+      setFormData((prev) => ({
+        ...prev,
+        streetAddress: '',
+        city: ''
+      }));
+      return;
+    }
+
+    const picked = savedAddresses.find((addr) => String(addr.id) === String(nextId));
+    if (picked) {
+      const mapped = mapAddressToCheckoutFields(picked, null, user);
+      setFormData((prev) => ({
+        ...prev,
+        receiverName: mapped.receiverName,
+        receiverPhone: mapped.receiverPhone,
+        streetAddress: mapped.streetAddress,
+        city: mapped.city
+      }));
+    }
+  };
+
   const handleFillTestData = () => {
+    if (!import.meta.env.DEV) return;
+    userEditedRef.current = true;
     setFormData({
       receiverName:  'Nguyễn Văn A',
       receiverPhone: '0912 345 678',
@@ -419,9 +589,10 @@ const Checkout = () => {
       return;
     }
 
-    const fullShippingAddress = formData.city
-      ? `${formData.streetAddress.trim()}, ${formData.city.trim()}`
-      : formData.streetAddress.trim();
+    const fullShippingAddress = composeFullShippingAddress(
+      formData.streetAddress,
+      formData.city
+    );
 
     setLoading(true);
     try {
@@ -527,17 +698,19 @@ const Checkout = () => {
             Kiểm tra thông tin giao hàng và xác nhận đơn hàng của bạn
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleFillTestData}
-          style={{
-            backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px',
-            padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700,
-            color: '#2563eb', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem'
-          }}
-        >
-          <span>⚡</span><span>Điền nhanh thông tin test</span>
-        </button>
+        {import.meta.env.DEV && (
+          <button
+            type="button"
+            onClick={handleFillTestData}
+            style={{
+              backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px',
+              padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700,
+              color: '#2563eb', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem'
+            }}
+          >
+            <span>⚡</span><span>Điền nhanh thông tin test</span>
+          </button>
+        )}
       </div>
 
       {error && <ErrorMessage message={error} onClose={() => setError('')} />}
@@ -612,11 +785,68 @@ const Checkout = () => {
                   </span>
                 </div>
 
-                <Input label="Họ và tên người nhận" name="receiverName" required value={formData.receiverName} onChange={handleChange} placeholder="Nguyễn Văn A" />
-                <Input label="Số điện thoại nhận hàng" name="receiverPhone" type="tel" required value={formData.receiverPhone} onChange={handleChange} placeholder="0912345678" />
-                <Input label="Địa chỉ chi tiết (Số nhà, tên đường, phường/xã)" name="streetAddress" required value={formData.streetAddress} onChange={handleChange} placeholder="Số nhà 123, đường Cầu Giấy, phường Dịch Vọng" />
-                <Input label="Tỉnh / Thành phố" name="city" value={formData.city} onChange={handleChange} placeholder="Hà Nội, TP.HCM..." />
-                <Input label="Ghi chú đơn hàng (Tùy chọn)" name="note" value={formData.note} onChange={handleChange} placeholder="Giao trong giờ hành chính, gọi trước khi giao..." />
+                {addressLoading ? (
+                  <div style={{ fontSize: '0.825rem', color: '#64748b', marginBottom: '0.85rem' }}>
+                    Đang tải thông tin người nhận từ hồ sơ của bạn...
+                  </div>
+                ) : savedAddresses.length > 0 && (
+                  <div style={{
+                    marginBottom: '1rem',
+                    padding: '0.8rem 0.95rem',
+                    borderRadius: '10px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <label
+                      htmlFor="saved-address-select"
+                      style={{
+                        display: 'block',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        color: '#334155',
+                        marginBottom: '0.4rem'
+                      }}
+                    >
+                      Chọn từ sổ địa chỉ ({savedAddresses.length} địa chỉ đã lưu)
+                    </label>
+                    <select
+                      id="saved-address-select"
+                      name="savedAddressId"
+                      value={selectedAddressId}
+                      onChange={handleSelectSavedAddress}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#ffffff',
+                        color: '#0f172a',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      {savedAddresses.map((addr) => {
+                        const labelParts = [
+                          addr.receiverName,
+                          addr.phone,
+                          composeFullShippingAddress(buildStreetAddressFromDto(addr), addr.city)
+                        ].filter(Boolean);
+                        return (
+                          <option key={addr.id} value={String(addr.id)}>
+                            {addr.isDefault ? '[Mặc định] ' : ''}
+                            {labelParts.join(' - ')}
+                          </option>
+                        );
+                      })}
+                      <option value="CUSTOM">Nhập địa chỉ nhận hàng khác</option>
+                    </select>
+                  </div>
+                )}
+
+                <Input label="Họ và tên người nhận" name="receiverName" required value={formData.receiverName} onChange={handleChange} placeholder="Nhập họ và tên người nhận" />
+                <Input label="Số điện thoại nhận hàng" name="receiverPhone" type="tel" required value={formData.receiverPhone} onChange={handleChange} placeholder="Nhập số điện thoại nhận hàng (VD: 0912345678)" />
+                <Input label="Địa chỉ chi tiết (Số nhà, tên đường, phường/xã, quận/huyện)" name="streetAddress" required value={formData.streetAddress} onChange={handleChange} placeholder="Nhập số nhà, tên đường, phường/xã, quận/huyện" />
+                <Input label="Tỉnh / Thành phố" name="city" value={formData.city} onChange={handleChange} placeholder="Nhập tỉnh / thành phố" />
+                <Input label="Ghi chú đơn hàng (Tùy chọn)" name="note" value={formData.note} onChange={handleChange} placeholder="Nhập ghi chú giao hàng nếu cần (tùy chọn)" />
 
                 {/* Section 2: Payment method */}
                 <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9' }}>

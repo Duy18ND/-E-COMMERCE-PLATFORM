@@ -91,19 +91,19 @@ const OrderSuccess = () => {
             <div>
               <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Người nhận:</span>
               <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                {order?.receiverName || 'Nguyễn Văn A'}
+                {order?.receiverName || '---'}
               </div>
             </div>
             <div>
               <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Số điện thoại:</span>
               <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                {order?.receiverPhone || '0912 345 678'}
+                {order?.receiverPhone || '---'}
               </div>
             </div>
             <div className="col-span-full">
               <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Địa chỉ nhận hàng:</span>
               <div style={{ fontWeight: 600, color: '#0f172a' }}>
-                {order?.shippingAddress || '123 Đường Cầu Giấy, Hà Nội'}
+                {order?.shippingAddress || '---'}
               </div>
             </div>
             <div>
