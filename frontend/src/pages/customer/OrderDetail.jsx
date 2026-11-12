@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useLocation, Link } from 'react-router-dom';
+import useAuth from '../../hooks/useAuth';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -10,6 +11,15 @@ import ErrorMessage from '../../components/common/ErrorMessage';
 import { ORDER_STATUS } from '../../utils/constants';
 import useNotification from '../../hooks/useNotification';
 import OrderTimeline from '../../components/order/OrderTimeline';
+import QrPaymentModal from '../../components/order/QrPaymentModal';
+import ProductReviewForm from '../../components/product/ProductReviewForm';
+import reviewService, {
+  isOrderCompletedForReview,
+  evaluateOrderItemReviewEligibility
+} from '../../services/reviewService';
+
+// Số lần thử đồng bộ lại trạng thái đơn (mỗi 1 giây) sau khi xác nhận thanh toán QR, chờ Kafka cập nhật
+const MAX_PAYMENT_SYNC_ATTEMPTS = 8;
 
 /**
  * Trang chi tiết đơn hàng (OrderDetail)
@@ -19,27 +29,61 @@ import OrderTimeline from '../../components/order/OrderTimeline';
  */
 const OrderDetail = () => {
   const { id } = useParams();
+  const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
   const { notify, confirmDialog } = useNotification();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+  const [qrOpen, setQrOpen] = useState(false);
+  // Trạng thái đơn đang chờ đồng bộ sau thanh toán QR (PAID / FAILED) — truyền từ Checkout qua navigation state
+  const [awaitingStatus, setAwaitingStatus] = useState(location.state?.expectedStatus || null);
+  const syncAttemptsRef = useRef(0);
 
-  const fetchOrderDetail = async () => {
-    setLoading(true);
-    setError('');
+  // State đánh giá sản phẩm sau mua ngay tại trang Chi tiết đơn hàng
+  const [itemReviewsMap, setItemReviewsMap] = useState({});
+  const [checkingReviews, setCheckingReviews] = useState(false);
+  const [reviewCheckErrorsMap, setReviewCheckErrorsMap] = useState({});
+  const [reviewModalItem, setReviewModalItem] = useState(null);
+
+  const fetchOrderDetail = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       // Gọi API Backend: GET /api/orders/{orderId}
       const data = await orderService.getOrderById(id);
+      if (data && data.status === ORDER_STATUS.PENDING && typeof window !== 'undefined' && window.sessionStorage) {
+        try {
+          const rawOverrides = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
+          const overrides = rawOverrides ? JSON.parse(rawOverrides) : {};
+          const override = overrides[String(id)];
+          if (override?.status) {
+            if (isOrderCompletedForReview(override.status)) {
+              setCheckingReviews(true);
+            }
+            setOrder({ ...data, status: override.status });
+            return;
+          }
+        } catch (e) {
+          // Bỏ qua lỗi đọc sessionStorage
+        }
+      }
+      if (isOrderCompletedForReview(data?.status)) {
+        setCheckingReviews(true);
+      }
       setOrder(data);
     } catch (err) {
+      if (silent) return;
       if (err.response?.status === 403) {
         setError('Bạn không có quyền xem thông tin đơn hàng này (Bảo mật IDOR).');
       } else {
         setError(err.message || 'Không thể tải chi tiết đơn hàng.');
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -53,6 +97,89 @@ const OrderDetail = () => {
     }
     return undefined;
   }, [id]);
+
+  // Tải thông tin đánh giá hiện có của người dùng cho từng sản phẩm trong đơn hàng đã giao thành công
+  const loadExistingItemReviews = useCallback(async () => {
+    if (!order || !Array.isArray(order.items) || order.items.length === 0) {
+      setCheckingReviews(false);
+      return;
+    }
+    if (!isOrderCompletedForReview(order.status) || !isAuthenticated || !user) {
+      setItemReviewsMap({});
+      setReviewCheckErrorsMap({});
+      setCheckingReviews(false);
+      return;
+    }
+
+    const productIds = [
+      ...new Set(
+        order.items
+          .map((it) => it?.productId ?? it?.id)
+          .filter((pid) => pid !== undefined && pid !== null)
+      )
+    ];
+    if (productIds.length === 0) {
+      setCheckingReviews(false);
+      return;
+    }
+
+    setCheckingReviews(true);
+    setReviewCheckErrorsMap({});
+
+    try {
+      const results = await Promise.all(
+        productIds.map(async (pid) => {
+          try {
+            const rev = await reviewService.getMyReview(pid);
+            return { pid: String(pid), rev, error: '' };
+          } catch (err) {
+            return {
+              pid: String(pid),
+              rev: null,
+              error:
+                err?.response?.data?.message ||
+                err?.message ||
+                'Không thể kiểm tra trạng thái đánh giá.'
+            };
+          }
+        })
+      );
+
+      const nextMap = {};
+      const nextErrMap = {};
+      results.forEach(({ pid, rev, error: revErr }) => {
+        if (revErr) {
+          nextErrMap[pid] = revErr;
+        } else if (rev && rev.id) {
+          nextMap[pid] = rev;
+        }
+      });
+      setItemReviewsMap(nextMap);
+      setReviewCheckErrorsMap(nextErrMap);
+    } finally {
+      setCheckingReviews(false);
+    }
+  }, [order, isAuthenticated, user]);
+
+  useEffect(() => {
+    loadExistingItemReviews();
+  }, [loadExistingItemReviews]);
+
+  // Sau khi xác nhận thanh toán QR: đồng bộ lại trạng thái đơn mỗi 1 giây cho tới khi Kafka cập nhật
+  // (PENDING -> PAID / FAILED) hoặc hết số lần thử, tránh hiển thị trạng thái PENDING cũ.
+  useEffect(() => {
+    if (!awaitingStatus || !order) return undefined;
+    if (order.status !== ORDER_STATUS.PENDING || syncAttemptsRef.current >= MAX_PAYMENT_SYNC_ATTEMPTS) {
+      setAwaitingStatus(null);
+      syncAttemptsRef.current = 0;
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      syncAttemptsRef.current += 1;
+      fetchOrderDetail({ silent: true });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [awaitingStatus, order]);
 
   // Hủy đơn hàng khi đơn còn ở trạng thái PENDING
   const handleCancelOrder = async () => {
@@ -77,18 +204,28 @@ const OrderDetail = () => {
     }
   };
 
-  // Thanh toán mô phỏng nếu đơn còn PENDING
-  const handleMockPay = async () => {
-    setActionLoading(true);
-    try {
-      await paymentService.mockPay(id, true);
-      notify.success('Thanh toán thành công! Đang làm mới dữ liệu...');
-      await fetchOrderDetail();
-    } catch (err) {
-      notify.error(err.message || 'Thanh toán mô phỏng thất bại.');
-    } finally {
-      setActionLoading(false);
-    }
+  // Thanh toán mô phỏng qua màn hình QR nếu đơn còn PENDING
+  // Gọi API POST /payments/mock-pay/{orderId} với body { success, note }
+  const handleMockPay = (success = true, note = '') => paymentService.mockPay(id, success, note);
+
+  const startPaymentSync = (expectedStatus) => {
+    syncAttemptsRef.current = 0;
+    setAwaitingStatus(expectedStatus);
+    fetchOrderDetail({ silent: true });
+  };
+
+  const handleQrPaid = () => {
+    setQrOpen(false);
+    setOrder((prev) => (prev ? { ...prev, status: ORDER_STATUS.PAID } : prev));
+    notify.success(`Thanh toán thành công! Đơn hàng #${id} đã chuyển sang ĐÃ THANH TOÁN (PAID).`);
+    startPaymentSync(ORDER_STATUS.PAID);
+  };
+
+  const handleQrFailed = () => {
+    setQrOpen(false);
+    setOrder((prev) => (prev ? { ...prev, status: ORDER_STATUS.FAILED } : prev));
+    notify.error(`Thanh toán đơn hàng #${id} thất bại. Hệ thống đã hoàn lại tồn kho và lượt sử dụng Voucher (Saga Rollback).`);
+    startPaymentSync(ORDER_STATUS.FAILED);
   };
 
   if (loading) {
@@ -159,9 +296,60 @@ const OrderDetail = () => {
   const phone = order.receiverPhone || order.shippingAddress?.phone || '---';
   const fullAddress = order.shippingAddress?.fullAddress || order.shippingAddress || 'Chưa cung cấp';
   const isPending = order.status === ORDER_STATUS.PENDING;
+  // Nếu vừa xác nhận từ màn hình QR nhưng Kafka ở Backend đang trên đường cập nhật, ưu tiên hiển thị trạng thái vừa xác nhận
+  const effectiveStatus = isPending && awaitingStatus ? awaitingStatus : order.status;
+  // Mọi phương thức khác COD (MOCK_ONLINE, VNPAY, MOMO, BANK_TRANSFER, QR_CODE...) đều thanh toán qua mã QR
+  const isOnlinePayment = order.paymentMethod === 'MOCK_ONLINE' || (!!order.paymentMethod && order.paymentMethod !== 'COD');
+  const canPayByQr = isPending && !awaitingStatus && isOnlinePayment;
+  const isPaidStatus =
+    effectiveStatus === ORDER_STATUS.PAID ||
+    effectiveStatus === ORDER_STATUS.COMPLETED ||
+    effectiveStatus === ORDER_STATUS.DELIVERED ||
+    (isOnlinePayment && (
+      effectiveStatus === ORDER_STATUS.CONFIRMED ||
+      effectiveStatus === ORDER_STATUS.PROCESSING ||
+      effectiveStatus === ORDER_STATUS.SHIPPING
+    ));
+  const isFailedStatus = effectiveStatus === ORDER_STATUS.FAILED;
+  const isSyncingPayment = !!awaitingStatus && order.status === ORDER_STATUS.PENDING;
+  const canReviewOrderItems = isOrderCompletedForReview(effectiveStatus);
+
+  // Tính toán chi tiết tiền hàng, giảm giá, phí vận chuyển và tổng thanh toán
+  // Công thức: totalAmount = subtotal - discountAmount + shippingFee
+  const computedItemsSubtotal = items.reduce((sum, item) => {
+    const price = Number(item.priceAtPurchase ?? item.price ?? 0);
+    const qty = Number(item.quantity ?? 1);
+    return sum + Number(item.subTotal ?? price * qty);
+  }, 0);
+
+  const subtotal =
+    order.subtotal !== undefined && order.subtotal !== null
+      ? Number(order.subtotal)
+      : order.subtotalAmount !== undefined && order.subtotalAmount !== null
+        ? Number(order.subtotalAmount)
+        : computedItemsSubtotal || Number(order.totalAmount || 0);
+  const discountAmount = Math.max(0, Number(order.discountAmount ?? 0) || 0);
+  const shippingFee = Math.max(0, Number(order.shippingFee ?? 0) || 0);
+  const couponCode = order.couponCode || order.voucherCode || null;
+  const totalAmount =
+    order.subtotal !== undefined ||
+    order.subtotalAmount !== undefined ||
+    order.discountAmount !== undefined ||
+    order.shippingFee !== undefined
+      ? Math.max(0, subtotal - discountAmount) + shippingFee
+      : Number(order.totalAmount ?? Math.max(0, subtotal - discountAmount) + shippingFee);
 
   return (
     <div className="container page-container" style={{ paddingBottom: '3rem' }}>
+      {/* Màn hình quét mã QR thanh toán (VietQR) — mở lại bất cứ lúc nào khi đơn online còn PENDING */}
+      <QrPaymentModal
+        isOpen={qrOpen && canPayByQr}
+        order={order}
+        onPay={handleMockPay}
+        onPaid={handleQrPaid}
+        onFailed={handleQrFailed}
+        onPayLater={() => setQrOpen(false)}
+      />
       {/* Nút quay lại */}
       <div style={{ marginBottom: '1.25rem' }}>
         <Link
@@ -228,7 +416,7 @@ const OrderDetail = () => {
             </Button>
           </Link>
 
-          {/* Nút thao tác khách hàng: Hủy đơn hoặc Thanh toán mô phỏng */}
+          {/* Nút thao tác khách hàng: Hủy đơn hoặc Thanh toán ngay qua mã QR */}
           {isPending && (
             <>
               <Button
@@ -240,20 +428,61 @@ const OrderDetail = () => {
                 {actionLoading ? 'Đang xử lý...' : 'Hủy đơn hàng'}
               </Button>
 
-              {order.paymentMethod === 'MOCK_ONLINE' && (
+              {canPayByQr && (
                 <Button
                   variant="primary"
                   size="sm"
-                  disabled={actionLoading}
-                  onClick={handleMockPay}
+                  disabled={actionLoading || isSyncingPayment}
+                  onClick={() => setQrOpen(true)}
                 >
-                  {actionLoading ? 'Đang xử lý...' : 'Thanh toán ngay'}
+                  📱 Thanh toán QR ngay
                 </Button>
               )}
             </>
           )}
         </div>
       </div>
+
+      {/* Đang đồng bộ trạng thái thanh toán từ Kafka (sau khi xác nhận trên màn hình QR) */}
+      {isSyncingPayment && (
+        <div
+          className="card"
+          style={{
+            padding: '0.85rem 1.1rem', marginBottom: '1.5rem', fontSize: '0.875rem',
+            border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', color: '#1e40af',
+            display: 'flex', alignItems: 'center', gap: '0.6rem'
+          }}
+        >
+          <span>⏳</span>
+          <span>
+            Đang đồng bộ kết quả thanh toán ({awaitingStatus === ORDER_STATUS.PAID ? 'ĐÃ THANH TOÁN' : 'THẤT BẠI'}) từ hệ thống...
+          </span>
+        </div>
+      )}
+
+      {/* Nhắc thanh toán cho đơn online còn PENDING */}
+      {canPayByQr && !isSyncingPayment && (
+        <div
+          className="card"
+          style={{
+            padding: '1rem 1.25rem', marginBottom: '1.5rem',
+            border: '1px solid #fde68a', backgroundColor: '#fffbeb',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem'
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.95rem' }}>
+              ⏰ Đơn hàng đang chờ thanh toán
+            </div>
+            <div style={{ fontSize: '0.825rem', color: '#a16207', marginTop: '0.2rem' }}>
+              Quét mã VietQR để thanh toán {formatCurrency(order.totalAmount || 0)} và hoàn tất đơn hàng.
+            </div>
+          </div>
+          <Button variant="primary" size="sm" disabled={actionLoading} onClick={() => setQrOpen(true)}>
+            📱 Thanh toán QR ngay
+          </Button>
+        </div>
+      )}
 
       {/* Dòng thời gian tiến trình trạng thái đơn hàng (ECOM-173 / ECOM-188 / ECOM-311 / ECOM-315) */}
       <OrderTimeline
@@ -299,13 +528,21 @@ const OrderDetail = () => {
             <div>
               <span style={{ color: '#64748b' }}>Phương thức:</span>{' '}
               <strong style={{ color: '#0f172a' }}>
-                {order.paymentMethod === 'MOCK_ONLINE' ? 'Thanh toán trực tuyến (Mô phỏng)' : 'Thanh toán khi nhận hàng (COD)'}
+                {order.paymentMethod === 'MOCK_ONLINE'
+                  ? `Thanh toán trực tuyến (${order.onlinePaymentProviderLabel || 'Chuyển khoản QR'})`
+                  : isOnlinePayment
+                    ? 'Thanh toán trực tuyến (Chuyển khoản QR)'
+                    : 'Thanh toán khi nhận hàng (COD)'}
               </strong>
             </div>
             <div>
               <span style={{ color: '#64748b' }}>Trạng thái thanh toán:</span>{' '}
-              <span style={{ fontWeight: 600, color: order.status === ORDER_STATUS.PAID || order.status === ORDER_STATUS.COMPLETED || order.status === ORDER_STATUS.DELIVERED ? '#16a34a' : '#d97706' }}>
-                {order.status === ORDER_STATUS.PAID || order.status === ORDER_STATUS.COMPLETED || order.status === ORDER_STATUS.DELIVERED ? 'Đã thanh toán' : 'Chưa thanh toán'}
+              <span style={{ fontWeight: 600, color: isPaidStatus ? '#16a34a' : isFailedStatus ? '#dc2626' : '#d97706' }}>
+                {isPaidStatus
+                  ? 'Đã thanh toán'
+                  : isFailedStatus
+                    ? 'Thanh toán thất bại (đã hoàn kho & hoàn Voucher)'
+                    : 'Chưa thanh toán'}
               </span>
             </div>
           </div>
@@ -314,61 +551,315 @@ const OrderDetail = () => {
 
       {/* Danh sách sản phẩm */}
       <div className="card" style={{ padding: '1.25rem' }}>
-        <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
-          📦 Sản phẩm đã đặt ({items.length})
-        </h3>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {items.map((item, idx) => (
-            <div
-              key={item.id || idx}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            margin: '0 0 1rem',
+            borderBottom: '1px solid #f1f5f9',
+            paddingBottom: '0.5rem'
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
+            📦 Sản phẩm đã đặt ({items.length})
+          </h3>
+          {canReviewOrderItems ? (
+            <span
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingBottom: idx === items.length - 1 ? 0 : '1rem',
-                borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9',
-                flexWrap: 'wrap',
-                gap: '0.75rem'
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                color: '#166534',
+                backgroundColor: '#dcfce7',
+                padding: '0.2rem 0.65rem',
+                borderRadius: '9999px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name || item.productName}
-                    style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                  />
-                ) : (
-                  <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
-                    🛍️
-                  </div>
-                )}
-                <div>
-                  <h4 style={{ margin: '0 0 0.25rem', fontSize: '0.9rem', fontWeight: 600, color: '#0f172a' }}>
-                    {item.name || item.productName}
-                  </h4>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                    Số lượng: <strong>{item.quantity}</strong> &times; {formatCurrency(item.price || item.priceAtPurchase || 0)}
+              ⭐ Đơn hàng đã hoàn thành — Bạn có thể đánh giá sản phẩm
+            </span>
+          ) : (
+            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+              ⏳ Đánh giá sản phẩm sẽ mở sau khi đơn hàng giao thành công
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {items.map((item, idx) => {
+            const resolvedProductId = item.productId ?? item.id;
+            const existingReview =
+              resolvedProductId !== undefined && resolvedProductId !== null
+                ? itemReviewsMap[String(resolvedProductId)]
+                : null;
+            const reviewCheckError =
+              resolvedProductId !== undefined && resolvedProductId !== null
+                ? reviewCheckErrorsMap[String(resolvedProductId)] || ''
+                : '';
+
+            const itemEligibility = evaluateOrderItemReviewEligibility({
+              isAuthenticated,
+              user,
+              order: { ...order, status: effectiveStatus },
+              productId: resolvedProductId,
+              existingReview,
+              checkingReviews: canReviewOrderItems && checkingReviews,
+              reviewCheckError
+            });
+
+            return (
+              <div
+                key={item.id || idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingBottom: idx === items.length - 1 ? 0 : '1rem',
+                  borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name || item.productName}
+                      style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    />
+                  ) : (
+                    <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
+                      🛍️
+                    </div>
+                  )}
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem', fontSize: '0.9rem', fontWeight: 600, color: '#0f172a' }}>
+                      {resolvedProductId ? (
+                        <Link
+                          to={`/products/${resolvedProductId}`}
+                          style={{ color: '#0f172a', textDecoration: 'none' }}
+                        >
+                          {item.name || item.productName}
+                        </Link>
+                      ) : (
+                        item.name || item.productName
+                      )}
+                    </h4>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                      Số lượng: <strong>{item.quantity}</strong> &times; {formatCurrency(item.price || item.priceAtPurchase || 0)}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>
-                {formatCurrency(item.subTotal || ((item.price || item.priceAtPurchase || 0) * item.quantity))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>
+                    {formatCurrency(item.subTotal || ((item.price || item.priceAtPurchase || 0) * item.quantity))}
+                  </div>
+
+                  {/* Khu vực Đánh giá sản phẩm sau mua (CHỈ hiển thị khi đơn hàng đã giao thành công & người dùng đã đăng nhập) */}
+                  {canReviewOrderItems && isAuthenticated && user && resolvedProductId && (
+                    itemEligibility.isLoading ? (
+                      <span
+                        data-testid={`order-item-review-loading-${resolvedProductId}`}
+                        style={{
+                          fontSize: '0.76rem',
+                          fontWeight: 600,
+                          color: '#64748b',
+                          padding: '0.3rem 0.65rem',
+                          borderRadius: '6px',
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0'
+                        }}
+                      >
+                        ⏳ Đang kiểm tra trạng thái đánh giá...
+                      </span>
+                    ) : itemEligibility.isError ? (
+                      <div
+                        data-testid={`order-item-review-error-${resolvedProductId}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}
+                      >
+                        <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                          ⚠️ Lỗi kiểm tra đánh giá
+                        </span>
+                        <button
+                          type="button"
+                          onClick={loadExistingItemReviews}
+                          style={{
+                            padding: '0.28rem 0.6rem',
+                            borderRadius: '6px',
+                            border: '1px solid #fca5a5',
+                            backgroundColor: '#fef2f2',
+                            color: '#b91c1c',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Thử lại
+                        </button>
+                      </div>
+                    ) : itemEligibility.isReviewed ? (
+                      <span
+                        data-testid={`order-item-reviewed-badge-${resolvedProductId}`}
+                        style={{
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: '#166534',
+                          backgroundColor: '#dcfce7',
+                          border: '1px solid #86efac',
+                          padding: '0.32rem 0.75rem',
+                          borderRadius: '9999px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}
+                      >
+                        <span>✓</span>
+                        <span>Đã đánh giá ({existingReview.rating}/5 ★)</span>
+                      </span>
+                    ) : itemEligibility.canShowReviewButton ? (
+                      <button
+                        type="button"
+                        data-testid={`order-item-review-btn-${resolvedProductId}`}
+                        onClick={() => {
+                          if (!itemEligibility.canOpenReviewForm) return;
+                          setReviewModalItem({
+                            item: { ...item, id: resolvedProductId, productId: resolvedProductId },
+                            existingReview: null
+                          });
+                        }}
+                        style={{
+                          padding: '0.4rem 0.85rem',
+                          borderRadius: '8px',
+                          border: 'none',
+                          backgroundColor: '#f59e0b',
+                          color: '#ffffff',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
+                        }}
+                      >
+                        ⭐ Đánh giá sản phẩm
+                      </button>
+                    ) : null
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Tổng kết tiền */}
-        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Tổng số tiền:</span>
-          <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#2563eb' }}>
-            {formatCurrency(order.totalAmount || 0)}
-          </span>
+        {/* Tổng kết thanh toán */}
+        <div
+          style={{
+            marginTop: '1.5rem',
+            paddingTop: '1rem',
+            borderTop: '2px dashed #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.55rem',
+            fontSize: '0.925rem'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+            <span>Tiền hàng:</span>
+            <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(subtotal)}</span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: discountAmount > 0 ? '#16a34a' : '#64748b' }}>
+            <span>
+              Giảm giá{couponCode ? ` (${couponCode})` : ''}:
+            </span>
+            <span style={{ fontWeight: 700 }}>
+              -{formatCurrency(discountAmount)}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+            <span>Phí vận chuyển:</span>
+            <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(shippingFee)}</span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '1.15rem',
+              fontWeight: 'bold',
+              color: '#0f172a',
+              borderTop: '1px solid #f1f5f9',
+              paddingTop: '0.65rem',
+              marginTop: '0.25rem'
+            }}
+          >
+            <span>Tổng số tiền:</span>
+            <span style={{ color: '#2563eb', fontSize: '1.35rem', fontWeight: 800 }}>
+              {formatCurrency(order.totalAmount ?? totalAmount)}
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Modal Form đánh giá sản phẩm sau mua */}
+      {reviewModalItem && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Đánh giá sản phẩm sau mua"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            overflowY: 'auto'
+          }}
+          onClick={() => setReviewModalItem(null)}
+        >
+          <div
+            style={{ width: '100%', maxWidth: '620px', maxHeight: '92vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ProductReviewForm
+              product={reviewModalItem.item}
+              orderId={order.id}
+              orderInfo={order}
+              eligibleOrders={[order]}
+              initialReview={reviewModalItem.existingReview}
+              onSuccess={(savedReview) => {
+                const pid = String(reviewModalItem.item.productId ?? reviewModalItem.item.id);
+                setItemReviewsMap((prev) => ({
+                  ...prev,
+                  [pid]: savedReview
+                }));
+                setReviewModalItem(null);
+              }}
+              onDuplicateDetected={async (dupProductId) => {
+                if (!dupProductId) return;
+                try {
+                  const existing = await reviewService.getMyReview(dupProductId);
+                  if (existing && existing.id) {
+                    setItemReviewsMap((prev) => ({
+                      ...prev,
+                      [String(dupProductId)]: existing
+                    }));
+                    setReviewModalItem(null);
+                  }
+                } catch {
+                  // Bỏ qua nếu không tải được
+                }
+              }}
+              onCancel={() => setReviewModalItem(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

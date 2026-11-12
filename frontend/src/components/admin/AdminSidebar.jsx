@@ -14,6 +14,7 @@ const AdminSidebar = ({
     { icon: '🏭', text: 'Quản lý tồn kho', path: '/admin/inventory' },
     { icon: '⚡', text: 'Quản lý Sale / Khuyến mãi', path: '/admin/sales' },
     { icon: '🎫', text: 'Quản lý mã giảm giá', path: '/admin/vouchers' },
+    { icon: '⭐', text: 'Quản lý đánh giá', path: '/admin/reviews' },
     { icon: '👥', text: 'Quản lý Tài khoản', path: '/admin/users' }
   ];
 

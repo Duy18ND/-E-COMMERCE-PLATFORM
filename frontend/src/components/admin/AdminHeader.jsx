@@ -191,6 +191,16 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
             </NavLink>
 
             <NavLink
+              to="/admin/reviews"
+              className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
+            >
+              <span className="admin-link-icon">⭐</span>
+              <span>
+                <span className="admin-nav-prefix">Quản lý </span>Đánh giá
+              </span>
+            </NavLink>
+
+            <NavLink
               to="/admin/users"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
