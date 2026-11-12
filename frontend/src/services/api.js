@@ -7,6 +7,7 @@ const BASE_API_URL =
 
 const api = axios.create({
   baseURL: BASE_API_URL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -30,6 +31,18 @@ api.interceptors.request.use(
  * Hỗ trợ cả { success, message, data, timestamp } và { status, message, data }
  */
 export const unwrapApiResponse = (payload) => {
+  // Support either full Axios response object or raw response.data payload
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    payload.data &&
+    typeof payload.data === 'object' &&
+    !('success' in payload) &&
+    ('success' in payload.data || 'status' in payload.data || 'data' in payload.data)
+  ) {
+    payload = payload.data;
+  }
+
   if (
     payload &&
     typeof payload === 'object' &&
@@ -110,16 +123,40 @@ api.interceptors.response.use(
         : null;
 
     const firstFieldError = fieldErrors ? Object.values(fieldErrors)[0] : null;
+    const isTimeout =
+      error.code === 'ECONNABORTED' ||
+      String(error.message || '').toLowerCase().includes('timeout');
+    const isNetworkError = !error.response && !isTimeout;
+
+    let statusFallbackMessage = null;
+    if (isTimeout) {
+      statusFallbackMessage =
+        'Yêu cầu quá thời gian phản hồi (Timeout). Vui lòng kiểm tra kết nối và thử lại.';
+    } else if (isNetworkError) {
+      statusFallbackMessage =
+        'Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra kết nối mạng hoặc dịch vụ.';
+    } else if (status === 400) {
+      statusFallbackMessage = 'Dữ liệu yêu cầu không hợp lệ (HTTP 400).';
+    } else if (status === 401) {
+      statusFallbackMessage = 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn (HTTP 401).';
+    } else if (status === 403) {
+      statusFallbackMessage = 'Bạn không có quyền truy cập tài nguyên này (HTTP 403).';
+    } else if (status === 404) {
+      statusFallbackMessage = 'Không tìm thấy dữ liệu hoặc tài nguyên yêu cầu (HTTP 404).';
+    } else if (status >= 500) {
+      statusFallbackMessage = 'Máy chủ đang gặp sự cố nội bộ (HTTP 500). Vui lòng thử lại sau.';
+    }
 
     const message =
       firstFieldError ||
       responseData?.message ||
-      (typeof responseData === 'string' ? responseData : null) ||
+      (typeof responseData === 'string' && responseData.trim() ? responseData : null) ||
+      statusFallbackMessage ||
       error.message ||
       'Đã xảy ra lỗi khi kết nối với máy chủ!';
 
     const customError = new Error(message);
-    customError.status = status;
+    customError.status = status || (isTimeout ? 408 : isNetworkError ? 0 : undefined);
     customError.fieldErrors = fieldErrors;
     customError.response = error.response;
     customError.code = error.code;

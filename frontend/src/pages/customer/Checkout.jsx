@@ -325,7 +325,10 @@ const Checkout = () => {
     setPickerOpen(false);
   };
 
-  const handleRemoveVoucher = () => setAppliedVoucher(null);
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    notify.info('Đã gỡ bỏ mã giảm giá.');
+  };
 
   // Recalculate if cart total changes (and auto-invalidate if order drops below minOrderValue)
   useEffect(() => {

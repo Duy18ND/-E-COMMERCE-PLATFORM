@@ -36,6 +36,7 @@ import AdminInventory from '../pages/admin/Inventory';
 import AdminSales from '../pages/admin/AdminSales';
 import AdminSaleForm from '../pages/admin/AdminSaleForm';
 import AdminVouchers from '../pages/admin/AdminVouchers';
+import AdminUsers from '../pages/admin/AdminUsers';
 
 const AppRoutes = () => {
   return (
@@ -158,6 +159,15 @@ const AppRoutes = () => {
           element={
             <AdminLayout>
               <AdminVouchers />
+            </AdminLayout>
+          }
+        />
+        {/* Admin Users (Customer Management) */}
+        <Route
+          path="/admin/users"
+          element={
+            <AdminLayout>
+              <AdminUsers />
             </AdminLayout>
           }
         />
