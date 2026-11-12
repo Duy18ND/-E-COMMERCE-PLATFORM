@@ -1,0 +1,3597 @@
+{
+  "info": {
+    "_postman_id": "8b5f3a21-7e4d-4c91-9a1f-3d6e5a4b2c1e",
+    "name": "ShopMart E-Commerce Microservices — Complete API Collection (v2.1)",
+    "description": "Bộ sưu tập Postman chuẩn v2.1 bao phủ 100% REST API của hệ thống E-Commerce Microservices qua cổng API Gateway ({{baseUrl}} = http://localhost:8080).\n\nCấu trúc gồm 8 luồng nghiệp vụ (Folders) tuần tự:\n01. Auth & User Profile Flow\n02. Category & Product Flow\n03. Inventory Management Flow\n04. Flash Sale Campaign & Redis Lua Flow\n05. Voucher Management & Apply Flow\n06. Cart, Checkout & VietQR Payment Flow\n07. Saga Rollback & Order State Machine Flow\n08. Product Review & Admin Moderation Flow\n\nHỗ trợ chạy tự động 1-Click qua Postman Collection Runner với các kịch bản kiểm thử (Tests) và tự động trích xuất biến môi trường (collectionVariables).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "userToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "addressId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "categoryName",
+      "value": "Laptop & Workstation",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "campaignId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "voucherId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "voucherCode",
+      "value": "SALE10",
+      "type": "string"
+    },
+    {
+      "key": "cartItemId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "codOrderId",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "rollbackOrderId",
+      "value": "3",
+      "type": "string"
+    },
+    {
+      "key": "reviewId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "customerEmail",
+      "value": "customer@shopmart.com",
+      "type": "string"
+    },
+    {
+      "key": "customerPassword",
+      "value": "Customer@123",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@ecommerce.com",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin@123456",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Auth & User Profile Flow",
+      "description": "Luồng xác thực JWT (Đăng ký, Đăng nhập User, Đăng nhập Admin, Refresh Token, Validate, Logout), Quản lý Hồ sơ cá nhân (/api/v1/users/profile) và Sổ địa chỉ (/api/v1/users/me/addresses).",
+      "item": [
+        {
+          "name": "1.1 Đăng ký Tài khoản Khách hàng (POST /api/v1/auth/register)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ts = Date.now();",
+                  "const dynamicEmail = `customer_${ts}@shopmart.com`;",
+                  "pm.collectionVariables.set('customerEmail', dynamicEmail);",
+                  "pm.collectionVariables.set('customerPassword', 'Customer@123');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Đăng ký tài khoản thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất userToken, refreshToken và userId', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('object');",
+                  "    if (res.data.accessToken) {",
+                  "        pm.collectionVariables.set('userToken', res.data.accessToken);",
+                  "    }",
+                  "    if (res.data.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "    }",
+                  "    if (res.data.userId) {",
+                  "        pm.collectionVariables.set('userId', String(res.data.userId));",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"fullName\": \"Nguyễn Văn Khách Hàng\",\n  \"phone\": \"0987654321\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Đăng ký tài khoản khách hàng mới (mặc định gán ROLE_USER) và nhận cặp JWT Access Token / Refresh Token."
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 Đăng nhập Khách hàng (POST /api/v1/auth/login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Đăng nhập User thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Lưu userToken và refreshToken vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('userToken', res.data.accessToken);",
+                  "    if (res.data.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "    }",
+                  "    if (res.data.userId) {",
+                  "        pm.collectionVariables.set('userId', String(res.data.userId));",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập tài khoản Khách hàng, trích xuất accessToken lưu vào {{userToken}}."
+          },
+          "response": []
+        },
+        {
+          "name": "1.3 Đăng nhập Quản trị viên Admin (POST /api/v1/auth/login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Đăng nhập Admin thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Lưu adminToken vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(res.data.roles).to.include('ROLE_ADMIN');",
+                  "    pm.collectionVariables.set('adminToken', res.data.accessToken);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập tài khoản Admin mặc định (admin@ecommerce.com / Admin@123456), lưu token vào biến {{adminToken}}."
+          },
+          "response": []
+        },
+        {
+          "name": "1.4 Làm mới Access Token (POST /api/v1/auth/refresh)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cấp lại Access Token mới thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Cập nhật userToken mới từ Refresh Token', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    if (res.data && res.data.accessToken) {",
+                  "        pm.collectionVariables.set('userToken', res.data.accessToken);",
+                  "    }",
+                  "    if (res.data && res.data.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Cấp lại Access Token mới khi hết hạn dựa vào Refresh Token hợp lệ."
+          },
+          "response": []
+        },
+        {
+          "name": "1.5 Kiểm tra tính hợp lệ của JWT Token (GET /api/v1/auth/validate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Token hợp lệ', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.valid).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "validate"
+              ]
+            },
+            "description": "Xác thực chữ ký số HMAC-SHA và kiểm tra trạng thái thu hồi trong Redis Blacklist."
+          },
+          "response": []
+        },
+        {
+          "name": "1.6 Xem Hồ sơ Cá nhân (GET /api/v1/users/profile)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy thông tin cá nhân thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.email).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "profile"
+              ]
+            },
+            "description": "Xem thông tin hồ sơ người dùng đang đăng nhập (Gateway giải mã JWT sang X-User-Id)."
+          },
+          "response": []
+        },
+        {
+          "name": "1.7 Cập nhật Hồ sơ Cá nhân (PUT /api/v1/users/profile)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cập nhật thông tin cá nhân thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.fullName).to.eql('Nguyễn Văn Khách Hàng VIP');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Nguyễn Văn Khách Hàng VIP\",\n  \"phone\": \"0912345678\",\n  \"addressLine\": \"Số 1 Đại Cồ Việt\",\n  \"city\": \"Hà Nội\",\n  \"district\": \"Quận Hai Bà Trưng\",\n  \"ward\": \"Phường Bách Khoa\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "profile"
+              ]
+            },
+            "description": "Cập nhật họ tên, số điện thoại và địa chỉ mặc định của khách hàng."
+          },
+          "response": []
+        },
+        {
+          "name": "1.8 Thêm Địa chỉ mới vào Sổ địa chỉ (POST /api/v1/users/me/addresses)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Thêm địa chỉ mới thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất addressId vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('addressId', String(res.data.id));",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn Khách Hàng VIP\",\n  \"phone\": \"0912345678\",\n  \"addressLine\": \"Tòa nhà Bitexco, Số 2 Hải Triều\",\n  \"city\": \"TP. Hồ Chí Minh\",\n  \"district\": \"Quận 1\",\n  \"ward\": \"Phường Bến Nghé\",\n  \"isDefault\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/addresses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "addresses"
+              ]
+            },
+            "description": "Thêm địa chỉ giao hàng mới vào sổ địa chỉ cá nhân và đặt làm mặc định."
+          },
+          "response": []
+        },
+        {
+          "name": "1.9 Lấy danh sách Sổ địa chỉ (GET /api/v1/users/me/addresses)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy danh sách sổ địa chỉ thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/addresses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "addresses"
+              ]
+            },
+            "description": "Lấy toàn bộ danh sách địa chỉ nhận hàng của người dùng hiện tại."
+          },
+          "response": []
+        },
+        {
+          "name": "1.10 Cập nhật Địa chỉ trong Sổ địa chỉ (PUT /api/v1/users/me/addresses/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cập nhật địa chỉ thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn Khách Hàng (Văn Phòng)\",\n  \"phone\": \"0987654321\",\n  \"addressLine\": \"Tòa nhà Landmark 81, 720A Điện Biên Phủ\",\n  \"city\": \"TP. Hồ Chí Minh\",\n  \"district\": \"Quận Bình Thạnh\",\n  \"ward\": \"Phường 22\",\n  \"isDefault\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/addresses/{{addressId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "addresses",
+                "{{addressId}}"
+              ]
+            },
+            "description": "Cập nhật địa chỉ nhận hàng theo ID (kiểm tra quyền sở hữu chống IDOR)."
+          },
+          "response": []
+        },
+        {
+          "name": "1.11 Xóa Địa chỉ khỏi Sổ địa chỉ (DELETE /api/v1/users/me/addresses/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Xóa địa chỉ thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/addresses/{{addressId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "addresses",
+                "{{addressId}}"
+              ]
+            },
+            "description": "Xóa một địa chỉ nhận hàng khỏi sổ địa chỉ của người dùng."
+          },
+          "response": []
+        },
+        {
+          "name": "1.12 [Admin] Quản lý Danh sách Khách hàng (GET /api/v1/admin/customers)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Admin lấy danh sách khách hàng thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.content).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/customers?page=0&size=10&sortBy=id&sortDir=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "id"
+                },
+                {
+                  "key": "sortDir",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Admin tra cứu danh sách khách hàng toàn hệ thống có phân trang và lọc theo trạng thái."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02. Category & Product Flow",
+      "description": "Quản lý CRUD Danh mục (/api/v1/products/categories/**), CRUD Sản phẩm (/api/v1/products/**), Tìm kiếm & Lọc đa tiêu chí (keyword, categoryId, minPrice, maxPrice, inStock, sort) và Xóa mềm sản phẩm.",
+      "item": [
+        {
+          "name": "2.1 [Admin] Tạo Danh mục Sản phẩm mới (POST /api/v1/products/categories)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const catName = 'Thiết bị Gaming Pro ' + Date.now();",
+                  "pm.collectionVariables.set('categoryName', catName);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Tạo danh mục thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất categoryId vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('categoryId', String(res.data.id));",
+                  "    }",
+                  "    if (res.data && res.data.name) {",
+                  "        pm.collectionVariables.set('categoryName', res.data.name);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{categoryName}}\",\n  \"description\": \"Danh mục laptop gaming, màn hình tần số quét cao và gear chuyên nghiệp\",\n  \"imageUrl\": \"https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "categories"
+              ]
+            },
+            "description": "Admin tạo danh mục sản phẩm mới. Lưu ID vào biến {{categoryId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 [Public] Lấy danh sách Danh mục công khai (GET /api/v1/products/categories)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy danh mục thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "categories"
+              ]
+            },
+            "description": "Public API lấy toàn bộ danh mục sản phẩm hiển thị trên thanh điều hướng."
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 [Public] Xem chi tiết Danh mục theo ID (GET /api/v1/products/categories/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy chi tiết danh mục thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(String(res.data.id)).to.eql(String(pm.collectionVariables.get('categoryId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Lấy thông tin chi tiết một danh mục theo ID."
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 [Admin] Cập nhật Danh mục (PUT /api/v1/products/categories/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cập nhật danh mục thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{categoryName}}\",\n  \"description\": \"[Updated] Danh mục thiết bị Gaming & Hi-End Workstation chính hãng\",\n  \"imageUrl\": \"https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Admin cập nhật mô tả và hình ảnh của danh mục sản phẩm."
+          },
+          "response": []
+        },
+        {
+          "name": "2.5 [Admin] Tạo Sản phẩm mới (POST /api/v1/products)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Tạo sản phẩm mới thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất productId vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.id).to.exist;",
+                  "    pm.collectionVariables.set('productId', String(res.data.id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"MacBook Pro 16 M3 Max 48GB 1TB\",\n  \"description\": \"Siêu phẩm workstation di động chip Apple M3 Max, màn hình Liquid Retina XDR 120Hz\",\n  \"price\": 25000000,\n  \"stockQuantity\": 50,\n  \"category\": \"{{categoryName}}\",\n  \"imageUrl\": \"https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products"
+              ]
+            },
+            "description": "Admin tạo sản phẩm mới và xóa cache Redis. Lưu ID sản phẩm vào {{productId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "2.6 [Public] Xem chi tiết Sản phẩm (GET /api/v1/products/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy chi tiết sản phẩm thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(String(res.data.id)).to.eql(String(pm.collectionVariables.get('productId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Xem chi tiết sản phẩm theo ID (bao gồm thông tin activeFlashSale nếu sản phẩm đang chạy Flash Sale)."
+          },
+          "response": []
+        },
+        {
+          "name": "2.7 [Admin] Cập nhật Sản phẩm (PUT /api/v1/products/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cập nhật sản phẩm thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('ACTIVE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"MacBook Pro 16 M3 Max 48GB 1TB (Chính Hãng VN/A)\",\n  \"description\": \"Bảo hành chính hãng Apple Việt Nam 12 tháng, chip M3 Max 16-core CPU\",\n  \"price\": 25000000,\n  \"stockQuantity\": 60,\n  \"category\": \"{{categoryName}}\",\n  \"imageUrl\": \"https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Admin cập nhật thông tin, giá bán và số lượng tồn kho của sản phẩm."
+          },
+          "response": []
+        },
+        {
+          "name": "2.8 [Public] Tìm kiếm & Lọc nâng cao đa tiêu chí (GET /api/v1/products)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lọc sản phẩm đa tiêu chí thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.content).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products?keyword=MacBook&categoryId={{categoryId}}&minPrice=1000000&maxPrice=50000000&inStock=true&page=0&size=10&sort=price,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "MacBook"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}"
+                },
+                {
+                  "key": "minPrice",
+                  "value": "1000000"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "50000000"
+                },
+                {
+                  "key": "inStock",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sort",
+                  "value": "price,asc"
+                }
+              ]
+            },
+            "description": "Truy vấn động bằng JPA Specification kết hợp keyword, categoryId, minPrice, maxPrice, inStock và sort."
+          },
+          "response": []
+        },
+        {
+          "name": "2.9 [Public] Tìm kiếm Sản phẩm theo từ khóa (GET /api/v1/products/search)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Tìm kiếm sản phẩm theo keyword thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/search?keyword=MacBook&page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "MacBook"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Tìm kiếm nhanh sản phẩm theo tên, mô tả hoặc danh mục."
+          },
+          "response": []
+        },
+        {
+          "name": "2.10 [Admin] Xem toàn bộ Sản phẩm quản trị (GET /api/v1/products/admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Admin lấy danh sách sản phẩm thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.content).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/admin?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "admin"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Admin xem danh sách toàn bộ sản phẩm (bao gồm cả ACTIVE, INACTIVE và OUT_OF_STOCK)."
+          },
+          "response": []
+        },
+        {
+          "name": "2.11 [Admin] Xóa mềm Sản phẩm (DELETE /api/v1/products/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Xóa mềm sản phẩm (chuyển sang INACTIVE) thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Xóa mềm sản phẩm (chuyển status sang INACTIVE để bảo toàn lịch sử đơn hàng)."
+          },
+          "response": []
+        },
+        {
+          "name": "2.12 [Admin] Kích hoạt lại Sản phẩm sang ACTIVE (PUT /api/v1/products/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Khôi phục sản phẩm về ACTIVE để phục vụ các luồng sau', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.data.status).to.eql('ACTIVE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"MacBook Pro 16 M3 Max 48GB 1TB (Chính Hãng VN/A)\",\n  \"description\": \"Bảo hành chính hãng Apple Việt Nam 12 tháng, chip M3 Max 16-core CPU\",\n  \"price\": 25000000,\n  \"stockQuantity\": 60,\n  \"category\": \"{{categoryName}}\",\n  \"imageUrl\": \"https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Mở bán lại sản phẩm (status = ACTIVE) để sử dụng xuyên suốt cho các luồng Tồn kho, Flash Sale và Đặt hàng."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03. Inventory Management Flow",
+      "description": "Kiểm tra tồn kho công khai (/stock), Nhập kho (/inbound), Điều chỉnh kho kiểm kê (/adjust-stock), Giữ kho (/reserve-stock) & Hoàn kho nội bộ (/restore-stock) với Optimistic Locking (@Version).",
+      "item": [
+        {
+          "name": "3.1 [Public] Kiểm tra Tồn kho công khai (GET /api/v1/products/{id}/stock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Kiểm tra tồn kho thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.inStock).to.be.true;",
+                  "    pm.expect(res.data.sufficientStock).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/stock?quantity=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "stock"
+              ],
+              "query": [
+                {
+                  "key": "quantity",
+                  "value": "2"
+                }
+              ]
+            },
+            "description": "Kiểm tra nhanh trạng thái còn hàng và khả năng đáp ứng số lượng yêu cầu của khách."
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 [Admin] Nhập thêm hàng vào Kho (POST /api/v1/products/{id}/inbound)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Nhập kho thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.stockQuantity).to.be.at.least(80);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 20,\n  \"note\": \"Nhập lô hàng chính hãng đợt 2 phục vụ chiến dịch Flash Sale\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/inbound",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "inbound"
+              ]
+            },
+            "description": "Admin nhập thêm số lượng hàng mới vào kho (cộng dồn tồn kho và tự động chuyển OUT_OF_STOCK về ACTIVE nếu có)."
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 [Admin] Điều chỉnh tồn kho kiểm kê (POST /api/v1/products/{id}/adjust-stock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Điều chỉnh kho kiểm kê thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.stockQuantity).to.eql(100);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualStock\": 100,\n  \"reason\": \"Kiểm kê định kỳ cuối quý — đồng bộ số lượng thực tế tại kho trung tâm\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/adjust-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "adjust-stock"
+              ]
+            },
+            "description": "Admin điều chỉnh số lượng tồn kho thực tế sau kiểm kê kèm lý do."
+          },
+          "response": []
+        },
+        {
+          "name": "3.4 [Internal] Giữ kho nguyên tử Optimistic Lock (POST /api/v1/products/reserve-stock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Đặt trước tồn kho thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"productId\": {{productId}},\n    \"quantity\": 2\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/reserve-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "reserve-stock"
+              ]
+            },
+            "description": "API nội bộ được Order Service gọi qua OpenFeign để trừ kho với cơ chế chống bán lố Optimistic Locking (@Version)."
+          },
+          "response": []
+        },
+        {
+          "name": "3.5 [Internal] Khôi phục tồn kho bù trừ (POST /api/v1/products/restore-stock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Khôi phục tồn kho thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"productId\": {{productId}},\n    \"quantity\": 2\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/restore-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "restore-stock"
+              ]
+            },
+            "description": "API nội bộ được Order Service gọi khi hủy đơn hoặc khi Saga Rollback hoàn lại tồn kho."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04. Flash Sale Campaign & Redis Lua Flow",
+      "description": "Admin tạo chiến dịch Flash Sale (/api/v1/admin/flash-sales/campaigns), cập nhật trạng thái (ACTIVE/ENDED), nạp stock Redis, Khách hàng xem danh sách Flash Sale đang diễn ra (/api/v1/flash-sales/active) và trừ kho nguyên tử qua Redis Lua Script.",
+      "item": [
+        {
+          "name": "4.1 [Admin] Tạo Chiến dịch Flash Sale (POST /api/v1/admin/flash-sales/campaigns)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Tạo chiến dịch Flash Sale thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất campaignId vào collectionVariables', function () {",
+                    "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.id).to.exist;",
+                  "    pm.collectionVariables.set('campaignId', String(res.data.id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Siêu Sale Giờ Vàng Tech Deal\",\n  \"startTime\": \"2026-01-01T00:00:00\",\n  \"endTime\": \"2027-12-31T23:59:59\",\n  \"items\": [\n    {\n      \"productId\": {{productId}},\n      \"flashSalePrice\": 19990000,\n      \"quantity\": 30,\n      \"userLimit\": 5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "flash-sales",
+                "campaigns"
+              ]
+            },
+            "description": "Admin tạo chiến dịch Flash Sale mới (kiểm tra chặt flashSalePrice < originalPrice và quantity <= stockQuantity). Lưu {{campaignId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 [Admin] Lấy danh sách Chiến dịch Flash Sale (GET /api/v1/admin/flash-sales/campaigns)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy danh sách chiến dịch Flash Sale thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "flash-sales",
+                "campaigns"
+              ]
+            },
+            "description": "Admin xem toàn bộ các chiến dịch Flash Sale (UPCOMING, ACTIVE, ENDED, CANCELLED)."
+          },
+          "response": []
+        },
+        {
+          "name": "4.3 [Admin] Xem chi tiết Chiến dịch Flash Sale (GET /api/v1/admin/flash-sales/campaigns/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Xem chi tiết chiến dịch thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(String(res.data.id)).to.eql(String(pm.collectionVariables.get('campaignId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns/{{campaignId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "flash-sales",
+                "campaigns",
+                "{{campaignId}}"
+              ]
+            },
+            "description": "Xem chi tiết thông tin và danh sách sản phẩm trong một chiến dịch Flash Sale."
+          },
+          "response": []
+        },
+        {
+          "name": "4.4 [Admin] Kích hoạt Chiến dịch Flash Sale ACTIVE (PUT /api/v1/admin/flash-sales/campaigns/{id}/status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Kích hoạt chiến dịch ACTIVE thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('ACTIVE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns/{{campaignId}}/status?status=ACTIVE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "flash-sales",
+                "campaigns",
+                "{{campaignId}}",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            },
+            "description": "Admin chuyển trạng thái chiến dịch sang ACTIVE và tự động nạp tồn kho Flash Sale lên Redis."
+          },
+          "response": []
+        },
+        {
+          "name": "4.5 [Admin] Nạp trực tiếp Tồn kho Flash Sale lên Redis (POST /api/v1/admin/flash-sales/products/{productId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Nạp stock Flash Sale lên Redis thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/products/{{productId}}?stock=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "flash-sales",
+                "products",
+                "{{productId}}"
+              ],
+              "query": [
+                {
+                  "key": "stock",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Nạp trực tiếp số lượng tồn kho Flash Sale vào key Redis `flash_sale_stock:{productId}`."
+          },
+          "response": []
+        },
+        {
+          "name": "4.6 [Public] Khách hàng xem Flash Sale đang diễn ra (GET /api/v1/flash-sales/active)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy danh sách Flash Sale đang diễn ra thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/active",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "flash-sales",
+                "active"
+              ]
+            },
+            "description": "Khách hàng xem danh sách các chiến dịch và sản phẩm Flash Sale đang mở bán."
+          },
+          "response": []
+        },
+        {
+          "name": "4.7 [Internal] Giữ suất Flash Sale nguyên tử qua Redis Lua (POST /api/v1/flash-sales/reserve)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Trừ kho Flash Sale bằng Redis Lua Script thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/flash-sales/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "flash-sales",
+                "reserve"
+              ]
+            },
+            "description": "Thực thi script Lua `flash_sale_deduct.lua` nguyên tử trên Redis để kiểm tra và trừ tồn kho Flash Sale."
+          },
+          "response": []
+        },
+        {
+          "name": "4.8 [Admin] Kết thúc Chiến dịch ENDED & Mở lại ACTIVE (PUT /api/v1/admin/flash-sales/campaigns/{id}/status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Đảm bảo chiến dịch ở trạng thái ACTIVE cho bước Checkout', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.data.status).to.eql('ACTIVE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/flash-sales/campaigns/{{campaignId}}/status?status=ACTIVE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "flash-sales",
+                "campaigns",
+                "{{campaignId}}",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            },
+            "description": "Cập nhật trạng thái chiến dịch (hỗ trợ UPCOMING / ACTIVE / ENDED / CANCELLED)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05. Voucher Management & Apply Flow",
+      "description": "Admin CRUD Voucher (/api/v1/admin/vouchers), bật/tắt trạng thái, Khách hàng lấy danh sách mã đang mở (/api/v1/vouchers/active) và kiểm tra/tính thử tiền giảm (POST /api/v1/vouchers/apply).",
+      "item": [
+        {
+          "name": "5.1 [Admin] Tạo Mã giảm giá Voucher mới (POST /api/v1/admin/vouchers)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const code = 'DEALVIP' + String(Date.now()).slice(-5);",
+                  "pm.collectionVariables.set('voucherCode', code);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Tạo Voucher mới thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất voucherId và voucherCode vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.code).to.exist;",
+                  "    pm.collectionVariables.set('voucherId', String(res.data.id));",
+                  "    pm.collectionVariables.set('voucherCode', res.data.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{voucherCode}}\",\n  \"name\": \"Siêu Voucher Công Nghệ Giảm 500K\",\n  \"description\": \"Giảm ngay 500.000đ cho đơn hàng từ 2.000.000đ\",\n  \"discountType\": \"FIXED\",\n  \"discountValue\": 500000,\n  \"maxDiscount\": null,\n  \"minOrderValue\": 2000000,\n  \"quantity\": 100,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2027-12-31\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/vouchers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "vouchers"
+              ]
+            },
+            "description": "Admin phát hành mã giảm giá mới. Lưu mã vào {{voucherCode}} và ID vào {{voucherId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 [Admin] Lấy toàn bộ danh sách Voucher (GET /api/v1/admin/vouchers)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy danh sách Voucher quản trị thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/vouchers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "vouchers"
+              ]
+            },
+            "description": "Admin xem toàn bộ danh sách mã giảm giá và số lượt đã sử dụng (usedQuantity / quantity)."
+          },
+          "response": []
+        },
+        {
+          "name": "5.3 [Admin] Xem chi tiết Voucher theo ID (GET /api/v1/admin/vouchers/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy chi tiết Voucher thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.code).to.eql(pm.collectionVariables.get('voucherCode'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/vouchers/{{voucherId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "vouchers",
+                "{{voucherId}}"
+              ]
+            },
+            "description": "Xem thông tin chi tiết một mã giảm giá theo ID."
+          },
+          "response": []
+        },
+        {
+          "name": "5.4 [Admin] Cập nhật thông tin Voucher (PUT /api/v1/admin/vouchers/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cập nhật Voucher thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{voucherCode}}\",\n  \"name\": \"Siêu Voucher Công Nghệ Giảm 500K (Đã Gia Hạn)\",\n  \"description\": \"Giảm ngay 500.000đ cho đơn hàng từ 2.000.000đ — Áp dụng kết hợp Flash Sale\",\n  \"discountType\": \"FIXED\",\n  \"discountValue\": 500000,\n  \"maxDiscount\": null,\n  \"minOrderValue\": 2000000,\n  \"quantity\": 200,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2027-12-31\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/vouchers/{{voucherId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "vouchers",
+                "{{voucherId}}"
+              ]
+            },
+            "description": "Admin cập nhật hạn mức phát hành và mô tả của mã giảm giá."
+          },
+          "response": []
+        },
+        {
+          "name": "5.5 [Admin] Tạm tắt trạng thái Voucher (PATCH /api/v1/admin/vouchers/{id}/toggle-status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Chuyển trạng thái Voucher sang INACTIVE thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('INACTIVE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/vouchers/{{voucherId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "vouchers",
+                "{{voucherId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Đảo trạng thái hoạt động của Voucher (ACTIVE -> INACTIVE)."
+          },
+          "response": []
+        },
+        {
+          "name": "5.6 [Admin] Bật lại trạng thái ACTIVE cho Voucher (PATCH /api/v1/admin/vouchers/{id}/toggle-status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Kích hoạt lại Voucher sang ACTIVE thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('ACTIVE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/vouchers/{{voucherId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "vouchers",
+                "{{voucherId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Bật lại trạng thái ACTIVE cho Voucher để khách hàng sử dụng ở bước Checkout."
+          },
+          "response": []
+        },
+        {
+          "name": "5.7 [Public/User] Khách hàng lấy danh sách Voucher đang mở (GET /api/v1/vouchers/active)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy danh sách Voucher đang mở thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vouchers/active",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vouchers",
+                "active"
+              ]
+            },
+            "description": "Khách hàng xem danh sách các mã giảm giá đang có hiệu lực và còn lượt dùng."
+          },
+          "response": []
+        },
+        {
+          "name": "5.8 [User] Kiểm tra & Tính thử tiền giảm Voucher (POST /api/v1/vouchers/apply)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Áp thử mã giảm giá hợp lệ', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.discountAmount).to.eql(500000);",
+                  "    pm.expect(res.data.finalAmount).to.eql(19490000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{voucherCode}}\",\n  \"orderTotal\": 19990000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vouchers/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vouchers",
+                "apply"
+              ]
+            },
+            "description": "Kiểm tra điều kiện đơn tối thiểu, thời hạn, lượt dùng và tính thử số tiền giảm tại bước Checkout."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06. Cart, Checkout & VietQR Payment Flow",
+      "description": "Quản lý Giỏ hàng (/api/v1/cart/**), Đặt hàng COD, Đặt hàng Online có áp mã Voucher & giá Flash Sale (POST /api/v1/orders/checkout), Xác nhận thanh toán QR thành công (POST /api/v1/payments/mock-pay/{orderId} với success: true).",
+      "item": [
+        {
+          "name": "6.1 [User] Thêm sản phẩm vào Giỏ hàng (POST /api/v1/cart/items)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Thêm sản phẩm vào giỏ hàng thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất cartItemId vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    if (res.data && Array.isArray(res.data.items) && res.data.items.length > 0) {",
+                  "        pm.collectionVariables.set('cartItemId', String(res.data.items[0].id));",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cart",
+                "items"
+              ]
+            },
+            "description": "Thêm sản phẩm vào giỏ hàng (Order Service gọi Product Service kiểm tra tồn kho trước khi thêm)."
+          },
+          "response": []
+        },
+        {
+          "name": "6.2 [User] Xem Giỏ hàng hiện tại (GET /api/v1/cart)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy thông tin giỏ hàng thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.items).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cart"
+              ]
+            },
+            "description": "Xem danh sách sản phẩm và tổng tiền tạm tính trong giỏ hàng."
+          },
+          "response": []
+        },
+        {
+          "name": "6.3 [User] Cập nhật số lượng trong Giỏ hàng (PUT /api/v1/cart/items/{itemId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cập nhật số lượng giỏ hàng thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cart",
+                "items",
+                "{{cartItemId}}"
+              ]
+            },
+            "description": "Cập nhật số lượng sản phẩm trong giỏ hàng."
+          },
+          "response": []
+        },
+        {
+          "name": "6.4 [User] Xóa sản phẩm khỏi Giỏ hàng (DELETE /api/v1/cart/items/{itemId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Xóa sản phẩm khỏi giỏ hàng thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cart",
+                "items",
+                "{{cartItemId}}"
+              ]
+            },
+            "description": "Xóa một sản phẩm cụ thể khỏi giỏ hàng."
+          },
+          "response": []
+        },
+        {
+          "name": "6.5 [User] Đặt hàng COD (POST /api/v1/orders/checkout)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Đặt đơn hàng COD thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất codOrderId (trạng thái PENDING)', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('PENDING');",
+                  "    pm.expect(res.data.paymentMethod).to.eql('COD');",
+                  "    pm.collectionVariables.set('codOrderId', String(res.data.id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn Khách Hàng\",\n  \"receiverPhone\": \"0912345678\",\n  \"shippingAddress\": \"Số 1 Đại Cồ Việt, Quận Hai Bà Trưng, Hà Nội\",\n  \"paymentMethod\": \"COD\",\n  \"items\": [\n    {\n      \"productId\": {{productId}},\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "orders",
+                "checkout"
+              ]
+            },
+            "description": "Đặt hàng thanh toán khi nhận hàng (COD). Lưu ID đơn vào {{codOrderId}} để kiểm thử luồng khách tự hủy đơn ở Folder 07."
+          },
+          "response": []
+        },
+        {
+          "name": "6.6 [User] Đặt hàng Online VietQR + Áp mã Voucher & Giá Flash Sale (POST /api/v1/orders/checkout)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Đặt hàng Online kèm Flash Sale & Voucher thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất orderId và kiểm tra tính đúng giá Flash Sale + giảm giá Voucher', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.id).to.exist;",
+                  "    pm.expect(res.data.voucherCode).to.eql(pm.collectionVariables.get('voucherCode'));",
+                  "    pm.expect(res.data.discountAmount).to.eql(500000);",
+                  "    pm.expect(res.data.totalAmount).to.eql(19490000);",
+                  "    pm.collectionVariables.set('orderId', String(res.data.id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn Khách Hàng VIP\",\n  \"receiverPhone\": \"0912345678\",\n  \"shippingAddress\": \"Tòa nhà Bitexco, Số 2 Hải Triều, Quận 1, TP. Hồ Chí Minh\",\n  \"paymentMethod\": \"MOCK_ONLINE\",\n  \"voucherCode\": \"{{voucherCode}}\",\n  \"items\": [\n    {\n      \"productId\": {{productId}},\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "orders",
+                "checkout"
+              ]
+            },
+            "description": "Đặt hàng trực tuyến (VietQR / MOCK_ONLINE) có áp mã {{voucherCode}} và tự động hưởng giá Flash Sale (19.990.000đ - 500.000đ = 19.490.000đ). Lưu {{orderId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "6.7 [User] Xác nhận Thanh toán VietQR Thành công (POST /api/v1/payments/mock-pay/{orderId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Xác nhận thanh toán QR thành công (status = SUCCESS)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('SUCCESS');",
+                  "    pm.expect(res.data.transactionCode).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"success\": true,\n  \"note\": \"Khách hàng xác nhận đã quét mã VietQR chuyển khoản thành công\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/mock-pay/{{orderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                "mock-pay",
+                "{{orderId}}"
+              ]
+            },
+            "description": "Xác nhận thanh toán QR thành công (success: true). Payment Service phát sự kiện `payment-success` qua Kafka để Order Service chuyển trạng thái đơn sang PAID."
+          },
+          "response": []
+        },
+        {
+          "name": "6.8 [User] Tra cứu Giao dịch Thanh toán theo Order ID (GET /api/v1/payments/order/{orderId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy thông tin giao dịch thanh toán thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('SUCCESS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/order/{{orderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                "order",
+                "{{orderId}}"
+              ]
+            },
+            "description": "Tra cứu thông tin bản ghi thanh toán và mã giao dịch (transactionCode) theo orderId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07. Saga Rollback & Order State Machine Flow",
+      "description": "Giả lập lỗi thanh toán QR (mock-pay với success: false) để kích hoạt Saga tự động hoàn kho sản phẩm + hoàn lượt dùng Voucher; Khách hủy đơn PENDING; Admin duyệt trạng thái đơn (CONFIRMED -> SHIPPING -> DELIVERED) và xem lịch sử hành trình đơn (statusHistories).",
+      "item": [
+        {
+          "name": "7.1 [User] Tạo Đơn hàng Online mới áp mã SALE10 để test Saga Rollback (POST /api/v1/orders/checkout)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Tạo đơn hàng test Saga Rollback thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Lưu rollbackOrderId vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.collectionVariables.set('rollbackOrderId', String(res.data.id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverName\": \"Nguyễn Văn Khách Hàng\",\n  \"receiverPhone\": \"0912345678\",\n  \"shippingAddress\": \"Số 1 Đại Cồ Việt, Quận Hai Bà Trưng, Hà Nội\",\n  \"paymentMethod\": \"MOCK_ONLINE\",\n  \"voucherCode\": \"SALE10\",\n  \"items\": [\n    {\n      \"productId\": {{productId}},\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "orders",
+                "checkout"
+              ]
+            },
+            "description": "Đặt đơn hàng mới áp dụng mã SALE10 để chuẩn bị kiểm thử kịch bản lỗi thanh toán (Saga Compensating Rollback)."
+          },
+          "response": []
+        },
+        {
+          "name": "7.2 [User] Giả lập Lỗi Thanh toán QR kích hoạt Saga Rollback (POST /api/v1/payments/mock-pay/{orderId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Giả lập thanh toán thất bại (status = FAILED)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('FAILED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"success\": false,\n  \"note\": \"Khách hàng hủy tại màn hình QR / Giả lập lỗi thanh toán để test Saga Rollback\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/mock-pay/{{rollbackOrderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                "mock-pay",
+                "{{rollbackOrderId}}"
+              ]
+            },
+            "description": "Giả lập thanh toán thất bại (success: false). Payment Service bắn sự kiện `payment-failed` qua Kafka -> Order Service tự động hoàn kho sản phẩm + hoàn lượt dùng Voucher và chuyển đơn sang FAILED."
+          },
+          "response": []
+        },
+        {
+          "name": "7.3 [User] Khách hàng tự hủy đơn PENDING (PUT /api/v1/orders/{id}/cancel)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Khách hủy đơn PENDING thành công và hoàn kho', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('CANCELLED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{codOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "orders",
+                "{{codOrderId}}",
+                "cancel"
+              ]
+            },
+            "description": "Khách hàng hủy đơn hàng đang ở trạng thái PENDING ({{codOrderId}}). Hệ thống tự động hoàn trả tồn kho qua Product Service."
+          },
+          "response": []
+        },
+        {
+          "name": "7.4 [Admin] Duyệt trạng thái đơn hàng sang CONFIRMED (PUT /api/v1/admin/orders/{id}/status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Chuyển trạng thái đơn sang CONFIRMED thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('CONFIRMED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRMED\",\n  \"note\": \"Admin đã xác nhận đơn hàng và chuyển xuống kho đóng gói\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "orders",
+                "{{orderId}}",
+                "status"
+              ]
+            },
+            "description": "Admin xác nhận đơn hàng (PAID/PENDING -> CONFIRMED)."
+          },
+          "response": []
+        },
+        {
+          "name": "7.5 [Admin] Chuyển trạng thái đơn hàng sang SHIPPING (PUT /api/v1/admin/orders/{id}/status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Chuyển trạng thái đơn sang SHIPPING thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('SHIPPING');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SHIPPING\",\n  \"note\": \"Đã bàn giao cho đơn vị vận chuyển Giao Hàng Nhanh (Mã vận đơn: GHN-889922)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "orders",
+                "{{orderId}}",
+                "status"
+              ]
+            },
+            "description": "Admin cập nhật trạng thái đơn hàng đang vận chuyển (CONFIRMED -> SHIPPING)."
+          },
+          "response": []
+        },
+        {
+          "name": "7.6 [Admin] Chuyển trạng thái đơn hàng sang DELIVERED (PUT /api/v1/admin/orders/{id}/status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Chuyển trạng thái đơn sang DELIVERED thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('DELIVERED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\",\n  \"note\": \"Giao hàng thành công — Khách hàng đã ký nhận\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "orders",
+                "{{orderId}}",
+                "status"
+              ]
+            },
+            "description": "Admin hoàn tất giao hàng (SHIPPING -> DELIVERED), mở khóa quyền đánh giá sản phẩm cho khách hàng."
+          },
+          "response": []
+        },
+        {
+          "name": "7.7 [User] Xem chi tiết Đơn hàng & Lịch sử hành trình statusHistories (GET /api/v1/orders/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Xem chi tiết đơn hàng kèm statusHistories thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('DELIVERED');",
+                  "    pm.expect(res.data.statusHistories).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "description": "Lấy thông tin chi tiết đơn hàng cùng toàn bộ danh sách mốc lịch sử trạng thái (`statusHistories`)."
+          },
+          "response": []
+        },
+        {
+          "name": "7.8 [User] Xem Timeline Lịch sử Trạng thái Đơn hàng (GET /api/v1/orders/{id}/history)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy dòng thời gian Timeline đơn hàng thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "orders",
+                "{{orderId}}",
+                "history"
+              ]
+            },
+            "description": "Xem chi tiết các mốc thời gian chuyển trạng thái, người thực hiện và ghi chú vận đơn."
+          },
+          "response": []
+        },
+        {
+          "name": "7.9 [Admin] Thống kê Doanh thu & Đơn hàng Toàn hệ thống (GET /api/v1/admin/statistics)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy thống kê Dashboard Admin thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.totalOrders).to.be.a('number');",
+                  "    pm.expect(res.data.totalRevenue).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/statistics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "statistics"
+              ]
+            },
+            "description": "Báo cáo tổng doanh thu, tổng số đơn hàng theo trạng thái, sản phẩm sắp hết hàng và tổng khách hàng."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "08. Product Review & Admin Moderation Flow",
+      "description": "Khách gửi đánh giá sản phẩm sau khi đơn DELIVERED (POST /api/v1/products/{id}/reviews), lấy đánh giá của tôi (/reviews/me), lấy đánh giá công khai; Admin lấy danh sách kiểm duyệt (/api/v1/admin/reviews) và ẩn/duyệt đánh giá vi phạm (PATCH /api/v1/admin/reviews/{id}/moderate).",
+      "item": [
+        {
+          "name": "8.1 [User] Gửi Đánh giá Sản phẩm sau khi đơn DELIVERED (POST /api/v1/products/{id}/reviews)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 Created — Gửi đánh giá 5 sao thành công', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Trích xuất reviewId vào collectionVariables', function () {",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.id).to.exist;",
+                  "    pm.expect(res.data.rating).to.eql(5);",
+                  "    pm.expect(res.data.status).to.eql('APPROVED');",
+                  "    pm.collectionVariables.set('reviewId', String(res.data.id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": {{orderId}},\n  \"rating\": 5,\n  \"comment\": \"Sản phẩm chính hãng tuyệt vời, đóng gói cẩn thận, giao hàng siêu tốc!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "reviews"
+              ]
+            },
+            "description": "Khách hàng đánh giá sản phẩm sau khi đơn hàng đã chuyển sang DELIVERED (Product Service xác minh qua OrderClient). Lưu {{reviewId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "8.2 [User] Lấy Đánh giá của tôi cho Sản phẩm (GET /api/v1/products/{id}/reviews/me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy đánh giá cá nhân thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(String(res.data.id)).to.eql(String(pm.collectionVariables.get('reviewId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/reviews/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "reviews",
+                "me"
+              ]
+            },
+            "description": "Lấy bài đánh giá của chính người dùng đang đăng nhập đối với sản phẩm."
+          },
+          "response": []
+        },
+        {
+          "name": "8.3 [User] Cập nhật Đánh giá của tôi (PUT /api/v1/products/{id}/reviews/{reviewId})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Cập nhật nội dung đánh giá thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.rating).to.eql(5);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"comment\": \"[Đã cập nhật] Máy chạy cực kỳ mượt, màn hình đẹp xuất sắc, đáng tiền 100%!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/reviews/{{reviewId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "reviews",
+                "{{reviewId}}"
+              ]
+            },
+            "description": "Chủ sở hữu chỉnh sửa số sao và nội dung nhận xét."
+          },
+          "response": []
+        },
+        {
+          "name": "8.4 [Public] Lấy danh sách Đánh giá công khai & Điểm trung bình (GET /api/v1/products/{id}/reviews)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Lấy danh sách đánh giá công khai thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.averageRating).to.eql(5.0);",
+                  "    pm.expect(res.data.totalReviews).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/reviews?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Public API lấy điểm đánh giá trung bình (averageRating), tổng số lượt đánh giá hợp lệ (APPROVED) và danh sách phân trang."
+          },
+          "response": []
+        },
+        {
+          "name": "8.5 [Admin] Lấy danh sách Đánh giá để Kiểm duyệt (GET /api/v1/admin/reviews)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Admin lấy danh sách kiểm duyệt đánh giá thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.content).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/reviews?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Admin tra cứu toàn bộ đánh giá trên hệ thống (hỗ trợ lọc theo status=APPROVED hoặc status=HIDDEN)."
+          },
+          "response": []
+        },
+        {
+          "name": "8.6 [Admin] Ẩn Đánh giá vi phạm sang HIDDEN (PATCH /api/v1/admin/reviews/{id}/moderate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Ẩn đánh giá vi phạm sang HIDDEN thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('HIDDEN');",
+                  "    pm.expect(res.data.hiddenReason).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"HIDDEN\",\n  \"reason\": \"Nội dung chứa liên kết quảng cáo spam vi phạm tiêu chuẩn cộng đồng\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/reviews/{{reviewId}}/moderate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "reviews",
+                "{{reviewId}}",
+                "moderate"
+              ]
+            },
+            "description": "Admin ẩn đánh giá vi phạm sang trạng thái HIDDEN kèm lý do kiểm duyệt."
+          },
+          "response": []
+        },
+        {
+          "name": "8.7 [Public] Xác nhận Đánh giá HIDDEN đã ẩn khỏi trang công khai (GET /api/v1/products/{id}/reviews)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Đánh giá HIDDEN không hiển thị công khai và điểm sao được tính lại', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.totalReviews).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/reviews?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{productId}}",
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Kiểm chứng đánh giá bị ẩn (HIDDEN) lập tức biến mất khỏi danh sách công khai và điểm trung bình được tính toán lại."
+          },
+          "response": []
+        },
+        {
+          "name": "8.8 [Admin] Duyệt lại Đánh giá sang APPROVED (PATCH /api/v1/admin/reviews/{id}/moderate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 OK — Khôi phục trạng thái đánh giá APPROVED thành công', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const res = pm.response.json();",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(res.data.status).to.eql('APPROVED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\",\n  \"reason\": \"Đã xác minh đánh giá hợp lệ từ khách hàng thực tế\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/reviews/{{reviewId}}/moderate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "reviews",
+                "{{reviewId}}",
+                "moderate"
+              ]
+            },
+            "description": "Admin khôi phục trạng thái đánh giá về APPROVED."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
