@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     product_name      VARCHAR(255)   NOT NULL COMMENT 'Tên sản phẩm tại thời điểm mua',
     quantity          INT            NOT NULL COMMENT 'Số lượng mua',
     price_at_purchase DECIMAL(12, 2) NOT NULL COMMENT 'Giá bán tại thời điểm đặt hàng',
+    is_flash_sale     TINYINT(1)     NOT NULL DEFAULT 0 COMMENT 'Cờ đánh dấu sản phẩm mua trong chương trình Flash Sale',
     CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     INDEX idx_order_item_order_id (order_id),
     INDEX idx_order_item_product_id (product_id)

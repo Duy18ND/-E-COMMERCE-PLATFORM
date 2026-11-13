@@ -860,6 +860,203 @@ class OrderServiceTest {
         verify(voucherService, times(1)).restoreVoucherUsageForOrder("GIAM50K", 1L, 1L);
     }
 
+    // =========================================================================
+    // Regression Tests: Revive Prevention, Double Rollback, Flash Sale & Cart
+    // =========================================================================
+
+    @Test
+    @DisplayName("[Fix-1] handlePaymentSuccess không hồi sinh đơn CANCELLED hoặc FAILED thành PAID")
+    void handlePaymentSuccess_WhenOrderCancelledOrFailed_ShouldNotReviveToPaid() {
+        samplePendingOrder.setStatus(OrderStatus.CANCELLED);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        com.ecommerce.order.event.PaymentSuccessEvent event = com.ecommerce.order.event.PaymentSuccessEvent.builder()
+                .orderId(1L)
+                .paymentId(11L)
+                .transactionCode("TXN-LATE-SUCCESS")
+                .build();
+
+        orderService.handlePaymentSuccess(event);
+
+        assertThat(samplePendingOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository, never()).save(any());
+        verify(orderStatusHistoryRepository, never()).save(any());
+
+        samplePendingOrder.setStatus(OrderStatus.FAILED);
+        orderService.handlePaymentSuccess(event);
+        assertThat(samplePendingOrder.getStatus()).isEqualTo(OrderStatus.FAILED);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[Fix-1] handlePaymentFailed bỏ qua đơn đã PAID/CANCELLED/FAILED để chống Double Rollback")
+    void handlePaymentFailed_WhenOrderAlreadyPaidOrTerminal_ShouldNotDoubleRollback() {
+        samplePendingOrder.setStatus(OrderStatus.PAID);
+        samplePendingOrder.setVoucherCode("SALE10");
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        com.ecommerce.order.event.PaymentFailedEvent event = com.ecommerce.order.event.PaymentFailedEvent.builder()
+                .orderId(1L)
+                .reason("Late failure event")
+                .build();
+
+        orderService.handlePaymentFailed(event);
+
+        assertThat(samplePendingOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        verify(productClient, never()).restoreStock(any());
+        verify(productClient, never()).restoreFlashSaleStock(any());
+        verify(orderRepository, never()).save(any());
+        verifyNoInteractions(voucherService);
+    }
+
+    @Test
+    @DisplayName("[Fix-2] Checkout Flash Sale kiểm tra giới hạn userLimit tích lũy qua nhiều đơn hàng")
+    void checkout_WithActiveFlashSale_WhenCumulativeAcrossOrdersExceedsLimit_ShouldThrow() {
+        LocalDateTime startTime = LocalDateTime.now().minusHours(1);
+        LocalDateTime endTime = LocalDateTime.now().plusHours(2);
+        ActiveFlashSaleDto activeFs = ActiveFlashSaleDto.builder()
+                .campaignId(10L)
+                .flashSalePrice(new BigDecimal("750.00"))
+                .quantity(20)
+                .soldQuantity(1)
+                .remainingStock(19)
+                .userLimit(2)
+                .startTime(startTime)
+                .endTime(endTime)
+                .build();
+
+        ProductResponse flashSaleProduct = ProductResponse.builder()
+                .id(101L)
+                .name("iPhone 15 Pro")
+                .price(new BigDecimal("1000.00"))
+                .stockQuantity(30)
+                .activeFlashSale(activeFs)
+                .build();
+
+        CheckoutItemRequest itemReq = CheckoutItemRequest.builder()
+                .productId(101L)
+                .quantity(2)
+                .build();
+        CheckoutRequest req = CheckoutRequest.builder()
+                .userId(1L)
+                .receiverName("Nguyễn Văn A")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .items(List.of(itemReq))
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(flashSaleProduct));
+        when(orderRepository.sumPurchasedQuantityByUserAndProductBetween(
+                eq(1L),
+                eq(101L),
+                eq(List.of(OrderStatus.CANCELLED, OrderStatus.FAILED)),
+                eq(startTime),
+                eq(endTime)))
+                .thenReturn(1);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderService.checkout(req));
+
+        assertThat(ex.getMessage()).contains("chỉ cho phép mua tối đa 2 sản phẩm với giá Flash Sale");
+        verify(productClient, never()).reserveFlashSaleStock(any());
+        verify(productClient, never()).reserveStock(any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[Fix-2] Checkout rollback tồn kho Flash Sale nếu bước reserveStock thường thất bại")
+    void checkout_WithActiveFlashSale_WhenReserveStockFails_ShouldRestoreFlashSaleStock() {
+        ActiveFlashSaleDto activeFs = ActiveFlashSaleDto.builder()
+                .campaignId(10L)
+                .flashSalePrice(new BigDecimal("750.00"))
+                .quantity(20)
+                .soldQuantity(3)
+                .remainingStock(17)
+                .userLimit(2)
+                .startTime(LocalDateTime.now().minusMinutes(30))
+                .endTime(LocalDateTime.now().plusHours(2))
+                .build();
+
+        ProductResponse flashSaleProduct = ProductResponse.builder()
+                .id(101L)
+                .name("iPhone 15 Pro")
+                .price(new BigDecimal("1000.00"))
+                .stockQuantity(30)
+                .activeFlashSale(activeFs)
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(flashSaleProduct));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(sampleProduct2));
+        when(productClient.reserveFlashSaleStock(any(FlashSaleReserveRequest.class)))
+                .thenReturn(ApiResponse.success(null));
+        when(productClient.reserveStock(any())).thenThrow(new NotEnoughStockException("Hết tồn kho thường"));
+
+        assertThrows(NotEnoughStockException.class, () -> orderService.checkout(sampleCheckoutRequest));
+
+        ArgumentCaptor<FlashSaleReserveRequest> restoreCaptor = ArgumentCaptor.forClass(FlashSaleReserveRequest.class);
+        verify(productClient, times(1)).restoreFlashSaleStock(restoreCaptor.capture());
+        assertThat(restoreCaptor.getValue().getProductId()).isEqualTo(101L);
+        assertThat(restoreCaptor.getValue().getQuantity()).isEqualTo(2);
+        verify(productClient, never()).restoreStock(any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[Fix-2] Hủy đơn, PaymentFailed và Admin CANCELLED đều hoàn lại tồn kho Flash Sale cho item Flash Sale")
+    void flashSaleStock_ShouldBeRestoredOnCancelPaymentFailedAndAdminCancelled() {
+        samplePendingOrder.getOrderItems().get(0).setFlashSale(true);
+        when(orderRepository.findByIdWithItems(1L)).thenReturn(Optional.of(samplePendingOrder));
+        when(productClient.restoreStock(any())).thenReturn(ApiResponse.success(null));
+        when(productClient.restoreFlashSaleStock(any())).thenReturn(ApiResponse.success(null));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // 1. User cancel
+        orderService.cancelOrder(1L, 1L);
+        verify(productClient, times(1)).restoreFlashSaleStock(argThat(r ->
+                Long.valueOf(101L).equals(r.getProductId()) && Integer.valueOf(2).equals(r.getQuantity())));
+        verify(kafkaOrderProducer, times(1)).sendOrderCancelledEvent(argThat(e ->
+                Long.valueOf(1L).equals(e.getOrderId()) && OrderStatus.CANCELLED == e.getStatus()));
+
+        // 2. Payment failed
+        samplePendingOrder.setStatus(OrderStatus.PENDING);
+        orderService.handlePaymentFailed(com.ecommerce.order.event.PaymentFailedEvent.builder()
+                .orderId(1L).reason("Thất bại").build());
+        verify(productClient, times(2)).restoreFlashSaleStock(any());
+
+        // 3. Admin cancel
+        samplePendingOrder.setStatus(OrderStatus.PAID);
+        orderService.updateOrderStatus(1L, OrderStatus.CANCELLED, "ADMIN:1", "ROLE_ADMIN", "Hủy hoàn Flash Sale");
+        verify(productClient, times(3)).restoreFlashSaleStock(any());
+        verify(kafkaOrderProducer, times(2)).sendOrderCancelledEvent(any());
+    }
+
+    @Test
+    @DisplayName("[Fix-2] Checkout truyền items riêng chỉ xóa đúng sản phẩm đã đặt khỏi giỏ hàng, giữ nguyên sản phẩm còn lại")
+    void checkout_WithExplicitItems_ShouldRemoveOnlyOrderedItemsFromCart() {
+        Cart cart = Cart.builder().id(1L).userId(1L).items(new ArrayList<>()).build();
+        CartItem orderedCartItem = CartItem.builder().id(11L).cart(cart).productId(101L).quantity(2).build();
+        CartItem remainingCartItem = CartItem.builder().id(12L).cart(cart).productId(999L).quantity(1).build();
+        cart.getItems().add(orderedCartItem);
+        cart.getItems().add(remainingCartItem);
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(sampleProduct1));
+        when(productClient.getProductById(102L)).thenReturn(ApiResponse.success(sampleProduct2));
+        when(productClient.reserveStock(any())).thenReturn(ApiResponse.success(null));
+        when(cartRepository.findByUserIdWithItems(1L)).thenReturn(Optional.of(cart));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
+            Order o = inv.getArgument(0);
+            o.setId(55L);
+            o.setCreatedAt(LocalDateTime.now());
+            return o;
+        });
+
+        orderService.checkout(sampleCheckoutRequest);
+
+        assertThat(cart.getItems()).hasSize(1);
+        assertThat(cart.getItems().get(0).getProductId()).isEqualTo(999L);
+        verify(cartRepository, times(1)).save(cart);
+    }
+
     @Test
     @DisplayName("[BUG-FIX] Checkout một phần (Buy Now): Chỉ xóa sản phẩm đã đặt, giữ lại các sản phẩm chưa chọn trong giỏ")
     void checkout_PartialItems_ShouldPreserveUnpurchasedCartItems() {

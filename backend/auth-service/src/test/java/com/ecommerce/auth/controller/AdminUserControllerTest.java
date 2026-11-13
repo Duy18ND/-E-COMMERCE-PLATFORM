@@ -23,6 +23,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -146,5 +147,18 @@ class AdminUserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("BLOCKED"));
+    }
+
+    @Test
+    @DisplayName("[Fix-4] GET /api/v1/admin/users với sortBy không hợp lệ -> 400 Bad Request thay vì 500")
+    void getAllUsers_WithInvalidSortBy_ShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .param("sortBy", "invalidColumn"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("sortBy")));
+
+        verifyNoInteractions(userService);
     }
 }

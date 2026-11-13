@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @RestController
@@ -29,6 +30,10 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Admin Order Controller", description = "Quản lý đơn hàng và thống kê doanh thu toàn hệ thống cho Admin")
 public class AdminOrderController {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "createdAt", "updatedAt", "totalAmount", "status"
+    );
 
     private final OrderService orderService;
 
@@ -44,8 +49,14 @@ public class AdminOrderController {
 
         requireAdminRole(roles);
 
+        String trimmedSortBy = sortBy != null ? sortBy.trim() : "";
+        if (!ALLOWED_SORT_FIELDS.contains(trimmedSortBy)) {
+            throw new IllegalArgumentException(
+                    "Trường sắp xếp (sortBy) không hợp lệ: '" + sortBy + "'. Chỉ chấp nhận: " + ALLOWED_SORT_FIELDS);
+        }
+
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, trimmedSortBy));
 
         PagedResponse<OrderResponse> response = orderService.getAllOrders(status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng thành công", response));

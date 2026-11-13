@@ -33,15 +33,14 @@ public class VoucherController {
     @Operation(summary = "Lấy danh sách voucher đang có hiệu lực [PUBLIC / USER]")
     public ResponseEntity<ApiResponse<List<VoucherResponse>>> getActiveVouchers(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
-            @RequestParam(value = "userId", required = false) Long queryUserId) {
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         if (userId != null && userId <= 0) {
             throw new AccessDeniedException("Thông tin người dùng xác thực (X-User-Id) không hợp lệ");
         }
-        if (queryUserId != null && (userId == null || !userId.equals(queryUserId))) {
-            log.warn("Blocked IDOR attempt on GET /vouchers/active: headerXUserId={}, queryUserId={}",
-                    userId, queryUserId);
-            throw new AccessDeniedException("Bạn không có quyền truy vấn danh sách voucher cá nhân của người dùng khác");
+        if (authorizationHeader != null && !authorizationHeader.trim().isEmpty() && userId == null) {
+            throw new AccessDeniedException("Token xác thực không hợp lệ hoặc đã hết hạn");
         }
+        // Chỉ sử dụng X-User-Id do Gateway giải mã từ JWT; nếu không có coi như khách vãng lai (userId = null)
         List<VoucherResponse> response = (userId != null)
                 ? voucherService.getAvailableVouchersForUser(userId)
                 : voucherService.getActiveVouchers();

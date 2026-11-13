@@ -1,11 +1,11 @@
 package com.ecommerce.product.controller;
 
-import java.util.Arrays;
 import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -39,7 +39,6 @@ import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
 import com.ecommerce.product.dto.response.ProductStockResponse;
 import com.ecommerce.product.enums.ProductStatus;
-import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,6 +53,9 @@ import lombok.RequiredArgsConstructor;
 public class ProductController {
 
     private final ProductService productService;
+
+    @Value("${internal.service-key:ecommerce-internal-service-secret-2026}")
+    private String internalServiceKey = "ecommerce-internal-service-secret-2026";
 
     @GetMapping
     @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có tìm kiếm, lọc theo danh mục (category/categoryId), khoảng giá, tồn kho, phân trang và sắp xếp")
@@ -118,21 +120,26 @@ public class ProductController {
      * @param roles chuỗi roles nhận từ API Gateway qua header X-User-Roles
      */
     private void requireAdminRole(String roles) {
-        // Tách chuỗi roles theo dấu phẩy và so khớp chính xác để tránh false-positive
-        // (ví dụ: "ROLE_ADMIN_VIEWER" không được coi là ROLE_ADMIN)
-        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
-                .map(String::trim)
-                .anyMatch("ROLE_ADMIN"::equals);
-        if (!isAdmin) {
-            throw new AccessDeniedException("Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
-        }
+        com.ecommerce.product.security.InternalAuthValidator.requireAdminRole(
+                roles, "Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
+    }
+
+    private void requireInternalOrAdmin(String internalKey, String roles) {
+        com.ecommerce.product.security.InternalAuthValidator.requireInternalOrAdmin(
+                internalServiceKey,
+                internalKey,
+                roles,
+                "Chỉ dịch vụ nội bộ hoặc ADMIN mới có quyền thao tác tồn kho này");
     }
 
     @PostMapping("/reserve-stock")
     @Operation(summary = "Đặt trước tồn kho", description = "API nội bộ cho Order Service để giữ và trừ số lượng kho với Optimistic Lock")
     public ResponseEntity<ApiResponse<Void>> reserveStock(
+            @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestBody @NotEmpty(message = "Danh sách sản phẩm đặt trước không được để trống") List<@Valid StockReservationItem> items) {
 
+        requireInternalOrAdmin(internalKey, roles);
         productService.reserveStock(items);
         return ResponseEntity.ok(ApiResponse.success("Đặt trước tồn kho thành công", null));
     }
@@ -140,8 +147,11 @@ public class ProductController {
     @PostMapping("/restore-stock")
     @Operation(summary = "Khôi phục tồn kho", description = "API nội bộ cho Order Service để hoàn lại tồn kho khi đơn hàng bị hủy")
     public ResponseEntity<ApiResponse<Void>> restoreStock(
+            @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestBody @NotEmpty(message = "Danh sách sản phẩm hoàn kho không được để trống") List<@Valid StockReservationItem> items) {
 
+        requireInternalOrAdmin(internalKey, roles);
         productService.restoreStock(items);
         return ResponseEntity.ok(ApiResponse.success("Khôi phục tồn kho thành công", null));
     }

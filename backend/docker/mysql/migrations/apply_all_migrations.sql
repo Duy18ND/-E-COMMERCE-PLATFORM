@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     product_name      VARCHAR(255)   NOT NULL,
     quantity          INT            NOT NULL,
     price_at_purchase DECIMAL(12, 2) NOT NULL,
+    is_flash_sale     BOOLEAN        NOT NULL DEFAULT FALSE,
     CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     INDEX idx_order_item_order_id (order_id),
     INDEX idx_order_item_product_id (product_id)

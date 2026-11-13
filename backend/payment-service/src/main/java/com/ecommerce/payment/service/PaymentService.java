@@ -16,18 +16,26 @@ public interface PaymentService {
 
     /**
      * Giả lập / Xác nhận thanh toán thủ công cho đơn hàng theo orderId:
+     * - Chỉ chủ sở hữu đơn hàng hoặc ROLE_ADMIN mới được phép thao tác.
+     * - Chỉ cho phép đối với giao dịch online đang ở trạng thái PENDING (chặn COD, chưa tồn tại, SUCCESS, FAILED).
      * - isSuccess = true: Cập nhật SUCCESS, sinh transactionCode và bắn event payment-success.
      * - isSuccess = false: Cập nhật FAILED và bắn event payment-failed để hoàn kho (Saga Rollback).
      */
-    PaymentResponse mockPay(Long orderId, boolean isSuccess);
+    PaymentResponse mockPay(Long orderId, boolean isSuccess, Long userId, String userRoles);
 
     /**
-     * Tra cứu thông tin thanh toán theo orderId
+     * Tra cứu thông tin thanh toán theo orderId (chỉ chủ sở hữu hoặc ROLE_ADMIN)
      */
-    PaymentResponse getPaymentByOrderId(Long orderId);
+    PaymentResponse getPaymentByOrderId(Long orderId, Long userId, String userRoles);
 
     /**
-     * Tra cứu thông tin thanh toán theo paymentId
+     * Tra cứu thông tin thanh toán theo paymentId (chỉ chủ sở hữu hoặc ROLE_ADMIN)
      */
-    PaymentResponse getPaymentById(Long id);
+    PaymentResponse getPaymentById(Long id, Long userId, String userRoles);
+
+    /**
+     * Đồng bộ khi đơn hàng bị hủy từ order-service: đóng bản ghi thanh toán PENDING sang FAILED
+     * để ngăn hoàn toàn khả năng thanh toán lại (mockPay) trên đơn đã hủy.
+     */
+    void cancelPaymentForOrder(Long orderId, String reason);
 }

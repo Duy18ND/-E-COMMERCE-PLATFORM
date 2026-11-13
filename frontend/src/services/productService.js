@@ -1,4 +1,4 @@
-import api from './api';
+import api, { isHttpResponseError } from './api';
 import { INITIAL_PRODUCTS } from './mockData';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
 import { CATEGORY_ALIAS_MAP, matchesCategoryFilter } from './categoryService';
@@ -356,6 +356,27 @@ export const extractPagedProducts = (apiPayload, params = {}) => {
   };
 };
 
+const syncLocalProduct = (id, rawProduct) => {
+  const normalized = normalizeProduct(rawProduct);
+  localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
+  return normalized;
+};
+
+const applyStockMutation = async (id, requestFn, buildOfflineProduct) => {
+  try {
+    return syncLocalProduct(id, await requestFn());
+  } catch (err) {
+    if (isHttpResponseError(err)) {
+      throw err;
+    }
+    const existing = localProducts.find((p) => String(p.id) === String(id));
+    if (!existing) {
+      throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
+    }
+    return syncLocalProduct(id, buildOfflineProduct(existing));
+  }
+};
+
 export const productService = {
   /**
    * Lấy danh mục sản phẩm có phân trang chuẩn `PagedResponse` phục vụ trang `/products`
@@ -612,7 +633,10 @@ export const productService = {
       const response = await api.get('/products/admin', { params: queryParams });
       const extracted = extractPagedProducts(response, params);
       return extracted.content;
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       return [...localProducts];
     }
   },
@@ -646,7 +670,10 @@ export const productService = {
       const normalized = normalizeProduct(created);
       localProducts = [normalized, ...localProducts.filter((p) => String(p.id) !== String(normalized.id))];
       return normalized;
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       const newProd = normalizeProduct({
         id: Date.now(),
         ...payload,
@@ -693,7 +720,10 @@ export const productService = {
       const normalized = normalizeProduct(updated);
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       let updatedItem = null;
       localProducts = localProducts.map((p) => {
         if (String(p.id) === String(id)) {
@@ -709,7 +739,10 @@ export const productService = {
   delete: async (id) => {
     try {
       await api.delete(`/products/${id}`);
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       // Fallback xóa mềm / xóa khỏi danh sách cục bộ khi offline
     }
     localProducts = localProducts.filter((p) => String(p.id) !== String(id));
@@ -728,30 +761,24 @@ export const productService = {
       throw new Error('Số lượng nhập kho phải là số nguyên lớn hơn 0');
     }
 
-    try {
-      const response = await api.post(`/products/${id}/inbound`, {
-        quantity: qty,
-        note: String(note ?? '').trim()
-      });
-      const normalized = normalizeProduct(response);
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
-      return normalized;
-    } catch (err) {
-      const existing = localProducts.find((p) => String(p.id) === String(id));
-      if (!existing) {
-        throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
+    return applyStockMutation(
+      id,
+      () =>
+        api.post(`/products/${id}/inbound`, {
+          quantity: qty,
+          note: String(note ?? '').trim()
+        }),
+      (existing) => {
+        const newStock = Math.max(0, Number(existing.stockQuantity ?? existing.stock ?? 0) + qty);
+        const updatedStatus = newStock > 0 && existing.status === 'OUT_OF_STOCK' ? 'ACTIVE' : existing.status;
+        return {
+          ...existing,
+          stock: newStock,
+          stockQuantity: newStock,
+          status: updatedStatus
+        };
       }
-      const newStock = Math.max(0, Number(existing.stockQuantity ?? existing.stock ?? 0) + qty);
-      const updatedStatus = newStock > 0 && existing.status === 'OUT_OF_STOCK' ? 'ACTIVE' : existing.status;
-      const updated = normalizeProduct({
-        ...existing,
-        stock: newStock,
-        stockQuantity: newStock,
-        status: updatedStatus
-      });
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? updated : p));
-      return updated;
-    }
+    );
   },
 
   /**
@@ -770,35 +797,28 @@ export const productService = {
       throw new Error('Lý do điều chỉnh kho không được để trống');
     }
 
-    try {
-      const response = await api.post(`/products/${id}/adjust-stock`, {
-        actualStock: stockVal,
-        reason: cleanReason
-      });
-      const normalized = normalizeProduct(response);
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
-      return normalized;
-    } catch (err) {
-      const existing = localProducts.find((p) => String(p.id) === String(id));
-      if (!existing) {
-        throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
+    return applyStockMutation(
+      id,
+      () =>
+        api.post(`/products/${id}/adjust-stock`, {
+          actualStock: stockVal,
+          reason: cleanReason
+        }),
+      (existing) => {
+        let updatedStatus = existing.status;
+        if (stockVal === 0 && existing.status === 'ACTIVE') {
+          updatedStatus = 'OUT_OF_STOCK';
+        } else if (stockVal > 0 && existing.status === 'OUT_OF_STOCK') {
+          updatedStatus = 'ACTIVE';
+        }
+        return {
+          ...existing,
+          stock: stockVal,
+          stockQuantity: stockVal,
+          status: updatedStatus
+        };
       }
-      let updatedStatus = existing.status;
-      if (stockVal === 0 && existing.status === 'ACTIVE') {
-        updatedStatus = 'OUT_OF_STOCK';
-      } else if (stockVal > 0 && existing.status === 'OUT_OF_STOCK') {
-        updatedStatus = 'ACTIVE';
-      }
-
-      const updated = normalizeProduct({
-        ...existing,
-        stock: stockVal,
-        stockQuantity: stockVal,
-        status: updatedStatus
-      });
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? updated : p));
-      return updated;
-    }
+    );
   }
 };
 

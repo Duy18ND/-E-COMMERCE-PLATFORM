@@ -315,26 +315,23 @@ class VoucherControllerTest {
     }
 
     @Test
-    @DisplayName("[Task ECOM-167] Bảo mật IDOR: GET /api/v1/vouchers/active?userId=25 không có X-User-Id -> 403 Forbidden")
-    void getActiveVouchers_WithQueryUserIdWithoutHeader_ShouldReturn403() throws Exception {
+    @DisplayName("[Fix-3] Security IDOR: GET /api/v1/vouchers/active?userId=25 không có X-User-Id -> Coi là khách vãng lai, KHÔNG gọi getAvailableVouchersForUser(25)")
+    void getActiveVouchers_WithUserIdQueryParamWithoutHeader_ShouldIgnoreQueryParamAndTreatAsGuest() throws Exception {
+        VoucherResponse v = VoucherResponse.builder()
+                .id(3L)
+                .code("FREESHIP")
+                .status(VoucherStatus.ACTIVE)
+                .build();
+        when(voucherService.getActiveVouchers()).thenReturn(List.of(v));
+
         mockMvc.perform(get("/api/v1/vouchers/active")
                         .param("userId", "25"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].code").value("FREESHIP"));
 
-        verifyNoInteractions(voucherService);
-    }
-
-    @Test
-    @DisplayName("[Task ECOM-167] Bảo mật IDOR: GET /api/v1/vouchers/active?userId=25 với X-User-Id=10 khác user -> 403 Forbidden")
-    void getActiveVouchers_WithMismatchedHeaderAndQueryUserId_ShouldReturn403() throws Exception {
-        mockMvc.perform(get("/api/v1/vouchers/active")
-                        .header("X-User-Id", 10L)
-                        .param("userId", "25"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.success").value(false));
-
-        verifyNoInteractions(voucherService);
+        verify(voucherService, times(1)).getActiveVouchers();
+        verify(voucherService, never()).getAvailableVouchersForUser(any());
     }
 
     @Test
@@ -355,6 +352,39 @@ class VoucherControllerTest {
                 .andExpect(jsonPath("$.data[0].code").value("FREESHIP"));
 
         verify(voucherService, times(1)).getAvailableVouchersForUser(25L);
+        verify(voucherService, never()).getActiveVouchers();
+    }
+
+    @Test
+    @DisplayName("[Fix-3] Security IDOR: GET /api/v1/vouchers/active?userId=999 kèm X-User-Id=15 -> Chỉ dùng X-User-Id=15")
+    void getActiveVouchers_WithHeaderAndSpoofedQueryParam_ShouldUseHeaderUserIdOnly() throws Exception {
+        VoucherResponse v = VoucherResponse.builder()
+                .id(2L)
+                .code("SALE10")
+                .status(VoucherStatus.ACTIVE)
+                .build();
+        when(voucherService.getAvailableVouchersForUser(15L)).thenReturn(List.of(v));
+
+        mockMvc.perform(get("/api/v1/vouchers/active")
+                        .header("X-User-Id", 15L)
+                        .param("userId", "999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].code").value("SALE10"));
+
+        verify(voucherService, times(1)).getAvailableVouchersForUser(15L);
+        verify(voucherService, never()).getAvailableVouchersForUser(999L);
+    }
+
+    @Test
+    @DisplayName("[Fix-3] Security: GET /api/v1/vouchers/active có Authorization header nhưng thiếu X-User-Id -> 403 Forbidden")
+    void getActiveVouchers_WithAuthHeaderButNoUserId_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/vouchers/active")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verifyNoInteractions(voucherService);
     }
 
     @Test
