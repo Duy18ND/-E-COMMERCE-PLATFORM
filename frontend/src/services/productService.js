@@ -1,13 +1,10 @@
-import api from './api';
+import api, { isHttpResponseError } from './api';
 import { INITIAL_PRODUCTS } from './mockData';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
 import { CATEGORY_ALIAS_MAP, matchesCategoryFilter } from './categoryService';
 
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
-
-const isHttpResponseError = (err) =>
-  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
 
 /**
  * Chuẩn hóa từ khóa tìm kiếm: cắt khoảng trắng đầu/cuối và gộp khoảng trắng thừa ở giữa

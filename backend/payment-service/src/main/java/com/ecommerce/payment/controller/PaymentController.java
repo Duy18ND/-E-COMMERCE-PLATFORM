@@ -3,7 +3,6 @@ package com.ecommerce.payment.controller;
 import com.ecommerce.payment.dto.request.MockPaymentRequest;
 import com.ecommerce.payment.dto.response.ApiResponse;
 import com.ecommerce.payment.dto.response.PaymentResponse;
-import com.ecommerce.payment.exception.AccessDeniedException;
 import com.ecommerce.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -72,8 +71,6 @@ public class PaymentController {
     }
 
     private void requireAuthenticated(Long userId) {
-        if (userId == null || userId <= 0) {
-            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
-        }
+        com.ecommerce.payment.security.PaymentAuthHelper.requireAuthenticated(userId);
     }
 }

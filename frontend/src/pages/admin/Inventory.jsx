@@ -7,17 +7,6 @@ import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
 import StockAdjustmentModal from '../../components/admin/StockAdjustmentModal';
 
-const INITIAL_MOCK_INVENTORY = [
-  { id: '1', name: 'Laptop Dell XPS 13', sku: 'DELL-XPS-13', stock: 10, stockQuantity: 10, minThreshold: 5 },
-  { id: '2', name: 'Điện thoại iPhone 15 Pro', sku: 'APPL-IP15P', stock: 3, stockQuantity: 3, minThreshold: 5 },
-  { id: '3', name: 'Bàn phím cơ không dây', sku: 'KEY-WL-01', stock: 25, stockQuantity: 25, minThreshold: 10 },
-  { id: '4', name: 'Tai nghe Bluetooth chống ồn', sku: 'AUD-BT-NC', stock: 0, stockQuantity: 0, minThreshold: 5 },
-  { id: '5', name: 'MacBook Air M2 13 inch', sku: 'APPL-MBA-M2', stock: 2, stockQuantity: 2, minThreshold: 5 },
-  { id: '6', name: 'Chuột không dây công thái học', sku: 'LOGI-MX-3S', stock: 18, stockQuantity: 18, minThreshold: 8 },
-  { id: '7', name: 'Robot hút bụi Ecovacs X2', sku: 'ECO-DEE-X2', stock: 0, stockQuantity: 0, minThreshold: 4 },
-  { id: '8', name: 'iPad Pro 11 M2 128GB', sku: 'APPL-IPD-11', stock: 12, stockQuantity: 12, minThreshold: 6 }
-];
-
 const Inventory = () => {
   const { notify } = useToast();
   const [inventoryList, setInventoryList] = useState([]);

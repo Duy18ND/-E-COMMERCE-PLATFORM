@@ -56,6 +56,9 @@ public class OrderServiceImpl implements OrderService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.ecommerce.order.client.AuthClient authClient;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     public void setAuthClient(com.ecommerce.order.client.AuthClient authClient) {
         this.authClient = authClient;
     }
@@ -71,30 +74,39 @@ public class OrderServiceImpl implements OrderService {
         if (orderId == null) {
             return null;
         }
-        java.util.concurrent.locks.ReentrantLock lock = orderLocks.computeIfAbsent(
+        return orderLocks.computeIfAbsent(
                 orderId, id -> new java.util.concurrent.locks.ReentrantLock());
-        lock.lock();
-        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()
-                && lock.getHoldCount() == 1) {
-            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                    new org.springframework.transaction.support.TransactionSynchronization() {
-                        @Override
-                        public void afterCompletion(int status) {
-                            while (lock.isHeldByCurrentThread()) {
-                                lock.unlock();
-                            }
-                        }
-                    });
-        }
-        return lock;
     }
 
-    private void releaseOrderLockIfNoTransaction(java.util.concurrent.locks.ReentrantLock lock) {
-        if (lock != null
-                && !org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()
-                && lock.isHeldByCurrentThread()) {
+    private <T> T executeWithOrderLock(Long orderId, java.util.function.Supplier<T> action) {
+        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(orderId);
+        if (lock == null) {
+            return executeInTransaction(action);
+        }
+        // Acquire and always release in finally inside the same method (Sonar java:S2222),
+        // wrapping the transaction inside the lock so changes commit before the next thread enters.
+        lock.lock();
+        try {
+            return executeInTransaction(action);
+        } finally {
             lock.unlock();
         }
+    }
+
+    private void runWithOrderLock(Long orderId, Runnable action) {
+        executeWithOrderLock(orderId, () -> {
+            action.run();
+            return null;
+        });
+    }
+
+    private <T> T executeInTransaction(java.util.function.Supplier<T> action) {
+        if (transactionManager == null) {
+            return action.get();
+        }
+        org.springframework.transaction.support.TransactionTemplate txTemplate =
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        return txTemplate.execute(status -> action.get());
     }
 
     private static final int DEFAULT_LOW_STOCK_THRESHOLD = 5;
@@ -253,16 +265,17 @@ public class OrderServiceImpl implements OrderService {
             }
 
             Order savedOrder = orderRepository.save(order);
-            if (savedOrder != null) {
-                savedOrder.setSubtotalAmount(subtotalAmount);
-                savedOrder.setDiscountAmount(discountAmount);
-                savedOrder.setTotalAmount(finalTotalAmount);
+            if (savedOrder == null) {
+                throw new IllegalStateException("Không thể lưu đơn hàng");
             }
+            savedOrder.setSubtotalAmount(subtotalAmount);
+            savedOrder.setDiscountAmount(discountAmount);
+            savedOrder.setTotalAmount(finalTotalAmount);
             log.info("Order created successfully with id: {}, subtotalAmount: {}, discountAmount: {}, totalAmount: {}",
                     savedOrder.getId(), subtotalAmount, discountAmount, savedOrder.getTotalAmount());
 
             // [Task ECOM-166 / ECOM-167 / ECOM-183] Lưu bản ghi voucher_usages (chặn dùng trùng và phục vụ hoàn lượt khi hủy/lỗi thanh toán)
-            if (appliedVoucherCode != null && voucherService != null && savedOrder != null) {
+            if (appliedVoucherCode != null && voucherService != null) {
                 voucherService.recordVoucherUsage(appliedVoucherCode, savedOrder.getUserId(), savedOrder.getId(), discountAmount);
             }
 
@@ -337,21 +350,16 @@ public class OrderServiceImpl implements OrderService {
      * KHÔNG expose qua Controller.
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public OrderResponse cancelOrder(Long orderId) {
         log.info("Processing internal (system) cancelOrder for orderId: {}", orderId);
-        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(orderId);
-        try {
+        return executeWithOrderLock(orderId, () -> {
             Order order = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
             return cancelPendingOrderAndRestoreStock(order);
-        } finally {
-            releaseOrderLockIfNoTransaction(lock);
-        }
+        });
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public OrderResponse cancelOrder(Long orderId, Long userId) {
         log.info("Processing cancelOrder for orderId: {}, userId: {}", orderId, userId);
 
@@ -360,8 +368,7 @@ public class OrderServiceImpl implements OrderService {
             throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
         }
 
-        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(orderId);
-        try {
+        return executeWithOrderLock(orderId, () -> {
             Order order = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
 
@@ -371,9 +378,16 @@ public class OrderServiceImpl implements OrderService {
             }
 
             return cancelPendingOrderAndRestoreStock(order);
-        } finally {
-            releaseOrderLockIfNoTransaction(lock);
-        }
+        });
+    }
+
+    private List<StockReservationItem> buildRestoreStockItems(Order order) {
+        return order.getOrderItems().stream()
+                .map(item -> StockReservationItem.builder()
+                        .productId(item.getProductId())
+                        .quantity(item.getQuantity())
+                        .build())
+                .toList();
     }
 
     /**
@@ -386,12 +400,7 @@ public class OrderServiceImpl implements OrderService {
             throw new IllegalStateException("Chỉ có thể hủy đơn hàng ở trạng thái PENDING. Trạng thái hiện tại: " + order.getStatus());
         }
 
-        List<StockReservationItem> restoreItems = order.getOrderItems().stream()
-                .map(item -> StockReservationItem.builder()
-                        .productId(item.getProductId())
-                        .quantity(item.getQuantity())
-                        .build())
-                .toList();
+        List<StockReservationItem> restoreItems = buildRestoreStockItems(order);
 
         log.info("Calling ProductClient restoreStock for orderId {}: {}", orderId, restoreItems);
         productClient.restoreStock(restoreItems);
@@ -503,13 +512,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void handlePaymentSuccess(PaymentSuccessEvent event) {
         log.info("[Saga Step] Handling payment success for orderId: {}, txn: {}",
                 event.getOrderId(), event.getTransactionCode());
 
-        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(event.getOrderId());
-        try {
+        runWithOrderLock(event.getOrderId(), () -> {
             Order order = orderRepository.findById(event.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
 
@@ -531,37 +538,25 @@ public class OrderServiceImpl implements OrderService {
             // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thành công
             recordStatusHistory(savedOrder, OrderStatus.PAID, previousStatus, "PAYMENT_SUCCESS",
                     "PAYMENT_SERVICE", "SYSTEM", "Đã thanh toán thành công qua cổng thanh toán");
-        } finally {
-            releaseOrderLockIfNoTransaction(lock);
-        }
+        });
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void handlePaymentFailed(PaymentFailedEvent event) {
         log.warn("[Saga Step] Handling payment failed for orderId: {}. Reason: {}",
                 event.getOrderId(), event.getReason());
 
-        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(event.getOrderId());
-        try {
+        runWithOrderLock(event.getOrderId(), () -> {
             Order order = orderRepository.findByIdWithItems(event.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
 
-            if (order.getStatus() == OrderStatus.CANCELLED
-                    || order.getStatus() == OrderStatus.FAILED
-                    || order.getStatus() == OrderStatus.PAID
-                    || order.getStatus() != OrderStatus.PENDING) {
+            if (order.getStatus() != OrderStatus.PENDING) {
                 log.warn("[Saga Step] Order {} is in status: {}. Skipping failure handling to prevent double rollback or invalid transition.",
                         event.getOrderId(), order.getStatus());
                 return;
             }
 
-            List<StockReservationItem> restoreItems = order.getOrderItems().stream()
-                    .map(item -> StockReservationItem.builder()
-                            .productId(item.getProductId())
-                            .quantity(item.getQuantity())
-                            .build())
-                    .toList();
+            List<StockReservationItem> restoreItems = buildRestoreStockItems(order);
 
             log.info("[Saga Rollback] Initiating compensating transaction: restoring stock for orderId {} with items: {}",
                     event.getOrderId(), restoreItems);
@@ -589,9 +584,7 @@ public class OrderServiceImpl implements OrderService {
                 voucherService.restoreVoucherUsage(order.getVoucherCode());
                 voucherService.restoreVoucherUsageForOrder(order.getVoucherCode(), order.getUserId(), order.getId());
             }
-        } finally {
-            releaseOrderLockIfNoTransaction(lock);
-        }
+        });
     }
 
     // ==========================================
@@ -624,12 +617,10 @@ public class OrderServiceImpl implements OrderService {
      * - Task ECOM-317: Đồng bộ trạng thái đơn hàng giữa Admin và Customer trong cùng transaction.
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus, String updatedBy, String actorRole, String note) {
         log.info("Admin updating order status for orderId: {} to {}, updatedBy: {}, note: {}", orderId, newStatus, updatedBy, note);
 
-        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(orderId);
-        try {
+        return executeWithOrderLock(orderId, () -> {
             Order order = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId));
 
@@ -647,12 +638,7 @@ public class OrderServiceImpl implements OrderService {
 
             // Nếu chuyển sang CANCELLED, bắt buộc phải gọi FeignClient ProductClient.restoreStock để hoàn lại kho trước khi cập nhật DB
             if (newStatus == OrderStatus.CANCELLED) {
-                List<StockReservationItem> restoreItems = order.getOrderItems().stream()
-                        .map(item -> StockReservationItem.builder()
-                                .productId(item.getProductId())
-                                .quantity(item.getQuantity())
-                                .build())
-                        .toList();
+                List<StockReservationItem> restoreItems = buildRestoreStockItems(order);
 
                 log.info("Calling ProductClient restoreStock on CANCELLED for orderId {}: {}", orderId, restoreItems);
                 productClient.restoreStock(restoreItems);
@@ -684,9 +670,7 @@ public class OrderServiceImpl implements OrderService {
             }
 
             return mapToOrderResponse(savedOrder);
-        } finally {
-            releaseOrderLockIfNoTransaction(lock);
-        }
+        });
     }
 
     /**

@@ -1,7 +1,5 @@
 package com.ecommerce.gateway.filter;
 
-import com.ecommerce.gateway.dto.ApiResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -17,13 +15,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -77,12 +72,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 if (config != null && config.isOptional()) {
                     // Route công khai hỗ trợ tùy chọn JWT: xóa các header danh tính và nội bộ nếu client cố tình giả mạo
                     ServerHttpRequest sanitizedRequest = request.mutate()
-                            .headers(headers -> {
-                                headers.remove("X-User-Id");
-                                headers.remove("X-User-Roles");
-                                headers.remove("X-User-Email");
-                                headers.remove("X-Internal-Service-Key");
-                            })
+                            .headers(this::stripSpoofedHeaders)
                             .build();
                     return chain.filter(exchange.mutate().request(sanitizedRequest).build());
                 }
@@ -156,12 +146,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
                 // 4. Mutate request để xóa header giả mạo từ client và gắn thông tin xác thực trước khi route downstream
                 ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                        .headers(headers -> {
-                            headers.remove("X-User-Id");
-                            headers.remove("X-User-Roles");
-                            headers.remove("X-User-Email");
-                            headers.remove("X-Internal-Service-Key");
-                        })
+                        .headers(this::stripSpoofedHeaders)
                         .header("X-User-Id", userId)
                         .header("X-User-Roles", rolesStr)
                         .header("X-User-Email", email)
@@ -172,12 +157,23 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         };
     }
 
+    private void stripSpoofedHeaders(HttpHeaders headers) {
+        headers.remove("X-User-Id");
+        headers.remove("X-User-Roles");
+        headers.remove("X-User-Email");
+        headers.remove("X-Internal-Service-Key");
+    }
+
     private Mono<Boolean> isTokenBlacklisted(String token) {
         if (redisTemplate == null || token == null || token.isEmpty()) {
             return Mono.just(false);
         }
         try {
-            return redisTemplate.hasKey(TOKEN_BLACKLIST_PREFIX + token)
+            Mono<Boolean> existsMono = redisTemplate.hasKey(TOKEN_BLACKLIST_PREFIX + token);
+            if (existsMono == null) {
+                return Mono.just(false);
+            }
+            return existsMono
                     .defaultIfEmpty(false)
                     .onErrorResume(ex -> {
                         log.warn("[Auth Filter] Failed to check Redis JWT blacklist: {}", ex.getMessage());
@@ -190,20 +186,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus httpStatus) {
-        ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(httpStatus);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-
-        ApiResponse<Void> errorResponse = ApiResponse.error(message);
-        byte[] bytes;
-        try {
-            bytes = objectMapper.writeValueAsBytes(errorResponse);
-        } catch (JsonProcessingException e) {
-            bytes = ("{\"success\":false,\"message\":\"" + message + "\"}").getBytes(StandardCharsets.UTF_8);
-        }
-
-        DataBuffer buffer = response.bufferFactory().wrap(bytes);
-        return response.writeWith(Mono.just(buffer));
+        return GatewayErrorResponseWriter.writeJsonError(exchange, httpStatus, message, objectMapper);
     }
 
     @Getter

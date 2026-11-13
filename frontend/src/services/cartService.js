@@ -1,10 +1,7 @@
-import api from './api';
+import api, { isHttpResponseError } from './api';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
 
 const CART_STORAGE_KEY = 'shopmart_cart_mock';
-
-const isHttpResponseError = (err) =>
-  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
 
 // Dữ liệu mẫu khởi đầu giỏ hàng Flash Sale để demo tức thì như trong hình ảnh tham khảo
 const DEFAULT_CART_ITEMS = [

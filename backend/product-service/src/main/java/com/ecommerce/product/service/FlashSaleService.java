@@ -105,7 +105,7 @@ public class FlashSaleService {
                     .findActiveByProductId(productId, LocalDateTime.now())
                     .orElse(null);
             if (activeDbItem != null) {
-                int remaining = Math.max(0, activeDbItem.getQuantity() - safeInt(activeDbItem.getSoldQuantity()));
+                int remaining = Math.max(0, safeInt(activeDbItem.getQuantity()) - safeInt(activeDbItem.getSoldQuantity()));
                 initFlashSaleStock(productId, remaining);
                 result = redisTemplate.execute(
                         flashSaleScript,
@@ -168,7 +168,7 @@ public class FlashSaleService {
                     maxStockArg
             );
             if ((restored == null || restored == -1L) && activeItem != null) {
-                int remaining = Math.max(0, activeItem.getQuantity() - effectiveSoldAfterRestore);
+                int remaining = Math.max(0, safeInt(activeItem.getQuantity()) - effectiveSoldAfterRestore);
                 safeInitRedisStock(productId, remaining);
             }
         }
@@ -285,10 +285,7 @@ public class FlashSaleService {
         }
 
         if ("ACTIVE".equals(updatedStatus)) {
-            for (FlashSaleItem item : saved.getItems()) {
-                int remaining = Math.max(0, item.getQuantity() - safeInt(item.getSoldQuantity()));
-                safeInitRedisStock(item.getProductId(), remaining);
-            }
+            initActiveItemsInRedis(saved.getItems());
         }
 
         log.info("[FlashSale] Updated campaign id={}, status={}", saved.getId(), saved.getStatus());
@@ -320,10 +317,7 @@ public class FlashSaleService {
         FlashSaleCampaign saved = campaignRepository.save(campaign);
 
         if ("ACTIVE".equals(normalizedStatus)) {
-            for (FlashSaleItem item : saved.getItems()) {
-                int remaining = Math.max(0, item.getQuantity() - safeInt(item.getSoldQuantity()));
-                safeInitRedisStock(item.getProductId(), remaining);
-            }
+            initActiveItemsInRedis(saved.getItems());
         } else if ("ENDED".equals(normalizedStatus) || "CANCELLED".equals(normalizedStatus)) {
             for (FlashSaleItem item : saved.getItems()) {
                 safeDeleteRedisStock(item.getProductId());
@@ -553,6 +547,16 @@ public class FlashSaleService {
                 .createdAt(campaign.getCreatedAt())
                 .updatedAt(campaign.getUpdatedAt())
                 .build();
+    }
+
+    private void initActiveItemsInRedis(List<FlashSaleItem> items) {
+        if (items == null) {
+            return;
+        }
+        for (FlashSaleItem item : items) {
+            int remaining = Math.max(0, item.getQuantity() - safeInt(item.getSoldQuantity()));
+            safeInitRedisStock(item.getProductId(), remaining);
+        }
     }
 
     private int safeInt(Integer value) {

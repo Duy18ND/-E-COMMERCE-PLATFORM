@@ -164,4 +164,13 @@ api.interceptors.response.use(
   }
 );
 
+export const isHttpResponseError = (err) =>
+  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
+
+export const toBackendError = (err, fallbackMessage = 'Lỗi từ hệ thống') => {
+  const mapped = new Error(err?.response?.data?.message || err?.message || fallbackMessage);
+  mapped.response = err?.response;
+  return mapped;
+};
+
 export default api;

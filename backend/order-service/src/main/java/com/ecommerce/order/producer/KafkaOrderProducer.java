@@ -28,38 +28,28 @@ public class KafkaOrderProducer {
      * Sử dụng orderId làm message key để đảm bảo message ordering cho từng đơn hàng.
      */
     public void sendOrderCreatedEvent(OrderEvent payload) {
-        String key = String.valueOf(payload.getOrderId());
-        log.info("Publishing OrderCreatedEvent to topic [{}] with key [{}]: {}", orderCreatedTopic, key, payload);
-
-        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(orderCreatedTopic, key, payload);
-
-        future.whenComplete((result, ex) -> {
-            if (ex != null) {
-                log.error("Failed to publish OrderCreatedEvent for orderId {}: {}", payload.getOrderId(), ex.getMessage(), ex);
-            } else {
-                log.info("OrderCreatedEvent published successfully for orderId {} to topic [{}] partition [{}] at offset [{}]",
-                        payload.getOrderId(),
-                        result.getRecordMetadata().topic(),
-                        result.getRecordMetadata().partition(),
-                        result.getRecordMetadata().offset());
-            }
-        });
+        sendOrderEvent(orderCreatedTopic, "OrderCreatedEvent", payload);
     }
 
     /**
      * Đồng bộ sự kiện hủy đơn hàng sang topic order-cancelled để payment-service đóng phiên thanh toán PENDING.
      */
     public void sendOrderCancelledEvent(OrderEvent payload) {
-        String key = String.valueOf(payload.getOrderId());
-        log.info("Publishing OrderCancelledEvent to topic [{}] with key [{}]: {}", orderCancelledTopic, key, payload);
+        sendOrderEvent(orderCancelledTopic, "OrderCancelledEvent", payload);
+    }
 
-        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(orderCancelledTopic, key, payload);
+    private void sendOrderEvent(String topic, String eventName, OrderEvent payload) {
+        String key = String.valueOf(payload.getOrderId());
+        log.info("Publishing {} to topic [{}] with key [{}]: {}", eventName, topic, key, payload);
+
+        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, payload);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {
-                log.error("Failed to publish OrderCancelledEvent for orderId {}: {}", payload.getOrderId(), ex.getMessage(), ex);
+                log.error("Failed to publish {} for orderId {}: {}", eventName, payload.getOrderId(), ex.getMessage(), ex);
             } else {
-                log.info("OrderCancelledEvent published successfully for orderId {} to topic [{}] partition [{}] at offset [{}]",
+                log.info("{} published successfully for orderId {} to topic [{}] partition [{}] at offset [{}]",
+                        eventName,
                         payload.getOrderId(),
                         result.getRecordMetadata().topic(),
                         result.getRecordMetadata().partition(),

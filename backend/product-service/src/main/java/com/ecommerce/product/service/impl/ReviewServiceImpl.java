@@ -355,7 +355,8 @@ public class ReviewServiceImpl implements ReviewService {
             return "Khách hàng đã mua hàng";
         }
         long mixed = (review.getUserId() * 0x9E3779B97F4A7C15L) ^ 0xBF58476D1CE4E5B9L;
-        int maskedCode = (int) (Math.abs(mixed) % 0xFFFF);
+        // Bitmask avoids Math.abs(Long.MIN_VALUE) remaining negative (Sonar java:S2676).
+        int maskedCode = (int) (mixed & 0xFFFFL);
         return String.format("Thành viên #%04X", maskedCode);
     }
 }

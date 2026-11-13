@@ -7,19 +7,6 @@ import Button from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
 import Pagination from '../../components/admin/Pagination';
 
-const INITIAL_MOCK_ADMIN_PRODUCTS = [
-  { id: '1', name: 'Laptop Dell XPS 13', category: 'Laptop & Workstation', price: 28990000, stock: 10, stockQuantity: 10 },
-  { id: '2', name: 'Điện thoại iPhone 15 Pro', category: 'Điện thoại thông minh', price: 27990000, stock: 15, stockQuantity: 15 },
-  { id: '3', name: 'Bàn phím cơ không dây', category: 'Bàn phím cơ & Chuột', price: 1850000, stock: 25, stockQuantity: 25 },
-  { id: '4', name: 'Tai nghe Bluetooth chống ồn', category: 'Tai nghe & Âm thanh Hi-Fi', price: 3490000, stock: 8, stockQuantity: 8 },
-  { id: '5', name: 'MacBook Air M2 13 inch', category: 'Laptop & Workstation', price: 24500000, stock: 3, stockQuantity: 3 },
-  { id: '6', name: 'Điện thoại Samsung Galaxy S24', category: 'Điện thoại thông minh', price: 21990000, stock: 0, stockQuantity: 0 },
-  { id: '7', name: 'iPad Pro 11 M2 Wi-Fi 128GB', category: 'Máy tính bảng & iPad', price: 19990000, stock: 12, stockQuantity: 12 },
-  { id: '8', name: 'Đồng hồ thông minh Apple Watch Series 9', category: 'Đồng hồ thông minh & Smartwatch', price: 9890000, stock: 18, stockQuantity: 18 },
-  { id: '9', name: 'Robot hút bụi Deebot X2 OMNI', category: 'Đồ gia dụng thông minh', price: 18990000, stock: 6, stockQuantity: 6 },
-  { id: '10', name: 'Màn hình Dell UltraSharp 27 4K U2723QE', category: 'Màn hình máy tính', price: 13490000, stock: 14, stockQuantity: 14 }
-];
-
 const AdminProducts = () => {
   const { showToast, confirmDialog, notify } = useToast();
   const [products, setProducts] = useState([]);

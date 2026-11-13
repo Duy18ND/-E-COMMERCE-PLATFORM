@@ -1,8 +1,5 @@
 package com.ecommerce.product.controller;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.Arrays;
 import java.util.List;
 
 import jakarta.validation.Valid;
@@ -10,7 +7,6 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +21,6 @@ import com.ecommerce.product.dto.request.CreateFlashSaleCampaignRequest;
 import com.ecommerce.product.dto.request.FlashSaleReserveRequest;
 import com.ecommerce.product.dto.response.ApiResponse;
 import com.ecommerce.product.dto.response.FlashSaleCampaignResponse;
-import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.service.FlashSaleService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -196,28 +191,15 @@ public class FlashSaleController {
     }
 
     private void requireInternalOrAdmin(String internalKey, String roles) {
-        boolean validInternalKey = StringUtils.hasText(internalServiceKey)
-                && StringUtils.hasText(internalKey)
-                && MessageDigest.isEqual(
-                        internalServiceKey.getBytes(StandardCharsets.UTF_8),
-                        internalKey.getBytes(StandardCharsets.UTF_8));
-        if (validInternalKey) {
-            return;
-        }
-        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
-                .map(String::trim)
-                .anyMatch("ROLE_ADMIN"::equals);
-        if (!isAdmin) {
-            throw new AccessDeniedException("Truy cập bị từ chối: API nội bộ Flash Sale chỉ cho phép order-service hoặc ROLE_ADMIN");
-        }
+        com.ecommerce.product.security.InternalAuthValidator.requireInternalOrAdmin(
+                internalServiceKey,
+                internalKey,
+                roles,
+                "Truy cập bị từ chối: API nội bộ Flash Sale chỉ cho phép order-service hoặc ROLE_ADMIN");
     }
 
     private void requireAdminRole(String roles) {
-        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
-                .map(String::trim)
-                .anyMatch("ROLE_ADMIN"::equals);
-        if (!isAdmin) {
-            throw new AccessDeniedException("Truy cập bị từ chối: yêu cầu quyền ROLE_ADMIN");
-        }
+        com.ecommerce.product.security.InternalAuthValidator.requireAdminRole(
+                roles, "Truy cập bị từ chối: yêu cầu quyền ROLE_ADMIN");
     }
 }

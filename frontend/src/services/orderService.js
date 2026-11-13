@@ -1,4 +1,4 @@
-import api from './api.js';
+import api, { isHttpResponseError } from './api.js';
 import cartService from './cartService';
 import { ORDER_STATUS, ORDER_STATUS_LABELS } from '../utils/constants';
 
@@ -339,9 +339,6 @@ const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
-
-const isHttpResponseError = (err) =>
-  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
 
 const normalizeOrderDate = (value) => {
   if (value === null || value === undefined || value === '') return null;

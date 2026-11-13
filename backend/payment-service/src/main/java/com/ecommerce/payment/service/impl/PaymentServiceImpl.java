@@ -38,11 +38,13 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("[Saga Step] Starting payment processing for orderId: {}, amount: {}, method: {}",
                 event.getOrderId(), event.getTotalAmount(), event.getPaymentMethod());
 
-        // 1. Kiểm tra tính Idempotent: Nếu đơn hàng đã được xử lý thanh toán, không xử lý lại
+        // 1. Kiểm tra tính Idempotent: Nếu đơn hàng đã được xử lý thanh toán, không xử
+        // lý lại
         Optional<Payment> existingPaymentOpt = paymentRepository.findByOrderId(event.getOrderId());
         if (existingPaymentOpt.isPresent()) {
             Payment existingPayment = existingPaymentOpt.get();
-            if (existingPayment.getStatus() == PaymentStatus.SUCCESS || existingPayment.getStatus() == PaymentStatus.FAILED) {
+            if (existingPayment.getStatus() == PaymentStatus.SUCCESS
+                    || existingPayment.getStatus() == PaymentStatus.FAILED) {
                 log.warn("[Saga Step] Payment for orderId {} already finalized with status: {}. Skipping.",
                         event.getOrderId(), existingPayment.getStatus());
                 return mapToPaymentResponse(existingPayment);
@@ -59,7 +61,8 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // 2. Luồng thanh toán COD (Cash On Delivery):
-        // Chỉ khởi tạo và lưu bản ghi Payment ở trạng thái PENDING, KHÔNG bắn event payment-success
+        // Chỉ khởi tạo và lưu bản ghi Payment ở trạng thái PENDING, KHÔNG bắn event
+        // payment-success
         // để giữ nguyên trạng thái đơn hàng là PENDING (chờ thanh toán khi nhận hàng).
         if ("COD".equalsIgnoreCase(event.getPaymentMethod())) {
             Payment codPayment = existingPaymentOpt.orElseGet(() -> Payment.builder()
@@ -79,16 +82,22 @@ public class PaymentServiceImpl implements PaymentService {
             return mapToPaymentResponse(savedCodPayment);
         }
 
-        // 3. Luồng thanh toán trực tuyến (MOCK_ONLINE / VNPAY / MOMO / BANK_TRANSFER / QR_CODE ...)
+        // 3. Luồng thanh toán trực tuyến (MOCK_ONLINE / VNPAY / MOMO / BANK_TRANSFER /
+        // QR_CODE ...)
         return processMockOnlinePayment(event, existingPaymentOpt);
     }
 
     /**
-     * Luồng xử lý cho các phương thức thanh toán trực tuyến (MOCK_ONLINE, VNPAY, MOMO, BANK_TRANSFER, QR_CODE...):
-     * - Nếu amount > 50,000,000 VND -> Chặn hạn mức chống gian lận: tự động THẤT BẠI, kích hoạt Saga Rollback.
-     * - Ngược lại -> Chỉ lưu bản ghi Payment ở trạng thái PENDING (chờ khách quét mã VietQR).
-     *   KHÔNG tự động phát payment-success: việc chuyển sang SUCCESS / FAILED do người dùng xác nhận
-     *   trên màn hình QR thông qua API POST /api/v1/payments/mock-pay/{orderId} (xem {@link #mockPay}).
+     * Luồng xử lý cho các phương thức thanh toán trực tuyến (MOCK_ONLINE, VNPAY,
+     * MOMO, BANK_TRANSFER, QR_CODE...):
+     * - Nếu amount > 50,000,000 VND -> Chặn hạn mức chống gian lận: tự động THẤT
+     * BẠI, kích hoạt Saga Rollback.
+     * - Ngược lại -> Chỉ lưu bản ghi Payment ở trạng thái PENDING (chờ khách quét
+     * mã VietQR).
+     * KHÔNG tự động phát payment-success: việc chuyển sang SUCCESS / FAILED do
+     * người dùng xác nhận
+     * trên màn hình QR thông qua API POST /api/v1/payments/mock-pay/{orderId} (xem
+     * {@link #mockPay}).
      */
     private PaymentResponse processMockOnlinePayment(OrderCreatedEvent event, Optional<Payment> existingPaymentOpt) {
         Payment payment = existingPaymentOpt.orElseGet(() -> Payment.builder()
@@ -133,8 +142,10 @@ public class PaymentServiceImpl implements PaymentService {
             return mapToPaymentResponse(finalizedFailedPayment);
         }
 
-        // Trong hạn mức: giữ nguyên PENDING, chờ khách quét mã QR và xác nhận qua API mock-pay
-        log.info("[Saga Step] Online orderId {} (method={}, amount={}) is PENDING, awaiting QR payment confirmation via /mock-pay.",
+        // Trong hạn mức: giữ nguyên PENDING, chờ khách quét mã QR và xác nhận qua API
+        // mock-pay
+        log.info(
+                "[Saga Step] Online orderId {} (method={}, amount={}) is PENDING, awaiting QR payment confirmation via /mock-pay.",
                 event.getOrderId(), savedPendingPayment.getPaymentMethod(), event.getTotalAmount());
         return mapToPaymentResponse(savedPendingPayment);
     }
@@ -148,16 +159,19 @@ public class PaymentServiceImpl implements PaymentService {
         requireAuthenticated(userId);
 
         Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán cho đơn hàng ID: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy giao dịch thanh toán cho đơn hàng ID: " + orderId));
 
         authorizeAccess(payment, userId, userRoles);
 
         if ("COD".equalsIgnoreCase(payment.getPaymentMethod())) {
             log.warn("[Mock Pay] Blocked mock-pay attempt on COD orderId={} by userId={}", orderId, userId);
-            throw new IllegalStateException("Đơn hàng thanh toán khi nhận hàng (COD) không hỗ trợ thanh toán trực tuyến qua cổng giả lập");
+            throw new IllegalStateException(
+                    "Đơn hàng thanh toán khi nhận hàng (COD) không hỗ trợ thanh toán trực tuyến qua cổng giả lập");
         }
 
-        // Chỉ cho phép mockPay thực thi khi giao dịch đang ở trạng thái PENDING (chặn ghi đè SUCCESS hoặc FAILED).
+        // Chỉ cho phép mockPay thực thi khi giao dịch đang ở trạng thái PENDING (chặn
+        // ghi đè SUCCESS hoặc FAILED).
         if (payment.getStatus() != PaymentStatus.PENDING) {
             log.warn("[Mock Pay] Rejected mock-pay for orderId {}: current status is {}", orderId, payment.getStatus());
             throw new IllegalStateException("Giao dịch của đơn hàng #" + orderId
@@ -209,7 +223,8 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Fetching payment details for orderId: {} by userId: {}", orderId, userId);
         requireAuthenticated(userId);
         Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin thanh toán cho đơn hàng ID: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy thông tin thanh toán cho đơn hàng ID: " + orderId));
         authorizeAccess(payment, userId, userRoles);
         return mapToPaymentResponse(payment);
     }
@@ -226,9 +241,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void requireAuthenticated(Long userId) {
-        if (userId == null || userId <= 0) {
-            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
-        }
+        com.ecommerce.payment.security.PaymentAuthHelper.requireAuthenticated(userId);
     }
 
     private void authorizeAccess(Payment payment, Long userId, String userRoles) {
@@ -236,9 +249,11 @@ public class PaymentServiceImpl implements PaymentService {
             return;
         }
         if (payment.getUserId() == null || !payment.getUserId().equals(userId)) {
-            log.warn("IDOR / unauthorized access blocked: userId={} attempted to access paymentId={} (orderId={}, ownerUserId={})",
+            log.warn(
+                    "IDOR / unauthorized access blocked: userId={} attempted to access paymentId={} (orderId={}, ownerUserId={})",
                     userId, payment.getId(), payment.getOrderId(), payment.getUserId());
-            throw new AccessDeniedException("Bạn không có quyền truy cập hoặc thao tác trên thanh toán của đơn hàng này");
+            throw new AccessDeniedException(
+                    "Bạn không có quyền truy cập hoặc thao tác trên thanh toán của đơn hàng này");
         }
     }
 
@@ -263,13 +278,15 @@ public class PaymentServiceImpl implements PaymentService {
                 log.info("[Order Cancelled Sync] Closed PENDING payment id={} for orderId={} -> FAILED (reason={})",
                         payment.getId(), orderId, reason);
             } else {
-                log.warn("[Order Cancelled Sync] Ignored cancel sync for orderId={} because payment status is already {}",
+                log.warn(
+                        "[Order Cancelled Sync] Ignored cancel sync for orderId={} because payment status is already {}",
                         orderId, payment.getStatus());
             }
             return;
         }
 
-        // Tạo bản ghi FAILED để chặn OrderCreatedEvent đến trễ hoặc mockPay sau khi đơn đã bị hủy
+        // Tạo bản ghi FAILED để chặn OrderCreatedEvent đến trễ hoặc mockPay sau khi đơn
+        // đã bị hủy
         Payment tombstone = Payment.builder()
                 .orderId(orderId)
                 .amount(BigDecimal.ZERO)
