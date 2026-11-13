@@ -6,6 +6,7 @@ import com.ecommerce.payment.enums.PaymentStatus;
 import com.ecommerce.payment.event.OrderCreatedEvent;
 import com.ecommerce.payment.event.PaymentFailedEvent;
 import com.ecommerce.payment.event.PaymentSuccessEvent;
+import com.ecommerce.payment.exception.AccessDeniedException;
 import com.ecommerce.payment.exception.ResourceNotFoundException;
 import com.ecommerce.payment.kafka.KafkaPaymentProducer;
 import com.ecommerce.payment.repository.PaymentRepository;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -53,10 +55,14 @@ public class PaymentServiceImpl implements PaymentService {
         if ("COD".equalsIgnoreCase(event.getPaymentMethod())) {
             Payment codPayment = existingPaymentOpt.orElseGet(() -> Payment.builder()
                     .orderId(event.getOrderId())
+                    .userId(event.getUserId())
                     .amount(event.getTotalAmount())
                     .paymentMethod("COD")
                     .status(PaymentStatus.PENDING)
                     .build());
+            if (event.getUserId() != null) {
+                codPayment.setUserId(event.getUserId());
+            }
             codPayment.setStatus(PaymentStatus.PENDING);
             Payment savedCodPayment = paymentRepository.save(codPayment);
             log.info("[Saga Step] COD orderId {}: saved PENDING payment id={} without triggering payment-success.",
@@ -78,12 +84,16 @@ public class PaymentServiceImpl implements PaymentService {
     private PaymentResponse processMockOnlinePayment(OrderCreatedEvent event, Optional<Payment> existingPaymentOpt) {
         Payment payment = existingPaymentOpt.orElseGet(() -> Payment.builder()
                 .orderId(event.getOrderId())
+                .userId(event.getUserId())
                 .amount(event.getTotalAmount())
                 .paymentMethod(event.getPaymentMethod() != null ? event.getPaymentMethod() : "MOCK_ONLINE")
                 .status(PaymentStatus.PENDING)
                 .build());
 
-        // Đồng bộ lại số tiền / phương thức theo đơn hàng (trường hợp bản ghi PENDING được tạo sớm bởi mock-pay)
+        // Đồng bộ lại thông tin từ OrderCreatedEvent nếu bản ghi PENDING được xử lý lại
+        if (event.getUserId() != null) {
+            payment.setUserId(event.getUserId());
+        }
         if (event.getTotalAmount() != null) {
             payment.setAmount(event.getTotalAmount());
         }
@@ -122,38 +132,27 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public PaymentResponse mockPay(Long orderId, boolean isSuccess) {
-        log.info("[Mock Pay] Processing simulated payment confirmation for orderId: {}, isSuccess: {}",
-                orderId, isSuccess);
+    public PaymentResponse mockPay(Long orderId, boolean isSuccess, Long userId, String userRoles) {
+        log.info("[Mock Pay] Processing simulated payment confirmation for orderId: {}, userId: {}, isSuccess: {}",
+                orderId, userId, isSuccess);
+
+        requireAuthenticated(userId);
 
         Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseGet(() -> {
-                    log.info("[Mock Pay] Không tìm thấy bản ghi payment cho orderId {}, tự động khởi tạo bản ghi mới để hoàn tất thanh toán", orderId);
-                    Payment newPayment = Payment.builder()
-                            .orderId(orderId)
-                            .amount(BigDecimal.ZERO)
-                            .paymentMethod("MOCK_ONLINE")
-                            .status(PaymentStatus.PENDING)
-                            .build();
-                    return paymentRepository.save(newPayment);
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán cho đơn hàng ID: " + orderId));
 
-        if (payment.getStatus() == PaymentStatus.SUCCESS) {
-            log.info("[Mock Pay] Đơn hàng ID {} đã được thanh toán thành công trước đó", orderId);
-            return mapToPaymentResponse(payment);
+        authorizeAccess(payment, userId, userRoles);
+
+        if ("COD".equalsIgnoreCase(payment.getPaymentMethod())) {
+            log.warn("[Mock Pay] Blocked mock-pay attempt on COD orderId={} by userId={}", orderId, userId);
+            throw new IllegalStateException("Đơn hàng thanh toán khi nhận hàng (COD) không hỗ trợ thanh toán trực tuyến qua cổng giả lập");
         }
 
-        // Giao dịch đã thất bại (vượt hạn mức / khách hủy) -> Saga Rollback đã hoàn kho & hoàn Voucher.
-        // Không cho phép xác nhận thành công lại để tránh đơn FAILED bị chuyển sang PAID, và không bắn lại
-        // payment-failed để tránh hoàn kho 2 lần.
-        if (payment.getStatus() == PaymentStatus.FAILED) {
-            if (isSuccess) {
-                log.warn("[Mock Pay] Đơn hàng ID {} đã thanh toán thất bại trước đó, từ chối xác nhận thành công", orderId);
-                throw new IllegalStateException("Giao dịch của đơn hàng #" + orderId
-                        + " đã thất bại hoặc bị hủy trước đó, không thể xác nhận thanh toán lại. Vui lòng đặt đơn hàng mới.");
-            }
-            log.info("[Mock Pay] Đơn hàng ID {} đã ở trạng thái FAILED trước đó, bỏ qua (idempotent)", orderId);
-            return mapToPaymentResponse(payment);
+        // Chỉ cho phép mockPay thực thi khi giao dịch đang ở trạng thái PENDING (chặn ghi đè SUCCESS hoặc FAILED).
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            log.warn("[Mock Pay] Rejected mock-pay for orderId {}: current status is {}", orderId, payment.getStatus());
+            throw new IllegalStateException("Giao dịch của đơn hàng #" + orderId
+                    + " đã ở trạng thái " + payment.getStatus() + ", không thể xác nhận hoặc ghi đè thanh toán.");
         }
 
         if (isSuccess) {
@@ -197,26 +196,54 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional(readOnly = true)
-    public PaymentResponse getPaymentByOrderId(Long orderId) {
-        log.info("Fetching payment details for orderId: {}", orderId);
+    public PaymentResponse getPaymentByOrderId(Long orderId, Long userId, String userRoles) {
+        log.info("Fetching payment details for orderId: {} by userId: {}", orderId, userId);
+        requireAuthenticated(userId);
         Payment payment = paymentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin thanh toán cho đơn hàng ID: " + orderId));
+        authorizeAccess(payment, userId, userRoles);
         return mapToPaymentResponse(payment);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PaymentResponse getPaymentById(Long id) {
-        log.info("Fetching payment details for paymentId: {}", id);
+    public PaymentResponse getPaymentById(Long id, Long userId, String userRoles) {
+        log.info("Fetching payment details for paymentId: {} by userId: {}", id, userId);
+        requireAuthenticated(userId);
         Payment payment = paymentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán với ID: " + id));
+        authorizeAccess(payment, userId, userRoles);
         return mapToPaymentResponse(payment);
+    }
+
+    private void requireAuthenticated(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
+        }
+    }
+
+    private void authorizeAccess(Payment payment, Long userId, String userRoles) {
+        if (hasAdminRole(userRoles)) {
+            return;
+        }
+        if (payment.getUserId() == null || !payment.getUserId().equals(userId)) {
+            log.warn("IDOR / unauthorized access blocked: userId={} attempted to access paymentId={} (orderId={}, ownerUserId={})",
+                    userId, payment.getId(), payment.getOrderId(), payment.getUserId());
+            throw new AccessDeniedException("Bạn không có quyền truy cập hoặc thao tác trên thanh toán của đơn hàng này");
+        }
+    }
+
+    private boolean hasAdminRole(String userRoles) {
+        return userRoles != null && Arrays.stream(userRoles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
     }
 
     private PaymentResponse mapToPaymentResponse(Payment payment) {
         return PaymentResponse.builder()
                 .id(payment.getId())
                 .orderId(payment.getOrderId())
+                .userId(payment.getUserId())
                 .amount(payment.getAmount())
                 .paymentMethod(payment.getPaymentMethod())
                 .status(payment.getStatus())

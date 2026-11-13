@@ -6,6 +6,7 @@ import com.ecommerce.payment.enums.PaymentStatus;
 import com.ecommerce.payment.event.OrderCreatedEvent;
 import com.ecommerce.payment.event.PaymentFailedEvent;
 import com.ecommerce.payment.event.PaymentSuccessEvent;
+import com.ecommerce.payment.exception.AccessDeniedException;
 import com.ecommerce.payment.exception.ResourceNotFoundException;
 import com.ecommerce.payment.kafka.KafkaPaymentProducer;
 import com.ecommerce.payment.repository.PaymentRepository;
@@ -29,7 +30,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -71,9 +71,8 @@ class PaymentServiceTest {
     class ProcessOrderPaymentTests {
 
         @Test
-        @DisplayName("Online <= 50,000,000 VND: chỉ lưu Payment PENDING chờ quét QR, KHÔNG tự động bắn payment-success")
+        @DisplayName("Online <= 50,000,000 VND: lưu Payment PENDING kèm userId chờ quét QR, KHÔNG tự động bắn payment-success")
         void testProcessPayment_OnlineWithinLimit_StaysPendingAwaitingQr() {
-            // Given: Đơn hàng MOCK_ONLINE 15.000.000 VND
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.empty());
             when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
                 Payment p = invocation.getArgument(0);
@@ -84,18 +83,16 @@ class PaymentServiceTest {
                 return p;
             });
 
-            // When
             PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
 
-            // Then
             assertThat(response).isNotNull();
             assertThat(response.getOrderId()).isEqualTo(101L);
+            assertThat(response.getUserId()).isEqualTo(1L);
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
             assertThat(response.getTransactionCode()).isNull();
             assertThat(response.getAmount()).isEqualByComparingTo("15000000");
             assertThat(response.getPaymentMethod()).isEqualTo("MOCK_ONLINE");
 
-            // Không phát bất kỳ sự kiện Kafka nào — chờ người dùng xác nhận qua /mock-pay
             verify(paymentRepository, times(1)).save(any(Payment.class));
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
             verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
@@ -103,7 +100,7 @@ class PaymentServiceTest {
 
         @ParameterizedTest(name = "Phương thức {0} trong hạn mức -> PENDING chờ quét QR")
         @ValueSource(strings = {"VNPAY", "MOMO", "BANK_TRANSFER", "QR_CODE"})
-        @DisplayName("Các phương thức online khác (VNPAY, MOMO, BANK_TRANSFER, QR_CODE) cũng giữ PENDING")
+        @DisplayName("Các phương thức online khác (VNPAY, MOMO, BANK_TRANSFER, QR_CODE) cũng giữ PENDING và lưu userId")
         void testProcessPayment_OtherOnlineMethods_StayPending(String method) {
             validOrderEvent.setPaymentMethod(method);
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.empty());
@@ -112,6 +109,7 @@ class PaymentServiceTest {
             PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
 
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(response.getUserId()).isEqualTo(1L);
             assertThat(response.getPaymentMethod()).isEqualTo(method);
             assertThat(response.getTransactionCode()).isNull();
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
@@ -119,7 +117,7 @@ class PaymentServiceTest {
         }
 
         @Test
-        @DisplayName("COD: lưu Payment PENDING, không bắn sự kiện Kafka")
+        @DisplayName("COD: lưu Payment PENDING kèm userId, không bắn sự kiện Kafka")
         void testProcessPayment_Cod_StaysPending() {
             validOrderEvent.setPaymentMethod("COD");
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.empty());
@@ -128,34 +126,36 @@ class PaymentServiceTest {
             PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
 
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(response.getUserId()).isEqualTo(1L);
             assertThat(response.getPaymentMethod()).isEqualTo("COD");
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
             verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
         }
 
         @Test
-        @DisplayName("Bản ghi PENDING tạo sớm bởi mock-pay (amount = 0) được đồng bộ lại số tiền theo đơn hàng")
-        void testProcessPayment_ExistingPending_RefreshesAmount() {
-            Payment earlyPending = Payment.builder()
+        @DisplayName("Bản ghi PENDING xử lý lại được đồng bộ userId và số tiền theo đơn hàng")
+        void testProcessPayment_ExistingPending_RefreshesAmountAndUserId() {
+            Payment existingPending = Payment.builder()
                     .id(5L)
                     .orderId(101L)
                     .amount(BigDecimal.ZERO)
                     .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.PENDING)
                     .build();
-            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(earlyPending));
+            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(existingPending));
             when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
 
             assertThat(response.getId()).isEqualTo(5L);
+            assertThat(response.getUserId()).isEqualTo(1L);
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.PENDING);
             assertThat(response.getAmount()).isEqualByComparingTo("15000000");
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
         }
 
         @Test
-        @DisplayName("Luồng QR đầy đủ: processOrderPayment -> PENDING, sau đó mockPay(true) -> SUCCESS + payment-success")
+        @DisplayName("Luồng QR đầy đủ: processOrderPayment -> PENDING, sau đó chủ đơn gọi mockPay(true) -> SUCCESS + payment-success")
         void testProcessPayment_ThenMockPay_CompletesQrFlow() {
             Payment[] store = new Payment[1];
             when(paymentRepository.findByOrderId(101L)).thenAnswer(invocation -> Optional.ofNullable(store[0]));
@@ -170,9 +170,10 @@ class PaymentServiceTest {
 
             PaymentResponse pending = paymentService.processOrderPayment(validOrderEvent);
             assertThat(pending.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(pending.getUserId()).isEqualTo(1L);
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
 
-            PaymentResponse paid = paymentService.mockPay(101L, true);
+            PaymentResponse paid = paymentService.mockPay(101L, true, 1L, "ROLE_USER");
 
             assertThat(paid.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
             assertThat(paid.getTransactionCode()).isNotNull().startsWith("TXN-");
@@ -184,7 +185,6 @@ class PaymentServiceTest {
         @Test
         @DisplayName("Should fail payment and trigger Saga Rollback when amount > 50,000,000 VND")
         void testProcessPayment_Failure_AmountExceedsLimit() {
-            // Given: Đơn hàng 60.000.000 VND vượt hạn mức 50 triệu
             validOrderEvent.setTotalAmount(new BigDecimal("60000000"));
 
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.empty());
@@ -197,16 +197,14 @@ class PaymentServiceTest {
                 return p;
             });
 
-            // When
             PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
 
-            // Then
             assertThat(response).isNotNull();
             assertThat(response.getOrderId()).isEqualTo(101L);
+            assertThat(response.getUserId()).isEqualTo(1L);
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.FAILED);
             assertThat(response.getTransactionCode()).isNull();
 
-            // Verify Kafka failure event published for Saga Rollback
             verify(kafkaPaymentProducer, times(1)).sendPaymentFailed(failedEventCaptor.capture());
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
 
@@ -218,10 +216,10 @@ class PaymentServiceTest {
         @Test
         @DisplayName("Should skip re-processing if payment was already SUCCESS (Idempotency)")
         void testProcessPayment_Idempotent_AlreadySuccess() {
-            // Given
             Payment existingPayment = Payment.builder()
                     .id(1L)
                     .orderId(101L)
+                    .userId(1L)
                     .amount(new BigDecimal("15000000"))
                     .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.SUCCESS)
@@ -230,14 +228,11 @@ class PaymentServiceTest {
 
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(existingPayment));
 
-            // When
             PaymentResponse response = paymentService.processOrderPayment(validOrderEvent);
 
-            // Then
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
             assertThat(response.getTransactionCode()).isEqualTo("TXN-ALREADYDONE");
 
-            // Verify no new Kafka event published
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
             verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
             verify(paymentRepository, never()).save(any());
@@ -245,15 +240,16 @@ class PaymentServiceTest {
     }
 
     @Nested
-    @DisplayName("Lookup Payment Details Tests")
+    @DisplayName("Lookup Payment Details Tests & IDOR Protection")
     class LookupPaymentTests {
 
         @Test
-        @DisplayName("getPaymentByOrderId - Should return payment response when order exists")
+        @DisplayName("getPaymentByOrderId - Chủ sở hữu xem thành công")
         void testGetPaymentByOrderId_Success() {
             Payment payment = Payment.builder()
                     .id(1L)
                     .orderId(101L)
+                    .userId(1L)
                     .amount(new BigDecimal("5000000"))
                     .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.SUCCESS)
@@ -263,30 +259,71 @@ class PaymentServiceTest {
 
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(payment));
 
-            PaymentResponse response = paymentService.getPaymentByOrderId(101L);
+            PaymentResponse response = paymentService.getPaymentByOrderId(101L, 1L, "ROLE_USER");
 
             assertThat(response).isNotNull();
             assertThat(response.getOrderId()).isEqualTo(101L);
+            assertThat(response.getUserId()).isEqualTo(1L);
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
             assertThat(response.getTransactionCode()).isEqualTo("TXN-123456789");
         }
 
         @Test
-        @DisplayName("getPaymentByOrderId - Should throw ResourceNotFoundException when order does not exist")
+        @DisplayName("getPaymentByOrderId - Không tìm thấy bản ghi -> ném ResourceNotFoundException")
         void testGetPaymentByOrderId_NotFound() {
             when(paymentRepository.findByOrderId(999L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> paymentService.getPaymentByOrderId(999L))
+            assertThatThrownBy(() -> paymentService.getPaymentByOrderId(999L, 1L, "ROLE_USER"))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("999");
         }
 
         @Test
-        @DisplayName("getPaymentById - Should return payment response when ID exists")
+        @DisplayName("getPaymentByOrderId - Chống IDOR: User A xem đơn của User B -> ném AccessDeniedException (403)")
+        void testGetPaymentByOrderId_IdorAttempt_ThrowsAccessDeniedException() {
+            Payment paymentOfUserB = Payment.builder()
+                    .id(1L)
+                    .orderId(101L)
+                    .userId(2L)
+                    .amount(new BigDecimal("5000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.SUCCESS)
+                    .build();
+
+            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(paymentOfUserB));
+
+            assertThatThrownBy(() -> paymentService.getPaymentByOrderId(101L, 1L, "ROLE_USER"))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Bạn không có quyền truy cập hoặc thao tác trên thanh toán của đơn hàng này");
+        }
+
+        @Test
+        @DisplayName("getPaymentByOrderId - ROLE_ADMIN được phép xem thanh toán của user khác")
+        void testGetPaymentByOrderId_AdminRole_Success() {
+            Payment paymentOfUserB = Payment.builder()
+                    .id(1L)
+                    .orderId(101L)
+                    .userId(2L)
+                    .amount(new BigDecimal("5000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.SUCCESS)
+                    .build();
+
+            when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(paymentOfUserB));
+
+            PaymentResponse response = paymentService.getPaymentByOrderId(101L, 99L, "ROLE_ADMIN,ROLE_USER");
+
+            assertThat(response.getOrderId()).isEqualTo(101L);
+            assertThat(response.getUserId()).isEqualTo(2L);
+        }
+
+        @Test
+        @DisplayName("getPaymentById - Chủ sở hữu xem thành công")
         void testGetPaymentById_Success() {
             Payment payment = Payment.builder()
                     .id(10L)
                     .orderId(202L)
+                    .userId(1L)
                     .amount(new BigDecimal("3000000"))
                     .paymentMethod("COD")
                     .status(PaymentStatus.PENDING)
@@ -295,7 +332,7 @@ class PaymentServiceTest {
 
             when(paymentRepository.findById(10L)).thenReturn(Optional.of(payment));
 
-            PaymentResponse response = paymentService.getPaymentById(10L);
+            PaymentResponse response = paymentService.getPaymentById(10L, 1L, "ROLE_USER");
 
             assertThat(response).isNotNull();
             assertThat(response.getId()).isEqualTo(10L);
@@ -304,26 +341,64 @@ class PaymentServiceTest {
         }
 
         @Test
-        @DisplayName("getPaymentById - Should throw ResourceNotFoundException when ID does not exist")
+        @DisplayName("getPaymentById - Không tìm thấy bản ghi -> ném ResourceNotFoundException")
         void testGetPaymentById_NotFound() {
             when(paymentRepository.findById(999L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> paymentService.getPaymentById(999L))
+            assertThatThrownBy(() -> paymentService.getPaymentById(999L, 1L, "ROLE_USER"))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("999");
+        }
+
+        @Test
+        @DisplayName("getPaymentById - Chống IDOR: User A xem thanh toán của User B -> ném AccessDeniedException (403)")
+        void testGetPaymentById_IdorAttempt_ThrowsAccessDeniedException() {
+            Payment paymentOfUserB = Payment.builder()
+                    .id(10L)
+                    .orderId(202L)
+                    .userId(2L)
+                    .amount(new BigDecimal("3000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+
+            when(paymentRepository.findById(10L)).thenReturn(Optional.of(paymentOfUserB));
+
+            assertThatThrownBy(() -> paymentService.getPaymentById(10L, 1L, "ROLE_USER"))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Bạn không có quyền truy cập hoặc thao tác trên thanh toán của đơn hàng này");
+        }
+
+        @Test
+        @DisplayName("getPaymentById - Chống false-positive role (ROLE_ADMIN_VIEWER không được bypass IDOR)")
+        void testGetPaymentById_FalsePositiveAdminRole_ThrowsAccessDeniedException() {
+            Payment paymentOfUserB = Payment.builder()
+                    .id(10L)
+                    .orderId(202L)
+                    .userId(2L)
+                    .amount(new BigDecimal("3000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+
+            when(paymentRepository.findById(10L)).thenReturn(Optional.of(paymentOfUserB));
+
+            assertThatThrownBy(() -> paymentService.getPaymentById(10L, 1L, "ROLE_ADMIN_VIEWER"))
+                    .isInstanceOf(AccessDeniedException.class);
         }
     }
 
     @Nested
-    @DisplayName("[ECOM-269] mockPay Tests (Simulated Payment Flow)")
+    @DisplayName("[ECOM-269] mockPay Tests (Simulated Payment Flow & Security)")
     class MockPaymentTests {
 
         @Test
-        @DisplayName("mockPay - Thành công: cập nhật SUCCESS, sinh mã giao dịch và phát sự kiện payment-success")
+        @DisplayName("mockPay - Thành công: chủ đơn xác nhận -> cập nhật SUCCESS, sinh mã giao dịch và phát payment-success")
         void testMockPay_Success() {
             Payment payment = Payment.builder()
                     .id(1L)
                     .orderId(101L)
+                    .userId(1L)
                     .amount(new BigDecimal("15000000"))
                     .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.PENDING)
@@ -332,7 +407,7 @@ class PaymentServiceTest {
             when(paymentRepository.findByOrderId(101L)).thenReturn(Optional.of(payment));
             when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            PaymentResponse response = paymentService.mockPay(101L, true);
+            PaymentResponse response = paymentService.mockPay(101L, true, 1L, "ROLE_USER");
 
             assertThat(response).isNotNull();
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
@@ -342,11 +417,12 @@ class PaymentServiceTest {
         }
 
         @Test
-        @DisplayName("mockPay - Thất bại: cập nhật FAILED và phát sự kiện payment-failed (Saga Rollback)")
+        @DisplayName("mockPay - Thất bại: chủ đơn từ chối -> cập nhật FAILED và phát payment-failed (Saga Rollback)")
         void testMockPay_Failure() {
             Payment payment = Payment.builder()
                     .id(2L)
                     .orderId(102L)
+                    .userId(1L)
                     .amount(new BigDecimal("5000000"))
                     .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.PENDING)
@@ -355,7 +431,7 @@ class PaymentServiceTest {
             when(paymentRepository.findByOrderId(102L)).thenReturn(Optional.of(payment));
             when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            PaymentResponse response = paymentService.mockPay(102L, false);
+            PaymentResponse response = paymentService.mockPay(102L, false, 1L, "ROLE_USER");
 
             assertThat(response).isNotNull();
             assertThat(response.getStatus()).isEqualTo(PaymentStatus.FAILED);
@@ -364,11 +440,112 @@ class PaymentServiceTest {
         }
 
         @Test
-        @DisplayName("mockPay - Đã thanh toán trước đó: idempotent trả về kết quả thành công hiện tại")
-        void testMockPay_AlreadyPaid_Idempotent_ReturnsSuccess() {
+        @DisplayName("mockPay - Chống IDOR: User A gọi mockPay (thanh toán/hủy) đơn của User B -> ném AccessDeniedException (403)")
+        void testMockPay_IdorAttempt_ThrowsAccessDeniedException() {
+            Payment paymentOfUserB = Payment.builder()
+                    .id(10L)
+                    .orderId(106L)
+                    .userId(2L)
+                    .amount(new BigDecimal("5000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+
+            when(paymentRepository.findByOrderId(106L)).thenReturn(Optional.of(paymentOfUserB));
+
+            assertThatThrownBy(() -> paymentService.mockPay(106L, true, 1L, "ROLE_USER"))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Bạn không có quyền truy cập hoặc thao tác trên thanh toán của đơn hàng này");
+
+            assertThatThrownBy(() -> paymentService.mockPay(106L, false, 1L, "ROLE_USER"))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Bạn không có quyền truy cập hoặc thao tác trên thanh toán của đơn hàng này");
+
+            verify(paymentRepository, never()).save(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
+
+        @Test
+        @DisplayName("mockPay - Thiếu userId xác thực -> ném AccessDeniedException (403)")
+        void testMockPay_MissingUserId_ThrowsAccessDeniedException() {
+            assertThatThrownBy(() -> paymentService.mockPay(101L, true, null, "ROLE_USER"))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("X-User-Id");
+
+            verify(paymentRepository, never()).findByOrderId(any());
+            verify(paymentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("mockPay - ROLE_ADMIN được phép thao tác xác nhận thanh toán cho đơn hợp lệ")
+        void testMockPay_AdminRole_Success() {
+            Payment paymentOfUserB = Payment.builder()
+                    .id(11L)
+                    .orderId(107L)
+                    .userId(2L)
+                    .amount(new BigDecimal("3000000"))
+                    .paymentMethod("MOCK_ONLINE")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+
+            when(paymentRepository.findByOrderId(107L)).thenReturn(Optional.of(paymentOfUserB));
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PaymentResponse response = paymentService.mockPay(107L, true, 99L, "ROLE_ADMIN");
+
+            assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+            verify(kafkaPaymentProducer, times(1)).sendPaymentSuccess(any(PaymentSuccessEvent.class));
+        }
+
+        @Test
+        @DisplayName("mockPay - orderId không tồn tại: ném ResourceNotFoundException (404), KHÔNG tự tạo Payment 0đ")
+        void testMockPay_OrderNotFound_ThrowsResourceNotFoundException() {
+            when(paymentRepository.findByOrderId(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.mockPay(999L, true, 1L, "ROLE_USER"))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("Không tìm thấy giao dịch thanh toán cho đơn hàng ID: 999");
+
+            verify(paymentRepository, never()).save(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
+
+        @Test
+        @DisplayName("mockPay - Đơn hàng COD: chặn bằng IllegalStateException, không thể ép đơn COD thành PAID")
+        void testMockPay_CodOrder_ThrowsIllegalStateException() {
+            Payment codPayment = Payment.builder()
+                    .id(12L)
+                    .orderId(108L)
+                    .userId(1L)
+                    .amount(new BigDecimal("1200000"))
+                    .paymentMethod("COD")
+                    .status(PaymentStatus.PENDING)
+                    .build();
+
+            when(paymentRepository.findByOrderId(108L)).thenReturn(Optional.of(codPayment));
+
+            assertThatThrownBy(() -> paymentService.mockPay(108L, true, 1L, "ROLE_USER"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("COD");
+
+            assertThatThrownBy(() -> paymentService.mockPay(108L, false, 1L, "ROLE_USER"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("COD");
+
+            verify(paymentRepository, never()).save(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
+
+        @Test
+        @DisplayName("mockPay - Đã thanh toán (SUCCESS): chặn ghi đè bằng IllegalStateException")
+        void testMockPay_AlreadyPaid_ThrowsIllegalStateException() {
             Payment payment = Payment.builder()
                     .id(3L)
                     .orderId(103L)
+                    .userId(1L)
                     .amount(new BigDecimal("2000000"))
                     .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.SUCCESS)
@@ -377,41 +554,26 @@ class PaymentServiceTest {
 
             when(paymentRepository.findByOrderId(103L)).thenReturn(Optional.of(payment));
 
-            PaymentResponse response = paymentService.mockPay(103L, true);
+            assertThatThrownBy(() -> paymentService.mockPay(103L, true, 1L, "ROLE_USER"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("103");
 
-            assertThat(response).isNotNull();
-            assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
-            assertThat(response.getTransactionCode()).isEqualTo("TXN-EXISTING123");
+            assertThatThrownBy(() -> paymentService.mockPay(103L, false, 1L, "ROLE_USER"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("103");
+
+            verify(paymentRepository, never()).save(any());
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
             verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
         }
 
         @Test
-        @DisplayName("mockPay - Đơn hàng chưa có bản ghi: tự động khởi tạo và xử lý thành công")
-        void testMockPay_OrderNotFound_AutoCreatesPaymentAndProcesses() {
-            when(paymentRepository.findByOrderId(999L)).thenReturn(Optional.empty());
-            when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
-                Payment p = invocation.getArgument(0);
-                p.setId(99L);
-                return p;
-            });
-
-            PaymentResponse response = paymentService.mockPay(999L, true);
-
-            assertThat(response).isNotNull();
-            assertThat(response.getOrderId()).isEqualTo(999L);
-            assertThat(response.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
-            assertThat(response.getTransactionCode()).isNotNull().startsWith("TXN-");
-            verify(paymentRepository, atLeastOnce()).save(any(Payment.class));
-            verify(kafkaPaymentProducer, times(1)).sendPaymentSuccess(any(PaymentSuccessEvent.class));
-        }
-
-        @Test
-        @DisplayName("mockPay - Giao dịch đã FAILED: từ chối xác nhận thành công (409) để tránh đơn đã rollback bị chuyển PAID")
-        void testMockPay_AlreadyFailed_RejectsSuccess() {
+        @DisplayName("mockPay - Giao dịch đã FAILED: chặn ghi đè bằng IllegalStateException cho cả success=true và success=false")
+        void testMockPay_AlreadyFailed_ThrowsIllegalStateException() {
             Payment payment = Payment.builder()
                     .id(4L)
                     .orderId(104L)
+                    .userId(1L)
                     .amount(new BigDecimal("2000000"))
                     .paymentMethod("MOCK_ONLINE")
                     .status(PaymentStatus.FAILED)
@@ -419,33 +581,17 @@ class PaymentServiceTest {
 
             when(paymentRepository.findByOrderId(104L)).thenReturn(Optional.of(payment));
 
-            assertThatThrownBy(() -> paymentService.mockPay(104L, true))
+            assertThatThrownBy(() -> paymentService.mockPay(104L, true, 1L, "ROLE_USER"))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("104");
+
+            assertThatThrownBy(() -> paymentService.mockPay(104L, false, 1L, "ROLE_USER"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("104");
+
             verify(paymentRepository, never()).save(any());
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
             verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
-        }
-
-        @Test
-        @DisplayName("mockPay - Giao dịch đã FAILED: hủy lại là idempotent, không bắn payment-failed lần 2 (tránh hoàn kho 2 lần)")
-        void testMockPay_AlreadyFailed_CancelAgain_Idempotent() {
-            Payment payment = Payment.builder()
-                    .id(5L)
-                    .orderId(105L)
-                    .amount(new BigDecimal("2000000"))
-                    .paymentMethod("MOCK_ONLINE")
-                    .status(PaymentStatus.FAILED)
-                    .build();
-
-            when(paymentRepository.findByOrderId(105L)).thenReturn(Optional.of(payment));
-
-            PaymentResponse response = paymentService.mockPay(105L, false);
-
-            assertThat(response.getStatus()).isEqualTo(PaymentStatus.FAILED);
-            verify(paymentRepository, never()).save(any());
-            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
-            verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
         }
     }
 }
