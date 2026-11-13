@@ -68,6 +68,11 @@ class FlashSaleServiceTest {
     @InjectMocks
     private FlashSaleService flashSaleService;
 
+    @SuppressWarnings("unchecked")
+    private static RedisScript<Long> anyRedisScript() {
+        return any(RedisScript.class);
+    }
+
     // -----------------------------------------------------------------------
     // Constants
     // -----------------------------------------------------------------------
@@ -425,14 +430,14 @@ class FlashSaleServiceTest {
             when(flashSaleItemRepository.findRestorableActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
                     .thenReturn(List.of(item));
             when(flashSaleItemRepository.decrementSoldQuantityAtomically(90L, 3)).thenReturn(1);
-            when(redisTemplate.execute(any(RedisScript.class), eq(List.of(EXPECTED_KEY)), eq("3"), eq("20")))
+            when(redisTemplate.execute(anyRedisScript(), eq(List.of(EXPECTED_KEY)), eq("3"), eq("20")))
                     .thenReturn(17L);
 
             flashSaleService.restoreFlashSaleStock(PRODUCT_ID, 3);
 
             verify(flashSaleItemRepository).decrementSoldQuantityAtomically(90L, 3);
             verify(flashSaleItemRepository, never()).save(any());
-            verify(redisTemplate).execute(any(RedisScript.class), eq(List.of(EXPECTED_KEY)), eq("3"), eq("20"));
+            verify(redisTemplate).execute(anyRedisScript(), eq(List.of(EXPECTED_KEY)), eq("3"), eq("20"));
         }
 
         @Test

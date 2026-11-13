@@ -73,6 +73,11 @@ class OrderServiceTest {
     private ProductResponse sampleProduct1;
     private ProductResponse sampleProduct2;
 
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<List<StockReservationItem>> stockReservationListCaptor() {
+        return ArgumentCaptor.forClass(List.class);
+    }
+
     @BeforeEach
     void setUp() {
         sampleProduct1 = ProductResponse.builder()
@@ -287,8 +292,7 @@ class OrderServiceTest {
         verify(orderRepository, times(1)).save(samplePendingOrder);
 
         // VERIFY: Đã gọi Feign restore-stock đúng danh sách sản phẩm
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<StockReservationItem>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<StockReservationItem>> captor = stockReservationListCaptor();
         verify(productClient, times(1)).restoreStock(captor.capture());
 
         List<StockReservationItem> restoredItems = captor.getValue();
@@ -523,7 +527,7 @@ class OrderServiceTest {
         verify(orderRepository, times(1)).save(samplePendingOrder);
 
         // Verify Saga Compensating Transaction: productClient.restoreStock called!
-        ArgumentCaptor<List<StockReservationItem>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<StockReservationItem>> captor = stockReservationListCaptor();
         verify(productClient, times(1)).restoreStock(captor.capture());
 
         List<StockReservationItem> restoredItems = captor.getValue();
