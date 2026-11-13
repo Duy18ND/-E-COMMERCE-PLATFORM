@@ -494,7 +494,6 @@ export const orderService = {
       const orders = getStoredOrders();
 
       const newId = Math.floor(1004 + Math.random() * 8990);
-      const isOnlinePay = paymentMethod === 'MOCK_ONLINE' || (Boolean(paymentMethod) && paymentMethod !== 'COD');
 
       const rawCartSubtotal = Number(cartData?.totalPrice ?? cartData?.totalAmount) || 32490000;
       const resolvedSubtotal =
@@ -532,8 +531,8 @@ export const orderService = {
         subtotalAmount: resolvedSubtotal,
         productDiscountAmount: resolvedProductDiscount,
         discountAmount: resolvedDiscountAmount,
-        // Đơn Online mới tạo giữ trạng thái PENDING chờ khách quét mã QR thanh toán
-        status: isOnlinePay ? ORDER_STATUS.PENDING : ORDER_STATUS.PENDING,
+        // Đơn mới tạo luôn giữ trạng thái PENDING chờ xác nhận hoặc thanh toán QR
+        status: ORDER_STATUS.PENDING,
         totalAmount: resolvedTotalAmount,
         createdAt: createdAtIso,
         statusHistories: [
@@ -599,7 +598,7 @@ export const orderService = {
   getMyOrders: async () => {
     try {
       const list = await api.get('/orders/my-orders');
-      return Array.isArray(list) ? list : list;
+      return Array.isArray(list) ? list : [];
     } catch (err) {
       if (isHttpResponseError(err)) {
         throw err;
