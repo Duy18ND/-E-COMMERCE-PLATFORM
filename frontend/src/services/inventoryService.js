@@ -125,12 +125,15 @@ export const inventoryService = {
   getInventory: async (params = {}) => {
     try {
       const adminItems = await productService.getAdminProducts(params);
-      if (Array.isArray(adminItems) && adminItems.length > 0) {
+      if (Array.isArray(adminItems)) {
         localInventory = adminItems.map(normalizeInventoryItem).filter(Boolean);
         return [...localInventory];
       }
-    } catch {
-      // Fallback sang localInventory
+    } catch (err) {
+      if (err?.response) {
+        throw err;
+      }
+      // Fallback sang localInventory khi offline
     }
     return localInventory.map(normalizeInventoryItem).filter(Boolean);
   },

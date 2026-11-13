@@ -10,12 +10,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
@@ -36,12 +38,13 @@ public class OrderController {
             @Valid @RequestBody CheckoutRequest request) {
 
         validateHeaderAuthentication(authenticatedUserId, authorizationHeader);
+        requireAuthenticated(authenticatedUserId);
 
-        if (authenticatedUserId != null) {
-            request.setUserId(authenticatedUserId);
-        } else if (request.getUserId() == null) {
-            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
+        if (request.getUserId() != null && !authenticatedUserId.equals(request.getUserId())) {
+            log.warn("Overriding spoofed userId in checkout request: authenticatedUserId={}, bodyUserId={}",
+                    authenticatedUserId, request.getUserId());
         }
+        request.setUserId(authenticatedUserId);
 
         OrderResponse response = orderService.checkout(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -63,14 +66,15 @@ public class OrderController {
             @Valid @RequestBody CheckoutRequest request) {
 
         validateHeaderAuthentication(authenticatedUserId, authorizationHeader);
+        requireAuthenticated(authenticatedUserId);
 
-        if (authenticatedUserId != null) {
-            request.setUserId(authenticatedUserId);
-        } else if (request.getUserId() == null) {
-            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
+        if (request.getUserId() != null && !authenticatedUserId.equals(request.getUserId())) {
+            log.warn("Overriding spoofed userId in createOrderFromCart request: authenticatedUserId={}, bodyUserId={}",
+                    authenticatedUserId, request.getUserId());
         }
+        request.setUserId(authenticatedUserId);
 
-        OrderResponse response = orderService.createOrderFromCart(request.getUserId(), request);
+        OrderResponse response = orderService.createOrderFromCart(authenticatedUserId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Tạo đơn hàng từ giỏ thành công", response));
     }

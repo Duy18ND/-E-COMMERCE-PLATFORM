@@ -1,11 +1,14 @@
 package com.ecommerce.product.controller;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -54,6 +57,9 @@ import lombok.RequiredArgsConstructor;
 public class ProductController {
 
     private final ProductService productService;
+
+    @Value("${internal.service-key:ecommerce-internal-service-secret-2026}")
+    private String internalServiceKey = "ecommerce-internal-service-secret-2026";
 
     @GetMapping
     @Operation(summary = "Lấy danh sách sản phẩm", description = "Lấy danh sách sản phẩm có tìm kiếm, lọc theo danh mục (category/categoryId), khoảng giá, tồn kho, phân trang và sắp xếp")
@@ -128,11 +134,31 @@ public class ProductController {
         }
     }
 
+    private void requireInternalOrAdmin(String internalKey, String roles) {
+        boolean validInternalKey = StringUtils.hasText(internalServiceKey)
+                && StringUtils.hasText(internalKey)
+                && MessageDigest.isEqual(
+                        internalServiceKey.getBytes(StandardCharsets.UTF_8),
+                        internalKey.getBytes(StandardCharsets.UTF_8));
+        if (validInternalKey) {
+            return;
+        }
+        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
+        if (!isAdmin) {
+            throw new AccessDeniedException("Chỉ dịch vụ nội bộ hoặc ADMIN mới có quyền thao tác tồn kho này");
+        }
+    }
+
     @PostMapping("/reserve-stock")
     @Operation(summary = "Đặt trước tồn kho", description = "API nội bộ cho Order Service để giữ và trừ số lượng kho với Optimistic Lock")
     public ResponseEntity<ApiResponse<Void>> reserveStock(
+            @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestBody @NotEmpty(message = "Danh sách sản phẩm đặt trước không được để trống") List<@Valid StockReservationItem> items) {
 
+        requireInternalOrAdmin(internalKey, roles);
         productService.reserveStock(items);
         return ResponseEntity.ok(ApiResponse.success("Đặt trước tồn kho thành công", null));
     }
@@ -140,8 +166,11 @@ public class ProductController {
     @PostMapping("/restore-stock")
     @Operation(summary = "Khôi phục tồn kho", description = "API nội bộ cho Order Service để hoàn lại tồn kho khi đơn hàng bị hủy")
     public ResponseEntity<ApiResponse<Void>> restoreStock(
+            @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestBody @NotEmpty(message = "Danh sách sản phẩm hoàn kho không được để trống") List<@Valid StockReservationItem> items) {
 
+        requireInternalOrAdmin(internalKey, roles);
         productService.restoreStock(items);
         return ResponseEntity.ok(ApiResponse.success("Khôi phục tồn kho thành công", null));
     }
@@ -319,9 +348,11 @@ public class ProductController {
      * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
      */
     @GetMapping("/low-stock/count")
-    @Operation(summary = "Đếm số sản phẩm sắp hết hàng", description = "Trả về tổng số sản phẩm đang kinh doanh có tồn kho <= threshold (mặc định 5)")
+    @Operation(summary = "Đếm số sản phẩm sắp hết hàng", description = "Trả về tổng số sản phẩm đang kinh doanh có tồn kho <= threshold (mặc định 5). Yêu cầu ROLE_ADMIN.")
     public ResponseEntity<ApiResponse<Long>> countLowStockProducts(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestParam(value = "threshold", defaultValue = "5") Integer threshold) {
+        requireAdminRole(roles);
         long count = productService.countLowStockProducts(threshold);
         return ResponseEntity.ok(ApiResponse.success("Đếm số sản phẩm sắp hết hàng thành công", count));
     }

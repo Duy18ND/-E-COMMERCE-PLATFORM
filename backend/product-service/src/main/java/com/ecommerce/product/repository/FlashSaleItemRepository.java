@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -27,5 +28,25 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         List<FlashSaleItem> items = findActiveItemsByProductId(productId, now);
         return (items == null || items.isEmpty()) ? Optional.empty() : Optional.of(items.get(0));
     }
+
+    @Query("SELECT i FROM FlashSaleItem i JOIN FETCH i.campaign c " +
+            "WHERE i.productId = :productId " +
+            "AND c.status = 'ACTIVE' " +
+            "AND c.startTime <= :now AND c.endTime >= :now " +
+            "AND i.soldQuantity > 0 " +
+            "ORDER BY i.flashSalePrice ASC, c.id DESC")
+    List<FlashSaleItem> findRestorableActiveItemsByProductId(@Param("productId") Long productId,
+                                                             @Param("now") LocalDateTime now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE FlashSaleItem i SET i.soldQuantity = i.soldQuantity + :quantity " +
+            "WHERE i.id = :id AND (i.soldQuantity + :quantity) <= i.quantity")
+    int incrementSoldQuantityAtomically(@Param("id") Long id, @Param("quantity") int quantity);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE FlashSaleItem i SET i.soldQuantity = " +
+            "CASE WHEN i.soldQuantity >= :quantity THEN (i.soldQuantity - :quantity) ELSE 0 END " +
+            "WHERE i.id = :id AND i.soldQuantity > 0")
+    int decrementSoldQuantityAtomically(@Param("id") Long id, @Param("quantity") int quantity);
 }
 

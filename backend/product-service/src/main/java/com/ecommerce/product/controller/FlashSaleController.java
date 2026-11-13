@@ -1,12 +1,16 @@
 package com.ecommerce.product.controller;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,6 +45,9 @@ public class FlashSaleController {
 
     private final FlashSaleService flashSaleService;
 
+    @Value("${internal.service-key:ecommerce-internal-service-secret-2026}")
+    private String internalServiceKey = "ecommerce-internal-service-secret-2026";
+
     // -----------------------------------------------------------------------
     // Public APIs
     // -----------------------------------------------------------------------
@@ -54,10 +61,13 @@ public class FlashSaleController {
     }
 
     @PostMapping("/api/v1/flash-sales/reserve")
-    @Operation(summary = "Đặt chỗ trừ tồn kho Flash Sale nguyên tử qua Redis Lua")
+    @Operation(summary = "Đặt chỗ trừ tồn kho Flash Sale nguyên tử qua Redis Lua [INTERNAL/ADMIN]")
     public ResponseEntity<ApiResponse<Void>> reserveFlashSaleStock(
+            @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @Valid @RequestBody FlashSaleReserveRequest request) {
 
+        requireInternalOrAdmin(internalKey, userRoles);
         flashSaleService.reserveFlashSaleStock(request.productId(), request.quantity());
 
         log.info("[FlashSale] Reserve OK — productId={}, qty={}", request.productId(), request.quantity());
@@ -65,6 +75,25 @@ public class FlashSaleController {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         "Đặt chỗ Flash Sale thành công! Sản phẩm "
+                                + request.productId() + " x" + request.quantity(),
+                        null));
+    }
+
+    @PostMapping("/api/v1/flash-sales/restore")
+    @Operation(summary = "Hoàn trả tồn kho Flash Sale khi checkout lỗi, hủy đơn hoặc thanh toán thất bại [INTERNAL/ADMIN]")
+    public ResponseEntity<ApiResponse<Void>> restoreFlashSaleStock(
+            @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @Valid @RequestBody FlashSaleReserveRequest request) {
+
+        requireInternalOrAdmin(internalKey, userRoles);
+        flashSaleService.restoreFlashSaleStock(request.productId(), request.quantity());
+
+        log.info("[FlashSale] Restore OK — productId={}, qty={}", request.productId(), request.quantity());
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Hoàn trả tồn kho Flash Sale thành công cho sản phẩm "
                                 + request.productId() + " x" + request.quantity(),
                         null));
     }
@@ -164,6 +193,23 @@ public class FlashSaleController {
                         "Flash Sale đã được kích hoạt cho sản phẩm " + productId
                                 + " với " + stock + " sản phẩm",
                         null));
+    }
+
+    private void requireInternalOrAdmin(String internalKey, String roles) {
+        boolean validInternalKey = StringUtils.hasText(internalServiceKey)
+                && StringUtils.hasText(internalKey)
+                && MessageDigest.isEqual(
+                        internalServiceKey.getBytes(StandardCharsets.UTF_8),
+                        internalKey.getBytes(StandardCharsets.UTF_8));
+        if (validInternalKey) {
+            return;
+        }
+        boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
+                .map(String::trim)
+                .anyMatch("ROLE_ADMIN"::equals);
+        if (!isAdmin) {
+            throw new AccessDeniedException("Truy cập bị từ chối: API nội bộ Flash Sale chỉ cho phép order-service hoặc ROLE_ADMIN");
+        }
     }
 
     private void requireAdminRole(String roles) {

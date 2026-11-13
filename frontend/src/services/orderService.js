@@ -340,6 +340,9 @@ const toFiniteNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const isHttpResponseError = (err) =>
+  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
+
 const normalizeOrderDate = (value) => {
   if (value === null || value === undefined || value === '') return null;
   if (Array.isArray(value) && value.length >= 3) {
@@ -433,31 +436,47 @@ export const orderService = {
       });
 
       if (apiOrder && typeof apiOrder === 'object') {
+        const backendSubtotal =
+          apiOrder.subtotalAmount !== null && apiOrder.subtotalAmount !== undefined
+            ? Number(apiOrder.subtotalAmount)
+            : null;
         const effectiveSubtotal =
-          subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
-            ? Number(subtotalAmount)
-            : Number(apiOrder.subtotalAmount ?? apiOrder.totalAmount ?? 0);
-        const effectiveDiscount = Math.min(
-          effectiveSubtotal,
-          Math.max(Number(apiOrder.discountAmount ?? 0), Math.max(0, Number(discountAmount) || 0))
-        );
-        const effectiveProductDiscount = Math.max(0, Number(productDiscountAmount) || 0);
+          backendSubtotal !== null && backendSubtotal > 0
+            ? backendSubtotal
+            : (subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
+                ? Number(subtotalAmount)
+                : Number(apiOrder.totalAmount ?? 0));
+        const backendDiscount =
+          apiOrder.discountAmount !== null && apiOrder.discountAmount !== undefined
+            ? Number(apiOrder.discountAmount)
+            : null;
+        const effectiveDiscount =
+          backendDiscount !== null
+            ? Math.min(effectiveSubtotal, Math.max(0, backendDiscount))
+            : Math.min(effectiveSubtotal, Math.max(0, Number(discountAmount) || 0));
+        const effectiveProductDiscount =
+          apiOrder.productDiscountAmount !== null && apiOrder.productDiscountAmount !== undefined
+            ? Math.max(0, Number(apiOrder.productDiscountAmount))
+            : Math.max(0, Number(productDiscountAmount) || 0);
+        const backendTotal =
+          apiOrder.totalAmount !== null && apiOrder.totalAmount !== undefined
+            ? Number(apiOrder.totalAmount)
+            : null;
         const computedFinal =
           finalTotal !== null && finalTotal !== undefined && Number(finalTotal) >= 0 && effectiveSubtotal > 0
             ? Math.min(Number(finalTotal), Math.max(0, effectiveSubtotal - effectiveDiscount))
             : Math.max(0, effectiveSubtotal - effectiveDiscount);
-        const backendTotal = Number(apiOrder.totalAmount ?? computedFinal);
-        const resolvedTotal =
-          effectiveSubtotal > 0 && (effectiveDiscount > 0 || effectiveProductDiscount > 0)
-            ? Math.min(backendTotal > 0 ? backendTotal : computedFinal, computedFinal)
-            : backendTotal;
-        const resolvedOriginal = Math.max(
-          Number(originalAmount ?? 0),
-          effectiveSubtotal + effectiveProductDiscount,
-          Number(apiOrder.subtotalAmount ?? resolvedTotal)
-        );
+        const resolvedTotal = backendTotal !== null ? backendTotal : computedFinal;
+        const resolvedOriginal =
+          apiOrder.originalAmount !== null && apiOrder.originalAmount !== undefined
+            ? Number(apiOrder.originalAmount)
+            : Math.max(
+                Number(originalAmount ?? 0),
+                effectiveSubtotal + effectiveProductDiscount,
+                Number(apiOrder.subtotalAmount ?? resolvedTotal)
+              );
 
-        const normalizedOrder = {
+        return {
           ...apiOrder,
           voucherId: voucherId ?? apiOrder.voucherId ?? null,
           voucherCode: apiOrder.voucherCode || normalizedVoucherCode,
@@ -467,11 +486,12 @@ export const orderService = {
           discountAmount: effectiveDiscount,
           totalAmount: resolvedTotal
         };
-        saveOrderPriceOverride(normalizedOrder);
-        return normalizedOrder;
       }
       return apiOrder;
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       // Fallback Mock Order Creation: Cho phép test xác nhận đơn hàng 100% không bị lỗi
       const cartData = await cartService.getCart();
       const orders = getStoredOrders();
@@ -565,7 +585,6 @@ export const orderService = {
       // Lưu vào danh sách đơn và bảng tra cứu giá đã giảm
       orders.unshift(createdOrder);
       setStoredOrders(orders);
-      saveOrderPriceOverride(createdOrder);
 
       // Dọn sạch giỏ sau khi đặt hàng thành công
       await cartService.clearCart();
@@ -583,16 +602,19 @@ export const orderService = {
   getMyOrders: async () => {
     try {
       const list = await api.get('/orders/my-orders');
-      return Array.isArray(list) ? list.map(applyOrderPriceOverride) : list;
+      return Array.isArray(list) ? list : list;
     } catch (err) {
-      return getStoredOrders().map(applyOrderPriceOverride);
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
+      return getStoredOrders();
     }
   },
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})
   getOrderById: async (id) => {
     const applyQrOverrideIfNeeded = (orderObj) => {
-      const withPrice = applyOrderPriceOverride(orderObj);
+      const withPrice = orderObj;
       if (!withPrice || withPrice.status !== ORDER_STATUS.PENDING) return withPrice;
       try {
         if (typeof window !== 'undefined' && window.sessionStorage) {
@@ -623,6 +645,9 @@ export const orderService = {
       if (err.response?.status === 403) {
         throw err;
       }
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       const orders = getStoredOrders();
       const found = orders.find((o) => String(o.id) === String(id));
       if (!found) {
@@ -645,6 +670,9 @@ export const orderService = {
       return response;
     } catch (err) {
       if (err.response?.status === 403) {
+        throw err;
+      }
+      if (isHttpResponseError(err)) {
         throw err;
       }
       const nowIso = new Date().toISOString();
@@ -958,6 +986,9 @@ export const orderService = {
       return response;
     } catch (err) {
       if (err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 404) {
+        throw err;
+      }
+      if (isHttpResponseError(err)) {
         throw err;
       }
       const nowIso = new Date().toISOString();

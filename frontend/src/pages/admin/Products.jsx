@@ -22,7 +22,7 @@ const INITIAL_MOCK_ADMIN_PRODUCTS = [
 
 const AdminProducts = () => {
   const { showToast, confirmDialog, notify } = useToast();
-  const [products, setProducts] = useState(INITIAL_MOCK_ADMIN_PRODUCTS);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Search & Filter state
@@ -39,7 +39,7 @@ const AdminProducts = () => {
     setLoading(true);
     try {
       const data = await productService.getAdminProducts();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setProducts(
           data.map((p) => ({
             ...p,
@@ -49,8 +49,11 @@ const AdminProducts = () => {
           }))
         );
       }
-    } catch {
-      // Fallback sang danh sách hiện tại
+    } catch (err) {
+      if (err?.response) {
+        setProducts([]);
+      }
+      // Fallback sang danh sách hiện tại khi offline
     } finally {
       setLoading(false);
     }

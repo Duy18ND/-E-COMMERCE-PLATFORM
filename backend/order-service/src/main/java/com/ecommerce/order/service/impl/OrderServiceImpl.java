@@ -14,6 +14,7 @@ import com.ecommerce.order.dto.response.OrderResponse;
 import com.ecommerce.order.dto.response.OrderStatusHistoryResponse;
 import com.ecommerce.order.dto.response.PagedResponse;
 import com.ecommerce.order.entity.Cart;
+import com.ecommerce.order.entity.CartItem;
 import com.ecommerce.order.entity.Order;
 import com.ecommerce.order.entity.OrderItem;
 import com.ecommerce.order.entity.OrderStatusHistory;
@@ -36,7 +37,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -123,12 +126,17 @@ public class OrderServiceImpl implements OrderService {
         if (request.getItems() == null || request.getItems().isEmpty()) {
             return createOrderFromCart(request.getUserId(), request);
         }
+        return checkoutInternal(request, false);
+    }
 
-        log.info("Processing checkout for userId: {}, items count: {}", request.getUserId(), request.getItems().size());
+    private OrderResponse checkoutInternal(CheckoutRequest request, boolean orderedFromFullCart) {
+        log.info("Processing checkout for userId: {}, items count: {}, orderedFromFullCart: {}",
+                request.getUserId(), request.getItems().size(), orderedFromFullCart);
 
-        // 1. Chống Price Tampering & Kiểm tra Flash Sale (giá ưu đãi + giới hạn mua userLimit)
+        // 1. Chống Price Tampering & Kiểm tra Flash Sale (giá ưu đãi + giới hạn mua userLimit tích lũy)
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<FlashSaleReserveRequest> flashSaleReservations = new ArrayList<>();
+        Set<Long> flashSaleProductIds = new HashSet<>();
         Map<Long, Integer> flashSaleQtyByProduct = new HashMap<>();
 
         for (CheckoutItemRequest itemReq : request.getItems()) {
@@ -141,8 +149,11 @@ public class OrderServiceImpl implements OrderService {
             BigDecimal actualPrice = product.getPrice();
             if (product.getActiveFlashSale() != null) {
                 ActiveFlashSaleDto activeFlashSale = product.getActiveFlashSale();
-                int cumulativeQty = flashSaleQtyByProduct.merge(
-                        itemReq.getProductId(), itemReq.getQuantity(), Integer::sum);
+                int priorQty = flashSaleQtyByProduct.containsKey(itemReq.getProductId())
+                        ? flashSaleQtyByProduct.get(itemReq.getProductId())
+                        : countAlreadyPurchasedFlashSaleQty(request.getUserId(), itemReq.getProductId(), activeFlashSale);
+                int cumulativeQty = priorQty + itemReq.getQuantity();
+                flashSaleQtyByProduct.put(itemReq.getProductId(), cumulativeQty);
 
                 if (activeFlashSale.getUserLimit() != null && cumulativeQty > activeFlashSale.getUserLimit()) {
                     throw new IllegalArgumentException(
@@ -154,6 +165,7 @@ public class OrderServiceImpl implements OrderService {
                     actualPrice = activeFlashSale.getFlashSalePrice();
                 }
 
+                flashSaleProductIds.add(itemReq.getProductId());
                 flashSaleReservations.add(FlashSaleReserveRequest.builder()
                         .productId(itemReq.getProductId())
                         .quantity(itemReq.getQuantity())
@@ -192,14 +204,6 @@ public class OrderServiceImpl implements OrderService {
 
         BigDecimal finalTotalAmount = subtotalAmount.subtract(discountAmount).max(BigDecimal.ZERO);
 
-        // 2a. Trừ tồn kho Flash Sale nguyên tử trên Redis Lua (và cập nhật soldQuantity) nếu sản phẩm đang chạy Flash Sale
-        for (FlashSaleReserveRequest fsReservation : flashSaleReservations) {
-            log.info("Calling ProductClient reserveFlashSaleStock for productId={}, quantity={}",
-                    fsReservation.getProductId(), fsReservation.getQuantity());
-            productClient.reserveFlashSaleStock(fsReservation);
-        }
-
-        // 2b. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
         List<StockReservationItem> reservationItems = request.getItems().stream()
                 .map(item -> StockReservationItem.builder()
                         .productId(item.getProductId())
@@ -207,75 +211,90 @@ public class OrderServiceImpl implements OrderService {
                         .build())
                 .toList();
 
-        log.info("Calling ProductClient reserveStock for {} items", reservationItems.size());
-        productClient.reserveStock(reservationItems);
+        List<FlashSaleReserveRequest> reservedFlashSaleItems = new ArrayList<>();
+        boolean regularStockReserved = false;
+        try {
+            // 2a. Trừ tồn kho Flash Sale nguyên tử trên Redis Lua (và cập nhật soldQuantity) nếu sản phẩm đang chạy Flash Sale
+            for (FlashSaleReserveRequest fsReservation : flashSaleReservations) {
+                log.info("Calling ProductClient reserveFlashSaleStock for productId={}, quantity={}",
+                        fsReservation.getProductId(), fsReservation.getQuantity());
+                productClient.reserveFlashSaleStock(fsReservation);
+                reservedFlashSaleItems.add(fsReservation);
+            }
 
-        // 3. Khởi tạo Order và OrderItems, lưu vào DB
-        Order order = Order.builder()
-                .userId(request.getUserId())
-                .receiverName(request.getReceiverName())
-                .receiverPhone(request.getReceiverPhone())
-                .shippingAddress(request.getShippingAddress())
-                .subtotalAmount(subtotalAmount)
-                .voucherCode(appliedVoucherCode)
-                .discountAmount(discountAmount)
-                .totalAmount(finalTotalAmount)
-                .status(OrderStatus.PENDING)
-                .paymentMethod(request.getPaymentMethod())
-                .build();
+            // 2b. Chuẩn bị danh sách trừ tồn kho và gọi FeignClient sang Product Service
+            log.info("Calling ProductClient reserveStock for {} items", reservationItems.size());
+            productClient.reserveStock(reservationItems);
+            regularStockReserved = true;
 
-        for (CheckoutItemRequest itemReq : request.getItems()) {
-            OrderItem orderItem = OrderItem.builder()
-                    .productId(itemReq.getProductId())
-                    .productName(itemReq.getProductName())
-                    .quantity(itemReq.getQuantity())
-                    .priceAtPurchase(itemReq.getPriceAtPurchase())
+            // 3. Khởi tạo Order và OrderItems, lưu vào DB
+            Order order = Order.builder()
+                    .userId(request.getUserId())
+                    .receiverName(request.getReceiverName())
+                    .receiverPhone(request.getReceiverPhone())
+                    .shippingAddress(request.getShippingAddress())
+                    .subtotalAmount(subtotalAmount)
+                    .voucherCode(appliedVoucherCode)
+                    .discountAmount(discountAmount)
+                    .totalAmount(finalTotalAmount)
+                    .status(OrderStatus.PENDING)
+                    .paymentMethod(request.getPaymentMethod())
                     .build();
-            order.addOrderItem(orderItem);
+
+            for (CheckoutItemRequest itemReq : request.getItems()) {
+                OrderItem orderItem = OrderItem.builder()
+                        .productId(itemReq.getProductId())
+                        .productName(itemReq.getProductName())
+                        .quantity(itemReq.getQuantity())
+                        .priceAtPurchase(itemReq.getPriceAtPurchase())
+                        .flashSale(flashSaleProductIds.contains(itemReq.getProductId()))
+                        .build();
+                order.addOrderItem(orderItem);
+            }
+
+            Order savedOrder = orderRepository.save(order);
+            if (savedOrder != null) {
+                savedOrder.setSubtotalAmount(subtotalAmount);
+                savedOrder.setDiscountAmount(discountAmount);
+                savedOrder.setTotalAmount(finalTotalAmount);
+            }
+            log.info("Order created successfully with id: {}, subtotalAmount: {}, discountAmount: {}, totalAmount: {}",
+                    savedOrder.getId(), subtotalAmount, discountAmount, savedOrder.getTotalAmount());
+
+            // [Task ECOM-166 / ECOM-167 / ECOM-183] Lưu bản ghi voucher_usages (chặn dùng trùng và phục vụ hoàn lượt khi hủy/lỗi thanh toán)
+            if (appliedVoucherCode != null && voucherService != null && savedOrder != null) {
+                voucherService.recordVoucherUsage(appliedVoucherCode, savedOrder.getUserId(), savedOrder.getId(), discountAmount);
+            }
+
+            // [Task ECOM-171 / ECOM-187] Ghi nhận mốc lịch sử đầu tiên khi đơn hàng vừa được khởi tạo
+            recordStatusHistory(savedOrder, OrderStatus.PENDING, null, "ORDER_CREATED",
+                    "CUSTOMER:" + savedOrder.getUserId(), "ROLE_CUSTOMER", "Đơn hàng đã được đặt thành công");
+
+            // [Task ECOM-123 / ECOM-267] Chỉ xóa các sản phẩm đã đặt khỏi giỏ hàng (hoặc làm trống hoàn toàn khi checkout toàn giỏ)
+            cleanupOrderedItemsFromCart(request, orderedFromFullCart);
+
+            // 4. Bắn sự kiện order-created qua Kafka cho payment-service
+            OrderEvent orderEvent = OrderEvent.builder()
+                    .orderId(savedOrder.getId())
+                    .userId(savedOrder.getUserId())
+                    .totalAmount(savedOrder.getTotalAmount())
+                    .paymentMethod(savedOrder.getPaymentMethod())
+                    .status(savedOrder.getStatus())
+                    .createdAt(savedOrder.getCreatedAt())
+                    .build();
+
+            kafkaOrderProducer.sendOrderCreatedEvent(orderEvent);
+
+            return mapToOrderResponse(savedOrder);
+        } catch (Exception ex) {
+            if (regularStockReserved) {
+                safeRestoreRegularStock(reservationItems);
+            }
+            if (!reservedFlashSaleItems.isEmpty()) {
+                restoreFlashSaleItems(reservedFlashSaleItems, true);
+            }
+            throw ex;
         }
-
-        Order savedOrder = orderRepository.save(order);
-        if (savedOrder != null) {
-            savedOrder.setSubtotalAmount(subtotalAmount);
-            savedOrder.setDiscountAmount(discountAmount);
-            savedOrder.setTotalAmount(finalTotalAmount);
-        }
-        log.info("Order created successfully with id: {}, subtotalAmount: {}, discountAmount: {}, totalAmount: {}",
-                savedOrder.getId(), subtotalAmount, discountAmount, savedOrder.getTotalAmount());
-
-        // [Task ECOM-166 / ECOM-167 / ECOM-183] Lưu bản ghi voucher_usages (chặn dùng trùng và phục vụ hoàn lượt khi hủy/lỗi thanh toán)
-        if (appliedVoucherCode != null && voucherService != null && savedOrder != null) {
-            voucherService.recordVoucherUsage(appliedVoucherCode, savedOrder.getUserId(), savedOrder.getId(), discountAmount);
-        }
-
-        // [Task ECOM-171 / ECOM-187] Ghi nhận mốc lịch sử đầu tiên khi đơn hàng vừa được khởi tạo
-        recordStatusHistory(savedOrder, OrderStatus.PENDING, null, "ORDER_CREATED",
-                "CUSTOMER:" + savedOrder.getUserId(), "ROLE_CUSTOMER", "Đơn hàng đã được đặt thành công");
-
-        // [Task ECOM-123 / ECOM-267] Làm trống giỏ hàng nếu user có giỏ hàng đang lưu
-        if (request.getUserId() != null && cartRepository != null) {
-            cartRepository.findByUserIdWithItems(request.getUserId()).ifPresent(c -> {
-                if (c.getItems() != null && !c.getItems().isEmpty()) {
-                    c.clearItems();
-                    cartRepository.save(c);
-                    log.info("[Task ECOM-267] Cleared active cart items for userId: {}", request.getUserId());
-                }
-            });
-        }
-
-        // 4. Bắn sự kiện order-created qua Kafka cho payment-service
-        OrderEvent orderEvent = OrderEvent.builder()
-                .orderId(savedOrder.getId())
-                .userId(savedOrder.getUserId())
-                .totalAmount(savedOrder.getTotalAmount())
-                .paymentMethod(savedOrder.getPaymentMethod())
-                .status(savedOrder.getStatus())
-                .createdAt(savedOrder.getCreatedAt())
-                .build();
-
-        kafkaOrderProducer.sendOrderCreatedEvent(orderEvent);
-
-        return mapToOrderResponse(savedOrder);
     }
 
     /**
@@ -309,8 +328,8 @@ public class OrderServiceImpl implements OrderService {
         request.setUserId(targetUserId);
         request.setItems(items);
 
-        // Gọi logic checkout chuẩn (chống giá ảo, trừ tồn kho, lưu DB, bắn Kafka)
-        return checkout(request);
+        // Gọi logic checkout chuẩn (chống giá ảo, trừ tồn kho, lưu DB, bắn Kafka) với cờ toàn bộ giỏ hàng
+        return checkoutInternal(request, true);
     }
 
     /**
@@ -376,6 +395,7 @@ public class OrderServiceImpl implements OrderService {
 
         log.info("Calling ProductClient restoreStock for orderId {}: {}", orderId, restoreItems);
         productClient.restoreStock(restoreItems);
+        restoreFlashSaleStockForOrder(order);
 
         order.setStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
@@ -392,7 +412,25 @@ public class OrderServiceImpl implements OrderService {
             voucherService.restoreVoucherUsageForOrder(order.getVoucherCode(), order.getUserId(), order.getId());
         }
 
+        // Đồng bộ trạng thái hủy sang payment-service để đóng giao dịch PENDING
+        publishOrderCancelledEvent(updatedOrder);
+
         return mapToOrderResponse(updatedOrder);
+    }
+
+    private void publishOrderCancelledEvent(Order order) {
+        if (kafkaOrderProducer == null || order == null) {
+            return;
+        }
+        OrderEvent cancelEvent = OrderEvent.builder()
+                .orderId(order.getId())
+                .userId(order.getUserId())
+                .totalAmount(order.getTotalAmount())
+                .paymentMethod(order.getPaymentMethod())
+                .status(OrderStatus.CANCELLED)
+                .createdAt(order.getCreatedAt())
+                .build();
+        kafkaOrderProducer.sendOrderCancelledEvent(cancelEvent);
     }
 
     /**
@@ -470,21 +508,27 @@ public class OrderServiceImpl implements OrderService {
         log.info("[Saga Step] Handling payment success for orderId: {}, txn: {}",
                 event.getOrderId(), event.getTransactionCode());
 
-        Order order = orderRepository.findById(event.getOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
+        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(event.getOrderId());
+        try {
+            Order order = orderRepository.findById(event.getOrderId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
 
-        if (order.getStatus() == OrderStatus.PAID) {
-            log.warn("[Saga Step] Order {} is already marked as PAID. Skipping duplicate event.", event.getOrderId());
-            return;
+            if (order.getStatus() != OrderStatus.PENDING) {
+                log.warn("[Saga Step] Order {} is in status {}. Skipping transition to PAID to prevent reviving cancelled/failed or already processed order.",
+                        event.getOrderId(), order.getStatus());
+                return;
+            }
+
+            order.setStatus(OrderStatus.PAID);
+            Order savedOrder = orderRepository.save(order);
+            log.info("[Saga Step] Order status successfully updated to PAID for orderId: {}", event.getOrderId());
+
+            // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thành công
+            recordStatusHistory(savedOrder, OrderStatus.PAID, OrderStatus.PENDING, "PAYMENT_SUCCESS",
+                    "PAYMENT_SERVICE", "SYSTEM", "Đã thanh toán thành công qua cổng thanh toán");
+        } finally {
+            releaseOrderLockIfNoTransaction(lock);
         }
-
-        order.setStatus(OrderStatus.PAID);
-        Order savedOrder = orderRepository.save(order);
-        log.info("[Saga Step] Order status successfully updated to PAID for orderId: {}", event.getOrderId());
-
-        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thành công
-        recordStatusHistory(savedOrder, OrderStatus.PAID, OrderStatus.PENDING, "PAYMENT_SUCCESS",
-                "PAYMENT_SERVICE", "SYSTEM", "Đã thanh toán thành công qua cổng thanh toán");
     }
 
     @Override
@@ -498,8 +542,11 @@ public class OrderServiceImpl implements OrderService {
             Order order = orderRepository.findByIdWithItems(event.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
 
-            if (order.getStatus() == OrderStatus.FAILED || order.getStatus() == OrderStatus.CANCELLED) {
-                log.warn("[Saga Step] Order {} is already in terminal status: {}. Skipping duplicate failure handling.",
+            if (order.getStatus() == OrderStatus.CANCELLED
+                    || order.getStatus() == OrderStatus.FAILED
+                    || order.getStatus() == OrderStatus.PAID
+                    || order.getStatus() != OrderStatus.PENDING) {
+                log.warn("[Saga Step] Order {} is in status: {}. Skipping failure handling to prevent double rollback or invalid transition.",
                         event.getOrderId(), order.getStatus());
                 return;
             }
@@ -515,6 +562,7 @@ public class OrderServiceImpl implements OrderService {
                     event.getOrderId(), restoreItems);
             try {
                 productClient.restoreStock(restoreItems);
+                restoreFlashSaleStockForOrder(order);
                 log.info("[Saga Rollback] Successfully restored stock for orderId: {}", event.getOrderId());
             } catch (Exception ex) {
                 log.error("[Saga Rollback Error] Failed to restore stock for orderId {}: {}",
@@ -603,6 +651,7 @@ public class OrderServiceImpl implements OrderService {
 
                 log.info("Calling ProductClient restoreStock on CANCELLED for orderId {}: {}", orderId, restoreItems);
                 productClient.restoreStock(restoreItems);
+                restoreFlashSaleStockForOrder(order);
 
                 // [Task ECOM-183 / ECOM-185] Hoàn lại lượt sử dụng Voucher và mở khóa voucher_usages nếu đơn hàng có áp dụng
                 if (order.getVoucherCode() != null && voucherService != null) {
@@ -624,6 +673,10 @@ public class OrderServiceImpl implements OrderService {
                     updatedBy != null ? updatedBy : "ADMIN",
                     actorRole != null ? actorRole : "ROLE_ADMIN",
                     logNote);
+
+            if (newStatus == OrderStatus.CANCELLED) {
+                publishOrderCancelledEvent(savedOrder);
+            }
 
             return mapToOrderResponse(savedOrder);
         } finally {
@@ -858,5 +911,110 @@ public class OrderServiceImpl implements OrderService {
                 .priceAtPurchase(item.getPriceAtPurchase())
                 .subTotal(subTotal)
                 .build();
+    }
+
+    private int countAlreadyPurchasedFlashSaleQty(Long userId, Long productId, ActiveFlashSaleDto activeFlashSale) {
+        if (userId == null || productId == null || orderRepository == null) {
+            return 0;
+        }
+        LocalDateTime windowStart = activeFlashSale.getStartTime() != null
+                ? activeFlashSale.getStartTime()
+                : LocalDateTime.now().minusDays(30);
+        LocalDateTime windowEnd = activeFlashSale.getEndTime() != null
+                ? activeFlashSale.getEndTime()
+                : LocalDateTime.now().plusYears(1);
+        Integer count = orderRepository.sumPurchasedQuantityByUserAndProductBetween(
+                userId,
+                productId,
+                List.of(OrderStatus.CANCELLED, OrderStatus.FAILED),
+                windowStart,
+                windowEnd);
+        return count != null ? count : 0;
+    }
+
+    private void cleanupOrderedItemsFromCart(CheckoutRequest request, boolean orderedFromFullCart) {
+        if (request.getUserId() == null || cartRepository == null) {
+            return;
+        }
+        cartRepository.findByUserIdWithItems(request.getUserId()).ifPresent(c -> {
+            if (c.getItems() == null || c.getItems().isEmpty()) {
+                return;
+            }
+            if (orderedFromFullCart) {
+                c.clearItems();
+                cartRepository.save(c);
+                log.info("[Task ECOM-267] Cleared active cart items for userId: {}", request.getUserId());
+                return;
+            }
+            Set<Long> orderedProductIds = request.getItems().stream()
+                    .map(CheckoutItemRequest::getProductId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            List<CartItem> itemsToRemove = c.getItems().stream()
+                    .filter(ci -> ci.getProductId() != null && orderedProductIds.contains(ci.getProductId()))
+                    .toList();
+            if (!itemsToRemove.isEmpty()) {
+                itemsToRemove.forEach(c::removeItem);
+                cartRepository.save(c);
+                log.info("[Checkout] Removed {} ordered product(s) from cart for userId: {}",
+                        itemsToRemove.size(), request.getUserId());
+            }
+        });
+    }
+
+    private void restoreFlashSaleStockForOrder(Order order) {
+        if (order == null || order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+            return;
+        }
+        Map<Long, Integer> fsQtyByProduct = new LinkedHashMap<>();
+        for (OrderItem item : order.getOrderItems()) {
+            if (Boolean.TRUE.equals(item.getFlashSale())
+                    && item.getProductId() != null
+                    && item.getQuantity() != null
+                    && item.getQuantity() > 0) {
+                fsQtyByProduct.merge(item.getProductId(), item.getQuantity(), Integer::sum);
+            }
+        }
+        if (fsQtyByProduct.isEmpty()) {
+            return;
+        }
+        List<FlashSaleReserveRequest> fsRestoreRequests = fsQtyByProduct.entrySet().stream()
+                .map(e -> FlashSaleReserveRequest.builder()
+                        .productId(e.getKey())
+                        .quantity(e.getValue())
+                        .build())
+                .toList();
+        restoreFlashSaleItems(fsRestoreRequests, false);
+    }
+
+    private void safeRestoreRegularStock(List<StockReservationItem> reservationItems) {
+        if (reservationItems == null || reservationItems.isEmpty()) {
+            return;
+        }
+        try {
+            log.warn("[Checkout Rollback] Restoring regular stock for {} item(s) after failure", reservationItems.size());
+            productClient.restoreStock(reservationItems);
+        } catch (Exception restoreEx) {
+            log.error("[Checkout Rollback Error] Failed to restore regular stock: {}", restoreEx.getMessage(), restoreEx);
+        }
+    }
+
+    private void restoreFlashSaleItems(List<FlashSaleReserveRequest> items, boolean swallowErrors) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        for (FlashSaleReserveRequest fsItem : items) {
+            try {
+                log.info("Calling ProductClient restoreFlashSaleStock for productId={}, quantity={}",
+                        fsItem.getProductId(), fsItem.getQuantity());
+                productClient.restoreFlashSaleStock(fsItem);
+            } catch (Exception restoreEx) {
+                log.error("[FlashSale Rollback Error] Failed to restore Flash Sale stock for productId={}: {}",
+                        fsItem.getProductId(), restoreEx.getMessage(), restoreEx);
+                if (!swallowErrors) {
+                    throw restoreEx;
+                }
+            }
+        }
     }
 }

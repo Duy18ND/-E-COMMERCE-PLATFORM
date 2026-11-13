@@ -339,6 +339,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .id(review.getId())
                 .productId(review.getProductId())
                 .userId(review.getUserId())
+                .reviewerName(buildSafeReviewerName(review))
                 .orderId(review.getOrderId())
                 .rating(review.getRating())
                 .comment(review.getComment())
@@ -347,5 +348,14 @@ public class ReviewServiceImpl implements ReviewService {
                 .createdAt(review.getCreatedAt())
                 .updatedAt(review.getUpdatedAt())
                 .build();
+    }
+
+    private String buildSafeReviewerName(ProductReview review) {
+        if (review == null || review.getUserId() == null) {
+            return "Khách hàng đã mua hàng";
+        }
+        long mixed = (review.getUserId() * 0x9E3779B97F4A7C15L) ^ 0xBF58476D1CE4E5B9L;
+        int maskedCode = (int) (Math.abs(mixed) % 0xFFFF);
+        return String.format("Thành viên #%04X", maskedCode);
     }
 }

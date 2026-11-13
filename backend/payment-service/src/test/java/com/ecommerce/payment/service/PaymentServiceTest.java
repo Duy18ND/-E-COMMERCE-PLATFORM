@@ -593,5 +593,48 @@ class PaymentServiceTest {
             verify(kafkaPaymentProducer, never()).sendPaymentSuccess(any());
             verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
         }
+
+        @Test
+        @DisplayName("cancelPaymentForOrder - Đồng bộ hủy đơn từ order-service: chuyển PENDING -> FAILED và chặn mockPay")
+        void testCancelPaymentForOrder_ClosesPendingAndBlocksMockPay() {
+            Payment[] store = new Payment[]{
+                    Payment.builder()
+                            .id(8L)
+                            .orderId(205L)
+                            .userId(1L)
+                            .amount(new BigDecimal("1500000"))
+                            .paymentMethod("MOCK_ONLINE")
+                            .status(PaymentStatus.PENDING)
+                            .build()
+            };
+            when(paymentRepository.findByOrderId(205L)).thenAnswer(inv -> Optional.ofNullable(store[0]));
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> {
+                Payment saved = inv.getArgument(0);
+                store[0] = saved;
+                return saved;
+            });
+
+            paymentService.cancelPaymentForOrder(205L, "Khách hàng hủy đơn");
+
+            assertThat(store[0].getStatus()).isEqualTo(PaymentStatus.FAILED);
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+
+            assertThatThrownBy(() -> paymentService.mockPay(205L, true, 1L, "ROLE_USER"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("205");
+        }
+
+        @Test
+        @DisplayName("cancelPaymentForOrder - Đơn chưa có Payment record vẫn tạo tombstone FAILED chặn OrderCreatedEvent trễ")
+        void testCancelPaymentForOrder_NoRecord_CreatesFailedGuard() {
+            when(paymentRepository.findByOrderId(206L)).thenReturn(Optional.empty());
+            when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            paymentService.cancelPaymentForOrder(206L, "Hủy trước khi tạo payment");
+
+            verify(paymentRepository).save(argThat(p ->
+                    Long.valueOf(206L).equals(p.getOrderId()) && p.getStatus() == PaymentStatus.FAILED));
+            verify(kafkaPaymentProducer, never()).sendPaymentFailed(any());
+        }
     }
 }

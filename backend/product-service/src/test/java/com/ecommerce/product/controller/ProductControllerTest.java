@@ -184,6 +184,7 @@ class ProductControllerTest {
                 doNothing().when(productService).reserveStock(any());
 
                 mockMvc.perform(post("/api/v1/products/reserve-stock")
+                                .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(items)))
                                 .andExpect(status().isOk())
@@ -200,6 +201,7 @@ class ProductControllerTest {
                 doThrow(new NotEnoughStockException("Không đủ tồn kho")).when(productService).reserveStock(any());
 
                 mockMvc.perform(post("/api/v1/products/reserve-stock")
+                                .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(items)))
                                 .andExpect(status().isConflict())
@@ -216,6 +218,7 @@ class ProductControllerTest {
                 doNothing().when(productService).restoreStock(any());
 
                 mockMvc.perform(post("/api/v1/products/restore-stock")
+                                .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(items)))
                                 .andExpect(status().isOk())
@@ -648,9 +651,38 @@ class ProductControllerTest {
                                 StockReservationItem.builder().productId(1L).quantity(-2).build());
 
                 mockMvc.perform(post("/api/v1/products/reserve-stock")
+                                .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(invalidItems)))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.error").value("Validation Failed"));
+        }
+
+        @Test
+        @DisplayName("[Fix-C.1] POST /api/v1/products/reserve-stock & restore-stock & GET /low-stock/count - Chặn user thường (403 Forbidden)")
+        void shouldForbidInternalStockAndLowStockCountForNormalUser() throws Exception {
+                List<StockReservationItem> items = List.of(
+                                StockReservationItem.builder().productId(1L).quantity(1).build());
+
+                mockMvc.perform(post("/api/v1/products/reserve-stock")
+                                .header("X-User-Roles", "ROLE_USER")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(items)))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(post("/api/v1/products/restore-stock")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(items)))
+                                .andExpect(status().isForbidden());
+
+                mockMvc.perform(get("/api/v1/products/low-stock/count")
+                                .header("X-User-Roles", "ROLE_USER"))
+                                .andExpect(status().isForbidden());
+
+                when(productService.countLowStockProducts(5)).thenReturn(3L);
+                mockMvc.perform(get("/api/v1/products/low-stock/count")
+                                .header("X-User-Roles", "ROLE_ADMIN"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.data").value(3));
         }
 }

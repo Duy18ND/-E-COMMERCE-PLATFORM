@@ -13,10 +13,12 @@ import io.jsonwebtoken.security.SecurityException;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -41,8 +43,13 @@ import java.util.stream.Collectors;
 @Component("AuthenticationFilter")
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
+    public static final String TOKEN_BLACKLIST_PREFIX = "jwt:blacklist:";
+
     @Value("${jwt.secret:ecommerce-super-secret-key-change-in-production-must-be-256-bits}")
     private String jwtSecret;
+
+    @Autowired(required = false)
+    private ReactiveStringRedisTemplate redisTemplate;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -67,6 +74,18 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
             // 1. Kiểm tra sự tồn tại của header Authorization
             if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
+                if (config != null && config.isOptional()) {
+                    // Route công khai hỗ trợ tùy chọn JWT: xóa các header danh tính và nội bộ nếu client cố tình giả mạo
+                    ServerHttpRequest sanitizedRequest = request.mutate()
+                            .headers(headers -> {
+                                headers.remove("X-User-Id");
+                                headers.remove("X-User-Roles");
+                                headers.remove("X-User-Email");
+                                headers.remove("X-Internal-Service-Key");
+                            })
+                            .build();
+                    return chain.filter(exchange.mutate().request(sanitizedRequest).build());
+                }
                 log.warn("[Auth Filter] Missing Authorization header for: {}", request.getURI().getPath());
                 return onError(exchange, "Thiếu header Authorization", HttpStatus.UNAUTHORIZED);
             }
@@ -108,36 +127,66 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 return onError(exchange, "Xác thực token thất bại: " + ex.getMessage(), HttpStatus.UNAUTHORIZED);
             }
 
-            // 3. Trích xuất userId, roles, email
-            Object userIdObj = claims.get("userId");
-            String userId = userIdObj != null ? String.valueOf(userIdObj) : "";
+            // 2b & 3. Kiểm tra JWT blacklist trong Redis trước khi trích xuất danh tính và chuyển tiếp
+            return isTokenBlacklisted(token).flatMap(isBlacklisted -> {
+                if (Boolean.TRUE.equals(isBlacklisted)) {
+                    log.warn("[Auth Filter] Rejected blacklisted JWT token for: {}", request.getURI().getPath());
+                    return onError(exchange, "Token đã bị thu hồi. Vui lòng đăng nhập lại.", HttpStatus.UNAUTHORIZED);
+                }
 
-            String email = claims.getSubject();
-            if (email == null) {
-                email = "";
-            }
+                Object userIdObj = claims.get("userId");
+                String userId = userIdObj != null ? String.valueOf(userIdObj) : "";
 
-            String rolesStr = "";
-            Object rolesObj = claims.get("roles");
-            if (rolesObj instanceof List<?> roleList) {
-                rolesStr = roleList.stream()
-                        .map(Object::toString)
-                        .collect(Collectors.joining(","));
-            } else if (rolesObj != null) {
-                rolesStr = rolesObj.toString();
-            }
+                String email = claims.getSubject();
+                if (email == null) {
+                    email = "";
+                }
 
-            log.info("[Auth Filter] Authenticated: userId={}, email={}, roles={}", userId, email, rolesStr);
+                String rolesStr = "";
+                Object rolesObj = claims.get("roles");
+                if (rolesObj instanceof List<?> roleList) {
+                    rolesStr = roleList.stream()
+                            .map(Object::toString)
+                            .collect(Collectors.joining(","));
+                } else if (rolesObj != null) {
+                    rolesStr = rolesObj.toString();
+                }
 
-            // 4. Mutate request để gắn các thông tin vào header trước khi route downstream
-            ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                    .header("X-User-Id", userId)
-                    .header("X-User-Roles", rolesStr)
-                    .header("X-User-Email", email)
-                    .build();
+                log.info("[Auth Filter] Authenticated: userId={}, email={}, roles={}", userId, email, rolesStr);
 
-            return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                // 4. Mutate request để xóa header giả mạo từ client và gắn thông tin xác thực trước khi route downstream
+                ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                        .headers(headers -> {
+                            headers.remove("X-User-Id");
+                            headers.remove("X-User-Roles");
+                            headers.remove("X-User-Email");
+                            headers.remove("X-Internal-Service-Key");
+                        })
+                        .header("X-User-Id", userId)
+                        .header("X-User-Roles", rolesStr)
+                        .header("X-User-Email", email)
+                        .build();
+
+                return chain.filter(exchange.mutate().request(mutatedRequest).build());
+            });
         };
+    }
+
+    private Mono<Boolean> isTokenBlacklisted(String token) {
+        if (redisTemplate == null || token == null || token.isEmpty()) {
+            return Mono.just(false);
+        }
+        try {
+            return redisTemplate.hasKey(TOKEN_BLACKLIST_PREFIX + token)
+                    .defaultIfEmpty(false)
+                    .onErrorResume(ex -> {
+                        log.warn("[Auth Filter] Failed to check Redis JWT blacklist: {}", ex.getMessage());
+                        return Mono.just(false);
+                    });
+        } catch (Exception ex) {
+            log.warn("[Auth Filter] Redis blacklist lookup exception: {}", ex.getMessage());
+            return Mono.just(false);
+        }
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus httpStatus) {
@@ -160,6 +209,11 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     @Getter
     @Setter
     public static class Config {
-        // Cấu hình mở rộng nếu cần
+        /**
+         * When true, requests without an Authorization header pass through as anonymous
+         * (after stripping any spoofed X-User-* headers), while requests carrying a
+         * Bearer token are still validated and enriched with X-User-Id / X-User-Roles.
+         */
+        private boolean optional = false;
     }
 }

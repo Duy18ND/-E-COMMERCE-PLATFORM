@@ -3,6 +3,9 @@ import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
 
 const CART_STORAGE_KEY = 'shopmart_cart_mock';
 
+const isHttpResponseError = (err) =>
+  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
+
 // Dữ liệu mẫu khởi đầu giỏ hàng Flash Sale để demo tức thì như trong hình ảnh tham khảo
 const DEFAULT_CART_ITEMS = [
   {
@@ -162,7 +165,21 @@ const enrichServerCart = (cartData) => {
       };
     }
 
-    if (hint && hint.salePrice > 0 && (serverPrice <= 0 || hint.salePrice < serverPrice)) {
+    if (serverPrice > 0) {
+      const qty = Number(item.quantity || 1);
+      return {
+        ...item,
+        originalPrice: serverOriginal,
+        salePrice: null,
+        price: serverPrice,
+        unitPrice: serverPrice,
+        subTotal: item.subTotal ?? serverPrice * qty,
+        originalSubTotal: item.originalSubTotal ?? serverOriginal * qty,
+        isFlashSale: false
+      };
+    }
+
+    if (hint && hint.salePrice > 0) {
       const qty = Number(item.quantity || 1);
       const orig = Math.max(serverOriginal, hint.originalPrice);
       return {
@@ -206,6 +223,9 @@ export const cartService = {
       const data = await api.get('/cart');
       return enrichServerCart(data);
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       // Fallback về local mock cart
       const items = getLocalCart();
       return calculateCartResponse(items);
@@ -221,6 +241,9 @@ export const cartService = {
       });
       return enrichServerCart(data);
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       // Mock fallback: Thêm vào local cart
       const items = getLocalCart();
       const existingIndex = items.findIndex((i) => String(i.productId) === String(productId));
@@ -265,6 +288,9 @@ export const cartService = {
       });
       return enrichServerCart(data);
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       let items = getLocalCart();
       const qty = Number(quantity);
       if (qty <= 0) {
@@ -292,6 +318,9 @@ export const cartService = {
       const data = await api.delete(`/cart/items/${itemId}`);
       return enrichServerCart(data);
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       let items = getLocalCart();
       items = items.filter((i) => String(i.id) !== String(itemId) && String(i.itemId) !== String(itemId));
       setLocalCart(items);
@@ -303,6 +332,9 @@ export const cartService = {
     try {
       return await api.delete('/cart/clear');
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       setLocalCart([]);
       return calculateCartResponse([]);
     }

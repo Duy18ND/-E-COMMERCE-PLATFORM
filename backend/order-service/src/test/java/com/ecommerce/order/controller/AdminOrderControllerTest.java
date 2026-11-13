@@ -22,6 +22,7 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -231,5 +232,18 @@ class AdminOrderControllerTest {
         mockMvc.perform(get("/api/v1/admin/orders/customer/55")
                         .header("X-User-Roles", "ROLE_USER"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("[Fix-4] GET /api/v1/admin/orders với sortBy không hợp lệ -> 400 Bad Request thay vì 500")
+    void getAllOrders_WithInvalidSortBy_ShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/orders")
+                        .header("X-User-Roles", "ROLE_ADMIN")
+                        .param("sortBy", "nonExistentField"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("sortBy")));
+
+        verifyNoInteractions(orderService);
     }
 }

@@ -6,6 +6,9 @@ import { CATEGORY_ALIAS_MAP, matchesCategoryFilter } from './categoryService';
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
 
+const isHttpResponseError = (err) =>
+  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
+
 /**
  * Chuẩn hóa từ khóa tìm kiếm: cắt khoảng trắng đầu/cuối và gộp khoảng trắng thừa ở giữa
  */
@@ -612,7 +615,10 @@ export const productService = {
       const response = await api.get('/products/admin', { params: queryParams });
       const extracted = extractPagedProducts(response, params);
       return extracted.content;
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       return [...localProducts];
     }
   },
@@ -646,7 +652,10 @@ export const productService = {
       const normalized = normalizeProduct(created);
       localProducts = [normalized, ...localProducts.filter((p) => String(p.id) !== String(normalized.id))];
       return normalized;
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       const newProd = normalizeProduct({
         id: Date.now(),
         ...payload,
@@ -693,7 +702,10 @@ export const productService = {
       const normalized = normalizeProduct(updated);
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       let updatedItem = null;
       localProducts = localProducts.map((p) => {
         if (String(p.id) === String(id)) {
@@ -709,7 +721,10 @@ export const productService = {
   delete: async (id) => {
     try {
       await api.delete(`/products/${id}`);
-    } catch {
+    } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       // Fallback xóa mềm / xóa khỏi danh sách cục bộ khi offline
     }
     localProducts = localProducts.filter((p) => String(p.id) !== String(id));
@@ -737,6 +752,9 @@ export const productService = {
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       const existing = localProducts.find((p) => String(p.id) === String(id));
       if (!existing) {
         throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
@@ -779,6 +797,9 @@ export const productService = {
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;
     } catch (err) {
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       const existing = localProducts.find((p) => String(p.id) === String(id));
       if (!existing) {
         throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');

@@ -49,6 +49,15 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
 
+        if ("CANCELLED".equalsIgnoreCase(event.getStatus()) || "FAILED".equalsIgnoreCase(event.getStatus())) {
+            log.warn("[Saga Step] Received OrderCreatedEvent for already {} orderId={}. Closing payment as FAILED.",
+                    event.getStatus(), event.getOrderId());
+            cancelPaymentForOrder(event.getOrderId(), "Order already " + event.getStatus());
+            return paymentRepository.findByOrderId(event.getOrderId())
+                    .map(this::mapToPaymentResponse)
+                    .orElse(null);
+        }
+
         // 2. Luồng thanh toán COD (Cash On Delivery):
         // Chỉ khởi tạo và lưu bản ghi Payment ở trạng thái PENDING, KHÔNG bắn event payment-success
         // để giữ nguyên trạng thái đơn hàng là PENDING (chờ thanh toán khi nhận hàng).
@@ -237,6 +246,39 @@ public class PaymentServiceImpl implements PaymentService {
         return userRoles != null && Arrays.stream(userRoles.split(","))
                 .map(String::trim)
                 .anyMatch("ROLE_ADMIN"::equals);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelPaymentForOrder(Long orderId, String reason) {
+        if (orderId == null) {
+            return;
+        }
+        Optional<Payment> existingOpt = paymentRepository.findByOrderId(orderId);
+        if (existingOpt.isPresent()) {
+            Payment payment = existingOpt.get();
+            if (payment.getStatus() == PaymentStatus.PENDING) {
+                payment.setStatus(PaymentStatus.FAILED);
+                paymentRepository.save(payment);
+                log.info("[Order Cancelled Sync] Closed PENDING payment id={} for orderId={} -> FAILED (reason={})",
+                        payment.getId(), orderId, reason);
+            } else {
+                log.warn("[Order Cancelled Sync] Ignored cancel sync for orderId={} because payment status is already {}",
+                        orderId, payment.getStatus());
+            }
+            return;
+        }
+
+        // Tạo bản ghi FAILED để chặn OrderCreatedEvent đến trễ hoặc mockPay sau khi đơn đã bị hủy
+        Payment tombstone = Payment.builder()
+                .orderId(orderId)
+                .amount(BigDecimal.ZERO)
+                .paymentMethod("CANCELLED")
+                .status(PaymentStatus.FAILED)
+                .build();
+        paymentRepository.save(tombstone);
+        log.info("[Order Cancelled Sync] Recorded FAILED payment guard for cancelled orderId={} (reason={})",
+                orderId, reason);
     }
 
     private PaymentResponse mapToPaymentResponse(Payment payment) {

@@ -20,7 +20,7 @@ const INITIAL_MOCK_INVENTORY = [
 
 const Inventory = () => {
   const { notify } = useToast();
-  const [inventoryList, setInventoryList] = useState(INITIAL_MOCK_INVENTORY);
+  const [inventoryList, setInventoryList] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,10 +42,11 @@ const Inventory = () => {
     setError('');
     try {
       const data = await inventoryService.getInventory();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setInventoryList(data);
       }
     } catch (err) {
+      setInventoryList([]);
       setError(err.message || 'Không thể tải dữ liệu tồn kho từ máy chủ.');
       console.warn('Lỗi tải tồn kho từ máy chủ, sử dụng dữ liệu cục bộ:', err);
     } finally {

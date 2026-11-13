@@ -32,4 +32,10 @@ public interface PaymentService {
      * Tra cứu thông tin thanh toán theo paymentId (chỉ chủ sở hữu hoặc ROLE_ADMIN)
      */
     PaymentResponse getPaymentById(Long id, Long userId, String userRoles);
+
+    /**
+     * Đồng bộ khi đơn hàng bị hủy từ order-service: đóng bản ghi thanh toán PENDING sang FAILED
+     * để ngăn hoàn toàn khả năng thanh toán lại (mockPay) trên đơn đã hủy.
+     */
+    void cancelPaymentForOrder(Long orderId, String reason);
 }

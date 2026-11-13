@@ -398,20 +398,34 @@ const Checkout = () => {
         finalTotal
       });
 
-      const resolvedSubtotal = Number(createdOrder?.subtotalAmount || totalPrice || 0);
-      const resolvedVoucherDiscount = Math.max(Number(createdOrder?.discountAmount || 0), voucherDiscount);
+      const resolvedSubtotal =
+        createdOrder?.subtotalAmount !== null && createdOrder?.subtotalAmount !== undefined
+          ? Number(createdOrder.subtotalAmount)
+          : Number(totalPrice || 0);
+      const resolvedVoucherDiscount =
+        createdOrder?.discountAmount !== null && createdOrder?.discountAmount !== undefined
+          ? Math.max(0, Number(createdOrder.discountAmount))
+          : Math.max(0, Number(voucherDiscount || 0));
       const resolvedPayableTotal =
-        finalTotal >= 0 && totalPrice > 0
-          ? finalTotal
-          : Math.max(0, resolvedSubtotal - resolvedVoucherDiscount);
+        createdOrder?.totalAmount !== null && createdOrder?.totalAmount !== undefined
+          ? Number(createdOrder.totalAmount)
+          : finalTotal >= 0 && totalPrice > 0
+            ? finalTotal
+            : Math.max(0, resolvedSubtotal - resolvedVoucherDiscount);
       const normalizedCreatedOrder = {
         ...createdOrder,
-        originalAmount:        Math.max(Number(createdOrder?.originalAmount || 0), totalOriginalPrice || resolvedSubtotal),
-        subtotalAmount:        resolvedSubtotal,
-        productDiscountAmount: Math.max(Number(createdOrder?.productDiscountAmount || 0), totalDiscount || 0),
-        voucherCode:           createdOrder?.voucherCode || appliedVoucher?.voucher?.code || null,
-        discountAmount:        resolvedVoucherDiscount,
-        totalAmount:           resolvedPayableTotal
+        originalAmount:
+          createdOrder?.originalAmount !== null && createdOrder?.originalAmount !== undefined
+            ? Number(createdOrder.originalAmount)
+            : totalOriginalPrice || resolvedSubtotal,
+        subtotalAmount: resolvedSubtotal,
+        productDiscountAmount:
+          createdOrder?.productDiscountAmount !== null && createdOrder?.productDiscountAmount !== undefined
+            ? Math.max(0, Number(createdOrder.productDiscountAmount))
+            : Math.max(0, totalDiscount || 0),
+        voucherCode: createdOrder?.voucherCode || appliedVoucher?.voucher?.code || null,
+        discountAmount: resolvedVoucherDiscount,
+        totalAmount: resolvedPayableTotal
       };
 
       await refreshCart();
