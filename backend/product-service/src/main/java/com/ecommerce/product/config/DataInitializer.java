@@ -1,16 +1,22 @@
 package com.ecommerce.product.config;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
 
 import com.ecommerce.product.entity.Category;
+import com.ecommerce.product.entity.FlashSaleCampaign;
+import com.ecommerce.product.entity.FlashSaleItem;
 import com.ecommerce.product.entity.Product;
 import com.ecommerce.product.enums.ProductStatus;
 import com.ecommerce.product.repository.CategoryRepository;
+import com.ecommerce.product.repository.FlashSaleCampaignRepository;
 import com.ecommerce.product.repository.ProductRepository;
+import com.ecommerce.product.service.FlashSaleService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,10 +29,17 @@ public class DataInitializer implements CommandLineRunner {
         private final CategoryRepository categoryRepository;
         private final ProductRepository productRepository;
 
+        @Autowired(required = false)
+        private FlashSaleCampaignRepository flashSaleCampaignRepository;
+
+        @Autowired(required = false)
+        private FlashSaleService flashSaleService;
+
         @Override
         public void run(String... args) {
                 seedCategories();
                 seedProducts();
+                seedFlashSaleCampaign();
         }
 
         private void seedCategories() {
@@ -141,5 +154,58 @@ public class DataInitializer implements CommandLineRunner {
 
                 productRepository.saveAll(products);
                 log.info("Seeded {} sample products successfully.", products.size());
+        }
+
+        private void seedFlashSaleCampaign() {
+                if (flashSaleCampaignRepository == null) {
+                        return;
+                }
+                if (flashSaleCampaignRepository.count() > 0) {
+                        log.info("Flash Sale campaigns already exist, skipping seeding.");
+                        return;
+                }
+                List<Product> allProducts = productRepository.findAll();
+                if (allProducts.isEmpty()) {
+                        return;
+                }
+
+                FlashSaleCampaign campaign = FlashSaleCampaign.builder()
+                                .name("Flash Sale Giữa Tháng Tech Day")
+                                .startTime(LocalDateTime.now().minusHours(2))
+                                .endTime(LocalDateTime.now().plusDays(30))
+                                .status("ACTIVE")
+                                .build();
+
+                for (Product p : allProducts) {
+                        if (p.getId() == null || p.getPrice() == null) {
+                                continue;
+                        }
+                        // Giảm 20% giá Flash Sale so với giá gốc (làm tròn nghìn đồng)
+                        long rawSale = Math.round(p.getPrice().doubleValue() * 0.8 / 10000.0) * 10000L;
+                        BigDecimal fsPrice = BigDecimal.valueOf(Math.max(10000L, rawSale));
+                        int fsQty = Math.max(5, Math.min(20, p.getStockQuantity() != null ? p.getStockQuantity() : 10));
+
+                        FlashSaleItem item = FlashSaleItem.builder()
+                                        .productId(p.getId())
+                                        .flashSalePrice(fsPrice)
+                                        .quantity(fsQty)
+                                        .soldQuantity(0)
+                                        .userLimit(5)
+                                        .build();
+                        campaign.addItem(item);
+                }
+
+                FlashSaleCampaign saved = flashSaleCampaignRepository.save(campaign);
+                if (flashSaleService != null && saved.getItems() != null) {
+                        for (FlashSaleItem item : saved.getItems()) {
+                                try {
+                                        flashSaleService.initFlashSaleStock(item.getProductId(), item.getQuantity());
+                                } catch (Exception ex) {
+                                        log.warn("Could not init Redis stock for seeded Flash Sale productId={}: {}",
+                                                        item.getProductId(), ex.getMessage());
+                                }
+                        }
+                }
+                log.info("Seeded active Flash Sale campaign '{}' with {} items.", saved.getName(), saved.getItems().size());
         }
 }

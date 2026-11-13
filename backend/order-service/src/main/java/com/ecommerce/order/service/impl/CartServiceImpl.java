@@ -182,7 +182,10 @@ public class CartServiceImpl implements CartService {
         if (cart.getItems() != null) {
             for (CartItem item : cart.getItems()) {
                 String productName = "Sản phẩm #" + item.getProductId();
+                BigDecimal originalPrice = BigDecimal.ZERO;
                 BigDecimal price = BigDecimal.ZERO;
+                BigDecimal salePrice = null;
+                boolean isFlashSale = false;
                 String imageUrl = null;
                 Integer stockAvailable = null;
 
@@ -191,7 +194,14 @@ public class CartServiceImpl implements CartService {
                     if (productApiResponse != null && productApiResponse.getData() != null) {
                         ProductResponse product = productApiResponse.getData();
                         productName = product.getName() != null ? product.getName() : productName;
-                        price = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+                        originalPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+                        price = originalPrice;
+                        if (product.getActiveFlashSale() != null
+                                && product.getActiveFlashSale().getFlashSalePrice() != null) {
+                            price = product.getActiveFlashSale().getFlashSalePrice();
+                            salePrice = price;
+                            isFlashSale = true;
+                        }
                         imageUrl = product.getImageUrl();
                         stockAvailable = product.getStockQuantity();
                     }
@@ -207,7 +217,10 @@ public class CartServiceImpl implements CartService {
                         .id(item.getId())
                         .productId(item.getProductId())
                         .productName(productName)
+                        .originalPrice(originalPrice)
                         .price(price)
+                        .salePrice(salePrice)
+                        .isFlashSale(isFlashSale)
                         .quantity(item.getQuantity())
                         .subTotal(subTotal)
                         .imageUrl(imageUrl)

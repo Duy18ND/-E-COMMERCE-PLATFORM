@@ -11,6 +11,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import CartSummary from '../../components/cart/CartSummary';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import QrPaymentModal from '../../components/order/QrPaymentModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtMoney = (n) => Number(n).toLocaleString('vi-VN') + 'đ';
@@ -257,6 +258,8 @@ const Checkout = () => {
   const [appliedVoucher,  setAppliedVoucher]  = useState(null); // { voucher, discountAmount }
   const [pickerOpen,      setPickerOpen]      = useState(false);
 
+  // ── QR payment state (đơn thanh toán trực tuyến chờ quét mã VietQR) ───────
+  const [qrOrder, setQrOrder] = useState(null);
   // Pre-fill user info
   useEffect(() => {
     if (user) {
@@ -379,27 +382,50 @@ const Checkout = () => {
 
     setLoading(true);
     try {
-      // Tạo đơn hàng – kèm thông tin voucher để sẵn sàng tích hợp Backend
+      // Tạo đơn hàng – kèm đầy đủ thông tin tạm tính (đã áp giá Flash Sale) và giảm giá Voucher
       const createdOrder = await orderService.checkout({
-        receiverName:    formData.receiverName.trim(),
-        receiverPhone:   formData.receiverPhone.trim(),
-        shippingAddress: fullShippingAddress,
-        note:            formData.note ? formData.note.trim() : '',
-        paymentMethod:   formData.paymentMethod,
-        // Voucher info – Backend có thể đọc trường này sau
-        voucherId:       appliedVoucher?.voucher?.id     ?? null,
-        voucherCode:     appliedVoucher?.voucher?.code   ?? null,
-        discountAmount:  appliedVoucher?.discountAmount  ?? 0
+        receiverName:          formData.receiverName.trim(),
+        receiverPhone:         formData.receiverPhone.trim(),
+        shippingAddress:       fullShippingAddress,
+        note:                  formData.note ? formData.note.trim() : '',
+        paymentMethod:         formData.paymentMethod,
+        subtotalAmount:        totalPrice,
+        originalAmount:        totalOriginalPrice > totalPrice ? totalOriginalPrice : totalPrice,
+        productDiscountAmount: totalDiscount,
+        voucherId:             appliedVoucher?.voucher?.id     ?? null,
+        voucherCode:           appliedVoucher?.voucher?.code   ?? null,
+        discountAmount:        voucherDiscount,
+        finalTotal
       });
 
-      if (formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE && createdOrder?.id) {
-        try { await paymentService.mockPay(createdOrder.id, true); }
-        catch (payErr) { console.warn('Lỗi thanh toán mô phỏng:', payErr); }
-      }
+      const resolvedSubtotal = Number(createdOrder?.subtotalAmount || totalPrice || 0);
+      const resolvedVoucherDiscount = Math.max(Number(createdOrder?.discountAmount || 0), voucherDiscount);
+      const resolvedPayableTotal =
+        finalTotal >= 0 && totalPrice > 0
+          ? finalTotal
+          : Math.max(0, resolvedSubtotal - resolvedVoucherDiscount);
+      const normalizedCreatedOrder = {
+        ...createdOrder,
+        originalAmount:        Math.max(Number(createdOrder?.originalAmount || 0), totalOriginalPrice || resolvedSubtotal),
+        subtotalAmount:        resolvedSubtotal,
+        productDiscountAmount: Math.max(Number(createdOrder?.productDiscountAmount || 0), totalDiscount || 0),
+        voucherCode:           createdOrder?.voucherCode || appliedVoucher?.voucher?.code || null,
+        discountAmount:        resolvedVoucherDiscount,
+        totalAmount:           resolvedPayableTotal
+      };
 
       await refreshCart();
-      notify.success(`Đặt hàng thành công! Đơn hàng #${createdOrder?.id || ''} đã được ghi nhận.`);
-      navigate('/order-success', { state: { orderId: createdOrder?.id, order: createdOrder } });
+
+      // Thanh toán trực tuyến (khác COD): giữ đơn PENDING và mở màn hình quét mã QR thay vì chuyển trang ngay
+      const isOnlinePayment = formData.paymentMethod !== PAYMENT_METHOD.COD;
+      if (isOnlinePayment && normalizedCreatedOrder?.id && normalizedCreatedOrder?.status !== 'PAID') {
+        setQrOrder(normalizedCreatedOrder);
+        notify.success(`Đặt hàng thành công! Vui lòng quét mã QR để thanh toán đơn hàng #${normalizedCreatedOrder.id}.`);
+        return;
+      }
+
+      notify.success(`Đặt hàng thành công! Đơn hàng #${normalizedCreatedOrder?.id || ''} đã được ghi nhận.`);
+      navigate('/order-success', { state: { orderId: normalizedCreatedOrder?.id, order: normalizedCreatedOrder } });
     } catch (err) {
       const errMsg = err.message || 'Đặt hàng không thành công. Vui lòng kiểm tra lại thông tin giỏ hàng!';
       setError(errMsg);
@@ -407,6 +433,31 @@ const Checkout = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ── QR payment handlers ────────────────────────────────────────────────────
+  // Gọi API POST /payments/mock-pay/{orderId} với body { success, note }
+  const handleQrPay = (success, note) => paymentService.mockPay(qrOrder.id, success, note);
+
+  const handleQrPaid = () => {
+    const orderId = qrOrder?.id;
+    notify.success(`Thanh toán thành công! Đơn hàng #${orderId} đã chuyển sang ĐÃ THANH TOÁN (PAID).`);
+    setQrOrder(null);
+    navigate(`/orders/${orderId}`, { state: { expectedStatus: 'PAID', fromQrPayment: true } });
+  };
+
+  const handleQrFailed = () => {
+    const orderId = qrOrder?.id;
+    notify.error(`Thanh toán đơn hàng #${orderId} thất bại. Hệ thống đã hoàn lại tồn kho và lượt sử dụng Voucher (Saga Rollback).`);
+    setQrOrder(null);
+    navigate(`/orders/${orderId}`, { state: { expectedStatus: 'FAILED', fromQrPayment: true } });
+  };
+
+  const handleQrPayLater = () => {
+    const orderId = qrOrder?.id;
+    notify.info(`Đơn hàng #${orderId} đang chờ thanh toán. Bạn có thể bấm "Thanh toán QR ngay" trong chi tiết đơn hàng bất cứ lúc nào.`);
+    setQrOrder(null);
+    navigate(`/orders/${orderId}`);
   };
 
   // Derived totals
@@ -439,7 +490,27 @@ const Checkout = () => {
 
       {error && <ErrorMessage message={error} onClose={() => setError('')} />}
 
-      {cartItems.length === 0 ? (
+      {/* ── Màn hình quét mã QR thanh toán (VietQR) cho đơn online vừa tạo ── */}
+      <QrPaymentModal
+        isOpen={!!qrOrder}
+        order={qrOrder}
+        onPay={handleQrPay}
+        onPaid={handleQrPaid}
+        onFailed={handleQrFailed}
+        onPayLater={handleQrPayLater}
+      />
+
+      {qrOrder ? (
+        <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
+          <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>📱</span>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+            Đơn hàng #{qrOrder.id} đang chờ thanh toán
+          </h3>
+          <p style={{ color: '#64748b', fontSize: '0.875rem', margin: '0.5rem 0 0' }}>
+            Vui lòng hoàn tất quét mã QR để xác nhận thanh toán.
+          </p>
+        </div>
+      ) : cartItems.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
           <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>🛒</span>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>Giỏ hàng của bạn đang trống</h3>
@@ -503,7 +574,7 @@ const Checkout = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {[
                       { value: PAYMENT_METHOD.COD,         icon: '💵', desc: 'Thanh toán bằng tiền mặt khi shipper giao tận nơi và đồng kiểm hàng' },
-                      { value: PAYMENT_METHOD.MOCK_ONLINE,  icon: '💳', desc: 'Tự động duyệt trạng thái Đã Thanh Toán (PAID) phục vụ kiểm thử nhanh' }
+                      { value: PAYMENT_METHOD.MOCK_ONLINE,  icon: '📱', desc: 'Quét mã VietQR chuyển khoản — Tự động duyệt trạng thái Đã Thanh Toán (PAID) ngay khi xác nhận giao dịch' }
                     ].map((pm) => (
                       <label key={pm.value} style={{
                         display: 'flex', alignItems: 'center', gap: '0.75rem',

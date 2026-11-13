@@ -40,13 +40,12 @@ const OrderDetail = () => {
   // Trạng thái đơn đang chờ đồng bộ sau thanh toán QR (PAID / FAILED) — truyền từ Checkout qua navigation state
   const [awaitingStatus, setAwaitingStatus] = useState(location.state?.expectedStatus || null);
   const syncAttemptsRef = useRef(0);
-
+  
   // State đánh giá sản phẩm sau mua ngay tại trang Chi tiết đơn hàng
   const [itemReviewsMap, setItemReviewsMap] = useState({});
   const [checkingReviews, setCheckingReviews] = useState(false);
   const [reviewCheckErrorsMap, setReviewCheckErrorsMap] = useState({});
   const [reviewModalItem, setReviewModalItem] = useState(null);
-
   const fetchOrderDetail = async ({ silent = false } = {}) => {
     if (!silent) {
       setLoading(true);
@@ -164,7 +163,6 @@ const OrderDetail = () => {
   useEffect(() => {
     loadExistingItemReviews();
   }, [loadExistingItemReviews]);
-
   // Sau khi xác nhận thanh toán QR: đồng bộ lại trạng thái đơn mỗi 1 giây cho tới khi Kafka cập nhật
   // (PENDING -> PAID / FAILED) hoặc hết số lần thử, tránh hiển thị trạng thái PENDING cũ.
   useEffect(() => {
@@ -750,7 +748,7 @@ const OrderDetail = () => {
             );
           })}
         </div>
-
+        
         {/* Tổng kết thanh toán */}
         <div
           style={{
