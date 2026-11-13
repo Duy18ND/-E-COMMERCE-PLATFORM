@@ -18,10 +18,11 @@ spring:
   # ─── Spring Cloud Gateway Routes ────────────────────────────
   cloud:
     gateway:
-      # Enable route discovery from Eureka (auto-routes lb://<service-name>)
+      # Tắt discovery locator auto-routes (/service-id/**) để tránh vượt qua AuthenticationFilter trên các explicit routes;
+      # đồng thời SpoofedHeaderSanitizationFilter (HIGHEST_PRECEDENCE) xóa mọi X-User-* / X-Internal-Service-Key giả mạo trước AuthenticationFilter.
       discovery:
         locator:
-          enabled: true
+          enabled: false
           lower-case-service-id: true
 
       # Default filters applied to ALL routes

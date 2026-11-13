@@ -40,6 +40,13 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
     public static final String TOKEN_BLACKLIST_PREFIX = "jwt:blacklist:";
 
+    public static final List<String> SPOOFED_HEADERS = List.of(
+            "X-User-Id",
+            "X-User-Roles",
+            "X-User-Email",
+            "X-Internal-Service-Key"
+    );
+
     @Value("${jwt.secret:ecommerce-super-secret-key-change-in-production-must-be-256-bits}")
     private String jwtSecret;
 
@@ -72,7 +79,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 if (config != null && config.isOptional()) {
                     // Route công khai hỗ trợ tùy chọn JWT: xóa các header danh tính và nội bộ nếu client cố tình giả mạo
                     ServerHttpRequest sanitizedRequest = request.mutate()
-                            .headers(this::stripSpoofedHeaders)
+                            .headers(AuthenticationFilter::stripSpoofedHeaders)
                             .build();
                     return chain.filter(exchange.mutate().request(sanitizedRequest).build());
                 }
@@ -146,7 +153,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
                 // 4. Mutate request để xóa header giả mạo từ client và gắn thông tin xác thực trước khi route downstream
                 ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                        .headers(this::stripSpoofedHeaders)
+                        .headers(AuthenticationFilter::stripSpoofedHeaders)
                         .header("X-User-Id", userId)
                         .header("X-User-Roles", rolesStr)
                         .header("X-User-Email", email)
@@ -157,11 +164,8 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         };
     }
 
-    private void stripSpoofedHeaders(HttpHeaders headers) {
-        headers.remove("X-User-Id");
-        headers.remove("X-User-Roles");
-        headers.remove("X-User-Email");
-        headers.remove("X-Internal-Service-Key");
+    public static void stripSpoofedHeaders(HttpHeaders headers) {
+        SPOOFED_HEADERS.forEach(headers::remove);
     }
 
     private Mono<Boolean> isTokenBlacklisted(String token) {

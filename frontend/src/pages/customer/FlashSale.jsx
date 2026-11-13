@@ -21,15 +21,19 @@ const FlashSale = () => {
   useEffect(() => {
     let active = true;
     const fetchActiveSaleData = async () => {
-      const [camp, prods] = await Promise.all([
-        saleService.getActiveCampaign(),
-        saleService.getActiveFlashProducts()
-      ]);
-      if (active) {
-        if (camp) setActiveCampaign(camp);
-        if (Array.isArray(prods) && prods.length > 0) {
-          setAllProducts(prods);
+      try {
+        const [camp, prods] = await Promise.all([
+          saleService.getActiveCampaign(),
+          saleService.getActiveFlashProducts()
+        ]);
+        if (active) {
+          if (camp) setActiveCampaign(camp);
+          if (Array.isArray(prods) && prods.length > 0) {
+            setAllProducts(prods);
+          }
         }
+      } catch (err) {
+        console.warn('Không thể tải dữ liệu Flash Sale:', err?.message || err);
       }
     };
     fetchActiveSaleData();

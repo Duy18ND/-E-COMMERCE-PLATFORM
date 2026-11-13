@@ -1,10 +1,38 @@
-import api from './api';
+import api, { isHttpResponseError, toBackendError } from './api';
 import { ORDER_STATUS_SYNC_EVENT } from './orderService';
 
 // Đồng bộ chính xác với ORDERS_STORAGE_KEY trong orderService.js
 const ORDERS_STORAGE_KEY = 'shopmart_orders_mock';
 const ORDER_SYNC_SIGNAL_KEY = 'shopmart_order_sync_signal';
 export const QR_PAYMENT_OVERRIDES_KEY = 'shopmart_qr_payment_overrides';
+
+const rethrowIfHttpBackendError = (err, fallbackMessage, orderId) => {
+  if (!isHttpResponseError(err) && !err?.response) return;
+  const error = toBackendError(err, fallbackMessage);
+  error.status = err?.status || err?.response?.status;
+  if (orderId !== undefined) {
+    error.orderId = orderId;
+  }
+  throw error;
+};
+
+const readOfflinePaymentOverride = (orderId) => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return null;
+  try {
+    const raw = window.sessionStorage.getItem(QR_PAYMENT_OVERRIDES_KEY);
+    const overrides = raw ? JSON.parse(raw) : null;
+    const entry = overrides?.[String(orderId)];
+    if (!entry || !entry.status) return null;
+    return {
+      orderId,
+      paymentMethod: 'MOCK_ONLINE',
+      status: entry.status,
+      paidAt: entry.updatedAt || null
+    };
+  } catch {
+    return null;
+  }
+};
 
 const syncOfflineOrderPaymentStatus = (orderId, isSuccess, note) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
@@ -105,16 +133,8 @@ export const paymentService = {
     } catch (err) {
       console.warn(`Lỗi gọi API mock-pay cho đơn hàng #${orderId}:`, err);
       // Tuyệt đối không gọi API admin (/api/v1/admin/orders/**) từ context của khách hàng thường để tránh lỗi 403 Forbidden
-      if (err.response) {
-        const error = new Error(
-          err.response?.data?.message || err.message || 'Không thể thực hiện thanh toán mô phỏng'
-        );
-        error.status = err.status || err.response?.status;
-        error.orderId = orderId;
-        throw error;
-      }
+      rethrowIfHttpBackendError(err, 'Không thể thực hiện thanh toán mô phỏng', orderId);
       // Fallback khi chạy Demo Frontend độc lập (không bật Backend)
-      const isSuccess = Boolean(success);
       syncOfflineOrderPaymentStatus(orderId, isSuccess, note);
       return {
         orderId,
@@ -131,6 +151,11 @@ export const paymentService = {
     try {
       return await api.get(`/payments/order/${orderId}`);
     } catch (err) {
+      rethrowIfHttpBackendError(err, 'Không thể tải thông tin thanh toán của đơn hàng', orderId);
+      const offlineOverride = readOfflinePaymentOverride(orderId);
+      if (offlineOverride) {
+        return offlineOverride;
+      }
       return {
         orderId,
         paymentMethod: 'MOCK_ONLINE',

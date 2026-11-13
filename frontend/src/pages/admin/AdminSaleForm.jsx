@@ -118,6 +118,8 @@ const AdminSaleForm = () => {
             setSelectedProducts(existing.customProducts);
           }
         }
+      }).catch((err) => {
+        console.warn('Không thể tải chi tiết chiến dịch Flash Sale:', err?.message || err);
       });
     }
     return () => {

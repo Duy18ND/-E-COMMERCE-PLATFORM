@@ -65,6 +65,11 @@ class ProductServiceTest {
 
     private Product sampleProduct;
 
+    @SuppressWarnings("unchecked")
+    private static Specification<Product> anyProductSpecification() {
+        return any(Specification.class);
+    }
+
     @BeforeEach
     void setUp() {
         sampleProduct = Product.builder()
@@ -216,14 +221,14 @@ class ProductServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Product> productPage = new PageImpl<>(List.of(sampleProduct), pageable, 1);
 
-        when(productRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(productPage);
+        when(productRepository.findAll(anyProductSpecification(), eq(pageable))).thenReturn(productPage);
 
         PagedResponse<ProductResponse> response = productService.getProducts(filter, pageable);
 
         assertThat(response).isNotNull();
         assertThat(response.getContent()).hasSize(1);
         assertThat(response.getContent().get(0).getName()).isEqualTo("MacBook Pro M3");
-        verify(productRepository, times(1)).findAll(any(Specification.class), eq(pageable));
+        verify(productRepository, times(1)).findAll(anyProductSpecification(), eq(pageable));
     }
 
     @Test
@@ -240,7 +245,7 @@ class ProductServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("không được lớn hơn");
 
-        verify(productRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+        verify(productRepository, never()).findAll(anyProductSpecification(), any(Pageable.class));
     }
 
     @Test
