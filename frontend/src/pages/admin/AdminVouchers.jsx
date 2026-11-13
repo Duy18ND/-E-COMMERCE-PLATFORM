@@ -63,6 +63,15 @@ const validate = (form, allVouchers, editId = null) => {
   const qty = Number(form.quantity);
   if (!form.quantity || isNaN(qty) || qty <= 0)
     errors.quantity = 'Số lượng mã phải lớn hơn 0.';
+  else if (editId) {
+    const current = allVouchers.find((v) => v.id === editId);
+    if (current && Number(current.usedQuantity) > 0 && qty < Number(current.usedQuantity)) {
+      errors.quantity = 'Số lượng phát hành không được nhỏ hơn số lượt đã dùng (' + current.usedQuantity + ').';
+    }
+  }
+  if (form.maxDiscount !== '' && Number(form.maxDiscount) <= 0) {
+    errors.maxDiscount = 'Giảm tối đa phải lớn hơn 0.';
+  }
   if (!form.startDate) errors.startDate = 'Vui lòng chọn ngày bắt đầu.';
   if (!form.endDate) errors.endDate = 'Vui lòng chọn ngày kết thúc.';
   if (form.startDate && form.endDate && form.endDate < form.startDate)

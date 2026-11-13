@@ -8,6 +8,7 @@ import productService from '../../services/productService';
 import saleService from '../../services/saleService';
 import FlashCountdown from '../../components/sale/FlashCountdown';
 import Loading from '../../components/common/Loading';
+import ProductReviewsSection, { renderRatingStars } from '../../components/product/ProductReviewsSection';
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -25,10 +26,12 @@ const ProductDetail = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [reviewMeta, setReviewMeta] = useState({ averageRating: 0, totalReviews: 0 });
 
   useEffect(() => {
     setLoading(true);
     setQuantity(1);
+    setReviewMeta({ averageRating: 0, totalReviews: 0 });
     productService
       .getById(id)
       .then(async (data) => {
@@ -112,24 +115,41 @@ const ProductDetail = () => {
   const currentDiscount = storageOption ? storageOption.discount : (product.discountPercent || 0);
   const savedAmount = Math.max(0, currentOriginalPrice - currentSalePrice);
 
+  const sold = Number(product.sold ?? product.soldQuantity ?? 15);
+  const flashQuotaTotal = Number(product.stock ?? product.quantity ?? 0);
+  const flashQuotaRemaining =
+    product.remainingStock !== undefined
+      ? Math.max(0, Number(product.remainingStock))
+      : isSale && flashQuotaTotal > 0 && product.stockQuantity === undefined
+        ? Math.max(0, flashQuotaTotal - sold)
+        : null;
+
   const actualStockQuantity = Math.max(
     0,
-    Number(stockInfo?.stockQuantity ?? product.stockQuantity ?? product.stock ?? 0)
+    flashQuotaRemaining !== null
+      ? flashQuotaRemaining
+      : Number(stockInfo?.stockQuantity ?? product.stockQuantity ?? product.stock ?? 0)
   );
-  const isOutOfStock = stockInfo
-    ? !stockInfo.inStock || actualStockQuantity <= 0
-    : actualStockQuantity <= 0;
+  const isOutOfStock =
+    (flashQuotaRemaining !== null && flashQuotaRemaining <= 0) ||
+    (stockInfo ? !stockInfo.inStock || actualStockQuantity <= 0 : actualStockQuantity <= 0);
   const stockStatusMessage =
-    stockInfo?.stockStatusMessage ||
-    (isOutOfStock ? 'Hết hàng' : `Còn hàng (${actualStockQuantity} sản phẩm có sẵn)`);
+    isOutOfStock && isSale
+      ? 'Đã hết suất Flash Sale'
+      : stockInfo?.stockStatusMessage ||
+        (isOutOfStock ? 'Hết hàng' : `Còn hàng (${actualStockQuantity} sản phẩm có sẵn)`);
   const maxOrderQuantity = isSale
-    ? Math.max(1, Math.min(2, actualStockQuantity || 1))
+    ? Math.max(1, Math.min(Number(product.userLimit ?? 2), actualStockQuantity || 1))
     : Math.max(1, actualStockQuantity || 1);
 
-  const sold = Number(product.sold ?? 15);
-  const totalStock = Math.max(actualStockQuantity + sold, 1);
+  const totalStock =
+    isSale && flashQuotaTotal >= sold && flashQuotaTotal > 0
+      ? flashQuotaTotal
+      : Math.max(actualStockQuantity + sold, 1);
   const remainingStock = actualStockQuantity;
-  const progressPercent = Math.min(100, Math.round((sold / totalStock) * 100));
+  const progressPercent = isOutOfStock
+    ? 100
+    : Math.min(100, Math.round((sold / totalStock) * 100));
 
   // Gallery images demo
   const galleryImages = [
@@ -477,11 +497,28 @@ const ProductDetail = () => {
 
               {/* Rating & Sold count */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.82rem', color: '#64748b', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#eab308', fontWeight: 700 }}>
-                  <span>★</span>
-                  <span>{product.rating || 4.9}</span>
-                  <span style={{ color: '#64748b', fontWeight: 500 }}>({product.reviewCount || 128} đánh giá thực tế)</span>
-                </div>
+                <a
+                  href="#product-reviews-section"
+                  data-testid="product-header-rating-link"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    color: '#0f172a',
+                    fontWeight: 700,
+                    textDecoration: 'none'
+                  }}
+                >
+                  {renderRatingStars(reviewMeta.totalReviews > 0 ? reviewMeta.averageRating : 0, '0.95rem')}
+                  <span style={{ color: '#b45309', fontWeight: 800 }}>
+                    {reviewMeta.totalReviews > 0
+                      ? `${Number(reviewMeta.averageRating).toFixed(1)}/5 sao`
+                      : '0.0/5 sao'}
+                  </span>
+                  <span style={{ color: '#64748b', fontWeight: 500 }}>
+                    ({reviewMeta.totalReviews} lượt đánh giá)
+                  </span>
+                </a>
                 <span>•</span>
                 <div style={{ color: '#dc2626', fontWeight: 600 }}>
                   🔥 Đã bán {sold} chiếc trong đợt sale
@@ -812,7 +849,7 @@ const ProductDetail = () => {
                   }}
                 >
                   <span>🛒</span>
-                  <span>{isOutOfStock ? 'Tạm hết hàng' : isAdded ? '✓ Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
+                  <span>{isOutOfStock ? (isSale ? 'Đã hết suất' : 'Tạm hết hàng') : isAdded ? '✓ Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
                 </button>
 
                 <button
@@ -842,7 +879,7 @@ const ProductDetail = () => {
                   }}
                 >
                   <span>⚡</span>
-                  <span>{isOutOfStock ? 'SẢN PHẨM ĐÃ HẾT HÀNG' : 'MUA NGAY VỚI GIÁ FLASH SALE'}</span>
+                  <span>{isOutOfStock ? (isSale ? 'ĐÃ HẾT SUẤT' : 'SẢN PHẨM ĐÃ HẾT HÀNG') : 'MUA NGAY VỚI GIÁ FLASH SALE'}</span>
                 </button>
               </div>
 
@@ -983,6 +1020,9 @@ const ProductDetail = () => {
             </div>
           </div>
         </div>
+
+        {/* 4. KHU VỰC ĐÁNH GIÁ & NHẬN XÉT SẢN PHẨM SAU MUA (TÍCH HỢP BACKEND API) */}
+        <ProductReviewsSection product={product} onSummaryChange={setReviewMeta} />
       </div>
     </div>
   );

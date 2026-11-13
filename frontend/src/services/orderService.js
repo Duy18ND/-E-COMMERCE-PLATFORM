@@ -1,4 +1,4 @@
-import api from './api';
+import api from './api.js';
 import cartService from './cartService';
 import { ORDER_STATUS, ORDER_STATUS_LABELS } from '../utils/constants';
 
@@ -334,69 +334,73 @@ const setStoredOrders = (orders) => {
   }
 };
 
-const ORDER_PRICE_OVERRIDES_KEY = 'shopmart_order_price_overrides';
-
-const saveOrderPriceOverride = (orderObj) => {
-  if (!orderObj || orderObj.id == null) return;
-  try {
-    if (typeof localStorage === 'undefined') return;
-    const raw = localStorage.getItem(ORDER_PRICE_OVERRIDES_KEY);
-    const map = raw ? JSON.parse(raw) : {};
-    map[String(orderObj.id)] = {
-      originalAmount: Number(orderObj.originalAmount ?? orderObj.subtotalAmount ?? orderObj.totalAmount ?? 0),
-      subtotalAmount: Number(orderObj.subtotalAmount ?? orderObj.totalAmount ?? 0),
-      productDiscountAmount: Number(orderObj.productDiscountAmount ?? 0),
-      discountAmount: Number(orderObj.discountAmount ?? 0),
-      voucherCode: orderObj.voucherCode || null,
-      totalAmount: Number(orderObj.totalAmount ?? 0)
-    };
-    localStorage.setItem(ORDER_PRICE_OVERRIDES_KEY, JSON.stringify(map));
-  } catch (e) {
-    // Bỏ qua lỗi lưu trữ
-  }
+const toFiniteNumber = (value, fallback = 0) => {
+  if (value === null || value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const applyOrderPriceOverride = (orderObj) => {
-  if (!orderObj || typeof orderObj !== 'object') return orderObj;
-  let result = { ...orderObj };
-  try {
-    if (typeof localStorage !== 'undefined' && result.id != null) {
-      const raw = localStorage.getItem(ORDER_PRICE_OVERRIDES_KEY);
-      const map = raw ? JSON.parse(raw) : null;
-      const ov = map?.[String(result.id)];
-      if (ov) {
-        const sub = Number(result.subtotalAmount || ov.subtotalAmount || 0);
-        const disc = Math.max(Number(result.discountAmount || 0), Number(ov.discountAmount || 0));
-        const prodDisc = Math.max(Number(result.productDiscountAmount || 0), Number(ov.productDiscountAmount || 0));
-        const orig = Math.max(Number(result.originalAmount || 0), Number(ov.originalAmount || 0), sub + prodDisc);
-        const discountedTotal = sub > 0 ? Math.max(0, sub - disc) : Number(ov.totalAmount ?? result.totalAmount ?? 0);
-        const finalTotal =
-          Number(ov.totalAmount) > 0 && Number(ov.totalAmount) < Number(result.totalAmount || Infinity)
-            ? Number(ov.totalAmount)
-            : discountedTotal;
-        result = {
-          ...result,
-          originalAmount: orig,
-          subtotalAmount: sub > 0 ? sub : Number(result.totalAmount || 0),
-          productDiscountAmount: prodDisc,
-          discountAmount: disc,
-          voucherCode: result.voucherCode || ov.voucherCode || null,
-          totalAmount: finalTotal
-        };
-      }
-    }
-  } catch (e) {
-    // Bỏ qua lỗi đọc override
+const normalizeOrderDate = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (Array.isArray(value) && value.length >= 3) {
+    const [year, month, day, hour = 0, minute = 0, second = 0, nano = 0] = value;
+    const dateObj = new Date(
+      Number(year),
+      Math.max(0, Number(month || 1) - 1),
+      Number(day || 1),
+      Number(hour || 0),
+      Number(minute || 0),
+      Number(second || 0),
+      Math.floor(Number(nano || 0) / 1e6)
+    );
+    return Number.isNaN(dateObj.getTime()) ? null : dateObj.toISOString();
   }
+  if (typeof value === 'number') {
+    const dateObj = new Date(value);
+    return Number.isNaN(dateObj.getTime()) ? null : dateObj.toISOString();
+  }
+  const str = String(value).trim();
+  return str || null;
+};
 
-  // Luôn đảm bảo nếu đơn có subtotalAmount và discountAmount > 0 thì totalAmount đã trừ discountAmount
-  if (result.subtotalAmount != null && Number(result.discountAmount) > 0) {
-    const expectedTotal = Math.max(0, Number(result.subtotalAmount) - Number(result.discountAmount));
-    if (Number(result.totalAmount) > expectedTotal) {
-      result.totalAmount = expectedTotal;
-    }
-  }
-  return result;
+const normalizeOrderStatus = (status) => {
+  if (status === null || status === undefined) return '';
+  const upper = String(status).trim().toUpperCase();
+  if (!upper) return '';
+  if (upper === 'COMPLETED') return ORDER_STATUS.DELIVERED;
+  return upper;
+};
+
+export const normalizeOrderFromBackend = (rawOrder) => {
+  if (!rawOrder || typeof rawOrder !== 'object') return null;
+
+  const totalAmount = toFiniteNumber(rawOrder.totalAmount ?? rawOrder.finalAmount, 0);
+  const discountAmount = Math.max(0, toFiniteNumber(rawOrder.discountAmount, 0));
+  const subtotalAmount =
+    rawOrder.subtotalAmount !== null && rawOrder.subtotalAmount !== undefined
+      ? toFiniteNumber(rawOrder.subtotalAmount, totalAmount)
+      : rawOrder.subtotal !== null && rawOrder.subtotal !== undefined
+        ? toFiniteNumber(rawOrder.subtotal, totalAmount)
+        : totalAmount;
+  const shippingFee = Math.max(0, toFiniteNumber(rawOrder.shippingFee, 0));
+
+  return {
+    ...rawOrder,
+    id: rawOrder.id ?? null,
+    userId: rawOrder.userId ?? null,
+    receiverName: rawOrder.receiverName || '',
+    receiverPhone: rawOrder.receiverPhone || '',
+    shippingAddress: rawOrder.shippingAddress || '',
+    status: normalizeOrderStatus(rawOrder.status) || ORDER_STATUS.PENDING,
+    paymentMethod: rawOrder.paymentMethod ? String(rawOrder.paymentMethod).trim().toUpperCase() : 'COD',
+    subtotalAmount,
+    discountAmount,
+    shippingFee,
+    totalAmount,
+    finalAmount: totalAmount,
+    createdAt: normalizeOrderDate(rawOrder.createdAt),
+    updatedAt: normalizeOrderDate(rawOrder.updatedAt)
+  };
 };
 
 export const orderService = {
@@ -1047,25 +1051,110 @@ export const orderService = {
     };
   },
 
-  // Admin thống kê dashboard (GET /api/admin/orders/stats)
-  getOrderStats: async () => {
-    try {
-      return await api.get('/admin/orders/stats');
-    } catch (err) {
-      const orders = getStoredOrders();
-      const totalRevenue = orders
-        .filter((o) => o.status !== ORDER_STATUS.CANCELLED)
-        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      const totalOrders = orders.length;
-      const pendingOrders = orders.filter((o) => o.status === ORDER_STATUS.PENDING).length;
-
-      return {
-        totalRevenue,
-        totalOrders,
-        pendingOrders,
-        totalUsers: 154
-      };
+  /**
+   * [Task ECOM-145 / ECOM-326]
+   * Lấy báo cáo thống kê doanh thu & đơn hàng từ Backend:
+   * - Ưu tiên gọi GET /api/v1/admin/statistics (hỗ trợ startDate, endDate định dạng YYYY-MM-DD)
+   * - Fallback sang GET /api/v1/admin/orders/stats nếu không truyền bộ lọc ngày
+   * Tuyệt đối không sử dụng dữ liệu giả hoặc hardcode khi API thất bại.
+   */
+  getOrderStats: async (params = {}) => {
+    const queryParams = {};
+    if (params.startDate && String(params.startDate).trim()) {
+      queryParams.startDate = String(params.startDate).trim();
     }
+    if (params.endDate && String(params.endDate).trim()) {
+      queryParams.endDate = String(params.endDate).trim();
+    }
+
+    let rawStats;
+    try {
+      rawStats = await api.get('/admin/statistics', { params: queryParams });
+    } catch (primaryErr) {
+      if (!queryParams.startDate && !queryParams.endDate) {
+        rawStats = await api.get('/admin/orders/stats');
+      } else {
+        throw primaryErr;
+      }
+    }
+
+    const statusMap =
+      rawStats?.ordersByStatus && typeof rawStats.ordersByStatus === 'object'
+        ? rawStats.ordersByStatus
+        : {};
+
+    const getCount = (key) => Math.max(0, toFiniteNumber(statusMap[key], 0));
+
+    const pendingOrders = Math.max(0, toFiniteNumber(rawStats?.pendingOrders, getCount('PENDING')));
+    const completedOrders = Math.max(0, toFiniteNumber(rawStats?.completedOrders, getCount('DELIVERED')));
+    const cancelledOrders = Math.max(0, toFiniteNumber(rawStats?.cancelledOrders, getCount('CANCELLED')));
+    const processingOrders = Math.max(
+      0,
+      toFiniteNumber(
+        rawStats?.processingOrders,
+        getCount('PAID') +
+          getCount('CONFIRMED') +
+          getCount('PROCESSING') +
+          getCount('SHIPPING')
+      )
+    );
+
+    let totalUsers = Math.max(0, toFiniteNumber(rawStats?.totalUsers, 0));
+    if (totalUsers === 0) {
+      try {
+        const countRes = await api.get('/admin/customers/count');
+        const parsedCount = toFiniteNumber(countRes, 0);
+        if (parsedCount > 0) {
+          totalUsers = parsedCount;
+        }
+      } catch {
+        // Giữ nguyên giá trị 0 từ DashboardResponse nếu endpoint count không phản hồi
+      }
+    }
+
+    const sanitizedStatusMap = {};
+    for (const [k, v] of Object.entries(statusMap)) {
+      sanitizedStatusMap[k] = Math.max(0, toFiniteNumber(v, 0));
+    }
+
+    return {
+      totalOrders: Math.max(0, toFiniteNumber(rawStats?.totalOrders, 0)),
+      totalRevenue: Math.max(0, toFiniteNumber(rawStats?.totalRevenue, 0)),
+      ordersByStatus: {
+        ...sanitizedStatusMap,
+        PENDING: getCount('PENDING'),
+        PAID: getCount('PAID'),
+        CONFIRMED: getCount('CONFIRMED'),
+        PROCESSING: getCount('PROCESSING'),
+        SHIPPING: getCount('SHIPPING'),
+        DELIVERED: getCount('DELIVERED'),
+        CANCELLED: getCount('CANCELLED'),
+        FAILED: getCount('FAILED'),
+        REFUNDED: getCount('REFUNDED')
+      },
+      pendingOrders,
+      completedOrders,
+      cancelledOrders,
+      processingOrders,
+      lowStockProductsCount: Math.max(0, toFiniteNumber(rawStats?.lowStockProductsCount, 0)),
+      totalUsers
+    };
+  },
+
+  /**
+   * Lấy danh sách đơn hàng thực tế từ Backend cho Dashboard (GET /api/v1/admin/orders)
+   * Không dùng localStorage fallback để đảm bảo tính chính xác của số liệu thống kê.
+   */
+  getRealOrdersForDashboard: async (size = 100) => {
+    const response = await api.get('/admin/orders', {
+      params: { page: 0, size, sortBy: 'id', sortDir: 'desc' }
+    });
+    const content = Array.isArray(response?.content)
+      ? response.content
+      : Array.isArray(response)
+        ? response
+        : [];
+    return content.map((item) => normalizeOrderFromBackend(item)).filter(Boolean);
   }
 };
 
