@@ -315,8 +315,31 @@ class VoucherControllerTest {
     }
 
     @Test
-    @DisplayName("[Task ECOM-167] Customer: GET /api/v1/vouchers/active?userId=25 -> Gọi getAvailableVouchersForUser")
-    void getActiveVouchers_WithUserIdQueryParam_ShouldCallGetAvailableVouchersForUser() throws Exception {
+    @DisplayName("[Task ECOM-167] Bảo mật IDOR: GET /api/v1/vouchers/active?userId=25 không có X-User-Id -> 403 Forbidden")
+    void getActiveVouchers_WithQueryUserIdWithoutHeader_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/vouchers/active")
+                        .param("userId", "25"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verifyNoInteractions(voucherService);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-167] Bảo mật IDOR: GET /api/v1/vouchers/active?userId=25 với X-User-Id=10 khác user -> 403 Forbidden")
+    void getActiveVouchers_WithMismatchedHeaderAndQueryUserId_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/vouchers/active")
+                        .header("X-User-Id", 10L)
+                        .param("userId", "25"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verifyNoInteractions(voucherService);
+    }
+
+    @Test
+    @DisplayName("[Task ECOM-167] Customer: GET /api/v1/vouchers/active?userId=25 khớp với X-User-Id=25 -> Gọi getAvailableVouchersForUser")
+    void getActiveVouchers_WithMatchingHeaderAndQueryUserId_ShouldCallGetAvailableVouchersForUser() throws Exception {
         VoucherResponse v = VoucherResponse.builder()
                 .id(3L)
                 .code("FREESHIP")
@@ -325,6 +348,7 @@ class VoucherControllerTest {
         when(voucherService.getAvailableVouchersForUser(25L)).thenReturn(List.of(v));
 
         mockMvc.perform(get("/api/v1/vouchers/active")
+                        .header("X-User-Id", 25L)
                         .param("userId", "25"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))

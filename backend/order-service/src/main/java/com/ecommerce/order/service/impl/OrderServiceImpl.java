@@ -252,15 +252,38 @@ public class OrderServiceImpl implements OrderService {
         recordStatusHistory(savedOrder, OrderStatus.PENDING, null, "ORDER_CREATED",
                 "CUSTOMER:" + savedOrder.getUserId(), "ROLE_CUSTOMER", "Đơn hàng đã được đặt thành công");
 
-        // [Task ECOM-123 / ECOM-267] Làm trống giỏ hàng nếu user có giỏ hàng đang lưu
+        // [Task ECOM-123 / ECOM-267] Chỉ xóa khỏi giỏ hàng những sản phẩm vừa được đặt mua (giữ nguyên item khác nếu checkout một phần / Buy Now)
         if (request.getUserId() != null && cartRepository != null) {
-            cartRepository.findByUserIdWithItems(request.getUserId()).ifPresent(c -> {
-                if (c.getItems() != null && !c.getItems().isEmpty()) {
-                    c.clearItems();
-                    cartRepository.save(c);
-                    log.info("[Task ECOM-267] Cleared active cart items for userId: {}", request.getUserId());
-                }
-            });
+            Set<Long> orderedProductIds = request.getItems().stream()
+                    .map(CheckoutItemRequest::getProductId)
+                    .filter(Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            if (!orderedProductIds.isEmpty()) {
+                cartRepository.findByUserIdWithItems(request.getUserId()).ifPresent(c -> {
+                    if (c.getItems() != null && !c.getItems().isEmpty()) {
+                        boolean containsAllCartItems = c.getItems().stream()
+                                .allMatch(cartItem -> orderedProductIds.contains(cartItem.getProductId()));
+                        if (containsAllCartItems) {
+                            c.clearItems();
+                            cartRepository.save(c);
+                            log.info("[Task ECOM-267] Cleared active cart items for userId: {}", request.getUserId());
+                        } else {
+                            boolean removedAny = c.getItems().removeIf(cartItem -> {
+                                boolean matched = orderedProductIds.contains(cartItem.getProductId());
+                                if (matched) {
+                                    cartItem.setCart(null);
+                                }
+                                return matched;
+                            });
+                            if (removedAny) {
+                                cartRepository.save(c);
+                                log.info("[Task ECOM-267] Removed purchased items {} from cart for userId: {}",
+                                        orderedProductIds, request.getUserId());
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         // 4. Bắn sự kiện order-created qua Kafka cho payment-service
@@ -470,21 +493,32 @@ public class OrderServiceImpl implements OrderService {
         log.info("[Saga Step] Handling payment success for orderId: {}, txn: {}",
                 event.getOrderId(), event.getTransactionCode());
 
-        Order order = orderRepository.findById(event.getOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
+        java.util.concurrent.locks.ReentrantLock lock = acquireOrderLock(event.getOrderId());
+        try {
+            Order order = orderRepository.findById(event.getOrderId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
 
-        if (order.getStatus() == OrderStatus.PAID) {
-            log.warn("[Saga Step] Order {} is already marked as PAID. Skipping duplicate event.", event.getOrderId());
-            return;
+            OrderStatus previousStatus = order.getStatus();
+            if (previousStatus == OrderStatus.PAID) {
+                log.warn("[Saga Step] Order {} is already marked as PAID. Skipping duplicate event.", event.getOrderId());
+                return;
+            }
+            if (previousStatus != OrderStatus.PENDING) {
+                log.warn("[Saga Step] Ignoring payment-success event for orderId {} because current status is {}",
+                        event.getOrderId(), previousStatus);
+                return;
+            }
+
+            order.setStatus(OrderStatus.PAID);
+            Order savedOrder = orderRepository.save(order);
+            log.info("[Saga Step] Order status successfully updated to PAID for orderId: {}", event.getOrderId());
+
+            // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thành công
+            recordStatusHistory(savedOrder, OrderStatus.PAID, previousStatus, "PAYMENT_SUCCESS",
+                    "PAYMENT_SERVICE", "SYSTEM", "Đã thanh toán thành công qua cổng thanh toán");
+        } finally {
+            releaseOrderLockIfNoTransaction(lock);
         }
-
-        order.setStatus(OrderStatus.PAID);
-        Order savedOrder = orderRepository.save(order);
-        log.info("[Saga Step] Order status successfully updated to PAID for orderId: {}", event.getOrderId());
-
-        // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thành công
-        recordStatusHistory(savedOrder, OrderStatus.PAID, OrderStatus.PENDING, "PAYMENT_SUCCESS",
-                "PAYMENT_SERVICE", "SYSTEM", "Đã thanh toán thành công qua cổng thanh toán");
     }
 
     @Override
