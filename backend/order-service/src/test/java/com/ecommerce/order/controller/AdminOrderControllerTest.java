@@ -246,4 +246,24 @@ class AdminOrderControllerTest {
 
         verifyNoInteractions(orderService);
     }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/orders/stats: Alias tương thích FE trả về 200 OK với ROLE_ADMIN và 403 khi thiếu quyền")
+    void getOrderStatsAlias_SuccessAndRbac() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/orders/stats")
+                        .header("X-User-Roles", "ROLE_USER"))
+                .andExpect(status().isForbidden());
+
+        DashboardResponse dashboardResponse = DashboardResponse.builder()
+                .totalOrders(12L)
+                .totalRevenue(new BigDecimal("1200000.00"))
+                .build();
+        when(orderService.getOrderStatistics()).thenReturn(dashboardResponse);
+
+        mockMvc.perform(get("/api/v1/admin/orders/stats")
+                        .header("X-User-Roles", "ROLE_ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.totalOrders").value(12));
+    }
 }

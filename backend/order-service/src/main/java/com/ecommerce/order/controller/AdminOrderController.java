@@ -107,7 +107,7 @@ public class AdminOrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử mua hàng của khách hàng thành công", response));
     }
 
-    @GetMapping({"/statistics", "/stats"})
+    @GetMapping("/statistics")
     @Operation(summary = "Thống kê doanh thu và đơn hàng [ADMIN]", description = "Tính toán tổng số đơn hàng, tổng doanh thu và số lượng đơn hàng theo từng trạng thái bằng COUNT & SUM dưới Database. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
     public ResponseEntity<ApiResponse<DashboardResponse>> getOrderStatistics(
             @RequestHeader(value = "X-User-Roles", required = false) String roles) {
@@ -116,6 +116,16 @@ public class AdminOrderController {
 
         DashboardResponse response = orderService.getOrderStatistics();
         return ResponseEntity.ok(ApiResponse.success("Lấy thống kê doanh thu thành công", response));
+    }
+
+    /**
+     * Alias tương thích với fallback GET /api/v1/admin/orders/stats của Frontend (orderService.js).
+     */
+    @GetMapping("/stats")
+    @Operation(summary = "Thống kê doanh thu và đơn hàng (alias /stats) [ADMIN]", description = "Alias tương thích cho GET /api/v1/admin/orders/statistics. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
+    public ResponseEntity<ApiResponse<DashboardResponse>> getOrderStats(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles) {
+        return getOrderStatistics(roles);
     }
 
     private void requireAdminRole(String roles) {
