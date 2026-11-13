@@ -37,9 +37,13 @@ public class VoucherController {
         if (userId != null && userId <= 0) {
             throw new AccessDeniedException("Thông tin người dùng xác thực (X-User-Id) không hợp lệ");
         }
-        Long effectiveUserId = (userId != null) ? userId : queryUserId;
-        List<VoucherResponse> response = (effectiveUserId != null)
-                ? voucherService.getAvailableVouchersForUser(effectiveUserId)
+        if (queryUserId != null && (userId == null || !userId.equals(queryUserId))) {
+            log.warn("Blocked IDOR attempt on GET /vouchers/active: headerXUserId={}, queryUserId={}",
+                    userId, queryUserId);
+            throw new AccessDeniedException("Bạn không có quyền truy vấn danh sách voucher cá nhân của người dùng khác");
+        }
+        List<VoucherResponse> response = (userId != null)
+                ? voucherService.getAvailableVouchersForUser(userId)
                 : voucherService.getActiveVouchers();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách mã giảm giá thành công", response));
     }

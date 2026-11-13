@@ -859,4 +859,70 @@ class OrderServiceTest {
         verify(voucherService, times(1)).restoreVoucherUsage("GIAM50K");
         verify(voucherService, times(1)).restoreVoucherUsageForOrder("GIAM50K", 1L, 1L);
     }
+
+    @Test
+    @DisplayName("[BUG-FIX] Checkout một phần (Buy Now): Chỉ xóa sản phẩm đã đặt, giữ lại các sản phẩm chưa chọn trong giỏ")
+    void checkout_PartialItems_ShouldPreserveUnpurchasedCartItems() {
+        Cart cart = Cart.builder()
+                .id(1L)
+                .userId(1L)
+                .items(new ArrayList<>())
+                .build();
+        CartItem cartItem1 = CartItem.builder().id(11L).cart(cart).productId(101L).quantity(2).build();
+        CartItem cartItem2 = CartItem.builder().id(12L).cart(cart).productId(102L).quantity(1).build();
+        cart.getItems().add(cartItem1);
+        cart.getItems().add(cartItem2);
+
+        CheckoutRequest buyOnly101 = CheckoutRequest.builder()
+                .userId(1L)
+                .receiverName("Đoàn Mạnh Duy")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .items(List.of(CheckoutItemRequest.builder()
+                        .productId(101L)
+                        .productName("iPhone 15 Pro")
+                        .quantity(2)
+                        .build()))
+                .build();
+
+        when(productClient.getProductById(101L)).thenReturn(ApiResponse.success(sampleProduct1));
+        when(productClient.reserveStock(any())).thenReturn(ApiResponse.success(null));
+        when(cartRepository.findByUserIdWithItems(1L)).thenReturn(Optional.of(cart));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order o = invocation.getArgument(0);
+            o.setId(200L);
+            return o;
+        });
+
+        OrderResponse response = orderService.checkout(buyOnly101);
+
+        assertThat(response.getId()).isEqualTo(200L);
+        assertThat(cart.getItems()).hasSize(1);
+        assertThat(cart.getItems().get(0).getProductId()).isEqualTo(102L);
+        verify(cartRepository, times(1)).save(cart);
+    }
+
+    @Test
+    @DisplayName("[BUG-FIX] Saga PaymentSuccess bị trễ trên đơn đã CANCELLED hoặc FAILED -> Bỏ qua, không hồi sinh sang PAID")
+    void handlePaymentSuccess_WhenOrderAlreadyCancelledOrFailed_ShouldIgnoreEvent() {
+        samplePendingOrder.setStatus(OrderStatus.CANCELLED);
+        com.ecommerce.order.event.PaymentSuccessEvent event = com.ecommerce.order.event.PaymentSuccessEvent.builder()
+                .orderId(1L)
+                .paymentId(10L)
+                .transactionCode("TXN-LATE")
+                .build();
+
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(samplePendingOrder));
+
+        orderService.handlePaymentSuccess(event);
+        assertThat(samplePendingOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+
+        samplePendingOrder.setStatus(OrderStatus.FAILED);
+        orderService.handlePaymentSuccess(event);
+        assertThat(samplePendingOrder.getStatus()).isEqualTo(OrderStatus.FAILED);
+
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
 }
