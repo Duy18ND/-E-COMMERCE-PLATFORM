@@ -335,6 +335,27 @@ class VoucherControllerTest {
     }
 
     @Test
+    @DisplayName("[Task ECOM-167] Customer: GET /api/v1/vouchers/active?userId=25 khớp với X-User-Id=25 -> Gọi getAvailableVouchersForUser")
+    void getActiveVouchers_WithMatchingHeaderAndQueryUserId_ShouldCallGetAvailableVouchersForUser() throws Exception {
+        VoucherResponse v = VoucherResponse.builder()
+                .id(3L)
+                .code("FREESHIP")
+                .status(VoucherStatus.ACTIVE)
+                .build();
+        when(voucherService.getAvailableVouchersForUser(25L)).thenReturn(List.of(v));
+
+        mockMvc.perform(get("/api/v1/vouchers/active")
+                        .header("X-User-Id", 25L)
+                        .param("userId", "25"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].code").value("FREESHIP"));
+
+        verify(voucherService, times(1)).getAvailableVouchersForUser(25L);
+        verify(voucherService, never()).getActiveVouchers();
+    }
+
+    @Test
     @DisplayName("[Fix-3] Security IDOR: GET /api/v1/vouchers/active?userId=999 kèm X-User-Id=15 -> Chỉ dùng X-User-Id=15")
     void getActiveVouchers_WithHeaderAndSpoofedQueryParam_ShouldUseHeaderUserIdOnly() throws Exception {
         VoucherResponse v = VoucherResponse.builder()

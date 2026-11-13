@@ -348,7 +348,7 @@ public class ProductController {
      * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
      */
     @GetMapping("/low-stock/count")
-    @Operation(summary = "Đếm số sản phẩm sắp hết hàng", description = "Trả về tổng số sản phẩm đang kinh doanh có tồn kho <= threshold (mặc định 5). Yêu cầu ROLE_ADMIN.")
+    @Operation(summary = "Đếm số sản phẩm sắp hết hàng [ADMIN]", description = "Chỉ ADMIN được phép xem số lượng sản phẩm có tồn kho <= threshold (mặc định 5)")
     public ResponseEntity<ApiResponse<Long>> countLowStockProducts(
             @RequestHeader(value = "X-User-Roles", required = false) String roles,
             @RequestParam(value = "threshold", defaultValue = "5") Integer threshold) {

@@ -685,4 +685,27 @@ class ProductControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.data").value(3));
         }
+
+        @Test
+        @DisplayName("GET /api/v1/products/low-stock/count - Trả về 403 Forbidden khi không có ROLE_ADMIN [ECOM-145]")
+        void shouldReturn403WhenCountLowStockWithoutAdminRole() throws Exception {
+                mockMvc.perform(get("/api/v1/products/low-stock/count")
+                                .header("X-User-Roles", "ROLE_USER")
+                                .param("threshold", "5"))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.error").value("Forbidden"));
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/products/low-stock/count - Trả về 200 OK khi có ROLE_ADMIN [ECOM-145]")
+        void shouldCountLowStockProductsForAdmin() throws Exception {
+                when(productService.countLowStockProducts(5)).thenReturn(4L);
+
+                mockMvc.perform(get("/api/v1/products/low-stock/count")
+                                .header("X-User-Roles", "ROLE_ADMIN")
+                                .param("threshold", "5"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.data").value(4));
+        }
 }

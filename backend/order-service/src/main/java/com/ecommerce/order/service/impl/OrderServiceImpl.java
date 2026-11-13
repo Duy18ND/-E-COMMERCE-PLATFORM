@@ -513,9 +513,14 @@ public class OrderServiceImpl implements OrderService {
             Order order = orderRepository.findById(event.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + event.getOrderId()));
 
-            if (order.getStatus() != OrderStatus.PENDING) {
-                log.warn("[Saga Step] Order {} is in status {}. Skipping transition to PAID to prevent reviving cancelled/failed or already processed order.",
-                        event.getOrderId(), order.getStatus());
+            OrderStatus previousStatus = order.getStatus();
+            if (previousStatus == OrderStatus.PAID) {
+                log.warn("[Saga Step] Order {} is already marked as PAID. Skipping duplicate event.", event.getOrderId());
+                return;
+            }
+            if (previousStatus != OrderStatus.PENDING) {
+                log.warn("[Saga Step] Order {} is in status {}. Skipping transition to PAID to prevent reviving cancelled/failed order.",
+                        event.getOrderId(), previousStatus);
                 return;
             }
 
@@ -524,7 +529,7 @@ public class OrderServiceImpl implements OrderService {
             log.info("[Saga Step] Order status successfully updated to PAID for orderId: {}", event.getOrderId());
 
             // [Task ECOM-171 / ECOM-187] Ghi nhận lịch sử thanh toán thành công
-            recordStatusHistory(savedOrder, OrderStatus.PAID, OrderStatus.PENDING, "PAYMENT_SUCCESS",
+            recordStatusHistory(savedOrder, OrderStatus.PAID, previousStatus, "PAYMENT_SUCCESS",
                     "PAYMENT_SERVICE", "SYSTEM", "Đã thanh toán thành công qua cổng thanh toán");
         } finally {
             releaseOrderLockIfNoTransaction(lock);
