@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import userService, { formatCustomerAddress } from '../../services/userService';
+import userService, { formatCustomerAddress, normalizeUserDate } from '../../services/userService';
 import useAuth from '../../hooks/useAuth';
 import useToast from '../../hooks/useToast';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -14,16 +14,18 @@ const FALLBACK_AVATAR =
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80';
 
 const fmtDate = (str) => {
-  if (!str) return '—';
-  const d = new Date(str);
-  if (isNaN(d.getTime())) return str;
+  const normalized = normalizeUserDate(str);
+  if (!normalized) return '—';
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return typeof str === 'string' ? str : '—';
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
 
 const fmtDateTime = (str) => {
-  if (!str) return '—';
-  const d = new Date(str);
-  if (isNaN(d.getTime())) return str;
+  const normalized = normalizeUserDate(str);
+  if (!normalized) return '—';
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return typeof str === 'string' ? str : '—';
   return d.toLocaleString('vi-VN');
 };
 
@@ -89,6 +91,7 @@ const AdminUsers = () => {
 
   // Tìm kiếm, Bộ lọc & Sắp xếp
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sortOption, setSortOption] = useState('newest');
@@ -112,6 +115,21 @@ const AdminUsers = () => {
 
   // Chống Race Condition khi làm mới hoặc thay đổi điều kiện truy vấn liên tục
   const requestIdRef = useRef(0);
+  // Chống gửi request lặp lại khi người dùng click liên tục nút Xác nhận Khóa/Mở khóa
+  const statusActionInFlightRef = useRef(false);
+
+  // Debounce từ khóa tìm kiếm 250ms để tránh gọi API thừa khi gõ phím liên tục
+  useEffect(() => {
+    const trimmed = searchTerm.trim();
+    if (!trimmed) {
+      setDebouncedSearchTerm('');
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(trimmed);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Tải danh sách khách hàng từ API Backend (GET /api/v1/admin/customers)
   const loadUsers = useCallback(async () => {
@@ -132,8 +150,20 @@ const AdminUsers = () => {
                 ? { sortBy: 'id', sortDir: 'desc' }
                 : { sortBy: 'createdAt', sortDir: 'desc' };
 
+    // Nếu người dùng nhập #123 để tìm theo ID cục bộ, không gửi dấu # lên query keyword của Backend
+    const apiKeyword =
+      debouncedSearchTerm && !/^#\d+$/.test(debouncedSearchTerm)
+        ? debouncedSearchTerm
+        : undefined;
+
+    const queryParams = {
+      ...sortParams,
+      ...(apiKeyword ? { keyword: apiKeyword } : {}),
+      ...(statusFilter !== 'ALL' ? { status: statusFilter } : {})
+    };
+
     try {
-      const data = await userService.getAllUsers(sortParams);
+      const data = await userService.getAllUsers(queryParams);
       if (currentRequestId !== requestIdRef.current) return;
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -149,7 +179,7 @@ const AdminUsers = () => {
         setLoading(false);
       }
     }
-  }, [sortOption]);
+  }, [sortOption, statusFilter, debouncedSearchTerm]);
 
   useEffect(() => {
     loadUsers();
@@ -173,10 +203,11 @@ const AdminUsers = () => {
     const cleanPhoneKeyword = rawKeyword.replace(/\s+/g, '');
 
     const filtered = users.filter((item) => {
+      if (!item || typeof item !== 'object') return false;
       const idStr = String(item.id ?? '').toLowerCase();
-      const fullName = (item.name || item.fullName || '').toLowerCase();
-      const email = (item.email || '').toLowerCase();
-      const phone = (item.phone && item.phone !== 'Chưa cập nhật' ? item.phone : '')
+      const fullName = String(item.name || item.fullName || '').toLowerCase();
+      const email = String(item.email || '').toLowerCase();
+      const phone = (item.phone && item.phone !== 'Chưa cập nhật' ? String(item.phone) : '')
         .replace(/\s+/g, '')
         .toLowerCase();
 
@@ -202,10 +233,10 @@ const AdminUsers = () => {
         return Number(b.id || 0) - Number(a.id || 0);
       }
       if (sortOption === 'name_asc') {
-        return (a.name || '').localeCompare(b.name || '', 'vi');
+        return String(a.name || '').localeCompare(String(b.name || ''), 'vi');
       }
       if (sortOption === 'name_desc') {
-        return (b.name || '').localeCompare(a.name || '', 'vi');
+        return String(b.name || '').localeCompare(String(a.name || ''), 'vi');
       }
       if (sortOption === 'oldest') {
         const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -219,14 +250,19 @@ const AdminUsers = () => {
     });
   }, [users, searchTerm, roleFilter, statusFilter, sortOption]);
 
+  // Tự động điều chỉnh currentPage nếu số trang tổng giảm sau khi lọc
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
   // Dữ liệu phân trang
   const paginatedUsers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
     return filteredUsers.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredUsers, currentPage, itemsPerPage]);
+  }, [filteredUsers, safeCurrentPage, itemsPerPage]);
 
   const handleResetFilters = () => {
     setSearchTerm('');
+    setDebouncedSearchTerm('');
     setRoleFilter('ALL');
     setStatusFilter('ALL');
     setSortOption('newest');
@@ -268,16 +304,30 @@ const AdminUsers = () => {
     }
   };
 
+  const currentAdminEmail = (currentAdmin?.email || '').trim().toLowerCase();
+  const currentAdminId = currentAdmin?.id ?? currentAdmin?.userId ?? null;
+
+  const isTargetSelfOrAdmin = (targetUser) => {
+    if (!targetUser) return false;
+    const isSelfByEmail =
+      Boolean(currentAdminEmail) &&
+      String(targetUser.email || '').trim().toLowerCase() === currentAdminEmail;
+    const isSelfById =
+      currentAdminId != null &&
+      targetUser.id != null &&
+      String(targetUser.id) === String(currentAdminId);
+    const isAdminRole =
+      targetUser.role === 'ADMIN' ||
+      (Array.isArray(targetUser.roles) &&
+        targetUser.roles.some((r) => String(r).toUpperCase() === 'ROLE_ADMIN' || String(r).toUpperCase() === 'ADMIN'));
+    return isSelfByEmail || isSelfById || isAdminRole;
+  };
+
   // Mở Confirm Dialog trước khi Khóa / Mở khóa tài khoản
   const handleRequestToggleStatus = (targetUser) => {
-    if (!targetUser) return;
+    if (!targetUser || actionLoading || statusActionInFlightRef.current) return;
 
-    const currentAdminEmail = (currentAdmin?.email || '').trim().toLowerCase();
-    const isSelf =
-      currentAdminEmail &&
-      (targetUser.email || '').toLowerCase() === currentAdminEmail;
-
-    if (isSelf || targetUser.role === 'ADMIN') {
+    if (isTargetSelfOrAdmin(targetUser)) {
       showToast({
         type: 'warning',
         title: 'Thao tác bị từ chối',
@@ -286,7 +336,8 @@ const AdminUsers = () => {
       return;
     }
 
-    const nextStatus = targetUser.status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
+    const nextStatus =
+      targetUser.status === 'LOCKED' || targetUser.status === 'BLOCKED' ? 'ACTIVE' : 'LOCKED';
     setConfirmState({
       isOpen: true,
       targetUser,
@@ -296,9 +347,11 @@ const AdminUsers = () => {
 
   // Xác nhận Khóa / Mở khóa qua PUT /api/v1/admin/customers/{id}/status
   const handleConfirmStatusChange = async () => {
+    if (statusActionInFlightRef.current || actionLoading) return;
     const { targetUser, nextStatus } = confirmState;
     if (!targetUser) return;
 
+    statusActionInFlightRef.current = true;
     setActionLoading(true);
     try {
       const updated =
@@ -334,11 +387,11 @@ const AdminUsers = () => {
           'Đã xảy ra lỗi khi cập nhật trạng thái tài khoản.'
       });
     } finally {
+      statusActionInFlightRef.current = false;
       setActionLoading(false);
     }
   };
 
-  const currentAdminEmail = (currentAdmin?.email || '').trim().toLowerCase();
   const hasActiveFilter =
     Boolean(searchTerm.trim()) ||
     roleFilter !== 'ALL' ||
@@ -401,9 +454,10 @@ const AdminUsers = () => {
 
       {/* 2. THỐNG KÊ TỔNG QUAN KHÁCH HÀNG */}
       <div
+        className="admin-users-kpi-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(210px, 100%), 1fr))',
           gap: '1rem',
           marginBottom: '1.75rem'
         }}
@@ -495,19 +549,22 @@ const AdminUsers = () => {
 
       {/* 3. THANH TÌM KIẾM, BỘ LỌC & SẮP XẾP */}
       <div
-        className="card"
+        className="card admin-users-filter-bar"
         style={{
           padding: '1rem 1.25rem',
           marginBottom: '1.5rem',
           borderRadius: '14px',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(190px, 100%), 1fr))',
           gap: '0.75rem',
           alignItems: 'center'
         }}
       >
         {/* Tìm kiếm theo ID, Họ tên, Email, Số điện thoại */}
-        <div style={{ position: 'relative', minWidth: 0, gridColumn: 'span 2' }}>
+        <div
+          className="admin-users-search-col"
+          style={{ position: 'relative', minWidth: 0, gridColumn: 'span 2' }}
+        >
           <span
             style={{
               position: 'absolute',
@@ -621,7 +678,8 @@ const AdminUsers = () => {
             gap: '0.65rem',
             fontSize: '0.82rem',
             color: '#64748b',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            flexWrap: 'wrap'
           }}
         >
           <span>
@@ -699,8 +757,9 @@ const AdminUsers = () => {
                 <tbody>
                   {paginatedUsers.map((u) => {
                     const isSelf =
-                      currentAdminEmail && (u.email || '').toLowerCase() === currentAdminEmail;
-                    const isAdminRole = u.role === 'ADMIN';
+                      (currentAdminEmail && String(u.email || '').toLowerCase() === currentAdminEmail) ||
+                      (currentAdminId != null && u.id != null && String(u.id) === String(currentAdminId));
+                    const isAdminRole = isTargetSelfOrAdmin(u);
                     const isLocked = u.status === 'LOCKED' || u.status === 'BLOCKED';
                     const hasPhone = u.phone && u.phone !== 'Chưa cập nhật';
 
@@ -734,7 +793,7 @@ const AdminUsers = () => {
                         </td>
 
                         {/* Họ tên + Avatar + Vai trò */}
-                        <td>
+                        <td style={{ maxWidth: '280px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <img
                               src={u.avatar || FALLBACK_AVATAR}
@@ -765,7 +824,9 @@ const AdminUsers = () => {
                                   style={{
                                     fontWeight: 700,
                                     color: '#0f172a',
-                                    fontSize: '0.9rem'
+                                    fontSize: '0.9rem',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere'
                                   }}
                                 >
                                   {u.name}
@@ -793,7 +854,16 @@ const AdminUsers = () => {
                         </td>
 
                         {/* Email */}
-                        <td style={{ color: '#334155', fontWeight: 500, fontSize: '0.875rem' }}>
+                        <td
+                          style={{
+                            color: '#334155',
+                            fontWeight: 500,
+                            fontSize: '0.875rem',
+                            maxWidth: '260px',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'anywhere'
+                          }}
+                        >
                           {u.email || '—'}
                         </td>
 
@@ -909,7 +979,7 @@ const AdminUsers = () => {
             </div>
 
             <Pagination
-              currentPage={currentPage}
+              currentPage={safeCurrentPage}
               totalItems={filteredUsers.length}
               itemsPerPage={itemsPerPage}
               onPageChange={(page) => setCurrentPage(page)}
@@ -966,10 +1036,10 @@ const AdminUsers = () => {
                 }}
               />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>
+                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem', wordBreak: 'break-word' }}>
                   {confirmState.targetUser.name} (#{confirmState.targetUser.id})
                 </div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                <div style={{ fontSize: '0.82rem', color: '#64748b', wordBreak: 'break-word' }}>
                   {confirmState.targetUser.email}
                 </div>
               </div>
@@ -1099,13 +1169,13 @@ const AdminUsers = () => {
                     marginBottom: '0.3rem'
                   }}
                 >
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', wordBreak: 'break-word' }}>
                     {detailUser.name}
                   </h3>
                   <UserRoleBadge role={detailUser.role} />
                   <UserStatusBadge status={detailUser.status} />
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#475569' }}>{detailUser.email}</div>
+                <div style={{ fontSize: '0.85rem', color: '#475569', wordBreak: 'break-word' }}>{detailUser.email}</div>
               </div>
             </div>
 
@@ -1146,7 +1216,8 @@ const AdminUsers = () => {
                       fontWeight: 700,
                       color: '#0f172a',
                       fontSize: '0.88rem',
-                      marginTop: '0.2rem'
+                      marginTop: '0.2rem',
+                      wordBreak: 'break-word'
                     }}
                   >
                     {info.value}
@@ -1172,7 +1243,8 @@ const AdminUsers = () => {
                     fontWeight: 600,
                     color: '#0f172a',
                     fontSize: '0.88rem',
-                    marginTop: '0.25rem'
+                    marginTop: '0.25rem',
+                    wordBreak: 'break-word'
                   }}
                 >
                   {detailLoading ? 'Đang tải địa chỉ...' : detailUser.address || 'Chưa cập nhật'}
@@ -1198,7 +1270,7 @@ const AdminUsers = () => {
                       Sổ địa chỉ đã lưu ({detailUser.addresses.length}):
                     </div>
                     {detailUser.addresses.map((addr, i) => (
-                      <div key={addr.id || i} style={{ marginBottom: '0.2rem' }}>
+                      <div key={addr.id || i} style={{ marginBottom: '0.2rem', wordBreak: 'break-word' }}>
                         • {formatCustomerAddress(addr)}
                         {addr.isDefault ? ' (Mặc định)' : ''}
                       </div>
@@ -1291,12 +1363,12 @@ const AdminUsers = () => {
                           <OrderStatus status={ord.status} />
                         </div>
                         {ord.shippingAddress && (
-                          <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                          <div style={{ fontSize: '0.74rem', color: '#64748b', wordBreak: 'break-word' }}>
                             📍 {ord.shippingAddress}
                           </div>
                         )}
                       </div>
-                      <strong style={{ color: '#dc2626', fontSize: '0.88rem' }}>
+                      <strong style={{ color: '#dc2626', fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
                         {formatCurrency(ord.finalAmount ?? ord.totalAmount ?? 0)}
                       </strong>
                     </div>
@@ -1332,10 +1404,11 @@ const AdminUsers = () => {
               }}
             >
               <div>
-                {detailUser.role !== 'ADMIN' && (
+                {!isTargetSelfOrAdmin(detailUser) && (
                   <Button
                     variant={detailUser.status === 'LOCKED' ? 'primary' : 'danger'}
                     size="sm"
+                    disabled={actionLoading}
                     onClick={() => handleRequestToggleStatus(detailUser)}
                   >
                     {detailUser.status === 'LOCKED' ? '🔓 Mở khóa tài khoản' : '🔒 Khóa tài khoản'}
@@ -1354,4 +1427,3 @@ const AdminUsers = () => {
 };
 
 export default AdminUsers;
-

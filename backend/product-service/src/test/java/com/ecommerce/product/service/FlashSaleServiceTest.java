@@ -369,11 +369,12 @@ class FlashSaleServiceTest {
         @Test
         @DisplayName("getActiveFlashSaleForProduct() trả về đúng ActiveFlashSaleDto khi sản phẩm đang có Flash Sale")
         void getActiveFlashSaleForProduct_ShouldReturnDtoWhenActive() {
+            LocalDateTime startTime = LocalDateTime.now().minusHours(1);
             LocalDateTime endTime = LocalDateTime.now().plusHours(3);
             FlashSaleCampaign campaign = FlashSaleCampaign.builder()
                     .id(9L)
                     .name("Sale Đêm")
-                    .startTime(LocalDateTime.now().minusHours(1))
+                    .startTime(startTime)
                     .endTime(endTime)
                     .status("ACTIVE")
                     .build();
@@ -397,7 +398,68 @@ class FlashSaleServiceTest {
             assertThat(dto.getFlashSalePrice()).isEqualByComparingTo("699.00");
             assertThat(dto.getRemainingStock()).isEqualTo(14);
             assertThat(dto.getUserLimit()).isEqualTo(2);
+            assertThat(dto.getStartTime()).isEqualTo(startTime);
             assertThat(dto.getEndTime()).isEqualTo(endTime);
+        }
+
+        @Test
+        @DisplayName("restoreFlashSaleStock() hoàn tồn kho Redis qua Lua và gọi atomic decrementSoldQuantityAtomically trong DB")
+        void restoreFlashSaleStock_ShouldRestoreRedisAndDecrementDbSoldQuantity() {
+            FlashSaleCampaign campaign = FlashSaleCampaign.builder()
+                    .id(9L)
+                    .name("Sale Đêm")
+                    .startTime(LocalDateTime.now().minusHours(1))
+                    .endTime(LocalDateTime.now().plusHours(3))
+                    .status("ACTIVE")
+                    .build();
+            FlashSaleItem item = FlashSaleItem.builder()
+                    .id(90L)
+                    .productId(PRODUCT_ID)
+                    .flashSalePrice(new BigDecimal("699.00"))
+                    .quantity(20)
+                    .soldQuantity(6)
+                    .userLimit(2)
+                    .build();
+            campaign.addItem(item);
+
+            when(flashSaleItemRepository.findRestorableActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of(item));
+            when(flashSaleItemRepository.decrementSoldQuantityAtomically(90L, 3)).thenReturn(1);
+            when(redisTemplate.execute(any(RedisScript.class), eq(List.of(EXPECTED_KEY)), eq("3"), eq("20")))
+                    .thenReturn(17L);
+
+            flashSaleService.restoreFlashSaleStock(PRODUCT_ID, 3);
+
+            verify(flashSaleItemRepository).decrementSoldQuantityAtomically(90L, 3);
+            verify(flashSaleItemRepository, never()).save(any());
+            verify(redisTemplate).execute(any(RedisScript.class), eq(List.of(EXPECTED_KEY)), eq("3"), eq("20"));
+        }
+
+        @Test
+        @DisplayName("reserveFlashSaleStock() thành công gọi atomic incrementSoldQuantityAtomically trong DB")
+        void reserveFlashSaleStock_ShouldInvokeAtomicIncrementDbSoldQuantity() {
+            FlashSaleItem item = FlashSaleItem.builder()
+                    .id(91L)
+                    .productId(PRODUCT_ID)
+                    .flashSalePrice(new BigDecimal("699.00"))
+                    .quantity(20)
+                    .soldQuantity(2)
+                    .userLimit(2)
+                    .build();
+
+            when(redisTemplate.execute(
+                    eq(flashSaleScript),
+                    eq(List.of(EXPECTED_KEY)),
+                    eq(String.valueOf(QUANTITY))
+            )).thenReturn(1L);
+            when(flashSaleItemRepository.findActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of(item));
+            when(flashSaleItemRepository.incrementSoldQuantityAtomically(91L, QUANTITY)).thenReturn(1);
+
+            flashSaleService.reserveFlashSaleStock(PRODUCT_ID, QUANTITY);
+
+            verify(flashSaleItemRepository).incrementSoldQuantityAtomically(91L, QUANTITY);
+            verify(flashSaleItemRepository, never()).save(any());
         }
     }
 }

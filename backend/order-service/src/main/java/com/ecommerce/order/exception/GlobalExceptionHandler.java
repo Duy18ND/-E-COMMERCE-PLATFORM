@@ -65,6 +65,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(
             IllegalArgumentException ex, HttpServletRequest request) {
+        return handleBadRequestException(ex, request);
+    }
+
+    @ExceptionHandler(org.springframework.data.mapping.PropertyReferenceException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePropertyReferenceException(
+            org.springframework.data.mapping.PropertyReferenceException ex, HttpServletRequest request) {
+        return handleBadRequestException(ex, request);
+    }
+
+    private ResponseEntity<ApiResponse<Void>> handleBadRequestException(
+            RuntimeException ex, HttpServletRequest request) {
 
         log.warn("Illegal argument error on {}: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

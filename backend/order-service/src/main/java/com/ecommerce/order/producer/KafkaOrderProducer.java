@@ -20,21 +20,36 @@ public class KafkaOrderProducer {
     @Value("${kafka.topics.order-created:order-created}")
     private String orderCreatedTopic;
 
+    @Value("${kafka.topics.order-cancelled:order-cancelled}")
+    private String orderCancelledTopic;
+
     /**
      * Gửi message dạng JSON tới topic order-created với payload gồm orderId, userId, totalAmount, paymentMethod.
      * Sử dụng orderId làm message key để đảm bảo message ordering cho từng đơn hàng.
      */
     public void sendOrderCreatedEvent(OrderEvent payload) {
-        String key = String.valueOf(payload.getOrderId());
-        log.info("Publishing OrderCreatedEvent to topic [{}] with key [{}]: {}", orderCreatedTopic, key, payload);
+        sendOrderEvent(orderCreatedTopic, "OrderCreatedEvent", payload);
+    }
 
-        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(orderCreatedTopic, key, payload);
+    /**
+     * Đồng bộ sự kiện hủy đơn hàng sang topic order-cancelled để payment-service đóng phiên thanh toán PENDING.
+     */
+    public void sendOrderCancelledEvent(OrderEvent payload) {
+        sendOrderEvent(orderCancelledTopic, "OrderCancelledEvent", payload);
+    }
+
+    private void sendOrderEvent(String topic, String eventName, OrderEvent payload) {
+        String key = String.valueOf(payload.getOrderId());
+        log.info("Publishing {} to topic [{}] with key [{}]: {}", eventName, topic, key, payload);
+
+        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, payload);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {
-                log.error("Failed to publish OrderCreatedEvent for orderId {}: {}", payload.getOrderId(), ex.getMessage(), ex);
+                log.error("Failed to publish {} for orderId {}: {}", eventName, payload.getOrderId(), ex.getMessage(), ex);
             } else {
-                log.info("OrderCreatedEvent published successfully for orderId {} to topic [{}] partition [{}] at offset [{}]",
+                log.info("{} published successfully for orderId {} to topic [{}] partition [{}] at offset [{}]",
+                        eventName,
                         payload.getOrderId(),
                         result.getRecordMetadata().topic(),
                         result.getRecordMetadata().partition(),

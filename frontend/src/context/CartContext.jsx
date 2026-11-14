@@ -87,14 +87,8 @@ export const CartProvider = ({ children }) => {
     try {
       const cartData = await cartService.getCart();
       applyCartResponse(cartData);
-    } catch (error) {
-      console.warn('Không thể tải giỏ hàng từ máy chủ, chuyển sang local mock:', error.message);
-      try {
-        const localData = await cartService.getCart();
-        applyCartResponse(localData);
-      } catch (e) {
-        applyCartResponse(null);
-      }
+    } catch {
+      applyCartResponse(null);
     } finally {
       setLoading(false);
     }
@@ -160,12 +154,14 @@ export const CartProvider = ({ children }) => {
     } catch (err) {
       console.error('Lỗi khi cập nhật giỏ hàng:', err);
       if (showToast) {
+        const isStockErr = err?.status === 409 || err?.isOutOfStock;
         showToast({
           type: 'error',
-          title: 'Lỗi cập nhật',
+          title: isStockErr ? 'Vượt quá tồn kho' : 'Lỗi cập nhật giỏ hàng',
           message: err.message || 'Không thể cập nhật số lượng sản phẩm.'
         });
       }
+      return false;
     }
   }, [showToast, applyCartResponse]);
 

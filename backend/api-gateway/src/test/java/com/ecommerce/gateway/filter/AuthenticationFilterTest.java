@@ -146,4 +146,209 @@ class AuthenticationFilterTest {
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
+
+    @Test
+    @DisplayName("[ECOM-181] Should overwrite client-spoofed X-User-Id header with actual userId from JWT on review creation")
+    void testOverwriteSpoofedUserIdHeaderOnReviewCreation() {
+        String token = createToken(42L, "customer42@ecommerce.com", List.of("ROLE_CUSTOMER"), 60000L);
+
+        MockServerHttpRequest request = MockServerHttpRequest.post("/api/v1/products/1/reviews")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header("X-User-Id", "999")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        AtomicReference<ServerWebExchange> mutatedExchangeRef = new AtomicReference<>();
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
+            mutatedExchangeRef.set(invocation.getArgument(0));
+            return Mono.empty();
+        });
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(mutatedExchangeRef.get()).isNotNull();
+        HttpHeaders headers = mutatedExchangeRef.get().getRequest().getHeaders();
+        assertThat(headers.getFirst("X-User-Id")).isEqualTo("42");
+        assertThat(headers.getFirst("X-User-Roles")).isEqualTo("ROLE_CUSTOMER");
+    }
+
+    @Test
+    @DisplayName("[ECOM-193] Should overwrite client-spoofed X-User-Roles: ROLE_ADMIN header with actual JWT roles on admin review API")
+    void testOverwriteSpoofedAdminRoleHeaderOnAdminReviewEndpoint() {
+        String customerToken = createToken(42L, "customer42@ecommerce.com", List.of("ROLE_CUSTOMER"), 60000L);
+
+        MockServerHttpRequest request = MockServerHttpRequest.patch("/api/v1/admin/reviews/100/moderate")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                .header("X-User-Roles", "ROLE_ADMIN")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        AtomicReference<ServerWebExchange> mutatedExchangeRef = new AtomicReference<>();
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
+            mutatedExchangeRef.set(invocation.getArgument(0));
+            return Mono.empty();
+        });
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(mutatedExchangeRef.get()).isNotNull();
+        HttpHeaders headers = mutatedExchangeRef.get().getRequest().getHeaders();
+        assertThat(headers.getFirst("X-User-Roles")).isEqualTo("ROLE_CUSTOMER");
+    }
+
+    @Test
+    @DisplayName("[ECOM-181 / ECOM-193] Should return 401 Unauthorized when Bearer token is empty")
+    void testEmptyBearerToken() {
+        MockServerHttpRequest request = MockServerHttpRequest.post("/api/v1/products/1/reviews")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer    ")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("[Fix-3] Optional mode: không có Authorization vẫn cho đi qua và xóa sạch header X-User-* giả mạo")
+    void testOptionalAuthWithoutTokenStripsSpoofedHeaders() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/vouchers/active")
+                .header("X-User-Id", "999")
+                .header("X-User-Roles", "ROLE_ADMIN")
+                .header("X-User-Email", "spoof@evil.com")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        AtomicReference<ServerWebExchange> mutatedExchangeRef = new AtomicReference<>();
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
+            mutatedExchangeRef.set(invocation.getArgument(0));
+            return Mono.empty();
+        });
+
+        AuthenticationFilter.Config optionalConfig = new AuthenticationFilter.Config();
+        optionalConfig.setOptional(true);
+
+        StepVerifier.create(authenticationFilter.apply(optionalConfig).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(mutatedExchangeRef.get()).isNotNull();
+        HttpHeaders headers = mutatedExchangeRef.get().getRequest().getHeaders();
+        assertThat(headers.getFirst("X-User-Id")).isNull();
+        assertThat(headers.getFirst("X-User-Roles")).isNull();
+        assertThat(headers.getFirst("X-User-Email")).isNull();
+    }
+
+    @Test
+    @DisplayName("[Fix-3] Optional mode: có Authorization Bearer hợp lệ thì giải mã và gắn X-User-Id downstream")
+    void testOptionalAuthWithValidTokenAttachesUserHeaders() {
+        String token = createToken(77L, "vip@ecommerce.com", List.of("ROLE_USER"), 60000L);
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/vouchers/active")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        AtomicReference<ServerWebExchange> mutatedExchangeRef = new AtomicReference<>();
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
+            mutatedExchangeRef.set(invocation.getArgument(0));
+            return Mono.empty();
+        });
+
+        AuthenticationFilter.Config optionalConfig = new AuthenticationFilter.Config();
+        optionalConfig.setOptional(true);
+
+        StepVerifier.create(authenticationFilter.apply(optionalConfig).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(mutatedExchangeRef.get()).isNotNull();
+        HttpHeaders headers = mutatedExchangeRef.get().getRequest().getHeaders();
+        assertThat(headers.getFirst("X-User-Id")).isEqualTo("77");
+        assertThat(headers.getFirst("X-User-Email")).isEqualTo("vip@ecommerce.com");
+    }
+
+    @Test
+    @DisplayName("[Fix-D.1] Chặn token đã đăng xuất nằm trong Redis blacklist (jwt:blacklist:<token>) -> 401 Unauthorized")
+    @SuppressWarnings("unchecked")
+    void testBlacklistedTokenIsRejectedWith401() {
+        String token = createToken(42L, "logout@ecommerce.com", List.of("ROLE_USER"), 60000L);
+        org.springframework.data.redis.core.ReactiveStringRedisTemplate redisTemplate =
+                mock(org.springframework.data.redis.core.ReactiveStringRedisTemplate.class);
+        when(redisTemplate.hasKey("jwt:blacklist:" + token)).thenReturn(Mono.just(true));
+        ReflectionTestUtils.setField(authenticationFilter, "redisTemplate", redisTemplate);
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/orders")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        org.mockito.Mockito.verifyNoInteractions(filterChain);
+    }
+
+    @Test
+    @DisplayName("[Fix-D.1] Token không nằm trong Redis blacklist cho đi qua và xóa X-Internal-Service-Key giả mạo")
+    void testNonBlacklistedTokenPassesAndStripsSpoofedInternalKey() {
+        String token = createToken(42L, "valid@ecommerce.com", List.of("ROLE_USER"), 60000L);
+        org.springframework.data.redis.core.ReactiveStringRedisTemplate redisTemplate =
+                mock(org.springframework.data.redis.core.ReactiveStringRedisTemplate.class);
+        when(redisTemplate.hasKey("jwt:blacklist:" + token)).thenReturn(Mono.just(false));
+        ReflectionTestUtils.setField(authenticationFilter, "redisTemplate", redisTemplate);
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/orders")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header("X-Internal-Service-Key", "evil-spoofed-key")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        AtomicReference<ServerWebExchange> mutatedExchangeRef = new AtomicReference<>();
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
+            mutatedExchangeRef.set(invocation.getArgument(0));
+            return Mono.empty();
+        });
+
+        StepVerifier.create(authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(mutatedExchangeRef.get()).isNotNull();
+        HttpHeaders headers = mutatedExchangeRef.get().getRequest().getHeaders();
+        assertThat(headers.getFirst("X-User-Id")).isEqualTo("42");
+        assertThat(headers.getFirst("X-Internal-Service-Key")).isNull();
+    }
+
+    @Test
+    @DisplayName("[Fix-D.1] Optional mode vẫn chặn token đã bị thu hồi trong Redis blacklist với 401")
+    void testOptionalModeRejectsBlacklistedTokenWith401() {
+        String token = createToken(88L, "revoked@ecommerce.com", List.of("ROLE_USER"), 60000L);
+        org.springframework.data.redis.core.ReactiveStringRedisTemplate redisTemplate =
+                mock(org.springframework.data.redis.core.ReactiveStringRedisTemplate.class);
+        when(redisTemplate.hasKey("jwt:blacklist:" + token)).thenReturn(Mono.just(true));
+        ReflectionTestUtils.setField(authenticationFilter, "redisTemplate", redisTemplate);
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/vouchers/active")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain filterChain = mock(GatewayFilterChain.class);
+
+        AuthenticationFilter.Config optionalConfig = new AuthenticationFilter.Config();
+        optionalConfig.setOptional(true);
+
+        StepVerifier.create(authenticationFilter.apply(optionalConfig).filter(exchange, filterChain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        org.mockito.Mockito.verifyNoInteractions(filterChain);
+    }
 }

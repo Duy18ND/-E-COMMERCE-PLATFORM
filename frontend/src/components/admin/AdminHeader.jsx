@@ -406,4 +406,3 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
 };
 
 export default AdminHeader;
-

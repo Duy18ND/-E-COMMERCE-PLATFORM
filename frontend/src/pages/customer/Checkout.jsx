@@ -515,7 +515,10 @@ const Checkout = () => {
     setPickerOpen(false);
   };
 
-  const handleRemoveVoucher = () => setAppliedVoucher(null);
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    notify.info('Đã gỡ bỏ mã giảm giá.');
+  };
 
   // Recalculate if cart total changes (and auto-invalidate if order drops below minOrderValue)
   useEffect(() => {
@@ -547,13 +550,13 @@ const Checkout = () => {
   }, [totalPrice]);
 
   // Derived totals (Công thức: totalAmount = subtotal - discountAmount + shippingFee)
-  const subtotal          = Number(totalPrice) || 0;
-  const shippingFee       = Number(appliedVoucher?.shippingFee ?? 0);
-  const couponCode        = appliedVoucher?.couponCode ?? appliedVoucher?.voucher?.code ?? null;
-  const voucherDiscount   = Number(appliedVoucher?.discountAmount ?? 0);
-  const discountAmount    = appliedVoucher ? voucherDiscount : 0;
-  const finalTotal        = Math.max(0, totalPrice - voucherDiscount) + shippingFee;
-  const totalAmount       = finalTotal;
+  const subtotal         = Number(totalPrice) || 0;
+  const shippingFee      = Number(appliedVoucher?.shippingFee ?? 0);
+  const couponCode       = appliedVoucher?.couponCode ?? appliedVoucher?.voucher?.code ?? null;
+  const voucherDiscount  = Number(appliedVoucher?.discountAmount ?? 0);
+  const discountAmount   = appliedVoucher ? voucherDiscount : 0;
+  const finalTotal       = Math.max(0, totalPrice - voucherDiscount);
+  const totalAmount      = finalTotal + shippingFee;
   const savedVoucherCount = savedVouchers.length;
 
   const handleAddSampleItem = () => {
@@ -618,20 +621,34 @@ const Checkout = () => {
         finalTotal
       });
 
-      const resolvedSubtotal = Number(createdOrder?.subtotalAmount || totalPrice || 0);
-      const resolvedVoucherDiscount = Math.max(Number(createdOrder?.discountAmount || 0), voucherDiscount);
+      const resolvedSubtotal =
+        createdOrder?.subtotalAmount !== null && createdOrder?.subtotalAmount !== undefined
+          ? Number(createdOrder.subtotalAmount)
+          : Number(totalPrice || 0);
+      const resolvedVoucherDiscount =
+        createdOrder?.discountAmount !== null && createdOrder?.discountAmount !== undefined
+          ? Math.max(0, Number(createdOrder.discountAmount))
+          : Math.max(0, Number(voucherDiscount || 0));
       const resolvedPayableTotal =
-        finalTotal >= 0 && totalPrice > 0
-          ? finalTotal
-          : Math.max(0, resolvedSubtotal - resolvedVoucherDiscount);
+        createdOrder?.totalAmount !== null && createdOrder?.totalAmount !== undefined
+          ? Number(createdOrder.totalAmount)
+          : finalTotal >= 0 && totalPrice > 0
+            ? finalTotal
+            : Math.max(0, resolvedSubtotal - resolvedVoucherDiscount);
       const normalizedCreatedOrder = {
         ...createdOrder,
-        originalAmount:        Math.max(Number(createdOrder?.originalAmount || 0), totalOriginalPrice || resolvedSubtotal),
-        subtotalAmount:        resolvedSubtotal,
-        productDiscountAmount: Math.max(Number(createdOrder?.productDiscountAmount || 0), totalDiscount || 0),
-        voucherCode:           createdOrder?.voucherCode || appliedVoucher?.voucher?.code || null,
-        discountAmount:        resolvedVoucherDiscount,
-        totalAmount:           resolvedPayableTotal
+        originalAmount:
+          createdOrder?.originalAmount !== null && createdOrder?.originalAmount !== undefined
+            ? Number(createdOrder.originalAmount)
+            : totalOriginalPrice || resolvedSubtotal,
+        subtotalAmount: resolvedSubtotal,
+        productDiscountAmount:
+          createdOrder?.productDiscountAmount !== null && createdOrder?.productDiscountAmount !== undefined
+            ? Math.max(0, Number(createdOrder.productDiscountAmount))
+            : Math.max(0, totalDiscount || 0),
+        voucherCode: createdOrder?.voucherCode || appliedVoucher?.voucher?.code || null,
+        discountAmount: resolvedVoucherDiscount,
+        totalAmount: resolvedPayableTotal
       };
 
       await refreshCart();

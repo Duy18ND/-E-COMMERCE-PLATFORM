@@ -90,6 +90,12 @@ const REVENUE_STATUS_SET = new Set([
   'DELIVERED'
 ]);
 
+const toSafeNumber = (val, fallback = 0) => {
+  if (val === null || val === undefined || val === '') return fallback;
+  const parsed = Number(val);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const toISODateInput = (dateObj) => {
   const year = dateObj.getFullYear();
   const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -104,14 +110,19 @@ const fmtDateShort = (dateStr) => {
     return `${parts[2]}/${parts[1]}`;
   }
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
+  if (isNaN(d.getTime())) return String(dateStr);
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
 const fmtDateTime = (str) => {
   if (!str) return '—';
+  if (Array.isArray(str) && str.length >= 3) {
+    const [year, month, day, hour = 0, minute = 0, second = 0] = str;
+    const d = new Date(Number(year), Math.max(0, Number(month || 1) - 1), Number(day || 1), Number(hour), Number(minute), Number(second));
+    return isNaN(d.getTime()) ? '—' : d.toLocaleString('vi-VN');
+  }
   const d = new Date(str);
-  if (isNaN(d.getTime())) return str;
+  if (isNaN(d.getTime())) return typeof str === 'string' ? str : '—';
   return d.toLocaleString('vi-VN');
 };
 
@@ -210,15 +221,15 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Các chỉ số KPI thực tế từ Backend DashboardResponse
-  const totalRevenue = Number(statsData?.totalRevenue ?? 0);
-  const totalOrders = Number(statsData?.totalOrders ?? 0);
-  const completedOrders = Number(statsData?.completedOrders ?? 0);
-  const processingOrders = Number(statsData?.processingOrders ?? 0);
-  const pendingOrders = Number(statsData?.pendingOrders ?? 0);
-  const cancelledOrders = Number(statsData?.cancelledOrders ?? 0);
-  const totalUsers = Number(statsData?.totalUsers ?? 0);
-  const lowStockProductsCount = Number(statsData?.lowStockProductsCount ?? 0);
+  // Các chỉ số KPI thực tế từ Backend DashboardResponse (đảm bảo không bao giờ bị null, undefined, NaN)
+  const totalRevenue = Math.max(0, toSafeNumber(statsData?.totalRevenue, 0));
+  const totalOrders = Math.max(0, toSafeNumber(statsData?.totalOrders, 0));
+  const completedOrders = Math.max(0, toSafeNumber(statsData?.completedOrders, 0));
+  const processingOrders = Math.max(0, toSafeNumber(statsData?.processingOrders, 0));
+  const pendingOrders = Math.max(0, toSafeNumber(statsData?.pendingOrders, 0));
+  const cancelledOrders = Math.max(0, toSafeNumber(statsData?.cancelledOrders, 0));
+  const totalUsers = Math.max(0, toSafeNumber(statsData?.totalUsers, 0));
+  const lowStockProductsCount = Math.max(0, toSafeNumber(statsData?.lowStockProductsCount, 0));
 
   // 8 Thẻ KPI hiển thị đầy đủ tất cả các trường từ Backend DashboardResponse
   const kpiCards = [
@@ -290,9 +301,11 @@ const Dashboard = () => {
 
   // Thống kê chi tiết toàn bộ 9 trạng thái từ ordersByStatus của Backend
   const statusBreakdown = useMemo(() => {
-    const map = statsData?.ordersByStatus || {};
+    const map = statsData?.ordersByStatus && typeof statsData.ordersByStatus === 'object'
+      ? statsData.ordersByStatus
+      : {};
     return STATUS_META.map((meta) => {
-      const count = Number(map[meta.key] ?? 0);
+      const count = Math.max(0, toSafeNumber(map[meta.key], 0));
       const percentage =
         totalOrders > 0 ? Math.round((count / totalOrders) * 1000) / 10 : 0;
       const isRevenueCounted = REVENUE_STATUS_SET.has(meta.key);
@@ -359,7 +372,7 @@ const Dashboard = () => {
       current.orderCount += 1;
       const statusUpper = String(ord.status || '').toUpperCase();
       if (REVENUE_STATUS_SET.has(statusUpper)) {
-        current.revenue += Number(ord.totalAmount ?? ord.finalAmount ?? 0);
+        current.revenue += Math.max(0, toSafeNumber(ord.totalAmount ?? ord.finalAmount, 0));
         current.revenueOrderCount += 1;
       }
 
@@ -480,7 +493,7 @@ const Dashboard = () => {
 
       {/* 2. BỘ LỌC THỜI GIAN (Gửi startDate / endDate lên GET /api/v1/admin/statistics) */}
       <div
-        className="card"
+        className="card admin-dashboard-filter-bar"
         style={{
           padding: '1rem 1.25rem',
           marginBottom: '1.5rem',
@@ -618,11 +631,12 @@ const Dashboard = () => {
         </div>
       ) : (
         <>
-          {/* 3. DANH SÁCH 7 THẺ KPI BẮT BUỘC (Responsive tự động xuống dòng) */}
+          {/* 3. DANH SÁCH 8 THẺ KPI BẮT BUỘC (Responsive tự động xuống dòng) */}
           <div
+            className="admin-dashboard-kpi-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(230px, 100%), 1fr))',
               gap: '1rem',
               marginBottom: '1.75rem'
             }}
@@ -683,15 +697,16 @@ const Dashboard = () => {
 
           {/* 4. KHU VỰC BIỂU ĐỒ: BIỂU ĐỒ DOANH THU & BIỂU ĐỒ PHÂN BỔ TRẠNG THÁI ĐƠN HÀNG */}
           <div
+            className="admin-dashboard-charts-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
               gap: '1.25rem',
               marginBottom: '1.75rem'
             }}
           >
             {/* 4A. BIỂU ĐỒ DOANH THU & CƠ CẤU ĐƠN HÀNG TÍNH DOANH THU */}
-            <div className="card" style={{ borderRadius: '14px', padding: '1.25rem' }}>
+            <div className="card" style={{ borderRadius: '14px', padding: '1.25rem', minWidth: 0 }}>
               <div
                 style={{
                   display: 'flex',
@@ -928,7 +943,7 @@ const Dashboard = () => {
             </div>
 
             {/* 4B. BIỂU ĐỒ PHÂN BỔ ĐƠN HÀNG THEO TRẠNG THÁI (DONUT + LEGEND 9 TRẠNG THÁI) */}
-            <div className="card" style={{ borderRadius: '14px', padding: '1.25rem' }}>
+            <div className="card" style={{ borderRadius: '14px', padding: '1.25rem', minWidth: 0 }}>
               <div style={{ marginBottom: '1rem' }}>
                 <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
                   🎯 Biểu đồ Phân bổ Đơn hàng theo Trạng thái
@@ -1034,7 +1049,7 @@ const Dashboard = () => {
                   <div
                     style={{
                       flex: 1,
-                      minWidth: '220px',
+                      minWidth: 'min(220px, 100%)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '0.45rem'
@@ -1047,7 +1062,9 @@ const Dashboard = () => {
                             display: 'flex',
                             justifyContent: 'space-between',
                             fontSize: '0.76rem',
-                            marginBottom: '2px'
+                            marginBottom: '2px',
+                            gap: '0.35rem',
+                            flexWrap: 'wrap'
                           }}
                         >
                           <span
@@ -1113,15 +1130,16 @@ const Dashboard = () => {
 
           {/* 5. BẢNG THỐNG KÊ ĐƠN HÀNG THEO 9 TRẠNG THÁI & TỔNG QUAN HOẠT ĐỘNG HỆ THỐNG */}
           <div
+            className="admin-dashboard-bottom-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
               gap: '1.25rem',
               marginBottom: '1.75rem'
             }}
           >
             {/* 5A. BẢNG THỐNG KÊ ĐƠN HÀNG THEO 9 TRẠNG THÁI BACKEND */}
-            <div className="card" style={{ borderRadius: '14px', padding: 0, overflow: 'hidden' }}>
+            <div className="card" style={{ borderRadius: '14px', padding: 0, overflow: 'hidden', minWidth: 0 }}>
               <div style={{ padding: '1.15rem 1.25rem', borderBottom: '1px solid #e2e8f0' }}>
                 <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
                   📋 Bảng Thống kê Đơn hàng theo Trạng thái (ordersByStatus)
@@ -1234,7 +1252,7 @@ const Dashboard = () => {
             </div>
 
             {/* 5B. TỔNG QUAN HOẠT ĐỘNG HỆ THỐNG & ĐƠN HÀNG MỚI NHẤT */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
               {/* Tổng quan vận hành */}
               <div className="card" style={{ borderRadius: '14px', padding: '1.25rem' }}>
                 <h2 style={{ margin: '0 0 0.85rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
@@ -1244,7 +1262,7 @@ const Dashboard = () => {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))',
                     gap: '0.75rem',
                     marginBottom: '1rem'
                   }}
@@ -1292,7 +1310,7 @@ const Dashboard = () => {
                     <div style={{ fontSize: '0.75rem', color: '#1e40af', fontWeight: 600 }}>
                       Giá trị đơn trung bình
                     </div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb', marginTop: '4px' }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb', marginTop: '4px', wordBreak: 'break-word' }}>
                       {formatCurrency(systemMetrics.avgOrderValue)}
                     </div>
                   </div>
@@ -1434,7 +1452,7 @@ const Dashboard = () => {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                           <OrderStatus status={ord.status} />
-                          <strong style={{ color: '#dc2626' }}>
+                          <strong style={{ color: '#dc2626', whiteSpace: 'nowrap' }}>
                             {formatCurrency(ord.finalAmount ?? ord.totalAmount ?? 0)}
                           </strong>
                         </div>

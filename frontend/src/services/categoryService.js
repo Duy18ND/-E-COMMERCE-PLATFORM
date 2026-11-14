@@ -193,22 +193,18 @@ export const categoryService = {
         ? response.data
         : [];
 
-      if (rawList.length > 0) {
-        return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
-      }
-      return INITIAL_CATEGORIES.map((item, idx) => normalizeCategory(item, idx));
+      return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
     } catch (err) {
-      if (options?.rejectOnError) {
-        throw err;
-      }
-      return INITIAL_CATEGORIES.map((item, idx) => normalizeCategory(item, idx));
+      throw new Error(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể tải danh mục sản phẩm từ máy chủ.'
+      );
     }
   },
 
   /**
-   * Lấy danh sách danh mục: thử gọi API GET /api/v1/products/categories trước,
-   * nếu gọi cho storefront (`{ publicOnly: true }`) thì trả về danh mục chuẩn cho Guest,
-   * nếu ở trang Admin hoặc offline thì fallback về localCategories.
+   * Lấy danh sách danh mục từ API GET /api/v1/products/categories
    */
   getAll: async (options = {}) => {
     if (options?.publicOnly) {
@@ -220,16 +216,17 @@ export const categoryService = {
         ? response
         : Array.isArray(response?.content)
         ? response.content
+        : Array.isArray(response?.data)
+        ? response.data
         : [];
-      if (rawList.length > 0) {
-        return rawList.map((item, idx) => normalizeCategory(item, idx));
-      }
-    } catch {
-      if (options?.rejectOnError) {
-        throw new Error('Không thể kết nối máy chủ danh mục sản phẩm.');
-      }
+      return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
+    } catch (err) {
+      throw new Error(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể kết nối máy chủ danh mục sản phẩm.'
+      );
     }
-    return [...localCategories];
   },
 
   /**
@@ -248,20 +245,14 @@ export const categoryService = {
         : Array.isArray(response?.data)
         ? response.data
         : [];
-      if (rawList.length > 0 || cleanKeyword) {
-        return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
-      }
-    } catch {
-      // Fallback tìm kiếm trên localCategories khi offline
+      return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
+    } catch (err) {
+      throw new Error(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể tìm kiếm danh mục sản phẩm.'
+      );
     }
-    if (!cleanKeyword) return [...localCategories];
-    const q = cleanKeyword.toLowerCase();
-    return localCategories.filter(
-      (c) =>
-        c.name?.toLowerCase().includes(q) ||
-        String(c.id).toLowerCase().includes(q) ||
-        c.description?.toLowerCase().includes(q)
-    );
   },
 
   /**

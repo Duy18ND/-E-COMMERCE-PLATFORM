@@ -22,6 +22,7 @@ public class ReviewResponse {
     private Long id;
     private Long productId;
     private Long userId;
+    private String reviewerName;
     private Long orderId;
     private Integer rating;
     private String comment;

@@ -49,4 +49,8 @@ public class OrderItem implements Serializable {
 
     @Column(name = "price_at_purchase", nullable = false, precision = 12, scale = 2)
     private BigDecimal priceAtPurchase;
+
+    @Column(name = "is_flash_sale", nullable = false)
+    @Builder.Default
+    private Boolean flashSale = Boolean.FALSE;
 }

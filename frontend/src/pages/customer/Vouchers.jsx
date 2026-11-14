@@ -190,23 +190,28 @@ const Vouchers = () => {
   const [filter,      setFilter]     = useState('ALL');
   const [searchTerm,  setSearchTerm] = useState('');
   const [loading,     setLoading]    = useState(true);
+  const [error,       setError]      = useState('');
   const [justSaved,   setJustSaved]  = useState(null); // id just saved (for toast-like feedback)
 
+  const loadVouchers = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await voucherService.getPublicVouchers();
+      setVouchers(Array.isArray(data) ? data : []);
+      setSavedIds(voucherService.getSavedIds());
+    } catch (err) {
+      setError(err?.message || 'Không thể tải danh sách mã giảm giá từ máy chủ.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await voucherService.getPublicVouchers();
-        setVouchers(data);
-        setSavedIds(voucherService.getSavedIds());
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    loadVouchers();
 
     const handleDataChange = () => {
-      load();
+      loadVouchers();
     };
     const handleSavedChange = () => {
       setSavedIds(voucherService.getSavedIds());
@@ -349,6 +354,21 @@ const Vouchers = () => {
         <div style={{ textAlign: 'center', padding: '5rem', color: '#94a3b8' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
           Đang tải danh sách mã giảm giá...
+        </div>
+      ) : error ? (
+        <div style={{ textAlign: 'center', padding: '4rem 1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '14px' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+          <h3 style={{ color: '#991b1b', fontWeight: 700, marginBottom: '0.5rem' }}>Không thể tải danh sách mã giảm giá</h3>
+          <p style={{ color: '#b91c1c', fontSize: '0.875rem', marginBottom: '1.25rem' }}>{error}</p>
+          <button
+            onClick={loadVouchers}
+            style={{
+              padding: '0.6rem 1.5rem', borderRadius: '8px', border: 'none',
+              backgroundColor: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            🔄 Thử lại kết nối
+          </button>
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>

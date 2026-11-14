@@ -1,4 +1,4 @@
-import api from './api';
+import api, { isHttpResponseError } from './api.js';
 import cartService from './cartService';
 import { ORDER_STATUS, ORDER_STATUS_LABELS } from '../utils/constants';
 
@@ -334,71 +334,6 @@ const setStoredOrders = (orders) => {
   }
 };
 
-const ORDER_PRICE_OVERRIDES_KEY = 'shopmart_order_price_overrides';
-
-const saveOrderPriceOverride = (orderObj) => {
-  if (!orderObj || orderObj.id == null) return;
-  try {
-    if (typeof localStorage === 'undefined') return;
-    const raw = localStorage.getItem(ORDER_PRICE_OVERRIDES_KEY);
-    const map = raw ? JSON.parse(raw) : {};
-    map[String(orderObj.id)] = {
-      originalAmount: Number(orderObj.originalAmount ?? orderObj.subtotalAmount ?? orderObj.totalAmount ?? 0),
-      subtotalAmount: Number(orderObj.subtotalAmount ?? orderObj.totalAmount ?? 0),
-      productDiscountAmount: Number(orderObj.productDiscountAmount ?? 0),
-      discountAmount: Number(orderObj.discountAmount ?? 0),
-      voucherCode: orderObj.voucherCode || null,
-      totalAmount: Number(orderObj.totalAmount ?? 0)
-    };
-    localStorage.setItem(ORDER_PRICE_OVERRIDES_KEY, JSON.stringify(map));
-  } catch (e) {
-    // Bỏ qua lỗi lưu trữ
-  }
-};
-
-const applyOrderPriceOverride = (orderObj) => {
-  if (!orderObj || typeof orderObj !== 'object') return orderObj;
-  let result = { ...orderObj };
-  try {
-    if (typeof localStorage !== 'undefined' && result.id != null) {
-      const raw = localStorage.getItem(ORDER_PRICE_OVERRIDES_KEY);
-      const map = raw ? JSON.parse(raw) : null;
-      const ov = map?.[String(result.id)];
-      if (ov) {
-        const sub = Number(result.subtotalAmount || ov.subtotalAmount || 0);
-        const disc = Math.max(Number(result.discountAmount || 0), Number(ov.discountAmount || 0));
-        const prodDisc = Math.max(Number(result.productDiscountAmount || 0), Number(ov.productDiscountAmount || 0));
-        const orig = Math.max(Number(result.originalAmount || 0), Number(ov.originalAmount || 0), sub + prodDisc);
-        const discountedTotal = sub > 0 ? Math.max(0, sub - disc) : Number(ov.totalAmount ?? result.totalAmount ?? 0);
-        const finalTotal =
-          Number(ov.totalAmount) > 0 && Number(ov.totalAmount) < Number(result.totalAmount || Infinity)
-            ? Number(ov.totalAmount)
-            : discountedTotal;
-        result = {
-          ...result,
-          originalAmount: orig,
-          subtotalAmount: sub > 0 ? sub : Number(result.totalAmount || 0),
-          productDiscountAmount: prodDisc,
-          discountAmount: disc,
-          voucherCode: result.voucherCode || ov.voucherCode || null,
-          totalAmount: finalTotal
-        };
-      }
-    }
-  } catch (e) {
-    // Bỏ qua lỗi đọc override
-  }
-
-  // Luôn đảm bảo nếu đơn có subtotalAmount và discountAmount > 0 thì totalAmount đã trừ discountAmount
-  if (result.subtotalAmount != null && Number(result.discountAmount) > 0) {
-    const expectedTotal = Math.max(0, Number(result.subtotalAmount) - Number(result.discountAmount));
-    if (Number(result.totalAmount) > expectedTotal) {
-      result.totalAmount = expectedTotal;
-    }
-  }
-  return result;
-};
-
 const toFiniteNumber = (value, fallback = 0) => {
   if (value === null || value === undefined || value === '') return fallback;
   const parsed = Number(value);
@@ -560,43 +495,59 @@ export const orderService = {
         voucherCode: normalizedVoucherCode
       });
 
-      // Nếu Backend chưa lưu đủ thông tin giảm giá/thanh toán thì chuẩn hóa theo giá trị tại thời điểm checkout
+      // Chỉ xóa giỏ hàng sau khi Backend xác nhận tạo đơn hàng thành công
+      if (apiOrder && apiOrder.id !== undefined && apiOrder.id !== null) {
+        await cartService.clearCart().catch(() => {});
+      }
+
+      // Ưu tiên dữ liệu tài chính thực tế từ Backend trả về
       if (apiOrder && typeof apiOrder === 'object') {
+        const backendSubtotal =
+          apiOrder.subtotalAmount !== null && apiOrder.subtotalAmount !== undefined
+            ? Number(apiOrder.subtotalAmount)
+            : null;
         const effectiveSubtotal =
-          subtotal !== null && subtotal !== undefined && Number(subtotal) >= 0
-            ? Number(subtotal)
-            : subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
-              ? Number(subtotalAmount)
-              : Number(apiOrder.subtotal ?? apiOrder.subtotalAmount ?? apiOrder.totalAmount ?? 0);
-        const effectiveDiscount = Math.min(
-          effectiveSubtotal,
-          Math.max(Number(apiOrder.discountAmount ?? 0) || 0, Math.max(0, Number(discountAmount) || 0))
-        );
-        const effectiveShipping = Math.max(0, Number(shippingFee ?? apiOrder.shippingFee ?? 0) || 0);
-        const effectiveProductDiscount = Math.max(
-          0,
-          Number(productDiscountAmount ?? apiOrder.productDiscountAmount ?? 0) || 0
-        );
+          backendSubtotal !== null && backendSubtotal > 0
+            ? backendSubtotal
+            : (subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
+                ? Number(subtotalAmount)
+                : (subtotal !== null && subtotal !== undefined && Number(subtotal) > 0
+                    ? Number(subtotal)
+                    : Number(apiOrder.totalAmount ?? 0)));
+        const backendDiscount =
+          apiOrder.discountAmount !== null && apiOrder.discountAmount !== undefined
+            ? Number(apiOrder.discountAmount)
+            : null;
+        const effectiveDiscount =
+          backendDiscount !== null
+            ? Math.min(effectiveSubtotal, Math.max(0, backendDiscount))
+            : Math.min(effectiveSubtotal, Math.max(0, Number(discountAmount) || 0));
+        const effectiveShipping = Math.max(0, Number(apiOrder.shippingFee ?? shippingFee ?? 0) || 0);
+        const effectiveProductDiscount =
+          apiOrder.productDiscountAmount !== null && apiOrder.productDiscountAmount !== undefined
+            ? Math.max(0, Number(apiOrder.productDiscountAmount))
+            : Math.max(0, Number(productDiscountAmount) || 0);
+        const backendTotal =
+          apiOrder.totalAmount !== null && apiOrder.totalAmount !== undefined
+            ? Number(apiOrder.totalAmount)
+            : null;
         const computedFinal =
           finalTotal !== null && finalTotal !== undefined && Number(finalTotal) >= 0 && effectiveSubtotal > 0
             ? Math.min(Number(finalTotal), Math.max(0, effectiveSubtotal - effectiveDiscount)) + effectiveShipping
             : totalAmount !== null && totalAmount !== undefined && Number(totalAmount) >= 0 && effectiveSubtotal > 0
               ? Math.min(Number(totalAmount), Math.max(0, effectiveSubtotal - effectiveDiscount) + effectiveShipping)
               : Math.max(0, effectiveSubtotal - effectiveDiscount) + effectiveShipping;
-        const backendTotal = Number(apiOrder.totalAmount ?? computedFinal);
-        const resolvedTotal =
-          effectiveShipping > 0
-            ? computedFinal
-            : effectiveSubtotal > 0 && (effectiveDiscount > 0 || effectiveProductDiscount > 0)
-              ? Math.min(backendTotal > 0 ? backendTotal : computedFinal, computedFinal)
-              : backendTotal;
-        const resolvedOriginal = Math.max(
-          Number(originalAmount ?? 0),
-          effectiveSubtotal + effectiveProductDiscount,
-          Number(apiOrder.originalAmount ?? apiOrder.subtotalAmount ?? resolvedTotal)
-        );
+        const resolvedTotal = backendTotal !== null ? backendTotal : computedFinal;
+        const resolvedOriginal =
+          apiOrder.originalAmount !== null && apiOrder.originalAmount !== undefined
+            ? Number(apiOrder.originalAmount)
+            : Math.max(
+                Number(originalAmount ?? 0),
+                effectiveSubtotal + effectiveProductDiscount,
+                Number(apiOrder.subtotalAmount ?? resolvedTotal)
+              );
 
-        const normalizedOrder = {
+        return {
           ...apiOrder,
           onlinePaymentProvider: apiOrder.onlinePaymentProvider ?? (isOnlinePay ? onlinePaymentProvider : null),
           onlinePaymentProviderLabel:
@@ -613,123 +564,17 @@ export const orderService = {
           shippingFee: effectiveShipping,
           totalAmount: resolvedTotal
         };
-        saveOrderPriceOverride(normalizedOrder);
-        return normalizedOrder;
       }
       return apiOrder;
     } catch (err) {
-      // Fallback Mock Order Creation: Cho phép test xác nhận đơn hàng 100% không bị lỗi
-      const cartData = await cartService.getCart();
-      const orders = getStoredOrders();
-
-      const newId = Math.floor(1004 + Math.random() * 8990);
-      const isOnlinePay = paymentMethod === 'MOCK_ONLINE' || (Boolean(paymentMethod) && paymentMethod !== 'COD');
-
-      const createdAtIso = new Date().toISOString();
-      const orderItems =
-        cartData.items && cartData.items.length > 0
-          ? cartData.items.map((i) => ({
-            id: i.id || i.itemId,
-            productId: i.productId,
-            name: i.name,
-            productName: i.name,
-            originalPrice: i.originalPrice ?? i.price,
-            priceAtPurchase: i.salePrice ?? i.unitPrice ?? i.price,
-            price: i.salePrice ?? i.unitPrice ?? i.price,
-            quantity: i.quantity,
-            subTotal: i.subTotal ?? Number(i.salePrice ?? i.unitPrice ?? i.price ?? 0) * Number(i.quantity || 1),
-            imageUrl: i.imageUrl
-          }))
-          : [
-            {
-              id: 'item-demo',
-              productId: 'fs-1',
-              name: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-              productName: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-              originalPrice: 49990000,
-              priceAtPurchase: 32490000,
-              price: 32490000,
-              quantity: 1,
-              subTotal: 32490000,
-              imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80'
-            }
-          ];
-
-      const itemsSubtotal = orderItems.reduce(
-        (sum, item) => sum + Number(item.subTotal ?? Number(item.price || 0) * Number(item.quantity || 1)),
-        0
+      // Tuyệt đối không tạo đơn hàng giả trong localStorage và không xóa giỏ hàng khi Backend thất bại (400, 403, 409, 500 hoặc lỗi kết nối)
+      const backendMessage = err?.response?.data?.message || err?.message;
+      const checkoutError = new Error(
+        backendMessage || 'Đặt hàng thất bại. Không thể kết nối tới máy chủ, vui lòng thử lại.'
       );
-
-      // Tính đúng công thức: totalAmount = subtotal - discountAmount + shippingFee
-      const rawCartSubtotal = Number(cartData?.totalPrice ?? cartData?.totalAmount ?? itemsSubtotal) || 32490000;
-      const resolvedSubtotal =
-        subtotal !== null && subtotal !== undefined
-          ? Math.max(0, Number(subtotal) || 0)
-          : subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
-            ? Number(subtotalAmount)
-            : rawCartSubtotal;
-      const resolvedDiscountAmount = Math.min(resolvedSubtotal, Math.max(0, Number(discountAmount ?? 0) || 0));
-      const resolvedShippingFee = Math.max(0, Number(shippingFee ?? 0) || 0);
-      const resolvedProductDiscount = Math.max(
-        0,
-        Number(productDiscountAmount) || Number(cartData?.totalDiscount) || 0
-      );
-      const resolvedOriginalAmount = Math.max(
-        Number(originalAmount) || 0,
-        Number(cartData?.totalOriginalPrice) || 0,
-        resolvedSubtotal + resolvedProductDiscount
-      );
-      const resolvedTotalAmount = Math.max(0, resolvedSubtotal - resolvedDiscountAmount) + resolvedShippingFee;
-
-      const createdOrder = {
-        id: newId,
-        receiverName: receiverName || 'Khách hàng ShopMart',
-        receiverPhone: receiverPhone || '0912 345 678',
-        userEmail: 'user@test.com',
-        shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
-        note: note || '',
-        paymentMethod: paymentMethod || 'COD',
-        onlinePaymentProvider: isOnlinePay ? (onlinePaymentProvider || 'MOMO') : null,
-        onlinePaymentProviderLabel: isOnlinePay ? (onlinePaymentProviderLabel || 'Ví điện tử MoMo') : null,
-        status: ORDER_STATUS.PENDING,
-        paidAt: null,
-        couponCode: normalizedVoucherCode,
-        voucherCode: normalizedVoucherCode,
-        voucherId: voucherId ?? null,
-        originalAmount: resolvedOriginalAmount,
-        subtotal: resolvedSubtotal,
-        subtotalAmount: resolvedSubtotal,
-        productDiscountAmount: resolvedProductDiscount,
-        discountAmount: resolvedDiscountAmount,
-        shippingFee: resolvedShippingFee,
-        totalAmount: resolvedTotalAmount,
-        createdAt: createdAtIso,
-        statusHistories: [
-          {
-            id: Date.now(),
-            orderId: newId,
-            status: ORDER_STATUS.PENDING,
-            statusDescription: STATUS_DESCRIPTIONS[ORDER_STATUS.PENDING] || 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
-            previousStatus: null,
-            action: 'CREATE_ORDER',
-            updatedBy: 'Khách hàng',
-            actorRole: 'ROLE_USER',
-            note: note || 'Đơn hàng được khởi tạo thành công',
-            createdAt: createdAtIso
-          }
-        ],
-        items: orderItems
-      };
-
-      // Lưu vào danh sách đơn (localStorage key: shopmart_orders_mock) và bảng tra cứu giá đã giảm
-      orders.unshift(createdOrder);
-      setStoredOrders(orders);
-      saveOrderPriceOverride(createdOrder);
-
-      // Dọn sạch giỏ sau khi đặt hàng thành công
-      await cartService.clearCart();
-
-      return createdOrder;
+      checkoutError.status = err?.status || err?.response?.status;
+      checkoutError.response = err?.response;
+      throw checkoutError;
     }
   },
 
@@ -742,45 +587,13 @@ export const orderService = {
   getMyOrders: async () => {
     const list = await api.get('/orders/my-orders');
     const arr = Array.isArray(list) ? list : Array.isArray(list?.content) ? list.content : [];
-    return arr.map(applyOrderPriceOverride);
+    return arr.map((order) => normalizeOrderFromBackend(order) || order);
   },
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})
   getOrderById: async (id) => {
-    const applyQrOverrideIfNeeded = (orderObj) => {
-      const withPrice = applyOrderPriceOverride(orderObj);
-      if (!withPrice || withPrice.status !== ORDER_STATUS.PENDING) return withPrice;
-      try {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          const raw = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
-          const overrides = raw ? JSON.parse(raw) : null;
-          const ov = overrides?.[String(withPrice.id ?? id)];
-          if (ov && ov.status) {
-            const histories = Array.isArray(withPrice.statusHistories) ? withPrice.statusHistories : [];
-            const hasEntry = histories.some((h) => h.status === ov.status);
-            return {
-              ...withPrice,
-              status: ov.status,
-              updatedAt: ov.updatedAt || withPrice.updatedAt,
-              statusHistories: hasEntry || !ov.historyEntry ? histories : [...histories, ov.historyEntry]
-            };
-          }
-        }
-      } catch (e) {
-        // Bỏ qua lỗi đọc sessionStorage
-      }
-      return withPrice;
-    };
-
-    try {
-      const data = await api.get(`/orders/${id}`);
-      return applyQrOverrideIfNeeded(data);
-    } catch (err) {
-      if (err.response?.status === 403) {
-        throw err;
-      }
-      throw err;
-    }
+    const data = await api.get(`/orders/${id}`);
+    return normalizeOrderFromBackend(data) || data;
   },
 
   // Khách tự hủy đơn PENDING (PUT /api/orders/{orderId}/cancel)
@@ -793,47 +606,16 @@ export const orderService = {
         actorRole: 'ROLE_USER',
         action: 'ORDER_CANCELLED'
       });
-      return response;
+      return normalizeOrderFromBackend(response) || response;
     } catch (err) {
-      if (err.response?.status === 403) {
-        throw err;
-      }
-      const nowIso = new Date().toISOString();
-      const orders = getStoredOrders();
-      const updatedOrders = orders.map((o) => {
-        if (String(o.id) === String(id)) {
-          const prevStatus = o.status || ORDER_STATUS.PENDING;
-          const existingHistories = Array.isArray(o.statusHistories) ? o.statusHistories : [];
-          const cancelEntry = {
-            id: Date.now(),
-            orderId: o.id,
-            status: ORDER_STATUS.CANCELLED,
-            statusDescription: STATUS_DESCRIPTIONS[ORDER_STATUS.CANCELLED],
-            previousStatus: prevStatus,
-            action: 'ORDER_CANCELLED',
-            updatedBy: o.userEmail || 'CUSTOMER',
-            actorRole: 'ROLE_USER',
-            note: 'Khách hàng hủy đơn hàng',
-            createdAt: nowIso
-          };
-          return {
-            ...o,
-            status: ORDER_STATUS.CANCELLED,
-            updatedAt: nowIso,
-            statusHistories: [...existingHistories, cancelEntry]
-          };
-        }
-        return o;
-      });
-      setStoredOrders(updatedOrders);
-      const updatedOrder = updatedOrders.find((o) => String(o.id) === String(id));
-      notifyOrderStatusSync({
-        orderId: id,
-        status: ORDER_STATUS.CANCELLED,
-        actorRole: 'ROLE_USER',
-        action: 'ORDER_CANCELLED'
-      });
-      return updatedOrder;
+      // Không tự động chuyển trạng thái đơn hàng thành CANCELLED ở Frontend khi API thất bại
+      const backendMessage = err?.response?.data?.message || err?.message;
+      const cancelError = new Error(
+        backendMessage || `Không thể hủy đơn hàng #${id}. Vui lòng thử lại.`
+      );
+      cancelError.status = err?.status || err?.response?.status;
+      cancelError.response = err?.response;
+      throw cancelError;
     }
   },
 
@@ -1113,6 +895,9 @@ export const orderService = {
       if (err.response?.status) {
         throw err;
       }
+      if (isHttpResponseError(err)) {
+        throw err;
+      }
       const nowIso = new Date().toISOString();
       const orders = getStoredOrders();
       const targetExists = orders.some((o) => String(o.id) === String(id));
@@ -1241,23 +1026,28 @@ export const orderService = {
         ? rawStats.ordersByStatus
         : {};
 
-    const getCount = (key) => Number(statusMap[key] ?? 0);
+    const getCount = (key) => Math.max(0, toFiniteNumber(statusMap[key], 0));
 
-    const pendingOrders = Number(rawStats?.pendingOrders ?? getCount('PENDING'));
-    const completedOrders = Number(rawStats?.completedOrders ?? getCount('DELIVERED'));
-    const cancelledOrders = Number(rawStats?.cancelledOrders ?? getCount('CANCELLED'));
-    const processingOrders =
-      getCount('PAID') +
-      getCount('CONFIRMED') +
-      getCount('PROCESSING') +
-      getCount('SHIPPING');
+    const pendingOrders = Math.max(0, toFiniteNumber(rawStats?.pendingOrders, getCount('PENDING')));
+    const completedOrders = Math.max(0, toFiniteNumber(rawStats?.completedOrders, getCount('DELIVERED')));
+    const cancelledOrders = Math.max(0, toFiniteNumber(rawStats?.cancelledOrders, getCount('CANCELLED')));
+    const processingOrders = Math.max(
+      0,
+      toFiniteNumber(
+        rawStats?.processingOrders,
+        getCount('PAID') +
+          getCount('CONFIRMED') +
+          getCount('PROCESSING') +
+          getCount('SHIPPING')
+      )
+    );
 
-    let totalUsers = Number(rawStats?.totalUsers ?? 0);
+    let totalUsers = Math.max(0, toFiniteNumber(rawStats?.totalUsers, 0));
     if (totalUsers === 0) {
       try {
         const countRes = await api.get('/admin/customers/count');
-        const parsedCount = Number(countRes ?? 0);
-        if (Number.isFinite(parsedCount) && parsedCount > 0) {
+        const parsedCount = toFiniteNumber(countRes, 0);
+        if (parsedCount > 0) {
           totalUsers = parsedCount;
         }
       } catch {
@@ -1265,10 +1055,16 @@ export const orderService = {
       }
     }
 
+    const sanitizedStatusMap = {};
+    for (const [k, v] of Object.entries(statusMap)) {
+      sanitizedStatusMap[k] = Math.max(0, toFiniteNumber(v, 0));
+    }
+
     return {
-      totalOrders: Number(rawStats?.totalOrders ?? 0),
-      totalRevenue: Number(rawStats?.totalRevenue ?? 0),
+      totalOrders: Math.max(0, toFiniteNumber(rawStats?.totalOrders, 0)),
+      totalRevenue: Math.max(0, toFiniteNumber(rawStats?.totalRevenue, 0)),
       ordersByStatus: {
+        ...sanitizedStatusMap,
         PENDING: getCount('PENDING'),
         PAID: getCount('PAID'),
         CONFIRMED: getCount('CONFIRMED'),
@@ -1277,14 +1073,13 @@ export const orderService = {
         DELIVERED: getCount('DELIVERED'),
         CANCELLED: getCount('CANCELLED'),
         FAILED: getCount('FAILED'),
-        REFUNDED: getCount('REFUNDED'),
-        ...statusMap
+        REFUNDED: getCount('REFUNDED')
       },
       pendingOrders,
       completedOrders,
       cancelledOrders,
       processingOrders,
-      lowStockProductsCount: Number(rawStats?.lowStockProductsCount ?? 0),
+      lowStockProductsCount: Math.max(0, toFiniteNumber(rawStats?.lowStockProductsCount, 0)),
       totalUsers
     };
   },

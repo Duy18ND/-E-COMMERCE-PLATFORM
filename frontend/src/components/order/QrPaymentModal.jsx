@@ -214,17 +214,20 @@ const QrPaymentModal = ({
           ? await onPay(false, note)
           : await paymentService.mockPay(order.id, false, 'Khách hàng hủy tại màn hình QR / Giao dịch lỗi');
       }
-      // Ưu tiên trạng thái thực tế Backend trả về (ví dụ đơn đã thanh toán trước đó)
-      const finalStatus = result?.status || (success ? 'SUCCESS' : 'FAILED');
-      if (finalStatus === 'SUCCESS') {
+      // Chỉ cập nhật giao diện theo đúng trạng thái thực tế Backend xác nhận trả về
+      const finalStatus = String(result?.status || '').trim().toUpperCase();
+      if (finalStatus === 'SUCCESS' || finalStatus === 'PAID') {
         setPhase('success');
         schedule(() => onPaid?.(result), SUCCESS_REDIRECT_DELAY_MS);
       } else if (finalStatus === 'FAILED') {
         setPhase('failed');
         schedule(() => onFailed?.(result), FAILED_REDIRECT_DELAY_MS);
+      } else if (finalStatus === 'PENDING' || finalStatus === 'PROCESSING') {
+        setPhase('idle');
+        setErrorMsg('Giao dịch đang được hệ thống xử lý (PENDING). Vui lòng đợi hoặc kiểm tra lại sau.');
       } else {
         setPhase('idle');
-        setErrorMsg(`Giao dịch đang ở trạng thái ${finalStatus}. Vui lòng thử lại.`);
+        setErrorMsg('Chưa nhận được xác nhận trạng thái thanh toán hợp lệ từ máy chủ. Vui lòng thử lại.');
       }
     } catch (err) {
       setPhase('idle');

@@ -1,6 +1,5 @@
 import api from './api';
 import productService from './productService';
-import { INITIAL_INVENTORY } from './mockData';
 
 const THRESHOLD_STORAGE_KEY = 'shopmart_inventory_thresholds';
 
@@ -87,7 +86,7 @@ export const getInventoryStatus = (stock, minThreshold = 5) => {
   };
 };
 
-let localInventory = [...INITIAL_INVENTORY];
+let localInventory = [];
 
 /**
  * Chuẩn hóa thông tin tồn kho từ sản phẩm (ProductResponse) hoặc dữ liệu tồn kho
@@ -120,19 +119,17 @@ export const inventoryService = {
   getInventoryStatus,
 
   /**
-   * Lấy danh sách tồn kho sản phẩm (kết nối với Product API `/products/admin` hoặc `/products`)
+   * Lấy danh sách tồn kho sản phẩm thực tế từ Backend API (`/products/admin`)
+   * Không hiển thị Mock Data khi Database rỗng hoặc khi API gặp lỗi.
    */
   getInventory: async (params = {}) => {
-    try {
-      const adminItems = await productService.getAdminProducts(params);
-      if (Array.isArray(adminItems) && adminItems.length > 0) {
-        localInventory = adminItems.map(normalizeInventoryItem).filter(Boolean);
-        return [...localInventory];
-      }
-    } catch {
-      // Fallback sang localInventory
+    const adminItems = await productService.getAdminProducts(params);
+    if (Array.isArray(adminItems)) {
+      localInventory = adminItems.map(normalizeInventoryItem).filter(Boolean);
+      return [...localInventory];
     }
-    return localInventory.map(normalizeInventoryItem).filter(Boolean);
+    localInventory = [];
+    return [];
   },
 
   /**

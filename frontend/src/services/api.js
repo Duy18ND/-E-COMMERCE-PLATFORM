@@ -31,6 +31,18 @@ api.interceptors.request.use(
  * Hỗ trợ cả { success, message, data, timestamp } và { status, message, data }
  */
 export const unwrapApiResponse = (payload) => {
+  // Support either full Axios response object or raw response.data payload
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    payload.data &&
+    typeof payload.data === 'object' &&
+    !('success' in payload) &&
+    ('success' in payload.data || 'status' in payload.data || 'data' in payload.data)
+  ) {
+    payload = payload.data;
+  }
+
   if (
     payload &&
     typeof payload === 'object' &&
@@ -144,12 +156,21 @@ api.interceptors.response.use(
       'Đã xảy ra lỗi khi kết nối với máy chủ!';
 
     const customError = new Error(message);
-    customError.status = status;
+    customError.status = status || (isTimeout ? 408 : isNetworkError ? 0 : undefined);
     customError.fieldErrors = fieldErrors;
     customError.response = error.response;
     customError.code = error.code;
     return Promise.reject(customError);
   }
 );
+
+export const isHttpResponseError = (err) =>
+  Boolean(err?.response && (typeof err.response.status === 'number' || err.response.data?.success === false));
+
+export const toBackendError = (err, fallbackMessage = 'Lỗi từ hệ thống') => {
+  const mapped = new Error(err?.response?.data?.message || err?.message || fallbackMessage);
+  mapped.response = err?.response;
+  return mapped;
+};
 
 export default api;

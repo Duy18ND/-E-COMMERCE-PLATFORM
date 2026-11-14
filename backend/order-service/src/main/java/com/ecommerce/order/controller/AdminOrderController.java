@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @RestController
@@ -29,6 +30,10 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Admin Order Controller", description = "Quản lý đơn hàng và thống kê doanh thu toàn hệ thống cho Admin")
 public class AdminOrderController {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "createdAt", "updatedAt", "totalAmount", "status"
+    );
 
     private final OrderService orderService;
 
@@ -44,8 +49,14 @@ public class AdminOrderController {
 
         requireAdminRole(roles);
 
+        String trimmedSortBy = sortBy != null ? sortBy.trim() : "";
+        if (!ALLOWED_SORT_FIELDS.contains(trimmedSortBy)) {
+            throw new IllegalArgumentException(
+                    "Trường sắp xếp (sortBy) không hợp lệ: '" + sortBy + "'. Chỉ chấp nhận: " + ALLOWED_SORT_FIELDS);
+        }
+
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, trimmedSortBy));
 
         PagedResponse<OrderResponse> response = orderService.getAllOrders(status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng thành công", response));
@@ -96,7 +107,7 @@ public class AdminOrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử mua hàng của khách hàng thành công", response));
     }
 
-    @GetMapping({"/statistics", "/stats"})
+    @GetMapping("/statistics")
     @Operation(summary = "Thống kê doanh thu và đơn hàng [ADMIN]", description = "Tính toán tổng số đơn hàng, tổng doanh thu và số lượng đơn hàng theo từng trạng thái bằng COUNT & SUM dưới Database. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
     public ResponseEntity<ApiResponse<DashboardResponse>> getOrderStatistics(
             @RequestHeader(value = "X-User-Roles", required = false) String roles) {
@@ -105,6 +116,16 @@ public class AdminOrderController {
 
         DashboardResponse response = orderService.getOrderStatistics();
         return ResponseEntity.ok(ApiResponse.success("Lấy thống kê doanh thu thành công", response));
+    }
+
+    /**
+     * Alias tương thích với fallback GET /api/v1/admin/orders/stats của Frontend (orderService.js).
+     */
+    @GetMapping("/stats")
+    @Operation(summary = "Thống kê doanh thu và đơn hàng (alias /stats) [ADMIN]", description = "Alias tương thích cho GET /api/v1/admin/orders/statistics. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
+    public ResponseEntity<ApiResponse<DashboardResponse>> getOrderStats(
+            @RequestHeader(value = "X-User-Roles", required = false) String roles) {
+        return getOrderStatistics(roles);
     }
 
     private void requireAdminRole(String roles) {

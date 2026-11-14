@@ -1,13 +1,9 @@
 import api from './api.js';
-import { getToken, getUser, setUser } from '../utils/auth.js';
+import { getUser, setUser, getToken } from '../utils/auth.js';
 
 const isMockUserSession = () => {
-  const isMockEnv =
-    typeof import.meta !== 'undefined' &&
-    import.meta.env &&
-    import.meta.env.VITE_USE_MOCK_AUTH === 'true';
-  const token = getToken();
-  return Boolean(isMockEnv || (typeof token === 'string' && token.startsWith('mock-')));
+  const token = String(getToken() || '');
+  return token.startsWith('mock-jwt-token-');
 };
 
 /**
@@ -25,6 +21,35 @@ const DEFAULT_AVATAR =
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80';
 
 /**
+ * Chuẩn hóa giá trị thời gian từ Backend (chuỗi ISO hoặc mảng LocalDateTime [yyyy, MM, dd, HH, mm, ss])
+ */
+export const normalizeUserDate = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (Array.isArray(value) && value.length >= 3) {
+    const [year, month, day, hour = 0, minute = 0, second = 0, nano = 0] = value;
+    const d = new Date(
+      Number(year),
+      Math.max(0, Number(month || 1) - 1),
+      Number(day || 1),
+      Number(hour || 0),
+      Number(minute || 0),
+      Number(second || 0),
+      Math.floor(Number(nano || 0) / 1e6)
+    );
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  if (typeof value === 'number') {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  return null;
+};
+
+/**
  * Định dạng đối tượng AddressResponse từ Backend thành chuỗi địa chỉ hiển thị
  */
 export const formatCustomerAddress = (addr) => {
@@ -35,7 +60,8 @@ export const formatCustomerAddress = (addr) => {
   if (addr.fullAddress && String(addr.fullAddress).trim()) {
     return String(addr.fullAddress).trim();
   }
-  const parts = [addr.addressLine, addr.ward, addr.district, addr.city]
+  const streetPart = addr.addressLine || addr.street || addr.detailAddress || '';
+  const parts = [streetPart, addr.ward, addr.district, addr.city]
     .map((part) => (part ? String(part).trim() : ''))
     .filter(Boolean);
   return parts.length > 0 ? parts.join(', ') : 'Chưa cập nhật';
@@ -52,20 +78,39 @@ export const normalizeUser = (u) => {
     : u.roles instanceof Set
       ? Array.from(u.roles)
       : [];
+
+  const normalizedRoleList = rawRoles
+    .map((r) => {
+      if (typeof r === 'string') return r.trim().toUpperCase();
+      if (r && typeof r.name === 'string') return r.name.trim().toUpperCase();
+      if (r && typeof r.authority === 'string') return r.authority.trim().toUpperCase();
+      return '';
+    })
+    .filter(Boolean);
+
+  const uRoleUpper = typeof u.role === 'string' ? u.role.trim().toUpperCase() : '';
   const isRoleAdmin =
-    u.role === 'ADMIN' ||
-    rawRoles.some((r) => String(r).toUpperCase().includes('ADMIN'));
+    uRoleUpper === 'ADMIN' ||
+    uRoleUpper === 'ROLE_ADMIN' ||
+    normalizedRoleList.some((r) => r === 'ROLE_ADMIN' || r === 'ADMIN');
 
   const resolvedRole = isRoleAdmin ? 'ADMIN' : 'USER';
   const resolvedRoles =
-    rawRoles.length > 0 ? rawRoles : isRoleAdmin ? ['ROLE_ADMIN'] : ['ROLE_USER'];
-  const resolvedName = (u.fullName || u.name || '').trim() || 'Khách hàng';
+    normalizedRoleList.length > 0
+      ? normalizedRoleList.map((r) => (r.startsWith('ROLE_') ? r : `ROLE_${r}`))
+      : isRoleAdmin
+        ? ['ROLE_ADMIN']
+        : ['ROLE_USER'];
+
+  const resolvedName = String(u.fullName ?? u.name ?? '').trim() || 'Khách hàng';
+  const rawStatusUpper = String(u.status || '').trim().toUpperCase();
   const resolvedStatus =
-    u.status === 'LOCKED' || u.status === 'BLOCKED' ? 'LOCKED' : 'ACTIVE';
+    rawStatusUpper === 'LOCKED' || rawStatusUpper === 'BLOCKED' ? 'LOCKED' : 'ACTIVE';
 
   const rawAddresses = Array.isArray(u.addresses) ? u.addresses : [];
   const primaryAddressObj =
     u.defaultAddress ||
+    (u.address && typeof u.address === 'object' ? u.address : null) ||
     rawAddresses.find((a) => a && a.isDefault) ||
     rawAddresses[0] ||
     null;
@@ -73,16 +118,16 @@ export const normalizeUser = (u) => {
   const resolvedAddress =
     primaryAddressObj
       ? formatCustomerAddress(primaryAddressObj)
-      : u.address && u.address !== 'Chưa cập nhật'
-        ? String(u.address).trim()
+      : typeof u.address === 'string' && u.address.trim() && u.address !== 'Chưa cập nhật'
+        ? u.address.trim()
         : 'Chưa cập nhật';
 
   return {
     ...u,
-    id: u.id,
+    id: u.id ?? u.userId ?? null,
     name: resolvedName,
     fullName: resolvedName,
-    email: u.email || '',
+    email: u.email ? String(u.email).trim() : '',
     avatar: u.avatar || u.avatarUrl || DEFAULT_AVATAR,
     phone: u.phone && String(u.phone).trim() ? String(u.phone).trim() : 'Chưa cập nhật',
     address: resolvedAddress,
@@ -91,9 +136,9 @@ export const normalizeUser = (u) => {
     role: resolvedRole,
     roles: resolvedRoles,
     status: resolvedStatus,
-    rawStatus: u.status || (resolvedStatus === 'LOCKED' ? 'BLOCKED' : 'ACTIVE'),
-    createdAt: u.createdAt || null,
-    updatedAt: u.updatedAt || null
+    rawStatus: rawStatusUpper || (resolvedStatus === 'LOCKED' ? 'BLOCKED' : 'ACTIVE'),
+    createdAt: normalizeUserDate(u.createdAt),
+    updatedAt: normalizeUserDate(u.updatedAt)
   };
 };
 
@@ -106,25 +151,26 @@ const userService = {
    * Lấy thông tin hồ sơ cá nhân của người dùng hiện tại (GET /api/v1/users/profile)
    */
   getProfile: async () => {
-    if (isMockUserSession()) {
-      const savedUser = getUser();
-      if (savedUser) {
-        return {
-          id: savedUser.id || savedUser.userId,
-          email: savedUser.email || '',
-          fullName: savedUser.fullName || '',
-          phone: savedUser.phone || '',
-          avatarUrl: savedUser.avatarUrl || '',
-          roles: savedUser.roles || ['ROLE_USER'],
-          defaultAddress: savedUser.address ? { fullAddress: savedUser.address } : null,
-          addresses: []
-        };
+    try {
+      const data = await api.get('/users/profile');
+      return data;
+    } catch (err) {
+      if (isMockUserSession()) {
+        const savedUser = getUser();
+        if (savedUser) {
+          return {
+            id: savedUser.id || savedUser.userId,
+            email: savedUser.email || '',
+            fullName: savedUser.fullName || '',
+            phone: savedUser.phone || '',
+            avatarUrl: savedUser.avatarUrl || '',
+            roles: savedUser.roles || ['ROLE_USER'],
+            defaultAddress: savedUser.address ? { fullAddress: savedUser.address } : null
+          };
+        }
       }
-      return null;
+      throw err;
     }
-
-    // Chế độ Backend thật: luôn lấy trực tiếp từ API, KHÔNG fallback về localStorage['user'].address giả
-    return await api.get('/users/profile');
   },
 
   /**
@@ -166,17 +212,18 @@ const userService = {
       }
       return data;
     } catch (err) {
-      // Fallback update local session if backend unreachable
-      const savedUser = getUser();
-      if (savedUser) {
-        const updated = {
-          ...savedUser,
-          fullName: fullName || savedUser.fullName,
-          phone: phone || savedUser.phone,
-          avatarUrl: avatarUrl || savedUser.avatarUrl
-        };
-        setUser(updated);
-        return updated;
+      if (isMockUserSession()) {
+        const savedUser = getUser();
+        if (savedUser) {
+          const updated = {
+            ...savedUser,
+            fullName: fullName || savedUser.fullName,
+            phone: phone || savedUser.phone,
+            avatarUrl: avatarUrl || savedUser.avatarUrl
+          };
+          setUser(updated);
+          return updated;
+        }
       }
       throw err;
     }
@@ -189,12 +236,8 @@ const userService = {
     if (isMockUserSession()) {
       return [];
     }
-    try {
-      const data = await api.get('/users/me/addresses');
-      return Array.isArray(data) ? data : [];
-    } catch (err) {
-      return [];
-    }
+    const data = await api.get('/users/me/addresses');
+    return Array.isArray(data) ? data : [];
   },
 
   /**
@@ -224,20 +267,29 @@ const userService = {
    * (GET /api/v1/admin/customers)
    */
   async getCustomers(params = {}) {
+    const safePage = Number.isFinite(Number(params.page)) ? Math.max(0, Number(params.page)) : 0;
+    const safeSize = Number.isFinite(Number(params.size))
+      ? Math.min(Math.max(1, Number(params.size)), 100)
+      : 100;
+
     const queryParams = {
-      page: params.page ?? 0,
-      size: params.size ?? 100,
+      page: safePage,
+      size: safeSize,
       sortBy: params.sortBy || 'id',
       sortDir: params.sortDir || 'desc'
     };
 
-    if (params.keyword && String(params.keyword).trim()) {
-      queryParams.keyword = String(params.keyword).trim();
+    if (params.keyword !== undefined && params.keyword !== null) {
+      const trimmedKeyword = String(params.keyword).trim();
+      if (trimmedKeyword) {
+        queryParams.keyword = trimmedKeyword;
+      }
     }
 
     if (params.status && params.status !== 'ALL') {
+      const upperStatus = String(params.status).trim().toUpperCase();
       queryParams.status =
-        params.status === 'LOCKED' || params.status === 'BLOCKED' ? 'BLOCKED' : 'ACTIVE';
+        upperStatus === 'LOCKED' || upperStatus === 'BLOCKED' ? 'BLOCKED' : 'ACTIVE';
     }
 
     const response = await api.get('/admin/customers', { params: queryParams });
@@ -247,20 +299,41 @@ const userService = {
         ? response
         : [];
 
-    const normalizedList = rawList.map((item) => normalizeUser(item)).filter(Boolean);
+    const seenIds = new Set();
+    const normalizedList = [];
+    for (const item of rawList) {
+      const normalized = normalizeUser(item);
+      if (normalized && normalized.id != null) {
+        const key = String(normalized.id);
+        if (!seenIds.has(key)) {
+          seenIds.add(key);
+          normalizedList.push(normalized);
+        }
+      }
+    }
+
+    const resolvedPage = Number(response?.pageNumber ?? response?.page ?? queryParams.page);
+    const resolvedSize = Number(response?.pageSize ?? response?.size ?? queryParams.size);
+    const resolvedTotalElements = Number(response?.totalElements ?? normalizedList.length);
+    const resolvedTotalPages = Number(
+      response?.totalPages ?? (resolvedTotalElements > 0 ? Math.ceil(resolvedTotalElements / resolvedSize) : 0)
+    );
 
     return {
       content: normalizedList,
-      totalElements: Number(response?.totalElements ?? normalizedList.length),
-      totalPages: Number(response?.totalPages ?? 1),
-      page: Number(response?.page ?? queryParams.page),
-      size: Number(response?.size ?? queryParams.size)
+      totalElements: Number.isFinite(resolvedTotalElements) ? resolvedTotalElements : normalizedList.length,
+      totalPages: Number.isFinite(resolvedTotalPages) ? resolvedTotalPages : 1,
+      pageNumber: Number.isFinite(resolvedPage) ? resolvedPage : queryParams.page,
+      pageSize: Number.isFinite(resolvedSize) ? resolvedSize : queryParams.size,
+      page: Number.isFinite(resolvedPage) ? resolvedPage : queryParams.page,
+      size: Number.isFinite(resolvedSize) ? resolvedSize : queryParams.size,
+      last: Boolean(response?.last ?? true)
     };
   },
 
   /**
    * Lấy danh sách tài khoản hệ thống từ API thật của Backend:
-   * - Gọi GET /api/v1/admin/customers để lấy danh sách khách hàng
+   * - Gọi GET /api/v1/admin/customers (kèm keyword, status, sortBy, sortDir) để lấy danh sách khách hàng
    * - Kết hợp GET /api/v1/admin/users để bổ sung các tài khoản ADMIN phục vụ bộ lọc vai trò
    * Tuyệt đối không sử dụng localStorage hay MOCK_USERS.
    */
@@ -270,13 +343,17 @@ const userService = {
       api.get('/admin/users', { params: { page: 0, size: 100, sortBy: 'id', sortDir: 'desc' } })
     ]);
 
-    if (customersResult.status === 'rejected' && usersResult.status === 'rejected') {
-      throw customersResult.reason || usersResult.reason || new Error('Không thể tải danh sách khách hàng từ máy chủ.');
+    // Nếu endpoint chính GET /api/v1/admin/customers bị lỗi (400/401/403/500/Network), phải báo lỗi ngay
+    if (customersResult.status === 'rejected') {
+      throw (
+        customersResult.reason ||
+        new Error('Không thể tải danh sách khách hàng từ máy chủ.')
+      );
     }
 
     const mergedMap = new Map();
 
-    if (customersResult.status === 'fulfilled' && Array.isArray(customersResult.value?.content)) {
+    if (Array.isArray(customersResult.value?.content)) {
       for (const customer of customersResult.value.content) {
         if (customer && customer.id != null) {
           mergedMap.set(String(customer.id), customer);
@@ -284,15 +361,37 @@ const userService = {
       }
     }
 
+    // Bổ sung các tài khoản ROLE_ADMIN từ /admin/users (nếu phản hồi thành công) và khớp bộ lọc hiện tại
     if (usersResult.status === 'fulfilled') {
       const rawUsers = Array.isArray(usersResult.value?.content)
         ? usersResult.value.content
         : Array.isArray(usersResult.value)
           ? usersResult.value
           : [];
+
+      const filterKeyword = params.keyword ? String(params.keyword).trim().toLowerCase() : '';
+      const filterStatus =
+        params.status && params.status !== 'ALL'
+          ? String(params.status).trim().toUpperCase() === 'BLOCKED' ||
+            String(params.status).trim().toUpperCase() === 'LOCKED'
+            ? 'LOCKED'
+            : 'ACTIVE'
+          : 'ALL';
+
       for (const rawUser of rawUsers) {
         const normalized = normalizeUser(rawUser);
-        if (normalized && normalized.id != null && !mergedMap.has(String(normalized.id))) {
+        if (!normalized || normalized.id == null) continue;
+        // Chỉ bổ sung tài khoản ADMIN để không ghi đè kết quả lọc khách hàng (ROLE_USER) của /admin/customers
+        if (normalized.role !== 'ADMIN') continue;
+        if (filterStatus !== 'ALL' && normalized.status !== filterStatus) continue;
+        if (filterKeyword) {
+          const matchAdminKeyword =
+            String(normalized.name || '').toLowerCase().includes(filterKeyword) ||
+            String(normalized.email || '').toLowerCase().includes(filterKeyword) ||
+            String(normalized.phone || '').toLowerCase().includes(filterKeyword);
+          if (!matchAdminKeyword) continue;
+        }
+        if (!mergedMap.has(String(normalized.id))) {
           mergedMap.set(String(normalized.id), normalized);
         }
       }
@@ -333,7 +432,10 @@ const userService = {
     ]);
     const totalSpent = userOrders
       .filter((o) => VALID_REVENUE_STATUSES.has(String(o.status || '').toUpperCase()))
-      .reduce((sum, o) => sum + Number(o.totalAmount ?? o.finalAmount ?? 0), 0);
+      .reduce((sum, o) => {
+        const val = Number(o.totalAmount ?? o.finalAmount ?? 0);
+        return sum + (Number.isFinite(val) ? val : 0);
+      }, 0);
 
     const completedOrderCount = userOrders.filter(
       (o) => String(o.status || '').toUpperCase() === 'DELIVERED'
@@ -383,7 +485,8 @@ const userService = {
    */
   async countCustomers() {
     const count = await api.get('/admin/customers/count');
-    return Number(count ?? 0);
+    const parsed = Number(count ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
   },
 
   /**
@@ -395,8 +498,9 @@ const userService = {
       throw new Error('Mã khách hàng không hợp lệ.');
     }
 
+    const upperNext = String(nextStatus || '').trim().toUpperCase();
     const resolvedFrontendStatus =
-      nextStatus === 'LOCKED' || nextStatus === 'BLOCKED' ? 'LOCKED' : 'ACTIVE';
+      upperNext === 'LOCKED' || upperNext === 'BLOCKED' ? 'LOCKED' : 'ACTIVE';
     const backendStatus = resolvedFrontendStatus === 'LOCKED' ? 'BLOCKED' : 'ACTIVE';
 
     const response = await api.put(`/admin/customers/${id}/status`, {

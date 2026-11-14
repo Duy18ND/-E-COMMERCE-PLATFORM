@@ -356,6 +356,20 @@ export const extractPagedProducts = (apiPayload, params = {}) => {
   };
 };
 
+const syncLocalProduct = (id, rawProduct) => {
+  const normalized = normalizeProduct(rawProduct);
+  localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
+  return normalized;
+};
+
+const applyStockMutation = async (id, requestFn) => {
+  try {
+    return syncLocalProduct(id, await requestFn());
+  } catch (err) {
+    throw new Error(err?.response?.data?.message || err?.message || 'Không thể cập nhật tồn kho sản phẩm.');
+  }
+};
+
 export const productService = {
   /**
    * Lấy danh mục sản phẩm có phân trang chuẩn `PagedResponse` phục vụ trang `/products`
@@ -394,20 +408,15 @@ export const productService = {
 
       return extracted;
     } catch (err) {
-      const strictApiMode =
-        params?.rejectOnError === true ||
-        params?.allowMockFallback === false ||
-        (typeof import.meta !== 'undefined' &&
-          import.meta.env &&
-          import.meta.env.VITE_STRICT_API === 'true');
-
-      if (strictApiMode) {
+      if (params?.allowMockFallback !== true) {
         throw new Error(
-          err?.message || 'Máy chủ sản phẩm hiện không phản hồi. Vui lòng thử lại sau!'
+          err?.response?.data?.message ||
+            err?.message ||
+            'Máy chủ sản phẩm hiện không phản hồi. Vui lòng thử lại sau!'
         );
       }
 
-      // Chế độ dự phòng cục bộ khi chạy Frontend độc lập (opt-in demo mode)
+      // Chế độ dự phòng cục bộ khi được bật tường minh (allowMockFallback: true)
       const filtered = filterAndSortProducts(localProducts, {
         category,
         keyword,
@@ -483,8 +492,12 @@ export const productService = {
       });
       return list;
     } catch (err) {
-      if (params?.rejectOnError || params?.allowMockFallback === false) {
-        throw err;
+      if (params?.allowMockFallback !== true) {
+        throw new Error(
+          err?.response?.data?.message ||
+            err?.message ||
+            'Không thể tải danh sách sản phẩm từ máy chủ.'
+        );
       }
       const filtered = filterAndSortProducts(localProducts, {
         category,
@@ -519,14 +532,8 @@ export const productService = {
     try {
       const data = await api.get(`/products/${id}`);
       return normalizeProduct(data);
-    } catch {
-      const found = localProducts.find(
-        (p) => String(p.id) === String(id) || (p.sku && String(p.sku) === String(id))
-      );
-      if (!found) {
-        throw new Error('Không tìm thấy sản phẩm!');
-      }
-      return normalizeProduct(found);
+    } catch (err) {
+      throw new Error(err?.response?.data?.message || err?.message || 'Không tìm thấy sản phẩm!');
     }
   },
 
@@ -612,8 +619,12 @@ export const productService = {
       const response = await api.get('/products/admin', { params: queryParams });
       const extracted = extractPagedProducts(response, params);
       return extracted.content;
-    } catch {
-      return [...localProducts];
+    } catch (err) {
+      throw new Error(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể tải danh sách sản phẩm quản trị từ máy chủ.'
+      );
     }
   },
 
@@ -646,15 +657,8 @@ export const productService = {
       const normalized = normalizeProduct(created);
       localProducts = [normalized, ...localProducts.filter((p) => String(p.id) !== String(normalized.id))];
       return normalized;
-    } catch {
-      const newProd = normalizeProduct({
-        id: Date.now(),
-        ...payload,
-        stock: stockQuantity,
-        status: 'ACTIVE'
-      });
-      localProducts.unshift(newProd);
-      return newProd;
+    } catch (err) {
+      throw new Error(err?.response?.data?.message || err?.message || 'Không thể thêm mới sản phẩm.');
     }
   },
 
@@ -693,27 +697,19 @@ export const productService = {
       const normalized = normalizeProduct(updated);
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;
-    } catch {
-      let updatedItem = null;
-      localProducts = localProducts.map((p) => {
-        if (String(p.id) === String(id)) {
-          updatedItem = normalizeProduct({ ...p, ...payload, stock: stockQuantity });
-          return updatedItem;
-        }
-        return p;
-      });
-      return updatedItem || normalizeProduct({ id, ...payload, stock: stockQuantity });
+    } catch (err) {
+      throw new Error(err?.response?.data?.message || err?.message || 'Không thể cập nhật sản phẩm.');
     }
   },
 
   delete: async (id) => {
     try {
       await api.delete(`/products/${id}`);
-    } catch {
-      // Fallback xóa mềm / xóa khỏi danh sách cục bộ khi offline
+      localProducts = localProducts.filter((p) => String(p.id) !== String(id));
+      return { success: true, id };
+    } catch (err) {
+      throw new Error(err?.response?.data?.message || err?.message || 'Không thể xóa sản phẩm.');
     }
-    localProducts = localProducts.filter((p) => String(p.id) !== String(id));
-    return { success: true, id };
   },
 
   /**
@@ -728,30 +724,24 @@ export const productService = {
       throw new Error('Số lượng nhập kho phải là số nguyên lớn hơn 0');
     }
 
-    try {
-      const response = await api.post(`/products/${id}/inbound`, {
-        quantity: qty,
-        note: String(note ?? '').trim()
-      });
-      const normalized = normalizeProduct(response);
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
-      return normalized;
-    } catch (err) {
-      const existing = localProducts.find((p) => String(p.id) === String(id));
-      if (!existing) {
-        throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
+    return applyStockMutation(
+      id,
+      () =>
+        api.post(`/products/${id}/inbound`, {
+          quantity: qty,
+          note: String(note ?? '').trim()
+        }),
+      (existing) => {
+        const newStock = Math.max(0, Number(existing.stockQuantity ?? existing.stock ?? 0) + qty);
+        const updatedStatus = newStock > 0 && existing.status === 'OUT_OF_STOCK' ? 'ACTIVE' : existing.status;
+        return {
+          ...existing,
+          stock: newStock,
+          stockQuantity: newStock,
+          status: updatedStatus
+        };
       }
-      const newStock = Math.max(0, Number(existing.stockQuantity ?? existing.stock ?? 0) + qty);
-      const updatedStatus = newStock > 0 && existing.status === 'OUT_OF_STOCK' ? 'ACTIVE' : existing.status;
-      const updated = normalizeProduct({
-        ...existing,
-        stock: newStock,
-        stockQuantity: newStock,
-        status: updatedStatus
-      });
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? updated : p));
-      return updated;
-    }
+    );
   },
 
   /**
@@ -770,35 +760,28 @@ export const productService = {
       throw new Error('Lý do điều chỉnh kho không được để trống');
     }
 
-    try {
-      const response = await api.post(`/products/${id}/adjust-stock`, {
-        actualStock: stockVal,
-        reason: cleanReason
-      });
-      const normalized = normalizeProduct(response);
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
-      return normalized;
-    } catch (err) {
-      const existing = localProducts.find((p) => String(p.id) === String(id));
-      if (!existing) {
-        throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
+    return applyStockMutation(
+      id,
+      () =>
+        api.post(`/products/${id}/adjust-stock`, {
+          actualStock: stockVal,
+          reason: cleanReason
+        }),
+      (existing) => {
+        let updatedStatus = existing.status;
+        if (stockVal === 0 && existing.status === 'ACTIVE') {
+          updatedStatus = 'OUT_OF_STOCK';
+        } else if (stockVal > 0 && existing.status === 'OUT_OF_STOCK') {
+          updatedStatus = 'ACTIVE';
+        }
+        return {
+          ...existing,
+          stock: stockVal,
+          stockQuantity: stockVal,
+          status: updatedStatus
+        };
       }
-      let updatedStatus = existing.status;
-      if (stockVal === 0 && existing.status === 'ACTIVE') {
-        updatedStatus = 'OUT_OF_STOCK';
-      } else if (stockVal > 0 && existing.status === 'OUT_OF_STOCK') {
-        updatedStatus = 'ACTIVE';
-      }
-
-      const updated = normalizeProduct({
-        ...existing,
-        stock: stockVal,
-        stockQuantity: stockVal,
-        status: updatedStatus
-      });
-      localProducts = localProducts.map((p) => (String(p.id) === String(id) ? updated : p));
-      return updated;
-    }
+    );
   }
 };
 

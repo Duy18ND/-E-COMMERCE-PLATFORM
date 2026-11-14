@@ -63,6 +63,15 @@ const validate = (form, allVouchers, editId = null) => {
   const qty = Number(form.quantity);
   if (!form.quantity || isNaN(qty) || qty <= 0)
     errors.quantity = 'Số lượng mã phải lớn hơn 0.';
+  else if (editId) {
+    const current = allVouchers.find((v) => v.id === editId);
+    if (current && Number(current.usedQuantity) > 0 && qty < Number(current.usedQuantity)) {
+      errors.quantity = 'Số lượng phát hành không được nhỏ hơn số lượt đã dùng (' + current.usedQuantity + ').';
+    }
+  }
+  if (form.maxDiscount !== '' && Number(form.maxDiscount) <= 0) {
+    errors.maxDiscount = 'Giảm tối đa phải lớn hơn 0.';
+  }
   if (!form.startDate) errors.startDate = 'Vui lòng chọn ngày bắt đầu.';
   if (!form.endDate) errors.endDate = 'Vui lòng chọn ngày kết thúc.';
   if (form.startDate && form.endDate && form.endDate < form.startDate)
@@ -75,6 +84,7 @@ const AdminVouchers = () => {
   const { showToast } = useToast();
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -99,11 +109,14 @@ const AdminVouchers = () => {
   // ─── Load ──────────────────────────────────────────────────────────────────
   const loadVouchers = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await voucherService.getAll();
-      setVouchers(data);
+      setVouchers(Array.isArray(data) ? data : []);
     } catch (err) {
-      showToast({ type: 'error', title: 'Lỗi', message: err.message });
+      const msg = err?.message || 'Không thể tải danh sách mã giảm giá từ máy chủ.';
+      setLoadError(msg);
+      showToast({ type: 'error', title: 'Lỗi', message: msg });
     } finally {
       setLoading(false);
     }
@@ -474,6 +487,13 @@ const AdminVouchers = () => {
       <div className="card" style={{ padding: 0, borderRadius: '14px', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Đang tải...</div>
+        ) : loadError ? (
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', backgroundColor: '#fef2f2' }}>
+            <div style={{ fontSize: '2.75rem', marginBottom: '0.5rem' }}>⚠️</div>
+            <h3 style={{ margin: '0.4rem 0', color: '#991b1b' }}>Lỗi tải danh sách mã giảm giá</h3>
+            <p style={{ color: '#b91c1c', fontSize: '0.875rem', marginBottom: '1rem' }}>{loadError}</p>
+            <Button variant="primary" onClick={loadVouchers}>🔄 Thử lại</Button>
+          </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: '4rem', textAlign: 'center' }}>
             <div style={{ fontSize: '3rem' }}>🎫</div>

@@ -55,22 +55,6 @@ const OrderDetail = () => {
     try {
       // Gọi API Backend: GET /api/orders/{orderId}
       const data = await orderService.getOrderById(id);
-      if (data && data.status === ORDER_STATUS.PENDING && typeof window !== 'undefined' && window.sessionStorage) {
-        try {
-          const rawOverrides = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
-          const overrides = rawOverrides ? JSON.parse(rawOverrides) : {};
-          const override = overrides[String(id)];
-          if (override?.status) {
-            if (isOrderCompletedForReview(override.status)) {
-              setCheckingReviews(true);
-            }
-            setOrder({ ...data, status: override.status });
-            return;
-          }
-        } catch (e) {
-          // Bỏ qua lỗi đọc sessionStorage
-        }
-      }
       if (isOrderCompletedForReview(data?.status)) {
         setCheckingReviews(true);
       }
@@ -333,9 +317,9 @@ const OrderDetail = () => {
   const couponCode = order.couponCode || order.voucherCode || null;
   const totalAmount =
     order.subtotal !== undefined ||
-    order.subtotalAmount !== undefined ||
-    order.discountAmount !== undefined ||
-    order.shippingFee !== undefined
+      order.subtotalAmount !== undefined ||
+      order.discountAmount !== undefined ||
+      order.shippingFee !== undefined
       ? Math.max(0, subtotal - discountAmount) + shippingFee
       : Number(order.totalAmount ?? Math.max(0, subtotal - discountAmount) + shippingFee);
 

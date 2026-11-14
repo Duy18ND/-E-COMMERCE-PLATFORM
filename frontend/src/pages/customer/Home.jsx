@@ -4,7 +4,7 @@ import ProductGrid from '../../components/product/ProductGrid';
 import Loading from '../../components/common/Loading';
 import productService from '../../services/productService';
 import categoryService from '../../services/categoryService';
-import { INITIAL_CATEGORIES, INITIAL_PRODUCTS } from '../../services/mockData';
+import { INITIAL_CATEGORIES } from '../../services/mockData';
 
 const CATEGORY_ICONS = {
   phones: (
@@ -42,26 +42,26 @@ const Home = () => {
   const [categories, setCategories] = useState(() =>
     INITIAL_CATEGORIES.map(enrichCategoryWithIcon)
   );
-  const [featuredProducts, setFeaturedProducts] = useState(() =>
-    INITIAL_PRODUCTS.slice(0, 8)
-  );
-  const [loadingFeatured, setLoadingFeatured] = useState(false);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [loadingFeatured, setLoadingFeatured] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     setLoadingFeatured(true);
 
-    Promise.all([
+    Promise.allSettled([
       categoryService.getPublicCategories(),
       productService.getAll({ page: 0, size: 8 })
     ])
-      .then(([catList, prodList]) => {
+      .then(([catResult, prodResult]) => {
         if (!isMounted) return;
-        if (Array.isArray(catList) && catList.length > 0) {
-          setCategories(catList.slice(0, 4).map(enrichCategoryWithIcon));
+        if (catResult.status === 'fulfilled' && Array.isArray(catResult.value)) {
+          setCategories(catResult.value.slice(0, 4).map(enrichCategoryWithIcon));
         }
-        if (Array.isArray(prodList) && prodList.length > 0) {
-          setFeaturedProducts(prodList.slice(0, 8));
+        if (prodResult.status === 'fulfilled' && Array.isArray(prodResult.value)) {
+          setFeaturedProducts(prodResult.value.slice(0, 8));
+        } else {
+          setFeaturedProducts([]);
         }
       })
       .finally(() => {

@@ -197,8 +197,8 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_healthy
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
 
@@ -238,10 +238,11 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_healthy
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-ecommerce-internal-service-secret-2026}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-product_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
@@ -277,10 +278,11 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_healthy
-    ports:
-      - "8083:8083"
+    expose:
+      - "8083"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-ecommerce-internal-service-secret-2026}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
@@ -311,8 +313,8 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_healthy
-    ports:
-      - "8084:8084"
+    expose:
+      - "8084"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8

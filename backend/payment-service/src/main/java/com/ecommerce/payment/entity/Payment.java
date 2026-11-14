@@ -37,6 +37,9 @@ public class Payment {
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     @Column(name = "amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 

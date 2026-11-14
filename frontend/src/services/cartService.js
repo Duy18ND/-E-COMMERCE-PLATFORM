@@ -1,5 +1,4 @@
 import api from './api';
-import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
 
 const CART_STORAGE_KEY = 'shopmart_cart_mock';
 
@@ -104,89 +103,62 @@ const calculateCartResponse = (items) => {
   };
 };
 
-const CART_PRICE_HINTS_KEY = 'shopmart_cart_price_hints';
-
-const savePriceHint = (productId, customProduct) => {
-  if (!productId || !customProduct) return;
-  const sale = Number(customProduct.salePrice ?? customProduct.flashSalePrice ?? 0);
-  const orig = Number(customProduct.originalPrice ?? customProduct.price ?? 0);
-  if (sale > 0 && orig > sale) {
-    try {
-      const raw = localStorage.getItem(CART_PRICE_HINTS_KEY);
-      const map = raw ? JSON.parse(raw) : {};
-      map[String(productId)] = { originalPrice: orig, salePrice: sale };
-      localStorage.setItem(CART_PRICE_HINTS_KEY, JSON.stringify(map));
-    } catch (e) {
-      // Bỏ qua lỗi localStorage
-    }
-  }
-};
-
-const getPriceHint = (productId) => {
-  if (!productId) return null;
-  try {
-    const raw = localStorage.getItem(CART_PRICE_HINTS_KEY);
-    if (raw) {
-      const map = JSON.parse(raw);
-      if (map?.[String(productId)]) return map[String(productId)];
-    }
-  } catch (e) {
-    // Bỏ qua lỗi đọc localStorage
-  }
-  const matched = INITIAL_FLASH_PRODUCTS.find((p) => String(p.id) === String(productId));
-  if (matched && Number(matched.salePrice) > 0 && Number(matched.price) > Number(matched.salePrice)) {
-    return { originalPrice: Number(matched.price), salePrice: Number(matched.salePrice) };
-  }
-  return null;
-};
-
+/**
+ * Chuẩn hóa dữ liệu giỏ hàng từ Backend trả về.
+ * Tuyệt đối KHÔNG dùng localStorage ('shopmart_cart_price_hints') để tạo giá Flash Sale giả
+ * khi Backend không xác nhận giá khuyến mãi. Giá và số lượng luôn lấy từ dữ liệu thực của Backend.
+ */
 const enrichServerCart = (cartData) => {
   if (!cartData || !Array.isArray(cartData.items)) return cartData;
   const enrichedItems = cartData.items.map((item) => {
-    const hint = getPriceHint(item.productId);
     const serverPrice = Number(item.price ?? item.unitPrice ?? 0);
     const serverOriginal = Number(item.originalPrice ?? serverPrice);
     const serverSale = item.salePrice != null ? Number(item.salePrice) : null;
+    const qty = Math.max(1, Number(item.quantity || 1));
 
+    // Chỉ ghi nhận giá Flash Sale khi chính Backend xác nhận salePrice hợp lệ nhỏ hơn originalPrice
     if (serverSale != null && serverSale > 0 && serverSale < serverOriginal) {
-      const qty = Number(item.quantity || 1);
       return {
         ...item,
+        quantity: qty,
         originalPrice: serverOriginal,
         salePrice: serverSale,
         price: serverSale,
         unitPrice: serverSale,
-        subTotal: serverSale * qty,
-        originalSubTotal: serverOriginal * qty,
+        subTotal: Number(item.subTotal ?? serverSale * qty),
+        originalSubTotal: Number(item.originalSubTotal ?? serverOriginal * qty),
         isFlashSale: true
       };
     }
 
-    if (hint && hint.salePrice > 0 && (serverPrice <= 0 || hint.salePrice < serverPrice)) {
-      const qty = Number(item.quantity || 1);
-      const orig = Math.max(serverOriginal, hint.originalPrice);
-      return {
-        ...item,
-        originalPrice: orig,
-        salePrice: hint.salePrice,
-        price: hint.salePrice,
-        unitPrice: hint.salePrice,
-        subTotal: hint.salePrice * qty,
-        originalSubTotal: orig * qty,
-        isFlashSale: true
-      };
-    }
-    return item;
+    return {
+      ...item,
+      quantity: qty,
+      originalPrice: serverOriginal,
+      salePrice: null,
+      price: serverPrice,
+      unitPrice: serverPrice,
+      subTotal: Number(item.subTotal ?? serverPrice * qty),
+      originalSubTotal: Number(item.originalSubTotal ?? serverOriginal * qty),
+      isFlashSale: Boolean(item.isFlashSale && serverOriginal > serverPrice && serverPrice > 0)
+    };
   });
 
-  const totalPrice = enrichedItems.reduce(
-    (sum, i) => sum + Number(i.subTotal ?? Number(i.price || 0) * Number(i.quantity || 1)),
-    0
+  const totalPrice = Number(
+    cartData.totalPrice ??
+      cartData.totalAmount ??
+      enrichedItems.reduce(
+        (sum, i) => sum + Number(i.subTotal ?? Number(i.price || 0) * Number(i.quantity || 1)),
+        0
+      )
   );
-  const totalOriginalPrice = enrichedItems.reduce(
-    (sum, i) =>
-      sum + Number(i.originalSubTotal ?? Number(i.originalPrice || i.price || 0) * Number(i.quantity || 1)),
-    0
+  const totalOriginalPrice = Number(
+    cartData.totalOriginalPrice ??
+      enrichedItems.reduce(
+        (sum, i) =>
+          sum + Number(i.originalSubTotal ?? Number(i.originalPrice || i.price || 0) * Number(i.quantity || 1)),
+        0
+      )
   );
   const totalDiscount = Math.max(0, totalOriginalPrice - totalPrice);
 
@@ -200,61 +172,80 @@ const enrichServerCart = (cartData) => {
   };
 };
 
+/**
+ * Chuẩn hóa lỗi từ Backend (đặc biệt là lỗi 409 NotEnoughStockException khi vượt quá tồn kho).
+ * Không nuốt lỗi, không tự cập nhật giỏ hàng giả khi Backend từ chối.
+ */
+const buildCartApiError = (err, fallbackMessage) => {
+  const status = err?.status || err?.response?.status;
+  const rawMessage = String(err?.response?.data?.message || err?.message || '').trim();
+  const isOutOfStockError =
+    status === 409 ||
+    /NotEnoughStock|out of stock|not enough stock|vượt quá tồn kho|không đủ tồn kho|hết hàng/i.test(rawMessage);
+
+  const friendlyMessage = isOutOfStockError
+    ? rawMessage && !/^Request failed with status code/i.test(rawMessage)
+      ? rawMessage
+      : 'Số lượng sản phẩm yêu cầu vượt quá số lượng tồn kho hiện có. Vui lòng giảm số lượng.'
+    : rawMessage || fallbackMessage;
+
+  const cartError = new Error(friendlyMessage);
+  cartError.status = status;
+  cartError.response = err?.response;
+  cartError.isOutOfStock = isOutOfStockError;
+  return cartError;
+};
+
+export { getLocalCart, setLocalCart, calculateCartResponse };
+
 export const cartService = {
   getCart: async () => {
     try {
       const data = await api.get('/cart');
       return enrichServerCart(data);
     } catch (err) {
-      // Fallback về local mock cart
-      const items = getLocalCart();
-      return calculateCartResponse(items);
+      throw buildCartApiError(err, 'Không thể tải thông tin giỏ hàng từ máy chủ.');
     }
   },
 
   addItem: async (productId, quantity = 1, customProduct = null) => {
-    savePriceHint(productId, customProduct);
+    const requestedQty = Number(quantity);
+    if (!Number.isFinite(requestedQty) || requestedQty <= 0) {
+      throw new Error('Số lượng sản phẩm thêm vào giỏ phải lớn hơn 0.');
+    }
+
+    const availableStock =
+      customProduct?.stockQuantity !== undefined && customProduct?.stockQuantity !== null
+        ? Number(customProduct.stockQuantity)
+        : customProduct?.stock !== undefined && customProduct?.stock !== null
+          ? Number(customProduct.stock)
+          : null;
+
+    if (availableStock !== null && Number.isFinite(availableStock)) {
+      if (availableStock <= 0) {
+        const outErr = new Error('Sản phẩm này hiện đã hết hàng trong kho.');
+        outErr.status = 409;
+        outErr.isOutOfStock = true;
+        throw outErr;
+      }
+      if (requestedQty > availableStock) {
+        const stockErr = new Error(
+          `Số lượng yêu cầu (${requestedQty}) vượt quá tồn kho hiện có (${availableStock} sản phẩm).`
+        );
+        stockErr.status = 409;
+        stockErr.isOutOfStock = true;
+        throw stockErr;
+      }
+    }
+
     try {
       const data = await api.post('/cart/items', {
         productId: Number(productId),
-        quantity: Number(quantity)
+        quantity: requestedQty
       });
       return enrichServerCart(data);
     } catch (err) {
-      // Mock fallback: Thêm vào local cart
-      const items = getLocalCart();
-      const existingIndex = items.findIndex((i) => String(i.productId) === String(productId));
-
-      // Tìm thông tin sản phẩm từ Flash Sale hoặc custom
-      const matched = customProduct || INITIAL_FLASH_PRODUCTS.find((p) => String(p.id) === String(productId));
-
-      if (existingIndex > -1) {
-        items[existingIndex].quantity += Number(quantity);
-        items[existingIndex].subTotal = (items[existingIndex].salePrice || items[existingIndex].price) * items[existingIndex].quantity;
-      } else {
-        const newItem = {
-          id: `item-${Date.now()}`,
-          itemId: `item-${Date.now()}`,
-          productId: matched?.id || productId,
-          name: matched?.shortName || matched?.name || 'Sản phẩm mới',
-          productName: matched?.name || 'Sản phẩm mới',
-          resellerTag: matched?.storeName ? `${matched.storeName.toUpperCase()}` : 'CHÍNH HÃNG UỶ QUYỀN',
-          originalPrice: matched?.price || 1000000,
-          price: matched?.salePrice || matched?.price || 1000000,
-          unitPrice: matched?.salePrice || matched?.price || 1000000,
-          salePrice: matched?.salePrice || null,
-          discountPercent: matched?.discountPercent || 0,
-          stockNotice: matched?.statusText || 'Bảo hành chính hãng 12 tháng',
-          imageUrl: matched?.imageUrl || 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80',
-          quantity: Number(quantity),
-          subTotal: (matched?.salePrice || matched?.price || 1000000) * Number(quantity),
-          isFlashSale: Boolean(matched?.salePrice)
-        };
-        items.push(newItem);
-      }
-
-      setLocalCart(items);
-      return calculateCartResponse(items);
+      throw buildCartApiError(err, 'Không thể thêm sản phẩm vào giỏ hàng.');
     }
   },
 
@@ -265,25 +256,7 @@ export const cartService = {
       });
       return enrichServerCart(data);
     } catch (err) {
-      let items = getLocalCart();
-      const qty = Number(quantity);
-      if (qty <= 0) {
-        items = items.filter((i) => String(i.id) !== String(itemId) && String(i.itemId) !== String(itemId));
-      } else {
-        items = items.map((i) => {
-          if (String(i.id) === String(itemId) || String(i.itemId) === String(itemId)) {
-            const unit = i.salePrice || i.price;
-            return {
-              ...i,
-              quantity: qty,
-              subTotal: unit * qty
-            };
-          }
-          return i;
-        });
-      }
-      setLocalCart(items);
-      return calculateCartResponse(items);
+      throw buildCartApiError(err, 'Không thể cập nhật số lượng sản phẩm trong giỏ hàng.');
     }
   },
 
@@ -292,10 +265,7 @@ export const cartService = {
       const data = await api.delete(`/cart/items/${itemId}`);
       return enrichServerCart(data);
     } catch (err) {
-      let items = getLocalCart();
-      items = items.filter((i) => String(i.id) !== String(itemId) && String(i.itemId) !== String(itemId));
-      setLocalCart(items);
-      return calculateCartResponse(items);
+      throw buildCartApiError(err, 'Không thể xóa sản phẩm khỏi giỏ hàng.');
     }
   },
 
@@ -303,8 +273,7 @@ export const cartService = {
     try {
       return await api.delete('/cart/clear');
     } catch (err) {
-      setLocalCart([]);
-      return calculateCartResponse([]);
+      throw buildCartApiError(err, 'Không thể làm trống giỏ hàng.');
     }
   }
 };

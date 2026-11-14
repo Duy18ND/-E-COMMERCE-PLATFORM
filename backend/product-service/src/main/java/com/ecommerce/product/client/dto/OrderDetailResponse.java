@@ -23,6 +23,7 @@ public class OrderDetailResponse {
     @Getter
     @Setter
     public static class OrderItemDetail {
+        private Long id;
         private Long productId;
         private Integer quantity;
         private BigDecimal priceAtPurchase;

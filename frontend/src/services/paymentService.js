@@ -2,88 +2,64 @@ import api from './api';
 import { ORDER_STATUS } from '../utils/constants';
 import { ORDER_STATUS_SYNC_EVENT } from './orderService';
 
-// Đồng bộ chính xác với ORDERS_STORAGE_KEY trong orderService.js
-const ORDERS_STORAGE_KEY = 'shopmart_orders_mock';
 const ORDER_SYNC_SIGNAL_KEY = 'shopmart_order_sync_signal';
-export const QR_PAYMENT_OVERRIDES_KEY = 'shopmart_qr_payment_overrides';
 
-const syncOfflineOrderPaymentStatus = (orderId, isSuccess, note) => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
+/**
+ * Chuẩn hóa phản hồi thanh toán từ Backend.
+ * Phân biệt rõ 3 trạng thái thực tế từ Backend:
+ * - Thanh toán thành công (SUCCESS / ORDER_STATUS.PAID)
+ * - Đang xử lý / chờ thanh toán (PENDING / PROCESSING)
+ * - Thanh toán thất bại (FAILED)
+ */
+export const normalizePaymentResponse = (rawPayment, fallbackOrderId = null) => {
+  if (!rawPayment || typeof rawPayment !== 'object') return null;
+
+  const rawStatus = String(rawPayment.status || 'PENDING').trim().toUpperCase();
+  const isPaid = rawStatus === 'SUCCESS' || rawStatus === ORDER_STATUS.PAID;
+  const isFailed = rawStatus === 'FAILED' || rawStatus === ORDER_STATUS.FAILED;
+  const isPending = !isPaid && !isFailed;
+
+  const resolvedOrderStatus = isPaid
+    ? ORDER_STATUS.PAID
+    : isFailed
+      ? ORDER_STATUS.FAILED
+      : ORDER_STATUS.PENDING;
+
+  return {
+    ...rawPayment,
+    orderId: rawPayment.orderId ?? fallbackOrderId,
+    status: rawStatus,
+    orderStatus: resolvedOrderStatus,
+    isPaid,
+    isPending,
+    isFailed
+  };
+};
+
+const emitPaymentStatusSyncSignal = (orderId, normalizedPayment) => {
+  if (typeof window === 'undefined' || !normalizedPayment) return;
+  if (!normalizedPayment.isPaid && !normalizedPayment.isFailed) return;
+
   try {
-    const nowIso = new Date().toISOString();
-    const nextStatus = isSuccess ? ORDER_STATUS.PAID : 'FAILED';
-    const nextDesc = isSuccess
-      ? 'Đã thanh toán thành công qua cổng thanh toán'
-      : 'Đơn hàng xử lý thất bại';
-    const historyEntry = {
-      id: Date.now(),
-      orderId: Number(orderId) || orderId,
-      status: nextStatus,
-      statusDescription: nextDesc,
-      previousStatus: 'PENDING',
-      action: isSuccess ? 'PAYMENT_SUCCESS' : 'PAYMENT_FAILED',
-      updatedBy: 'PAYMENT_SERVICE',
-      actorRole: 'SYSTEM',
-      note: note || (isSuccess ? 'Đã thanh toán thành công qua cổng thanh toán QR' : 'Thanh toán thất bại — đã hoàn kho & hoàn Voucher'),
-      createdAt: nowIso
-    };
-
-    // Lưu trạng thái vừa xác nhận QR để đồng bộ tức thì kể cả khi Kafka đang trễ
-    if (window.sessionStorage) {
-      const rawOverrides = window.sessionStorage.getItem(QR_PAYMENT_OVERRIDES_KEY);
-      const overrides = rawOverrides ? JSON.parse(rawOverrides) : {};
-      overrides[String(orderId)] = { status: nextStatus, historyEntry, updatedAt: nowIso };
-      window.sessionStorage.setItem(QR_PAYMENT_OVERRIDES_KEY, JSON.stringify(overrides));
-    }
-
-    const raw = window.localStorage.getItem(ORDERS_STORAGE_KEY);
-    if (raw) {
-      const orders = JSON.parse(raw);
-      if (Array.isArray(orders)) {
-        const updated = orders.map((o) => {
-          if (String(o.id) !== String(orderId)) return o;
-          const prevStatus = o.status || 'PENDING';
-          const existingHistories = Array.isArray(o.statusHistories) && o.statusHistories.length > 0
-            ? o.statusHistories
-            : [
-                {
-                  id: Date.now() - 1000,
-                  orderId: o.id,
-                  status: 'PENDING',
-                  statusDescription: 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
-                  previousStatus: null,
-                  action: 'ORDER_CREATED',
-                  updatedBy: o.userEmail || 'CUSTOMER',
-                  actorRole: 'ROLE_USER',
-                  note: 'Đơn hàng được khởi tạo thành công',
-                  createdAt: o.createdAt || nowIso
-                }
-              ];
-          return {
-            ...o,
-            status: nextStatus,
-            updatedAt: nowIso,
-            statusHistories: [...existingHistories, { ...historyEntry, orderId: o.id, previousStatus: prevStatus }]
-          };
-        });
-        window.localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(updated));
-      }
-    }
-
-    // Phát tín hiệu đồng bộ trạng thái đơn hàng cho OrderDetail / Orders
     const syncDetail = {
       orderId,
-      status: nextStatus,
+      status: normalizedPayment.orderStatus,
       actorRole: 'SYSTEM',
-      action: isSuccess ? 'PAYMENT_SUCCESS' : 'PAYMENT_FAILED',
-      timestamp: nowIso
+      action: normalizedPayment.isPaid ? 'PAYMENT_SUCCESS' : 'PAYMENT_FAILED',
+      timestamp: new Date().toISOString()
     };
-    window.localStorage.setItem(ORDER_SYNC_SIGNAL_KEY, JSON.stringify(syncDetail));
-    if (typeof window.dispatchEvent === 'function') {
-      window.dispatchEvent(new CustomEvent(ORDER_STATUS_SYNC_EVENT || 'shopmart:order-status-updated', { detail: syncDetail }));
+    if (window.localStorage) {
+      window.localStorage.setItem(ORDER_SYNC_SIGNAL_KEY, JSON.stringify(syncDetail));
     }
-  } catch (e) {
-    console.warn('Không thể đồng bộ trạng thái thanh toán offline:', e);
+    if (typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(
+        new CustomEvent(ORDER_STATUS_SYNC_EVENT || 'shopmart:order-status-updated', {
+          detail: syncDetail
+        })
+      );
+    }
+  } catch {
+    // Bỏ qua lỗi phát tín hiệu đồng bộ tab
   }
 };
 
@@ -93,6 +69,8 @@ export const paymentService = {
    * Body: { success, note }
    *  - success = true  → Payment SUCCESS, Kafka payment-success → đơn hàng chuyển PAID
    *  - success = false → Payment FAILED,  Kafka payment-failed  → Saga Rollback (hoàn kho + hoàn lượt Voucher)
+   *
+   * Tuyệt đối KHÔNG trả về status: 'PAID' trong catch khi API thất bại.
    */
   mockPay: async (orderId, success = true, note = '') => {
     const isSuccess = Boolean(success);
@@ -101,43 +79,40 @@ export const paymentService = {
         success: isSuccess,
         note: note ? String(note).slice(0, 255) : undefined
       });
-      syncOfflineOrderPaymentStatus(orderId, isSuccess, note);
-      return response;
+      const normalized = normalizePaymentResponse(response, orderId);
+      emitPaymentStatusSyncSignal(orderId, normalized);
+      return normalized || response;
     } catch (err) {
-      console.warn(`Lỗi gọi API mock-pay cho đơn hàng #${orderId}:`, err);
-      // Tuyệt đối không gọi API admin (/api/v1/admin/orders/**) từ context của khách hàng thường để tránh lỗi 403 Forbidden
-      if (err.response) {
-        const error = new Error(
-          err.response?.data?.message || err.message || 'Không thể thực hiện thanh toán mô phỏng'
-        );
-        error.status = err.status || err.response?.status;
-        error.orderId = orderId;
-        throw error;
-      }
-      // Fallback khi chạy Demo Frontend độc lập (không bật Backend)
-      syncOfflineOrderPaymentStatus(orderId, isSuccess, note);
-      return {
-        orderId,
-        paymentMethod: 'MOCK_ONLINE',
-        status: isSuccess ? ORDER_STATUS.PAID : 'FAILED',
-        transactionCode: isSuccess ? `TXN-${Date.now()}` : null,
-        note: note || null,
-        message: err.response?.data?.message || err.message || 'Không thể thực hiện thanh toán mô phỏng'
-      };
+      const error = new Error(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể thực hiện thanh toán. Máy chủ thanh toán hiện không phản hồi, vui lòng thử lại.'
+      );
+      error.status = err?.status || err?.response?.status;
+      error.response = err?.response;
+      error.orderId = orderId;
+      throw error;
     }
   },
 
-  // Xem thông tin thanh toán của đơn (GET /api/v1/payments/order/{orderId})
+  /**
+   * Xem thông tin thanh toán của đơn (GET /api/v1/payments/order/{orderId})
+   * Tuyệt đối KHÔNG nuốt lỗi API và KHÔNG trả về status: 'PAID' giả khi API lỗi.
+   */
   getPaymentByOrder: async (orderId) => {
     try {
-      return await api.get(`/payments/order/${orderId}`);
+      const response = await api.get(`/payments/order/${orderId}`);
+      return normalizePaymentResponse(response, orderId) || response;
     } catch (err) {
-      return {
-        orderId,
-        paymentMethod: 'MOCK_ONLINE',
-        status: ORDER_STATUS.PAID,
-        paidAt: new Date().toISOString()
-      };
+      const error = new Error(
+        err?.response?.data?.message ||
+          err?.message ||
+          `Không thể tải thông tin thanh toán của đơn hàng #${orderId}.`
+      );
+      error.status = err?.status || err?.response?.status;
+      error.response = err?.response;
+      error.orderId = orderId;
+      throw error;
     }
   }
 };
