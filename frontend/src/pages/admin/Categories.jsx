@@ -4,14 +4,16 @@ import useToast from '../../hooks/useToast';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Modal from '../../components/common/Modal';
+import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
 
 const Categories = () => {
   const { showToast } = useToast();
 
-  // State danh sách và loading
+  // State danh sách, loading và error riêng biệt
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,14 +51,24 @@ const Categories = () => {
   // 1. Tải danh mục từ Service
   const loadCategories = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const data = await categoryService.getAllForAdmin({ rejectOnError: true });
-      setCategories(Array.isArray(data) ? data : []);
+      if (!Array.isArray(data)) {
+        throw new Error('Dữ liệu danh mục trả về từ máy chủ không đúng định dạng.');
+      }
+      setCategories(data);
     } catch (err) {
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Không thể tải danh sách danh mục từ máy chủ. Vui lòng thử lại!';
+      setError(errMsg);
+      setCategories([]);
       showToast({
         type: 'error',
         title: 'Lỗi',
-        message: 'Không thể tải danh sách danh mục: ' + (err?.response?.data?.message || err?.message)
+        message: 'Không thể tải danh sách danh mục: ' + errMsg
       });
     } finally {
       setLoading(false);
@@ -274,10 +286,16 @@ const Categories = () => {
         message: 'Thêm danh mục thành công'
       });
     } catch (err) {
+      const errMsg = err?.response?.data?.message || err?.message || 'Không thể thêm danh mục';
+      if (err?.fieldErrors && typeof err.fieldErrors === 'object') {
+        setFormErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+      } else if (err?.status === 409 || err?.response?.status === 409) {
+        setFormErrors((prev) => ({ ...prev, name: errMsg }));
+      }
       showToast({
         type: 'error',
         title: 'Lỗi',
-        message: err?.response?.data?.message || err?.message || 'Không thể thêm danh mục'
+        message: errMsg
       });
     }
   };
@@ -331,10 +349,16 @@ const Categories = () => {
         message: 'Đã cập nhật danh mục thành công'
       });
     } catch (err) {
+      const errMsg = err?.response?.data?.message || err?.message || 'Không thể cập nhật danh mục';
+      if (err?.fieldErrors && typeof err.fieldErrors === 'object') {
+        setFormErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+      } else if (err?.status === 409 || err?.response?.status === 409) {
+        setFormErrors((prev) => ({ ...prev, name: errMsg }));
+      }
       showToast({
         type: 'error',
         title: 'Lỗi',
-        message: err?.response?.data?.message || err?.message || 'Không thể cập nhật danh mục'
+        message: errMsg
       });
     }
   };
@@ -407,7 +431,22 @@ const Categories = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            variant="outline"
+            onClick={loadCategories}
+            disabled={loading}
+            style={{
+              padding: '0.65rem 1.1rem',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            <span>🔄</span> {loading ? 'Đang tải...' : 'Làm mới dữ liệu'}
+          </Button>
           <Button
             variant="primary"
             onClick={handleOpenAddModal}
@@ -424,6 +463,13 @@ const Categories = () => {
           </Button>
         </div>
       </div>
+
+      {/* HIỂN THỊ LỖI API NẾU CÓ */}
+      {error && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <ErrorMessage message={error} onClose={() => setError('')} />
+        </div>
+      )}
 
       {/* 2. THỐNG KÊ (STATS CARDS) */}
       <div
@@ -780,6 +826,23 @@ const Categories = () => {
                 }}
               />
             ))}
+          </div>
+        ) : error && categories.length === 0 ? (
+          /* API ERROR STATE: Tách biệt rõ ràng với Empty State khi API thất bại */
+          <div
+            data-testid="categories-error-state"
+            style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#dc2626' }}
+          >
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#991b1b', margin: '0 0 0.5rem' }}>
+              Không thể tải danh sách danh mục từ máy chủ
+            </h3>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 1.25rem' }}>
+              {error}
+            </p>
+            <Button variant="primary" onClick={loadCategories}>
+              🔄 Thử lại kết nối
+            </Button>
           </div>
         ) : categories.length === 0 ? (
           /* EMPTY STATE 1: CHƯA CÓ DANH MỤC NÀO */

@@ -140,11 +140,16 @@ const AdminOrders = () => {
       }
     } catch (err) {
       if (currentRequestId === requestIdRef.current) {
-        setError(
+        const status = err?.response?.status ?? err?.status;
+        const resolvedErrorMsg =
           err?.response?.data?.message ||
-            err?.message ||
-            'Không thể tải danh sách đơn hàng từ máy chủ. Vui lòng thử lại!'
-        );
+          err?.message ||
+          (status === 401
+            ? 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ (HTTP 401). Vui lòng đăng nhập lại.'
+            : status === 403
+            ? 'Bạn không có quyền truy cập danh sách đơn hàng quản trị (HTTP 403).'
+            : 'Không thể tải danh sách đơn hàng từ máy chủ. Vui lòng thử lại!');
+        setError(resolvedErrorMsg);
         setOrders([]);
         setTotalElements(0);
         setTotalPages(1);
@@ -1082,7 +1087,29 @@ const AdminOrders = () => {
                 </div>
               )}
 
-              {detailError && <ErrorMessage message={detailError} />}
+              {detailError && (
+                <div>
+                  <ErrorMessage message={detailError} />
+                  <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleViewDetail(selectedOrder)}
+                      style={{
+                        backgroundColor: '#ef4444',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '0.4rem 0.9rem',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        fontSize: '0.825rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔄 Thử lại tải chi tiết
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Thông tin khách hàng & Giao nhận */}
               <div

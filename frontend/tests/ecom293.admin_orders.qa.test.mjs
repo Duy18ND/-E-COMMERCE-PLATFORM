@@ -7,7 +7,7 @@ import { register } from 'node:module';
 
 register(
   'data:text/javascript,' +
-    encodeURIComponent(`
+  encodeURIComponent(`
       export async function resolve(specifier, context, nextResolve) {
         try {
           return await nextResolve(specifier, context);
@@ -24,6 +24,7 @@ register(
 
 const { default: api } = await import('../src/services/api.js');
 const { default: orderService, normalizeOrderFromBackend } = await import('../src/services/orderService.js');
+const { default: categoryService, classifyCategoryApiError } = await import('../src/services/categoryService.js');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -321,8 +322,111 @@ test('TC-293-19: orderService.getAdminOrderById & updateOrderStatus không che g
       throw serverErr;
     };
     await assert.rejects(() => orderService.updateOrderStatus(55, 'CANCELLED', 'Hết hàng'), /HTTP 500/);
+
+    // Kiểm tra khi lỗi chỉ có err.status (không có err.response)
+    api.get = async () => {
+      const statusOnlyErr = new Error('Không tìm thấy đơn hàng (HTTP 404).');
+      statusOnlyErr.status = 404;
+      throw statusOnlyErr;
+    };
+    await assert.rejects(() => orderService.getAdminOrderById(9999), /HTTP 404/);
+    await assert.rejects(() => orderService.getAllOrders({ page: 0, size: 10 }), /HTTP 404/);
   } finally {
     api.get = originalGet;
     api.put = originalPut;
+  }
+});
+
+test('TC-293-20: ECOM-130, ECOM-131, ECOM-235, ECOM-237: categoryService xử lý chuẩn thành công và thất bại (Network, HTTP 500, Auth 401/403, Data 400/409)', async () => {
+  const originalGet = api.get;
+  const originalPost = api.post;
+  const originalPut = api.put;
+  const originalDelete = api.delete;
+
+  try {
+    // 1. Khi API thành công -> trả về danh sách danh mục chuẩn hóa với ID thực từ Backend
+    api.get = async (url) => {
+      assert.equal(url, '/products/categories');
+      return [
+        { id: 1, name: 'Điện thoại & Tablet', description: 'Smartphone chính hãng', imageUrl: 'https://example.com/phone.jpg' },
+        { id: 5, name: 'Thiết bị văn phòng', description: 'Máy in, máy chiếu', imageUrl: 'https://example.com/office.jpg' }
+      ];
+    };
+    const adminCats = await categoryService.getAllForAdmin({ rejectOnError: true });
+    assert.equal(adminCats.length, 2);
+    assert.equal(adminCats[0].id, '1');
+    assert.equal(adminCats[1].id, '5');
+    assert.equal(adminCats[1].name, 'Thiết bị văn phòng');
+    assert.equal(adminCats[1].productCount, 0);
+
+    // 2. Khi API trả về lỗi mạng (Network Error) -> throw NETWORK_ERROR, không trả về mock data
+    api.get = async () => {
+      throw new Error('Network Error');
+    };
+    await assert.rejects(
+      () => categoryService.getAllForAdmin({ rejectOnError: true }),
+      (err) => err.errorType === 'NETWORK_ERROR' && /kết nối/.test(err.message)
+    );
+
+    // 3. Khi API trả về lỗi xác thực / phân quyền (401 / 403) -> throw AUTH_ERROR
+    api.get = async () => {
+      const authErr = new Error('Forbidden');
+      authErr.response = { status: 403, data: { message: 'Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này' } };
+      throw authErr;
+    };
+    await assert.rejects(
+      () => categoryService.getAllForAdmin({ rejectOnError: true }),
+      (err) => err.errorType === 'AUTH_ERROR' && err.status === 403
+    );
+
+    // 4. Khi API trả về dữ liệu sai định dạng (object không phải mảng) -> throw DATA_ERROR, không biến thành mảng rỗng []
+    api.get = async () => ({ unexpected: true });
+    await assert.rejects(
+      () => categoryService.getAllForAdmin({ rejectOnError: true }),
+      (err) => err.errorType === 'DATA_ERROR' && /không đúng định dạng/.test(err.message)
+    );
+
+    // 5. Kiểm tra create, update, delete khi thành công và thất bại (409 Conflict, 500 Server Error)
+    api.post = async (url, payload) => {
+      assert.equal(url, '/products/categories');
+      return { id: 10, ...payload };
+    };
+    const created = await categoryService.create({ name: 'Màn hình Gaming', description: 'Màn hình 240Hz', rejectOnError: true });
+    assert.equal(created.id, '10');
+    assert.equal(created.name, 'Màn hình Gaming');
+
+    api.post = async () => {
+      const conflictErr = new Error('Conflict');
+      conflictErr.response = { status: 409, data: { message: 'Tên danh mục đã tồn tại' } };
+      throw conflictErr;
+    };
+    await assert.rejects(
+      () => categoryService.create({ name: 'Màn hình Gaming', rejectOnError: true }),
+      (err) => err.errorType === 'DATA_ERROR' && err.status === 409 && /đã tồn tại/.test(err.message)
+    );
+
+    api.put = async () => {
+      const serverErr = new Error('Internal Server Error');
+      serverErr.status = 500;
+      throw serverErr;
+    };
+    await assert.rejects(
+      () => categoryService.update(10, { name: 'Màn hình 4K', rejectOnError: true }),
+      (err) => err.errorType === 'HTTP_ERROR' && err.status === 500
+    );
+
+    api.delete = async () => {
+      const netErr = new Error('Network Error');
+      throw netErr;
+    };
+    await assert.rejects(
+      () => categoryService.delete(10),
+      (err) => err.errorType === 'NETWORK_ERROR'
+    );
+  } finally {
+    api.get = originalGet;
+    api.post = originalPost;
+    api.put = originalPut;
+    api.delete = originalDelete;
   }
 });

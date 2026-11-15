@@ -87,19 +87,50 @@ test('ECOM-130 (ECOM-237 & ECOM-240): Kiểm thử Admin Quản lý Danh mục (
   assert.match(categoryServiceCode, /rethrowIfBackendError\(err,\s*categoryData/, 'categoryService.create/update phải kiểm tra và ném lỗi HTTP từ Backend');
   assert.match(categoryServiceCode, /rethrowIfBackendError\(err,\s*options,\s*'Không thể xóa danh mục\.'\)/, 'categoryService.delete phải kiểm tra và ném lỗi HTTP từ Backend');
 
-  // 2. Kiểm tra giao diện Admin Categories có validate không để trống và chống trùng tên
+  // 2. Kiểm tra giao diện Admin Categories có validate không để trống, chống trùng tên và tách biệt Loading / Error / Empty state
   assert.match(adminCategoriesCode, /Tên danh mục không được để trống/, 'Admin Categories phải kiểm tra tên danh mục rỗng');
   assert.match(adminCategoriesCode, /đã tồn tại trong hệ thống/, 'Admin Categories phải kiểm tra trùng tên danh mục');
   assert.match(adminCategoriesCode, /categoryService\.getAllForAdmin\(\{\s*rejectOnError:\s*true\s*\}\)/, 'Admin Categories phải gọi categoryService.getAllForAdmin({ rejectOnError: true })');
   assert.match(adminCategoriesCode, /categoryService\.create\(formData\)/, 'Admin Categories phải gọi categoryService.create khi thêm mới');
   assert.match(adminCategoriesCode, /categoryService\.update\(selectedCategory\.id,\s*formData\)/, 'Admin Categories phải gọi categoryService.update khi sửa');
   assert.match(adminCategoriesCode, /categoryService\.delete\(selectedCategory\.id\)/, 'Admin Categories phải gọi categoryService.delete khi xóa');
+  assert.match(adminCategoriesCode, /data-testid="categories-error-state"/, 'Admin Categories phải có trạng thái Error riêng biệt với Empty state');
+  assert.match(adminCategoriesCode, /Không thể tải danh sách danh mục từ máy chủ/, 'Admin Categories phải hiển thị thông báo lỗi rõ ràng khi API thất bại');
 
   // 3. Kiểm tra Backend DTO & Phân quyền Admin Category
   assert.match(categoryRequestJava, /@NotBlank\(message = "Tên danh mục không được để trống"\)/, 'Backend CategoryRequest phải validate @NotBlank');
   assert.match(productControllerJava, /@PostMapping\("\/categories"\)[\s\S]*?requireAdminRole\(roles\);/, 'POST /categories phải yêu cầu ROLE_ADMIN');
   assert.match(productControllerJava, /@PutMapping\("\/categories\/\{id\}"\)[\s\S]*?requireAdminRole\(roles\);/, 'PUT /categories/{id} phải yêu cầu ROLE_ADMIN');
   assert.match(productControllerJava, /@DeleteMapping\("\/categories\/\{id\}"\)[\s\S]*?requireAdminRole\(roles\);/, 'DELETE /categories/{id} phải yêu cầu ROLE_ADMIN');
+});
+
+test('ECOM-109 & ECOM-201: Kiểm thử Code Splitting (React.lazy) và Suspense Fallback tránh màn hình trắng khi chuyển trang', () => {
+  const appRoutesCode = readSrc('routes/AppRoutes.jsx');
+  const userLayoutCode = readSrc('layouts/UserLayout.jsx');
+  const adminLayoutCode = readSrc('layouts/AdminLayout.jsx');
+
+  // Kiểm tra các trang được lazy load qua React.lazy()
+  const lazyPages = [
+    'Home', 'Products', 'ProductDetail', 'FlashSale', 'Cart', 'Checkout',
+    'OrderSuccess', 'Orders', 'OrderDetail', 'OrderTracking', 'Vouchers', 'MyVouchers',
+    'Login', 'Register',
+    'AdminDashboard', 'AdminProducts', 'AdminProductForm', 'AdminCategories',
+    'AdminOrders', 'AdminInventory', 'AdminSales', 'AdminSaleForm', 'AdminVouchers', 'AdminUsers', 'AdminReviews'
+  ];
+  for (const pageVar of lazyPages) {
+    assert.match(appRoutesCode, new RegExp(`const\\s+${pageVar}\\s*=\\s*React\\.lazy\\(`), `${pageVar} phải được tải qua React.lazy()`);
+  }
+
+  // Các thành phần khung và bảo vệ route cần thiết ngay lập tức được import trực tiếp
+  assert.match(appRoutesCode, /import UserLayout from '\.\.\/layouts\/UserLayout'/, 'UserLayout phải được import trực tiếp');
+  assert.match(appRoutesCode, /import AdminLayout from '\.\.\/layouts\/AdminLayout'/, 'AdminLayout phải được import trực tiếp');
+  assert.match(appRoutesCode, /import ProtectedRoute from '\.\/ProtectedRoute'/, 'ProtectedRoute phải được import trực tiếp');
+  assert.match(appRoutesCode, /import AdminRoute from '\.\/AdminRoute'/, 'AdminRoute phải được import trực tiếp');
+
+  // Suspense fallback tại AppRoutes, UserLayout và AdminLayout
+  assert.match(appRoutesCode, /<Suspense fallback=\{<Loading/, 'AppRoutes phải bọc Routes trong Suspense với Loading fallback');
+  assert.match(userLayoutCode, /<Suspense fallback=\{<Loading/, 'UserLayout phải bọc Outlet trong Suspense để giữ Header/Navbar khi chuyển trang');
+  assert.match(adminLayoutCode, /<Suspense fallback=\{<Loading/, 'AdminLayout phải bọc nội dung trang trong Suspense để giữ Sidebar/Header khi chuyển trang');
 });
 
 test('ECOM-133 (ECOM-246 & ECOM-249): Kiểm thử Admin Quản lý Sản phẩm & Tồn kho (CRUD, Validate giá > 0 & tồn kho >= 0)', () => {

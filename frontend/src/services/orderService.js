@@ -671,18 +671,17 @@ export const orderService = {
         };
       }
 
-      // Xử lý an toàn khi response rỗng hoặc null
-      return {
-        content: [],
-        totalElements: 0,
-        totalPages: 1,
-        pageNumber: params?.page || 0,
-        pageSize: params?.size || 10,
-        last: true
-      };
+      // Không tự động biến response không hợp lệ / null thành dữ liệu giả
+      throw new Error('Dữ liệu danh sách đơn hàng từ máy chủ không hợp lệ.');
     } catch (err) {
-      // Nếu response trả về HTTP error (401, 403, 400, 404, 500...) thì bắt buộc throw error để component xử lý
-      if (err.response?.status === 401 || err.response?.status === 403 || err.response?.status || isHttpResponseError(err)) {
+      // Nếu response trả về HTTP error (401, 403, 400, 404, 500...) qua err.response hoặc err.status thì bắt buộc throw error để component xử lý
+      if (
+        err?.response?.status === 401 ||
+        err?.response?.status === 403 ||
+        err?.response?.status ||
+        err?.status ||
+        isHttpResponseError(err)
+      ) {
         throw err;
       }
       throw err;
@@ -691,12 +690,28 @@ export const orderService = {
 
   // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId})
   getAdminOrderById: async (id) => {
-    const data = await api.get(`/orders/${id}`);
-    const normalized = normalizeOrderFromBackend(data);
-    if (!normalized) {
-      throw new Error('Dữ liệu chi tiết đơn hàng từ máy chủ không hợp lệ.');
+    if (id === null || id === undefined || String(id).trim() === '') {
+      throw new Error('Mã đơn hàng không hợp lệ.');
     }
-    return normalized;
+    try {
+      const data = await api.get(`/orders/${id}`);
+      const normalized = normalizeOrderFromBackend(data);
+      if (!normalized || (normalized.id === null && !normalized.status)) {
+        throw new Error('Dữ liệu chi tiết đơn hàng từ máy chủ không hợp lệ.');
+      }
+      return normalized;
+    } catch (err) {
+      if (
+        err?.response?.status === 401 ||
+        err?.response?.status === 403 ||
+        err?.response?.status ||
+        err?.status ||
+        isHttpResponseError(err)
+      ) {
+        throw err;
+      }
+      throw err;
+    }
   },
 
   // [Task ECOM-315 / ECOM-311] Lấy lịch sử dòng thời gian trạng thái đơn hàng (Timeline)
@@ -712,7 +727,12 @@ export const orderService = {
       return list.map(normalizeStatusHistoryFromBackend).filter(Boolean);
     } catch (err) {
       // Nếu là lỗi xác thực 401 hoặc bảo mật 403 (IDOR) thì ném lỗi để UI hiển thị thông báo phân quyền
-      if (err.response?.status === 401 || err.response?.status === 403) {
+      if (
+        err?.response?.status === 401 ||
+        err?.response?.status === 403 ||
+        err?.status === 401 ||
+        err?.status === 403
+      ) {
         throw err;
       }
 
@@ -726,8 +746,15 @@ export const orderService = {
             : [];
         return adminList.map(normalizeStatusHistoryFromBackend).filter(Boolean);
       } catch (adminErr) {
-        if (adminErr?.response?.status) {
-          throw adminErr;
+        if (
+          adminErr?.response?.status ||
+          adminErr?.status ||
+          isHttpResponseError(adminErr) ||
+          err?.response?.status ||
+          err?.status ||
+          isHttpResponseError(err)
+        ) {
+          throw adminErr?.response?.status || adminErr?.status ? adminErr : err;
         }
         // Tiếp tục xử lý fallback chỉ khi mất kết nối với máy chủ
       }
@@ -914,10 +941,7 @@ export const orderService = {
       });
       return normalized;
     } catch (err) {
-      if (err.response?.status) {
-        throw err;
-      }
-      if (isHttpResponseError(err)) {
+      if (err?.response?.status || err?.status || isHttpResponseError(err)) {
         throw err;
       }
       const nowIso = new Date().toISOString();
