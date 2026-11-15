@@ -39,6 +39,7 @@ import com.ecommerce.product.dto.response.PagedResponse;
 import com.ecommerce.product.dto.response.ProductResponse;
 import com.ecommerce.product.dto.response.ProductStockResponse;
 import com.ecommerce.product.enums.ProductStatus;
+import com.ecommerce.product.exception.AccessDeniedException;
 import com.ecommerce.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -120,8 +121,9 @@ public class ProductController {
      * @param roles chuỗi roles nhận từ API Gateway qua header X-User-Roles
      */
     private void requireAdminRole(String roles) {
-        com.ecommerce.product.security.InternalAuthValidator.requireAdminRole(
-                roles, "Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
+        if (roles == null || java.util.Arrays.stream(roles.split(",")).map(String::trim).noneMatch("ROLE_ADMIN"::equals)) {
+            throw new AccessDeniedException("Chỉ tài khoản ADMIN mới có quyền thực hiện thao tác này");
+        }
     }
 
     private void requireInternalOrAdmin(String internalKey, String roles) {

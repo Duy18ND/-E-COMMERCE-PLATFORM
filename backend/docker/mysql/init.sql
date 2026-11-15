@@ -128,6 +128,20 @@ CREATE TABLE IF NOT EXISTS products (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Danh mục sản phẩm và quản lý tồn kho';
 
+INSERT IGNORE INTO categories (id, name, description, image_url) VALUES
+(1, 'Điện thoại & Tablet', 'iPhone, Galaxy, iPad thế hệ mới chính hãng phân phối', 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80'),
+(2, 'Laptop & Workstation', 'MacBook, Dell XPS, ThinkPad phục vụ học tập, đồ họa, lập trình', 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80'),
+(3, 'Phụ Kiện & Âm Thanh', 'Tai nghe hi-res, bàn phím cơ, chuột không dây và củ sạc nhanh', 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80'),
+(4, 'Nhà Thông Minh & Gia Dụng', 'Robot hút bụi, máy lọc không khí và đèn thông minh tiện nghi', 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=400&q=80');
+
+INSERT IGNORE INTO products (id, name, category, price, stock_quantity, image_url, description, status) VALUES
+(1, 'Laptop Dell XPS 15', 'Laptop & Workstation', 32990000.00, 50, 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80', 'Laptop Dell XPS 15 cao cấp trang bị vi xử lý Intel Core i7 thế hệ mới, màn hình OLED 3.5K sắc nét.', 'ACTIVE'),
+(2, 'iPhone 15 Pro Max 256GB', 'Điện thoại & Tablet', 29990000.00, 100, 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=600&q=80', 'iPhone 15 Pro Max khung Titan chuẩn hàng không vũ trụ, chip A17 Pro đỉnh cao và camera tiềm vọng.', 'ACTIVE'),
+(3, 'Tai nghe Sony WH-1000XM5', 'Phụ Kiện & Âm Thanh', 7490000.00, 200, 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80', 'Tai nghe chụp tai chống ồn hàng đầu thế giới với vi xử lý V1 + QN1 tích hợp và chất âm Hi-Res.', 'ACTIVE'),
+(4, 'Robot Hút Bụi Deebot X2 OMNI', 'Nhà Thông Minh & Gia Dụng', 18990000.00, 15, 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80', 'Robot hút bụi lau nhà hình vuông thông minh với lực hút 8000Pa và trạm sạc giặt giẻ tự động.', 'ACTIVE'),
+(5, 'Bàn phím cơ không dây đa kết nối', 'Phụ Kiện & Âm Thanh', 1850000.00, 25, 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=600&q=80', 'Bàn phím cơ layout 75% gõ êm ái, hỗ trợ Bluetooth 5.1, Wireless 2.4G và Type-C đa nền tảng.', 'ACTIVE'),
+(6, 'MacBook Air M2 13 inch', 'Laptop & Workstation', 24500000.00, 8, 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=600&q=80', 'MacBook Air M2 thiết kế mỏng nhẹ đẳng cấp, thời lượng pin lên đến 18 giờ và màn hình Liquid Retina.', 'ACTIVE');
+
 CREATE TABLE IF NOT EXISTS product_reviews (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
     product_id    BIGINT       NOT NULL COMMENT 'ID sản phẩm được đánh giá',
