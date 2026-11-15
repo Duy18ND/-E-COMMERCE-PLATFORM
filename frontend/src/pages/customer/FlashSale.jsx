@@ -22,21 +22,22 @@ const FlashSale = () => {
   useEffect(() => {
     let active = true;
     const fetchActiveSaleData = async () => {
-      const [camp, allCamps, prods] = await Promise.all([
-        saleService.getActiveCampaign(),
-        saleService.getAllCampaigns(),
-        saleService.getActiveFlashProducts()
-      ]);
-      if (active) {
-        const resolvedCamp =
-          camp || (Array.isArray(allCamps) && allCamps.length > 0 ? allCamps[0] : null);
-        if (resolvedCamp) {
-          setActiveCampaign(resolvedCamp);
-          setIsCountdownExpired(false);
+      try {
+        const [camp, prods] = await Promise.all([
+          saleService.getActiveCampaign(),
+          saleService.getActiveFlashProducts()
+        ]);
+        if (active) {
+          if (camp) {
+            setActiveCampaign(camp);
+            setIsCountdownExpired(false);
+          }
+          if (Array.isArray(prods) && prods.length > 0) {
+            setAllProducts(prods);
+          }
         }
-        if (Array.isArray(prods) && prods.length > 0) {
-          setAllProducts(prods);
-        }
+      } catch (err) {
+        console.warn('Không thể tải dữ liệu Flash Sale:', err?.message || err);
       }
     };
     fetchActiveSaleData();

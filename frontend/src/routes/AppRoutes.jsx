@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Layouts (Tách biệt hoàn toàn UserLayout và AdminLayout)
@@ -11,36 +11,36 @@ import AdminRoute from './AdminRoute';
 import Loading from '../components/common/Loading';
 
 // Customer pages (Code Splitting qua React.lazy)
-const Home = lazy(() => import('../pages/customer/Home'));
-const Products = lazy(() => import('../pages/customer/Products'));
-const ProductDetail = lazy(() => import('../pages/customer/ProductDetail'));
-const FlashSale = lazy(() => import('../pages/customer/FlashSale'));
-const Cart = lazy(() => import('../pages/customer/Cart'));
-const Checkout = lazy(() => import('../pages/customer/Checkout'));
-const OrderSuccess = lazy(() => import('../pages/customer/OrderSuccess'));
-const Orders = lazy(() => import('../pages/customer/Orders'));
-const OrderDetail = lazy(() => import('../pages/customer/OrderDetail'));
+const Home = React.lazy(() => import('../pages/customer/Home'));
+const Products = React.lazy(() => import('../pages/customer/Products'));
+const ProductDetail = React.lazy(() => import('../pages/customer/ProductDetail'));
+const FlashSale = React.lazy(() => import('../pages/customer/FlashSale'));
+const Cart = React.lazy(() => import('../pages/customer/Cart'));
+const Checkout = React.lazy(() => import('../pages/customer/Checkout'));
+const OrderSuccess = React.lazy(() => import('../pages/customer/OrderSuccess'));
+const Orders = React.lazy(() => import('../pages/customer/Orders'));
+const OrderDetail = React.lazy(() => import('../pages/customer/OrderDetail'));
 // Lazy-loaded OrderTracking (replaces static: import OrderTracking from '../pages/customer/OrderTracking')
-const OrderTracking = lazy(() => import('../pages/customer/OrderTracking'));
-const Vouchers = lazy(() => import('../pages/customer/Vouchers'));
-const MyVouchers = lazy(() => import('../pages/customer/MyVouchers'));
+const OrderTracking = React.lazy(() => import('../pages/customer/OrderTracking'));
+const Vouchers = React.lazy(() => import('../pages/customer/Vouchers'));
+const MyVouchers = React.lazy(() => import('../pages/customer/MyVouchers'));
 
 // Auth pages (Code Splitting qua React.lazy)
-const Login = lazy(() => import('../pages/auth/Login'));
-const Register = lazy(() => import('../pages/auth/Register'));
+const Login = React.lazy(() => import('../pages/auth/Login'));
+const Register = React.lazy(() => import('../pages/auth/Register'));
 
 // Admin pages (Code Splitting qua React.lazy)
-const AdminDashboard = lazy(() => import('../pages/admin/Dashboard'));
-const AdminProducts = lazy(() => import('../pages/admin/Products'));
-const AdminProductForm = lazy(() => import('../pages/admin/ProductForm'));
-const AdminCategories = lazy(() => import('../pages/admin/Categories'));
-const AdminOrders = lazy(() => import('../pages/admin/Orders'));
-const AdminInventory = lazy(() => import('../pages/admin/Inventory'));
-const AdminSales = lazy(() => import('../pages/admin/AdminSales'));
-const AdminSaleForm = lazy(() => import('../pages/admin/AdminSaleForm'));
-const AdminVouchers = lazy(() => import('../pages/admin/AdminVouchers'));
-const AdminUsers = lazy(() => import('../pages/admin/AdminUsers'));
-const AdminReviews = lazy(() => import('../pages/admin/AdminReviews'));
+const AdminDashboard = React.lazy(() => import('../pages/admin/Dashboard'));
+const AdminProducts = React.lazy(() => import('../pages/admin/Products'));
+const AdminProductForm = React.lazy(() => import('../pages/admin/ProductForm'));
+const AdminCategories = React.lazy(() => import('../pages/admin/Categories'));
+const AdminOrders = React.lazy(() => import('../pages/admin/Orders'));
+const AdminInventory = React.lazy(() => import('../pages/admin/Inventory'));
+const AdminSales = React.lazy(() => import('../pages/admin/AdminSales'));
+const AdminSaleForm = React.lazy(() => import('../pages/admin/AdminSaleForm'));
+const AdminVouchers = React.lazy(() => import('../pages/admin/AdminVouchers'));
+const AdminUsers = React.lazy(() => import('../pages/admin/AdminUsers'));
+const AdminReviews = React.lazy(() => import('../pages/admin/AdminReviews'));
 
 const AppRoutes = () => {
   return (

@@ -1,4 +1,4 @@
-import api from './api';
+import api, { isHttpResponseError, toBackendError } from './api';
 import { ORDER_STATUS } from '../utils/constants';
 import { ORDER_STATUS_SYNC_EVENT } from './orderService';
 
@@ -83,12 +83,11 @@ export const paymentService = {
       emitPaymentStatusSyncSignal(orderId, normalized);
       return normalized || response;
     } catch (err) {
-      const error = new Error(
-        err?.response?.data?.message ||
-          err?.message ||
-          'Không thể thực hiện thanh toán. Máy chủ thanh toán hiện không phản hồi, vui lòng thử lại.'
+      const error = toBackendError(
+        err,
+        'Không thể thực hiện thanh toán. Máy chủ thanh toán hiện không phản hồi, vui lòng thử lại.'
       );
-      error.status = err?.status || err?.response?.status;
+      error.status = err?.status || err?.response?.status || (isHttpResponseError(err) ? 500 : undefined);
       error.response = err?.response;
       error.orderId = orderId;
       throw error;
@@ -104,12 +103,11 @@ export const paymentService = {
       const response = await api.get(`/payments/order/${orderId}`);
       return normalizePaymentResponse(response, orderId) || response;
     } catch (err) {
-      const error = new Error(
-        err?.response?.data?.message ||
-          err?.message ||
-          `Không thể tải thông tin thanh toán của đơn hàng #${orderId}.`
+      const error = toBackendError(
+        err,
+        `Không thể tải thông tin thanh toán của đơn hàng #${orderId}.`
       );
-      error.status = err?.status || err?.response?.status;
+      error.status = err?.status || err?.response?.status || (isHttpResponseError(err) ? 500 : undefined);
       error.response = err?.response;
       error.orderId = orderId;
       throw error;

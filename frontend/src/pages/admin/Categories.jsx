@@ -37,7 +37,8 @@ const Categories = () => {
     name: '',
     image: '',
     description: '',
-    status: 'ACTIVE'
+    status: 'ACTIVE',
+    rejectOnError: true
   });
   const [formErrors, setFormErrors] = useState({});
   // Image handling states for category form
@@ -49,13 +50,13 @@ const Categories = () => {
   const loadCategories = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await categoryService.getAll();
+      const data = await categoryService.getAllForAdmin({ rejectOnError: true });
       setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       showToast({
         type: 'error',
         title: 'Lỗi',
-        message: 'Không thể tải danh sách danh mục: ' + err.message
+        message: 'Không thể tải danh sách danh mục: ' + (err?.response?.data?.message || err?.message)
       });
     } finally {
       setLoading(false);
@@ -240,7 +241,8 @@ const Categories = () => {
       name: '',
       image: '',
       description: '',
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      rejectOnError: true
     });
     setFormErrors({});
     setCategoryImageFile(null);
@@ -275,7 +277,7 @@ const Categories = () => {
       showToast({
         type: 'error',
         title: 'Lỗi',
-        message: err.message || 'Không thể thêm danh mục'
+        message: err?.response?.data?.message || err?.message || 'Không thể thêm danh mục'
       });
     }
   };
@@ -293,7 +295,8 @@ const Categories = () => {
       name: category.name || '',
       image: category.image || '',
       description: category.description || '',
-      status: category.status || 'ACTIVE'
+      status: category.status || 'ACTIVE',
+      rejectOnError: true
     });
     setFormErrors({});
     // Reset image upload state; show existing image as preview
@@ -331,7 +334,7 @@ const Categories = () => {
       showToast({
         type: 'error',
         title: 'Lỗi',
-        message: err.message || 'Không thể cập nhật danh mục'
+        message: err?.response?.data?.message || err?.message || 'Không thể cập nhật danh mục'
       });
     }
   };
@@ -363,7 +366,7 @@ const Categories = () => {
       showToast({
         type: 'error',
         title: 'Lỗi',
-        message: err.message || 'Không thể xóa danh mục'
+        message: err?.response?.data?.message || err?.message || 'Không thể xóa danh mục'
       });
     }
   };

@@ -585,15 +585,29 @@ export const orderService = {
 
   // Lịch sử đơn hàng của user đang đăng nhập (GET /api/v1/orders/my-orders)
   getMyOrders: async () => {
-    const list = await api.get('/orders/my-orders');
-    const arr = Array.isArray(list) ? list : Array.isArray(list?.content) ? list.content : [];
-    return arr.map((order) => normalizeOrderFromBackend(order) || order);
+    try {
+      const list = await api.get('/orders/my-orders');
+      const arr = Array.isArray(list) ? list : Array.isArray(list?.content) ? list.content : [];
+      return arr.map((order) => normalizeOrderFromBackend(order) || order);
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403 || err.response?.status || isHttpResponseError(err)) {
+        throw err;
+      }
+      throw err;
+    }
   },
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})
   getOrderById: async (id) => {
-    const data = await api.get(`/orders/${id}`);
-    return normalizeOrderFromBackend(data) || data;
+    try {
+      const data = await api.get(`/orders/${id}`);
+      return normalizeOrderFromBackend(data) || data;
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403 || err.response?.status || isHttpResponseError(err)) {
+        throw err;
+      }
+      throw err;
+    }
   },
 
   // Khách tự hủy đơn PENDING (PUT /api/orders/{orderId}/cancel)
@@ -622,49 +636,57 @@ export const orderService = {
   // Admin xem toàn bộ đơn hàng có phân trang & lọc trạng thái (GET /api/v1/admin/orders)
   // Không tự thay thế lỗi API bằng dữ liệu mock để UI hiển thị chính xác Error State & nút Thử lại.
   getAllOrders: async (params = {}) => {
-    const response = await api.get('/admin/orders', { params });
+    try {
+      const response = await api.get('/admin/orders', { params });
 
-    // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
-    if (response && Array.isArray(response.content)) {
-      const normalizedContent = response.content
-        .map((item) => normalizeOrderFromBackend(item))
-        .filter(Boolean);
-      return {
-        content: normalizedContent,
-        totalElements: response.totalElements ?? normalizedContent.length,
-        totalPages: response.totalPages ?? 1,
-        pageNumber: response.pageNumber ?? (params?.page || 0),
-        pageSize: response.pageSize ?? (params?.size || 10),
-        last: response.last ?? true
-      };
-    }
+      // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
+      if (response && Array.isArray(response.content)) {
+        const normalizedContent = response.content
+          .map((item) => normalizeOrderFromBackend(item))
+          .filter(Boolean);
+        return {
+          content: normalizedContent,
+          totalElements: response.totalElements ?? normalizedContent.length,
+          totalPages: response.totalPages ?? 1,
+          pageNumber: response.pageNumber ?? (params?.page || 0),
+          pageSize: response.pageSize ?? (params?.size || 10),
+          last: response.last ?? true
+        };
+      }
 
-    // Nếu Backend trả về mảng trực tiếp
-    if (Array.isArray(response)) {
-      const page = params?.page || 0;
-      const size = params?.size || 10;
-      const normalizedContent = response
-        .map((item) => normalizeOrderFromBackend(item))
-        .filter(Boolean);
+      // Nếu Backend trả về mảng trực tiếp
+      if (Array.isArray(response)) {
+        const page = params?.page || 0;
+        const size = params?.size || 10;
+        const normalizedContent = response
+          .map((item) => normalizeOrderFromBackend(item))
+          .filter(Boolean);
+        return {
+          content: normalizedContent,
+          totalElements: normalizedContent.length,
+          totalPages: Math.max(1, Math.ceil(normalizedContent.length / size)),
+          pageNumber: page,
+          pageSize: size,
+          last: true
+        };
+      }
+
+      // Xử lý an toàn khi response rỗng hoặc null
       return {
-        content: normalizedContent,
-        totalElements: normalizedContent.length,
-        totalPages: Math.max(1, Math.ceil(normalizedContent.length / size)),
-        pageNumber: page,
-        pageSize: size,
+        content: [],
+        totalElements: 0,
+        totalPages: 1,
+        pageNumber: params?.page || 0,
+        pageSize: params?.size || 10,
         last: true
       };
+    } catch (err) {
+      // Nếu response trả về HTTP error (401, 403, 400, 404, 500...) thì bắt buộc throw error để component xử lý
+      if (err.response?.status === 401 || err.response?.status === 403 || err.response?.status || isHttpResponseError(err)) {
+        throw err;
+      }
+      throw err;
     }
-
-    // Xử lý an toàn khi response rỗng hoặc null
-    return {
-      content: [],
-      totalElements: 0,
-      totalPages: 1,
-      pageNumber: params?.page || 0,
-      pageSize: params?.size || 10,
-      last: true
-    };
   },
 
   // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId})
@@ -689,8 +711,8 @@ export const orderService = {
           : [];
       return list.map(normalizeStatusHistoryFromBackend).filter(Boolean);
     } catch (err) {
-      // Nếu là lỗi bảo mật 403 (IDOR) thì ném lỗi để UI hiển thị thông báo phân quyền
-      if (err.response?.status === 403) {
+      // Nếu là lỗi xác thực 401 hoặc bảo mật 403 (IDOR) thì ném lỗi để UI hiển thị thông báo phân quyền
+      if (err.response?.status === 401 || err.response?.status === 403) {
         throw err;
       }
 

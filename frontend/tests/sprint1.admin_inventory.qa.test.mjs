@@ -77,16 +77,20 @@ test('ECOM-130 (ECOM-237 & ECOM-240): Kiểm thử Admin Quản lý Danh mục (
     'product-service/src/main/java/com/ecommerce/product/dto/request/CategoryRequest.java'
   );
 
-  // 1. Kiểm tra kết nối API Backend trong categoryService.js (BUG-S1-04)
+  // 1. Kiểm tra kết nối API Backend và xử lý lỗi HTTP trong categoryService.js (BUG-S1-04)
   assert.match(categoryServiceCode, /api\.post\('\/products\/categories'/, 'categoryService.create phải gọi POST /products/categories');
   assert.match(categoryServiceCode, /api\.put\(`\/products\/categories\/\$\{id\}`/, 'categoryService.update phải gọi PUT /products/categories/{id}');
   assert.match(categoryServiceCode, /api\.delete\(`\/products\/categories\/\$\{id\}`/, 'categoryService.delete phải gọi DELETE /products/categories/{id}');
   assert.match(categoryServiceCode, /api\.get\('\/products\/categories\/search'/, 'categoryService.search phải gọi GET /products/categories/search');
   assert.match(categoryServiceCode, /api\.get\(`\/products\/categories\/\$\{numId\}`\)/, 'categoryService.getById phải gọi GET /products/categories/{id}');
+  assert.match(categoryServiceCode, /getAllForAdmin:\s*async/, 'categoryService phải có hàm getAllForAdmin');
+  assert.match(categoryServiceCode, /rethrowIfBackendError\(err,\s*categoryData/, 'categoryService.create/update phải kiểm tra và ném lỗi HTTP từ Backend');
+  assert.match(categoryServiceCode, /rethrowIfBackendError\(err,\s*options,\s*'Không thể xóa danh mục\.'\)/, 'categoryService.delete phải kiểm tra và ném lỗi HTTP từ Backend');
 
   // 2. Kiểm tra giao diện Admin Categories có validate không để trống và chống trùng tên
   assert.match(adminCategoriesCode, /Tên danh mục không được để trống/, 'Admin Categories phải kiểm tra tên danh mục rỗng');
   assert.match(adminCategoriesCode, /đã tồn tại trong hệ thống/, 'Admin Categories phải kiểm tra trùng tên danh mục');
+  assert.match(adminCategoriesCode, /categoryService\.getAllForAdmin\(\{\s*rejectOnError:\s*true\s*\}\)/, 'Admin Categories phải gọi categoryService.getAllForAdmin({ rejectOnError: true })');
   assert.match(adminCategoriesCode, /categoryService\.create\(formData\)/, 'Admin Categories phải gọi categoryService.create khi thêm mới');
   assert.match(adminCategoriesCode, /categoryService\.update\(selectedCategory\.id,\s*formData\)/, 'Admin Categories phải gọi categoryService.update khi sửa');
   assert.match(adminCategoriesCode, /categoryService\.delete\(selectedCategory\.id\)/, 'Admin Categories phải gọi categoryService.delete khi xóa');

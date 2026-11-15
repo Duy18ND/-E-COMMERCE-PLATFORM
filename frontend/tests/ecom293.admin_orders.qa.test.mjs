@@ -270,6 +270,20 @@ test('TC-293-18: orderService.getAllOrders và getRealOrdersForDashboard chuẩn
     assert.equal(dashboardOrders[0].status, 'PENDING');
 
     api.get = async () => {
+      const apiErr = new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn (HTTP 401).');
+      apiErr.response = { status: 401 };
+      throw apiErr;
+    };
+    await assert.rejects(() => orderService.getAllOrders({ page: 0, size: 10 }), /HTTP 401/);
+
+    api.get = async () => {
+      const apiErr = new Error('Bạn không có quyền truy cập tài nguyên này (HTTP 403).');
+      apiErr.response = { status: 403 };
+      throw apiErr;
+    };
+    await assert.rejects(() => orderService.getAllOrders({ page: 0, size: 10 }), /HTTP 403/);
+
+    api.get = async () => {
       const apiErr = new Error('Máy chủ đang gặp sự cố nội bộ (HTTP 500).');
       apiErr.response = { status: 500 };
       throw apiErr;
