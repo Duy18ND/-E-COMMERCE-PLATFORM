@@ -429,10 +429,6 @@
     border-radius: 14px !important;
   }
 
-  .auth-demo-actions {
-    grid-template-columns: 1fr !important;
-  }
-
   .auth-footer-tagline {
     display: none;
   }

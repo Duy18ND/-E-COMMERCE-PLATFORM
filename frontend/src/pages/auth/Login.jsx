@@ -64,18 +64,10 @@ const Login = () => {
     }
   };
 
-  const handleQuickFill = (email, password) => {
-    setFormData({ email, password });
-    setFieldErrors({});
-    setError('');
-    setSuccess('');
-    setInfoNotice('');
-  };
-
   const handleForgotPassword = () => {
     setError('');
     setInfoNotice(
-      'Vui lòng liên hệ Hotline 1900 8888 hoặc sử dụng tài khoản kiểm thử bên dưới để truy cập nhanh.'
+      'Vui lòng liên hệ Hotline 1900 8888 để được hỗ trợ khôi phục mật khẩu.'
     );
   };
 
@@ -283,30 +275,6 @@ const Login = () => {
                   </p>
                 </div>
 
-                {/* Khung điền nhanh tài khoản kiểm thử USER / ADMIN */}
-                <div className="auth-demo-box">
-                  <div className="auth-demo-label">
-                    <span>🧪 Tài khoản dùng thử nhanh:</span>
-                    <span className="auth-demo-pass">MK: 123456</span>
-                  </div>
-                  <div className="auth-demo-actions">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickFill('user@test.com', '123456')}
-                      className="auth-demo-chip user"
-                    >
-                      👤 Khách hàng (user@test.com)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickFill('admin@test.com', '123456')}
-                      className="auth-demo-chip admin"
-                    >
-                      🛡️ Quản trị (admin@test.com)
-                    </button>
-                  </div>
-                </div>
-
                 {error && <ErrorMessage message={error} onClose={() => setError('')} />}
 
                 {infoNotice && (
@@ -332,7 +300,7 @@ const Login = () => {
                     value={formData.email}
                     onChange={handleChange}
                     error={fieldErrors.email}
-                    placeholder="user@test.com hoặc admin@test.com"
+                    placeholder="example@gmail.com"
                     leftIcon={
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />

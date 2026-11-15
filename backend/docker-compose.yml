@@ -112,7 +112,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-product_db}
       MYSQL_USER: ${MYSQL_USER:-ecommerce_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce123}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
     ports:
       - "127.0.0.1:3307:3306"
     volumes:
