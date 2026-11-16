@@ -80,4 +80,22 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "WHERE o.createdAt >= :startDate AND o.createdAt <= :endDate GROUP BY o.status")
     List<Object[]> countOrdersByStatusGroupBetween(@Param("startDate") LocalDateTime startDate,
                                                    @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * Tính tổng số lượng sản phẩm userId đã mua trong khung thời gian chiến dịch Flash Sale
+     * (chỉ tính các đơn không bị hủy/thất bại để chống lách userLimit qua nhiều đơn).
+     */
+    @Query("SELECT COALESCE(SUM(oi.quantity), 0) FROM OrderItem oi " +
+           "JOIN oi.order o " +
+           "WHERE o.userId = :userId " +
+           "AND oi.productId = :productId " +
+           "AND o.status NOT IN :excludedStatuses " +
+           "AND o.createdAt >= :startDate " +
+           "AND o.createdAt <= :endDate")
+    Integer sumPurchasedQuantityByUserAndProductBetween(
+            @Param("userId") Long userId,
+            @Param("productId") Long productId,
+            @Param("excludedStatuses") Collection<OrderStatus> excludedStatuses,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
 }

@@ -15,6 +15,7 @@ public class PaymentResponse {
 
     private Long id;
     private Long orderId;
+    private Long userId;
     private BigDecimal amount;
     private String paymentMethod;
     private PaymentStatus status;

@@ -164,5 +164,42 @@ class FlashSaleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("ENDED"));
     }
+
+    @Test
+    @DisplayName("POST /api/v1/flash-sales/restore hoàn trả tồn kho Flash Sale thành công 200 OK")
+    void restoreFlashSaleStock_ShouldReturn200() throws Exception {
+        com.ecommerce.product.dto.request.FlashSaleReserveRequest request =
+                new com.ecommerce.product.dto.request.FlashSaleReserveRequest(42L, 3);
+
+        mockMvc.perform(post("/api/v1/flash-sales/restore")
+                        .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(flashSaleService).restoreFlashSaleStock(42L, 3);
+    }
+
+    @Test
+    @DisplayName("[Fix-C.1] POST /api/v1/flash-sales/reserve & restore chặn user thường (403 Forbidden)")
+    void reserveAndRestoreFlashSaleStock_WithoutInternalKeyOrAdmin_ShouldReturn403() throws Exception {
+        com.ecommerce.product.dto.request.FlashSaleReserveRequest request =
+                new com.ecommerce.product.dto.request.FlashSaleReserveRequest(42L, 1);
+
+        mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                        .header("X-User-Roles", "ROLE_USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/flash-sales/restore")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        verify(flashSaleService, never()).reserveFlashSaleStock(any(), any(Integer.class));
+        verify(flashSaleService, never()).restoreFlashSaleStock(any(), any(Integer.class));
+    }
 }
 

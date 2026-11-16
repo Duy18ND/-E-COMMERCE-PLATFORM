@@ -29,6 +29,9 @@ public interface ProductClient {
     @PostMapping("/api/v1/flash-sales/reserve")
     ApiResponse<Void> reserveFlashSaleStock(@RequestBody FlashSaleReserveRequest request);
 
+    @PostMapping("/api/v1/flash-sales/restore")
+    ApiResponse<Void> restoreFlashSaleStock(@RequestBody FlashSaleReserveRequest request);
+
     /**
      * [Task ECOM-145 / ECOM-326] Đếm số lượng sản phẩm sắp hết hàng phục vụ thống kê Dashboard Admin.
      * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006

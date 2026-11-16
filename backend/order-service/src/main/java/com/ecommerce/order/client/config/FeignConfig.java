@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.RequestInterceptor;
 import feign.codec.ErrorDecoder;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
@@ -15,6 +16,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Configuration
 public class FeignConfig {
 
+    @Value("${internal.service-key:ecommerce-internal-service-secret-2026}")
+    private String internalServiceKey = "ecommerce-internal-service-secret-2026";
+
     @Bean
     public ErrorDecoder errorDecoder(ObjectMapper objectMapper) {
         return new ProductErrorDecoder(objectMapper);
@@ -22,12 +26,15 @@ public class FeignConfig {
 
     /**
      * [Task ECOM-145 / ECOM-326] Chuyển tiếp các header xác thực & phân quyền (Authorization, X-User-Id, X-User-Roles)
-     * từ request hiện tại sang các dịch vụ nội bộ (như auth-service, product-service).
+     * và khóa dịch vụ nội bộ (X-Internal-Service-Key) sang các dịch vụ nội bộ (auth-service, product-service).
      * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
      */
     @Bean
     public RequestInterceptor requestHeaderForwardingInterceptor() {
         return template -> {
+            if (StringUtils.hasText(internalServiceKey)) {
+                template.header("X-Internal-Service-Key", internalServiceKey);
+            }
             RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
             if (attributes instanceof ServletRequestAttributes servletAttributes) {
                 HttpServletRequest request = servletAttributes.getRequest();

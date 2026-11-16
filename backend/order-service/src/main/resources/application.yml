@@ -83,3 +83,6 @@ management:
   endpoint:
     health:
       show-details: always
+
+internal:
+  service-key: ${INTERNAL_SERVICE_KEY:ecommerce-internal-service-secret-2026}

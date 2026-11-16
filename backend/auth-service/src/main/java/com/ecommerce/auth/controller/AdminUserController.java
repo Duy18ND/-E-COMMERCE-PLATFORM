@@ -19,12 +19,18 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Set;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
 @Tag(name = "Admin User Controller", description = "Quản trị danh sách người dùng và trạng thái tài khoản")
 public class AdminUserController {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "createdAt", "updatedAt", "email", "fullName", "phone", "status"
+    );
 
     private final UserService userService;
 
@@ -39,8 +45,14 @@ public class AdminUserController {
 
         requireAdminRole(roles);
 
+        String trimmedSortBy = sortBy != null ? sortBy.trim() : "";
+        if (!ALLOWED_SORT_FIELDS.contains(trimmedSortBy)) {
+            throw new IllegalArgumentException(
+                    "Trường sắp xếp (sortBy) không hợp lệ: '" + sortBy + "'. Chỉ chấp nhận: " + ALLOWED_SORT_FIELDS);
+        }
+
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, trimmedSortBy));
 
         PagedResponse<UserSummaryResponse> response = userService.getAllUsers(pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người dùng thành công", response));

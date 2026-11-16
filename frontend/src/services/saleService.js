@@ -1,4 +1,4 @@
-import api from './api';
+import api, { isHttpResponseError, toBackendError } from './api';
 import { INITIAL_CAMPAIGNS, INITIAL_FLASH_PRODUCTS, FLASH_TIME_SLOTS } from '../mock/mockSales';
 
 const STORAGE_KEYS = {
@@ -206,7 +206,31 @@ const buildBackendCampaignRequest = (campaignData) => {
   };
 };
 
-const isNetworkUnavailableError = (err) => !err?.response;
+const isNetworkUnavailableError = (err) => !isHttpResponseError(err) && !err?.response;
+
+const throwBackendError = (err, fallbackMessage = 'Lỗi hệ thống Flash Sale') => {
+  const mapped = toBackendError(err, fallbackMessage);
+  if (err?.status !== undefined) mapped.status = err.status;
+  if (err?.fieldErrors) mapped.fieldErrors = err.fieldErrors;
+  throw mapped;
+};
+
+const rethrowIfBackendError = (err, fallbackMessage = 'Lỗi hệ thống Flash Sale') => {
+  if (!isNetworkUnavailableError(err)) {
+    throwBackendError(err, fallbackMessage);
+  }
+};
+
+const fallbackOnOfflineRead = (err, label, resolveOffline) => {
+  rethrowIfBackendError(err, `Không thể tải dữ liệu Flash Sale (${label})`);
+  console.warn(`[saleService] Fallback ${label} từ cache/mock:`, err?.message);
+  return resolveOffline();
+};
+
+const fetchActiveCampaignsFromApi = async () => {
+  const data = await api.get('/flash-sales/active');
+  return Array.isArray(data) ? data.map(normalizeCampaignResponse).filter(Boolean) : [];
+};
 
 export const saleService = {
   // Đọc đồng bộ từ cache localStorage (hỗ trợ khởi tạo state tức thì trước khi API trả về)
@@ -235,8 +259,7 @@ export const saleService = {
       setStoredData(STORAGE_KEYS.CAMPAIGNS, list);
       return list;
     } catch (err) {
-      console.warn('[saleService] Fallback getAllCampaigns từ cache/mock:', err?.message);
-      return saleService.getAllCampaignsSync();
+      return fallbackOnOfflineRead(err, 'getAllCampaigns', () => saleService.getAllCampaignsSync());
     }
   },
 
@@ -246,21 +269,23 @@ export const saleService = {
       const data = await api.get(`/admin/flash-sales/campaigns/${id}`);
       return normalizeCampaignResponse(data);
     } catch (err) {
-      const campaigns = saleService.getAllCampaignsSync();
-      return (
-        campaigns.find((c) => String(c.id) === String(id) || String(c.code) === String(id)) || null
-      );
+      return fallbackOnOfflineRead(err, 'getCampaignById', () => {
+        const campaigns = saleService.getAllCampaignsSync();
+        return (
+          campaigns.find((c) => String(c.id) === String(id) || String(c.code) === String(id)) || null
+        );
+      });
     }
   },
 
   // 3. [PUBLIC] Lấy danh sách các chiến dịch Flash Sale đang hiệu lực từ Backend
   getActiveCampaigns: async () => {
     try {
-      const data = await api.get('/flash-sales/active');
-      return Array.isArray(data) ? data.map(normalizeCampaignResponse).filter(Boolean) : [];
+      return await fetchActiveCampaignsFromApi();
     } catch (err) {
-      console.warn('[saleService] Fallback getActiveCampaigns từ cache/mock:', err?.message);
-      return saleService.getAllCampaignsSync().filter((c) => c.status === 'ACTIVE');
+      return fallbackOnOfflineRead(err, 'getActiveCampaigns', () =>
+        saleService.getAllCampaignsSync().filter((c) => c.status === 'ACTIVE')
+      );
     }
   },
 
@@ -272,15 +297,15 @@ export const saleService = {
         return activeList[0];
       }
       return null;
-    } catch {
-      return saleService.getActiveCampaignSync();
+    } catch (err) {
+      return fallbackOnOfflineRead(err, 'getActiveCampaign', () => saleService.getActiveCampaignSync());
     }
   },
 
   // 5. [PUBLIC] Lấy danh sách sản phẩm Flash Sale đang hiệu lực (hoặc danh mục sản phẩm cho Admin chọn)
   getActiveFlashProducts: async () => {
     try {
-      const activeCampaigns = await saleService.getActiveCampaigns();
+      const activeCampaigns = await fetchActiveCampaignsFromApi();
       const seen = new Set();
       const flashProducts = [];
       for (const camp of activeCampaigns) {
@@ -297,8 +322,7 @@ export const saleService = {
       }
       return flashProducts;
     } catch (err) {
-      console.warn('[saleService] Fallback getActiveFlashProducts:', err?.message);
-      return saleService.getAllProductsSync();
+      return fallbackOnOfflineRead(err, 'getActiveFlashProducts', () => saleService.getAllProductsSync());
     }
   },
 
@@ -363,9 +387,7 @@ export const saleService = {
         }
         return normalizeCampaignResponse(created);
       } catch (err) {
-        if (!isNetworkUnavailableError(err)) {
-          throw err;
-        }
+        rethrowIfBackendError(err);
       }
     }
 
@@ -401,9 +423,7 @@ export const saleService = {
         }
         return normalizeCampaignResponse(updated);
       } catch (err) {
-        if (!isNetworkUnavailableError(err)) {
-          throw err;
-        }
+        rethrowIfBackendError(err);
       }
     }
 
@@ -425,9 +445,7 @@ export const saleService = {
         });
         return normalizeCampaignResponse(updated);
       } catch (err) {
-        if (!isNetworkUnavailableError(err)) {
-          throw err;
-        }
+        rethrowIfBackendError(err);
       }
     }
 
@@ -458,9 +476,7 @@ export const saleService = {
         await api.delete(`/admin/flash-sales/campaigns/${id}`);
         return true;
       } catch (err) {
-        if (!isNetworkUnavailableError(err)) {
-          throw err;
-        }
+        rethrowIfBackendError(err);
       }
     }
 

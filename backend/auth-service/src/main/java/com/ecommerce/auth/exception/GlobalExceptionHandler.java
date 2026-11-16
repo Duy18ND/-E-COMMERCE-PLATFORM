@@ -53,6 +53,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
             IllegalArgumentException ex, HttpServletRequest request) {
+        return buildBadRequestResponse(ex, request);
+    }
+
+    @ExceptionHandler(org.springframework.data.mapping.PropertyReferenceException.class)
+    public ResponseEntity<ErrorResponse> handlePropertyReferenceException(
+            org.springframework.data.mapping.PropertyReferenceException ex, HttpServletRequest request) {
+        return buildBadRequestResponse(ex, request);
+    }
+
+    private ResponseEntity<ErrorResponse> buildBadRequestResponse(
+            RuntimeException ex, HttpServletRequest request) {
 
         log.warn("Illegal argument on path {}: {}", request.getRequestURI(), ex.getMessage());
 

@@ -36,6 +36,8 @@ import AdminInventory from '../pages/admin/Inventory';
 import AdminSales from '../pages/admin/AdminSales';
 import AdminSaleForm from '../pages/admin/AdminSaleForm';
 import AdminVouchers from '../pages/admin/AdminVouchers';
+import AdminUsers from '../pages/admin/AdminUsers';
+import AdminReviews from '../pages/admin/AdminReviews';
 
 const AppRoutes = () => {
   return (
@@ -158,6 +160,24 @@ const AppRoutes = () => {
           element={
             <AdminLayout>
               <AdminVouchers />
+            </AdminLayout>
+          }
+        />
+        {/* Admin Users (Customer Management) */}
+        <Route
+          path="/admin/users"
+          element={
+            <AdminLayout>
+              <AdminUsers />
+            </AdminLayout>
+          }
+        />
+        {/* Admin Reviews (Quản lý & kiểm duyệt đánh giá sản phẩm) */}
+        <Route
+          path="/admin/reviews"
+          element={
+            <AdminLayout>
+              <AdminReviews />
             </AdminLayout>
           }
         />

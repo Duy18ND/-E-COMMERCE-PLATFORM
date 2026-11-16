@@ -67,8 +67,9 @@ describe('ECOM-269: [BE] QA TEST API, VALIDATION VÀ QUYỀN TRUY CẬP (CHECKOU
   test('TC-269-BE-05: Cơ chế phân quyền và xác thực bắt buộc X-User-Id trên checkout và from-cart', () => {
     const controller = readBackend('order-service/src/main/java/com/ecommerce/order/controller/OrderController.java');
 
-    assert.match(controller, /if\s*\(authenticatedUserId\s*!=\s*null\)\s*\{\s*request\.setUserId\(authenticatedUserId\);\s*\}\s*else\s+if\s*\(request\.getUserId\(\)\s*==\s*null\)\s*\{\s*throw new AccessDeniedException/, 'Bắt buộc xác thực người dùng trên checkout');
+    assert.match(controller, /validateHeaderAuthentication\(authenticatedUserId,\s*authorizationHeader\);[\s\S]*?requireAuthenticated\(authenticatedUserId\);[\s\S]*?request\.setUserId\(authenticatedUserId\);/, 'Bắt buộc xác thực người dùng qua header X-User-Id trên checkout');
     assert.match(controller, /private void requireAuthenticated\(Long authenticatedUserId\)/, 'Hàm helper requireAuthenticated');
+    assert.doesNotMatch(controller, /else\s+if\s*\(request\.getUserId\(\)\s*==\s*null\)/, 'Không được fallback sang userId trong JSON body khi thiếu X-User-Id');
   });
 
   test('TC-269-BE-06: Phòng chống tấn công IDOR khi xem chi tiết và hủy đơn hàng', () => {

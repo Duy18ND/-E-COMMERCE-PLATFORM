@@ -338,6 +338,7 @@ class InventoryStockApiQATest {
 
             // Reserve
             mockMvc.perform(post("/api/v1/products/reserve-stock")
+                    .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(items)))
                     .andExpect(status().isOk())
@@ -345,6 +346,7 @@ class InventoryStockApiQATest {
 
             // Restore
             mockMvc.perform(post("/api/v1/products/restore-stock")
+                    .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(items)))
                     .andExpect(status().isOk())
@@ -531,6 +533,7 @@ class InventoryStockApiQATest {
                     .when(productService).reserveStock(any());
 
             mockMvc.perform(post("/api/v1/products/reserve-stock")
+                    .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(items)))
                     .andExpect(status().isConflict())
@@ -542,6 +545,7 @@ class InventoryStockApiQATest {
         @DisplayName("TC-ECOM-287-22: [ReserveStock] Chặn danh sách đặt trước rỗng (400 Bad Request)")
         void testReserveStock_EmptyList() throws Exception {
             mockMvc.perform(post("/api/v1/products/reserve-stock")
+                    .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("[]"))
                     .andExpect(status().isBadRequest())

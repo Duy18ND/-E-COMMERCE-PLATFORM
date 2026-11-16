@@ -307,12 +307,13 @@ class FlashSaleApiQATest {
         }
 
         @Test
-        @DisplayName("TC-307-PUB-03: Khách hàng đặt chỗ tồn kho Flash Sale POST /api/v1/flash-sales/reserve thành công -> 200 OK")
+        @DisplayName("TC-307-PUB-03: Đặt chỗ tồn kho Flash Sale POST /api/v1/flash-sales/reserve nội bộ thành công -> 200 OK")
         void reserveFlashSaleStock_Success_ShouldReturn200() throws Exception {
             FlashSaleReserveRequest req = new FlashSaleReserveRequest(101L, 2);
             doNothing().when(flashSaleService).reserveFlashSaleStock(101L, 2);
 
             mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                            .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
                     .andExpect(status().isOk())
@@ -330,6 +331,7 @@ class FlashSaleApiQATest {
                     .when(flashSaleService).reserveFlashSaleStock(101L, 1);
 
             mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                            .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
                     .andExpect(status().isConflict())
@@ -348,6 +350,7 @@ class FlashSaleApiQATest {
                     .when(flashSaleService).reserveFlashSaleStock(999L, 1);
 
             mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                            .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
                     .andExpect(status().isNotFound())
@@ -364,6 +367,7 @@ class FlashSaleApiQATest {
             FlashSaleReserveRequest invalidZero = new FlashSaleReserveRequest(101L, 0);
 
             mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                            .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidZero)))
                     .andExpect(status().isBadRequest())
@@ -373,6 +377,7 @@ class FlashSaleApiQATest {
             FlashSaleReserveRequest invalidNull = new FlashSaleReserveRequest(101L, null);
 
             mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                            .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidNull)))
                     .andExpect(status().isBadRequest())
@@ -387,6 +392,7 @@ class FlashSaleApiQATest {
             FlashSaleReserveRequest invalidReq = new FlashSaleReserveRequest(null, 2);
 
             mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                            .header("X-Internal-Service-Key", "ecommerce-internal-service-secret-2026")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidReq)))
                     .andExpect(status().isBadRequest())
@@ -394,6 +400,29 @@ class FlashSaleApiQATest {
                     .andExpect(jsonPath("$.errors.productId").value(containsString("không được để trống")));
 
             verify(flashSaleService, never()).reserveFlashSaleStock(any(), anyInt());
+        }
+
+        @Test
+        @DisplayName("TC-307-SEC-08: Chặn user thường gọi trực tiếp POST /api/v1/flash-sales/reserve & restore -> 403 Forbidden")
+        void reserveFlashSaleStock_AsNormalUserWithoutInternalKey_ShouldReturn403() throws Exception {
+            FlashSaleReserveRequest validReq = new FlashSaleReserveRequest(101L, 1);
+
+            mockMvc.perform(post("/api/v1/flash-sales/reserve")
+                            .header("X-User-Roles", "ROLE_USER")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(validReq)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status").value(403));
+
+            mockMvc.perform(post("/api/v1/flash-sales/restore")
+                            .header("X-User-Roles", "ROLE_USER")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(validReq)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status").value(403));
+
+            verify(flashSaleService, never()).reserveFlashSaleStock(any(), anyInt());
+            verify(flashSaleService, never()).restoreFlashSaleStock(any(), anyInt());
         }
     }
 

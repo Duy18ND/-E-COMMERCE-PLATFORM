@@ -113,7 +113,8 @@ describe('ECOM-185 Group B & C: Giới hạn theo người dùng, Concurrency & 
     assert.match(voucherCtrl, /request\.setUserId\(userId\)/);
     assert.match(voucherCtrl, /Token xác thực không hợp lệ hoặc đã hết hạn/);
     assert.match(orderCtrl, /validateHeaderAuthentication\(authenticatedUserId,\s*authorizationHeader\)/);
-    assert.match(orderCtrl, /if\s*\(authenticatedUserId\s*!=\s*null\)\s*\{\s*request\.setUserId\(authenticatedUserId\);\s*\}/);
+    assert.match(orderCtrl, /requireAuthenticated\(authenticatedUserId\)/);
+    assert.match(orderCtrl, /request\.setUserId\(authenticatedUserId\)/);
   });
 });
 

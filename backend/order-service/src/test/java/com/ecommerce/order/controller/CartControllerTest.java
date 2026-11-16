@@ -279,4 +279,18 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.items[0].subTotal").value(2000.00))
                 .andExpect(jsonPath("$.data.items[0].stockAvailable").value(10));
     }
+
+    @Test
+    @DisplayName("Xem giỏ hàng: Header X-User-Id <= 0 không hợp lệ -> 403 Forbidden")
+    void getCart_WithNonPositiveUserId_ShouldReturnForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/cart")
+                        .header("X-User-Id", 0L))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/api/v1/cart")
+                        .header("X-User-Id", -5L))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
 }

@@ -18,15 +18,17 @@ spring:
   # ─── Spring Cloud Gateway Routes ────────────────────────────
   cloud:
     gateway:
-      # Enable route discovery from Eureka (auto-routes lb://<service-name>)
+      # Tắt discovery locator auto-routes (/service-id/**) để tránh vượt qua AuthenticationFilter trên các explicit routes;
+      # đồng thời SpoofedHeaderSanitizationFilter (HIGHEST_PRECEDENCE) xóa mọi X-User-* / X-Internal-Service-Key giả mạo trước AuthenticationFilter.
       discovery:
         locator:
-          enabled: true
+          enabled: false
           lower-case-service-id: true
 
       # Default filters applied to ALL routes
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - RemoveRequestHeader=X-Internal-Service-Key
 
       # Explicit routes
       routes:
@@ -55,11 +57,19 @@ spring:
                 name: auth-cb
                 fallbackUri: forward:/fallback/auth
 
+        # ── 2. Product Service — Block Internal Service Endpoints ─────
+        - id: product-service-internal-blocked
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/reserve-stock,/api/v1/products/restore-stock,/api/v1/products/*/reserve-stock,/api/v1/products/*/restore-stock,/api/v1/flash-sales/reserve,/api/v1/flash-sales/restore
+          filters:
+            - BlockExternalAccess
+
         # ── 2a. Product Service — Admin Read API (requires JWT) ────────
         - id: product-service-admin
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**,/api/v1/admin/reviews,/api/v1/admin/reviews/**
+            - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/products/categories/search,/api/v1/products/low-stock/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**,/api/v1/admin/reviews,/api/v1/admin/reviews/**
             - Method=GET
           filters:
             - StripPrefix=0
@@ -133,10 +143,13 @@ spring:
         - id: order-service-public-vouchers
           uri: lb://order-service
           predicates:
-            - Path=/api/v1/vouchers/active
+            - Path=/api/v1/vouchers/active,/api/v1/vouchers
             - Method=GET
           filters:
             - StripPrefix=0
+            - name: AuthenticationFilter
+              args:
+                optional: true
             - name: CircuitBreaker
               args:
                 name: order-cb
@@ -186,7 +199,6 @@ spring:
               - "http://localhost:3000"
               - "http://localhost:5173"
               - "http://localhost:8080"
-              - "https://across-bigger-screen-repair.trycloudflare.com"
             allowed-methods:
               - GET
               - POST

@@ -96,26 +96,58 @@ CREATE TABLE IF NOT EXISTS products (
     CONSTRAINT chk_products_stock_non_negative CHECK (stock_quantity >= 0),
     INDEX idx_products_name (name),
     INDEX idx_products_category (category),
-    INDEX idx_products_status (status)
+    INDEX idx_products_status (status),
+    INDEX idx_products_status_price (status, price),
+    INDEX idx_products_status_category (status, category)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS product_reviews (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    product_id BIGINT       NOT NULL,
-    user_id    BIGINT       NOT NULL,
-    order_id   BIGINT       NOT NULL,
-    rating     INT          NOT NULL,
-    comment    TEXT,
-    created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id    BIGINT       NOT NULL,
+    user_id       BIGINT       NOT NULL,
+    order_id      BIGINT       NOT NULL,
+    rating        INT          NOT NULL,
+    comment       TEXT,
+    status        VARCHAR(20)  NOT NULL DEFAULT 'APPROVED',
+    hidden_reason VARCHAR(255),
+    created_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at    DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     CONSTRAINT chk_rating CHECK (rating BETWEEN 1 AND 5),
     CONSTRAINT uq_review_product_user UNIQUE (product_id, user_id),
     INDEX idx_reviews_product_id (product_id),
-    INDEX idx_reviews_user_id (user_id)
+    INDEX idx_reviews_user_id (user_id),
+    INDEX idx_reviews_product_status (product_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- In case table already exists with TINYINT rating, alter to INT:
 ALTER TABLE product_reviews MODIFY COLUMN rating INT NOT NULL;
+
+CREATE TABLE IF NOT EXISTS flash_sale_campaigns (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(200) NOT NULL,
+    start_time DATETIME(6)  NOT NULL,
+    end_time   DATETIME(6)  NOT NULL,
+    status     VARCHAR(20)  NOT NULL DEFAULT 'UPCOMING',
+    created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_fs_status_time (status, start_time, end_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS flash_sale_items (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    campaign_id      BIGINT         NOT NULL,
+    product_id       BIGINT         NOT NULL,
+    flash_sale_price DECIMAL(12, 2) NOT NULL,
+    quantity         INT            NOT NULL,
+    sold_quantity    INT            NOT NULL DEFAULT 0,
+    user_limit       INT            NOT NULL DEFAULT 2,
+    CONSTRAINT fk_fs_campaign FOREIGN KEY (campaign_id) REFERENCES flash_sale_campaigns(id) ON DELETE CASCADE,
+    CONSTRAINT fk_fs_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    CONSTRAINT uq_fs_campaign_product UNIQUE (campaign_id, product_id),
+    CONSTRAINT chk_fs_price CHECK (flash_sale_price > 0),
+    CONSTRAINT chk_fs_quantity CHECK (quantity > 0 AND sold_quantity >= 0 AND sold_quantity <= quantity),
+    INDEX idx_fs_item_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. order_db Schemas
 USE order_db;
@@ -136,7 +168,24 @@ CREATE TABLE IF NOT EXISTS vouchers (
     created_at      DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at      DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     CONSTRAINT uq_voucher_code UNIQUE (code),
-    INDEX idx_vouchers_code (code)
+    INDEX idx_vouchers_code (code),
+    INDEX idx_vouchers_status_dates (status, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS voucher_usages (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    voucher_id      BIGINT         NOT NULL,
+    voucher_code    VARCHAR(50)    NOT NULL,
+    user_id         BIGINT         NOT NULL,
+    order_id        BIGINT,
+    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    status          VARCHAR(20)    NOT NULL DEFAULT 'APPLIED',
+    used_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_voucher_usage_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE,
+    INDEX idx_voucher_usage_voucher_user (voucher_id, user_id, status),
+    INDEX idx_voucher_usage_code_user (voucher_code, user_id, status),
+    INDEX idx_voucher_usage_order_id (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -165,6 +214,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     product_name      VARCHAR(255)   NOT NULL,
     quantity          INT            NOT NULL,
     price_at_purchase DECIMAL(12, 2) NOT NULL,
+    is_flash_sale     BOOLEAN        NOT NULL DEFAULT FALSE,
     CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     INDEX idx_order_item_order_id (order_id),
     INDEX idx_order_item_product_id (product_id)
@@ -211,6 +261,7 @@ USE payment_db;
 CREATE TABLE IF NOT EXISTS payments (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id         BIGINT         NOT NULL,
+    user_id          BIGINT,
     amount           DECIMAL(15, 2) NOT NULL,
     payment_method   VARCHAR(50)    NOT NULL,
     status           VARCHAR(20)    NOT NULL,
@@ -218,5 +269,6 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at       DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at       DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     INDEX idx_payment_order_id (order_id),
+    INDEX idx_payment_user_id (user_id),
     INDEX idx_payment_transaction_code (transaction_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

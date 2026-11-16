@@ -20,12 +20,18 @@ import com.ecommerce.product.service.ReviewService;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Arrays;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * [Task ECOM-177] Triển khai nghiệp vụ đánh giá sản phẩm và kiểm duyệt:
@@ -47,39 +53,82 @@ public class ReviewServiceImpl implements ReviewService {
     private final ProductRepository productRepository;
     private final OrderClient orderClient;
 
+    /**
+     * [Task ECOM-181] Khóa đồng bộ theo cặp (productId, userId) và tập giao dịch đang xử lý (in-flight)
+     * nhằm ngăn chặn TOCTOU race condition khi người dùng gửi nhiều request tạo đánh giá đồng thời.
+     */
+    private final ConcurrentHashMap<String, ReentrantLock> reviewLocks = new ConcurrentHashMap<>();
+    private final Set<String> inFlightReviews = ConcurrentHashMap.newKeySet();
+
     @Override
     @Transactional
     public ReviewResponse createReview(Long productId, Long userId, CreateReviewRequest request) {
         log.info("Creating review for productId={}, userId={}, orderId={}", productId, userId, request.getOrderId());
 
+        if (userId == null || userId <= 0) {
+            throw new AccessDeniedException("Thông tin người dùng xác thực không hợp lệ");
+        }
+
         // 1. Kiểm tra sản phẩm tồn tại
-        if (!productRepository.existsById(productId)) {
+        if (productId == null || productId <= 0 || !productRepository.existsById(productId)) {
             throw new ResourceNotFoundException("Không tìm thấy sản phẩm với ID: " + productId);
         }
 
-        // 2. Kiểm tra user chưa đánh giá sản phẩm này (trả về 409 Conflict)
-        if (reviewRepository.existsByProductIdAndUserId(productId, userId)) {
-            throw new DuplicateResourceException("Bạn đã đánh giá sản phẩm này rồi. Vui lòng chỉnh sửa đánh giá hiện có.");
+        String lockKey = productId + "#" + userId;
+        ReentrantLock lock = reviewLocks.computeIfAbsent(lockKey, k -> new ReentrantLock());
+        lock.lock();
+        boolean syncRegistered = false;
+        try {
+            // 2. Kiểm tra user chưa đánh giá sản phẩm này (trả về 409 Conflict)
+            if (inFlightReviews.contains(lockKey) || reviewRepository.existsByProductIdAndUserId(productId, userId)) {
+                throw new DuplicateResourceException("Bạn đã đánh giá sản phẩm này rồi. Vui lòng chỉnh sửa đánh giá hiện có.");
+            }
+
+            // 3. Xác minh đơn hàng và order item qua Feign Client
+            OrderDetailResponse order = fetchAndValidateOrder(
+                    request.getOrderId(), request.getOrderItemId(), userId, productId);
+
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                inFlightReviews.add(lockKey);
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        try {
+                            inFlightReviews.remove(lockKey);
+                        } finally {
+                            while (lock.isHeldByCurrentThread()) {
+                                lock.unlock();
+                            }
+                        }
+                    }
+                });
+                syncRegistered = true;
+            }
+
+            // 4. Tạo và lưu đánh giá (mặc định APPROVED)
+            String sanitizedComment = request.getComment() != null ? request.getComment().trim() : null;
+            ProductReview review = ProductReview.builder()
+                    .productId(productId)
+                    .userId(userId)
+                    .orderId(order.getId())
+                    .rating(request.getRating())
+                    .comment(sanitizedComment)
+                    .status(ReviewStatus.APPROVED)
+                    .build();
+
+            try {
+                ProductReview saved = reviewRepository.save(review);
+                log.info("Review created successfully with id={}", saved.getId());
+                return mapToReviewResponse(saved);
+            } catch (DataIntegrityViolationException ex) {
+                log.warn("Duplicate review blocked by DB unique constraint for productId={}, userId={}", productId, userId);
+                throw new DuplicateResourceException("Bạn đã đánh giá sản phẩm này rồi. Vui lòng chỉnh sửa đánh giá hiện có.");
+            }
+        } finally {
+            if (!syncRegistered && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
-
-        // 3. Xác minh đơn hàng qua Feign Client
-        OrderDetailResponse order = fetchAndValidateOrder(request.getOrderId(), userId, productId);
-
-        // 4. Tạo và lưu đánh giá (mặc định APPROVED)
-        String sanitizedComment = request.getComment() != null ? request.getComment().trim() : null;
-        ProductReview review = ProductReview.builder()
-                .productId(productId)
-                .userId(userId)
-                .orderId(order.getId())
-                .rating(request.getRating())
-                .comment(sanitizedComment)
-                .status(ReviewStatus.APPROVED)
-                .build();
-
-        ProductReview saved = reviewRepository.save(review);
-        log.info("Review created successfully with id={}", saved.getId());
-
-        return mapToReviewResponse(saved);
     }
 
     @Override
@@ -176,12 +225,17 @@ public class ReviewServiceImpl implements ReviewService {
     public ReviewResponse moderateReview(Long reviewId, ModerateReviewRequest request) {
         log.info("Admin moderating review id={} to status={}, reason={}", reviewId, request.getStatus(), request.getReason());
 
+        if (reviewId == null || reviewId <= 0) {
+            throw new ResourceNotFoundException("Không tìm thấy đánh giá với ID: " + reviewId);
+        }
+
         ProductReview review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID: " + reviewId));
 
         review.setStatus(request.getStatus());
         if (request.getStatus() == ReviewStatus.HIDDEN) {
-            review.setHiddenReason(request.getReason());
+            String sanitizedReason = request.getReason() != null ? request.getReason().trim() : null;
+            review.setHiddenReason(sanitizedReason);
         } else {
             review.setHiddenReason(null);
         }
@@ -212,9 +266,13 @@ public class ReviewServiceImpl implements ReviewService {
      * 1. Đơn hàng tồn tại.
      * 2. Đơn hàng thuộc về userId.
      * 3. Đơn hàng có trạng thái DELIVERED.
-     * 4. Đơn hàng chứa productId.
+     * 4. Đơn hàng chứa productId (và khớp orderItemId nếu client gửi kèm).
      */
-    private OrderDetailResponse fetchAndValidateOrder(Long orderId, Long userId, Long productId) {
+    private OrderDetailResponse fetchAndValidateOrder(Long orderId, Long orderItemId, Long userId, Long productId) {
+        if (orderId == null || orderId <= 0) {
+            throw new ResourceNotFoundException("Không tìm thấy đơn hàng với ID: " + orderId);
+        }
+
         ApiResponse<OrderDetailResponse> orderApiResponse;
         try {
             orderApiResponse = orderClient.getOrderById(orderId, userId);
@@ -247,10 +305,27 @@ public class ReviewServiceImpl implements ReviewService {
             );
         }
 
+        // Kiểm tra orderItemId nếu được truyền lên trong request
+        if (orderItemId != null) {
+            if (orderItemId <= 0 || order.getItems() == null) {
+                throw new ResourceNotFoundException("Không tìm thấy order item với ID: " + orderItemId);
+            }
+            OrderDetailResponse.OrderItemDetail matchedItem = order.getItems().stream()
+                    .filter(item -> item != null && orderItemId.equals(item.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Không tìm thấy order item với ID: " + orderItemId + " trong đơn hàng " + orderId));
+
+            if (!productId.equals(matchedItem.getProductId())) {
+                throw new IllegalStateException(
+                        "Order item " + orderItemId + " trong đơn hàng " + orderId + " không thuộc sản phẩm " + productId);
+            }
+        }
+
         // Kiểm tra đơn hàng chứa sản phẩm
         boolean containsProduct = order.getItems() != null &&
                 order.getItems().stream()
-                        .anyMatch(item -> productId.equals(item.getProductId()));
+                        .anyMatch(item -> item != null && productId.equals(item.getProductId()));
 
         if (!containsProduct) {
             throw new IllegalStateException("Đơn hàng " + orderId + " không chứa sản phẩm " + productId);
@@ -264,6 +339,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .id(review.getId())
                 .productId(review.getProductId())
                 .userId(review.getUserId())
+                .reviewerName(buildSafeReviewerName(review))
                 .orderId(review.getOrderId())
                 .rating(review.getRating())
                 .comment(review.getComment())
@@ -272,5 +348,15 @@ public class ReviewServiceImpl implements ReviewService {
                 .createdAt(review.getCreatedAt())
                 .updatedAt(review.getUpdatedAt())
                 .build();
+    }
+
+    private String buildSafeReviewerName(ProductReview review) {
+        if (review == null || review.getUserId() == null) {
+            return "Khách hàng đã mua hàng";
+        }
+        long mixed = (review.getUserId() * 0x9E3779B97F4A7C15L) ^ 0xBF58476D1CE4E5B9L;
+        // Bitmask avoids Math.abs(Long.MIN_VALUE) remaining negative (Sonar java:S2676).
+        int maskedCode = (int) (mixed & 0xFFFFL);
+        return String.format("Thành viên #%04X", maskedCode);
     }
 }

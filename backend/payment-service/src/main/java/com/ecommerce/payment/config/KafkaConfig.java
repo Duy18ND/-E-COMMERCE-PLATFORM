@@ -28,6 +28,9 @@ public class KafkaConfig {
     @Value("${kafka.topics.order-created:order-created}")
     private String orderCreatedTopic;
 
+    @Value("${kafka.topics.order-cancelled:order-cancelled}")
+    private String orderCancelledTopic;
+
     @Value("${kafka.topics.payment-success:payment-success}")
     private String paymentSuccessTopic;
 
@@ -61,6 +64,14 @@ public class KafkaConfig {
     @Bean
     public NewTopic orderCreatedTopic() {
         return TopicBuilder.name(orderCreatedTopic)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic orderCancelledTopic() {
+        return TopicBuilder.name(orderCancelledTopic)
                 .partitions(3)
                 .replicas(1)
                 .build();

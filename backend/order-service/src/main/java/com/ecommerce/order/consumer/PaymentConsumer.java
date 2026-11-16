@@ -5,27 +5,19 @@ import com.ecommerce.order.event.PaymentSuccessEvent;
 import com.ecommerce.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.stereotype.Component;
 
 /**
- * [Saga Orchestration] Kafka Consumer lắng nghe kết quả thanh toán từ payment-service.
- * - payment-success: Chuyển trạng thái Order sang PAID.
- * - payment-failed: Kích hoạt Saga Rollback hoàn lại tồn kho cho Product Service.
+ * [Deprecated Delegate] Đã hợp nhất KafkaListener chính thức vào {@link KafkaPaymentConsumer}
+ * để tránh đăng ký trùng 2 consumer cùng groupId "order-service-group" trên cùng topic.
+ * Giữ lại class helper không gắn @Component/@KafkaListener để tương thích ngược nếu được gọi trực tiếp.
  */
 @Slf4j
-@Component
 @RequiredArgsConstructor
 public class PaymentConsumer {
 
     private final OrderService orderService;
 
-    @KafkaListener(
-            topics = "${kafka.topics.payment-success:payment-success}",
-            groupId = "${spring.kafka.consumer.group-id:order-service-group}"
-    )
-    public void handlePaymentSuccess(@Payload PaymentSuccessEvent event) {
+    public void handlePaymentSuccess(PaymentSuccessEvent event) {
         log.info("[Saga Step] Received PaymentSuccessEvent for orderId: {}, txn: {}",
                 event.getOrderId(), event.getTransactionCode());
         try {
@@ -36,11 +28,7 @@ public class PaymentConsumer {
         }
     }
 
-    @KafkaListener(
-            topics = "${kafka.topics.payment-failed:payment-failed}",
-            groupId = "${spring.kafka.consumer.group-id:order-service-group}"
-    )
-    public void handlePaymentFailed(@Payload PaymentFailedEvent event) {
+    public void handlePaymentFailed(PaymentFailedEvent event) {
         log.warn("[Saga Step] Received PaymentFailedEvent for orderId: {}, reason: {}",
                 event.getOrderId(), event.getReason());
         try {

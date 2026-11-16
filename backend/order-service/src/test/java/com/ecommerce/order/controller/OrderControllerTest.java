@@ -397,4 +397,52 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data[0].id").value(100L))
                 .andExpect(jsonPath("$.data[0].status").value("PENDING"));
     }
+
+    @Test
+    @DisplayName("[Fix-4] Checkout: Truyền userId trong JSON body nhưng thiếu header X-User-Id -> 403 Forbidden (Chặn Auth Bypass)")
+    void checkout_WithSpoofedBodyUserIdWithoutHeader_ShouldReturnForbidden() throws Exception {
+        CheckoutItemRequest item = CheckoutItemRequest.builder()
+                .productId(101L)
+                .productName("iPhone 15 Pro")
+                .quantity(1)
+                .priceAtPurchase(new BigDecimal("1000.00"))
+                .build();
+
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(999L)
+                .receiverName("Hacker")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .items(List.of(item))
+                .build();
+
+        mockMvc.perform(post("/api/v1/orders/checkout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    @DisplayName("[Fix-4] Tạo đơn từ giỏ: Truyền userId trong JSON body nhưng thiếu header X-User-Id -> 403 Forbidden (Chặn Auth Bypass)")
+    void createOrderFromCart_WithSpoofedBodyUserIdWithoutHeader_ShouldReturnForbidden() throws Exception {
+        CheckoutRequest request = CheckoutRequest.builder()
+                .userId(999L)
+                .receiverName("Hacker")
+                .receiverPhone("0987654321")
+                .shippingAddress("Hà Nội")
+                .paymentMethod(PaymentMethod.COD)
+                .build();
+
+        mockMvc.perform(post("/api/v1/orders/from-cart")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verifyNoInteractions(orderService);
+    }
 }

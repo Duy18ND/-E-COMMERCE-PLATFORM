@@ -17,6 +17,9 @@ public class CreateReviewRequest {
     @NotNull(message = "orderId không được để trống")
     private Long orderId;
 
+    /** ID của order item trong đơn hàng (tùy chọn, nếu gửi lên sẽ được đối chiếu chặt chẽ với đơn hàng và sản phẩm) */
+    private Long orderItemId;
+
     @NotNull(message = "rating không được để trống")
     @Min(value = 1, message = "rating tối thiểu là 1 sao")
     @Max(value = 5, message = "rating tối đa là 5 sao")

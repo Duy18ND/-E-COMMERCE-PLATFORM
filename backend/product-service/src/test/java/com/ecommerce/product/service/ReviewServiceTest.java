@@ -132,6 +132,7 @@ class ReviewServiceTest {
 
         assertThat(response.getId()).isEqualTo(99L);
         assertThat(response.getUserId()).isEqualTo(10L);
+        assertThat(response.getReviewerName()).isNotBlank().doesNotContain("#10");
         assertThat(response.getStatus()).isEqualTo(ReviewStatus.APPROVED);
         verify(orderClient, times(1)).getOrderById(500L, 10L);
     }

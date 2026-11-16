@@ -25,6 +25,7 @@ public class ActiveFlashSaleDto implements Serializable {
     private Integer soldQuantity;
     private Integer remainingStock;
     private Integer userLimit;
+    private LocalDateTime startTime;
     private LocalDateTime endTime;
 }
 

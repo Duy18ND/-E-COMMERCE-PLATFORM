@@ -10,12 +10,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
@@ -26,7 +28,8 @@ public class OrderController {
 
     /**
      * [Task ECOM-121 / ECOM-123 / ECOM-267] Đặt hàng (Checkout).
-     * Hỗ trợ cả đặt hàng kèm danh sách sản phẩm hoặc tự động lấy từ giỏ hàng nếu items rỗng.
+     * Hỗ trợ cả đặt hàng kèm danh sách sản phẩm hoặc tự động lấy từ giỏ hàng nếu
+     * items rỗng.
      */
     @PostMapping("/checkout")
     @Operation(summary = "Đặt hàng (Checkout)", description = "Lấy userId từ header nội bộ X-User-Id, kiểm tra giá thực tế, trừ kho qua Product Service (Feign), tạo Order PENDING, bắn sự kiện order-created qua Kafka")
@@ -36,12 +39,10 @@ public class OrderController {
             @Valid @RequestBody CheckoutRequest request) {
 
         validateHeaderAuthentication(authenticatedUserId, authorizationHeader);
+        requireAuthenticated(authenticatedUserId);
 
-        if (authenticatedUserId != null) {
-            request.setUserId(authenticatedUserId);
-        } else if (request.getUserId() == null) {
-            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
-        }
+        warnIfSpoofedRequestUserId(authenticatedUserId, request, "checkout");
+        request.setUserId(authenticatedUserId);
 
         OrderResponse response = orderService.checkout(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -53,7 +54,8 @@ public class OrderController {
      * Endpoint: POST /api/v1/orders/from-cart
      * Phụ trách bởi: Đoàn Mạnh Duy
      * - Trích xuất userId từ header X-User-Id.
-     * - Lấy toàn bộ sản phẩm trong giỏ hàng, trừ tồn kho (@Transactional), lưu đơn hàng và làm trống giỏ hàng.
+     * - Lấy toàn bộ sản phẩm trong giỏ hàng, trừ tồn kho (@Transactional), lưu đơn
+     * hàng và làm trống giỏ hàng.
      */
     @PostMapping("/from-cart")
     @Operation(summary = "Tạo đơn hàng từ giỏ", description = "Lấy các sản phẩm trong giỏ hàng hiện tại của người dùng, kiểm tra tồn kho, tạo đơn hàng và làm trống giỏ hàng")
@@ -63,16 +65,21 @@ public class OrderController {
             @Valid @RequestBody CheckoutRequest request) {
 
         validateHeaderAuthentication(authenticatedUserId, authorizationHeader);
+        requireAuthenticated(authenticatedUserId);
 
-        if (authenticatedUserId != null) {
-            request.setUserId(authenticatedUserId);
-        } else if (request.getUserId() == null) {
-            throw new AccessDeniedException("Thiếu thông tin người dùng xác thực (X-User-Id)");
-        }
+        warnIfSpoofedRequestUserId(authenticatedUserId, request, "createOrderFromCart");
+        request.setUserId(authenticatedUserId);
 
-        OrderResponse response = orderService.createOrderFromCart(request.getUserId(), request);
+        OrderResponse response = orderService.createOrderFromCart(authenticatedUserId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Tạo đơn hàng từ giỏ thành công", response));
+    }
+
+    private void warnIfSpoofedRequestUserId(Long authenticatedUserId, CheckoutRequest request, String action) {
+        if (request.getUserId() != null && !authenticatedUserId.equals(request.getUserId())) {
+            log.warn("Overriding spoofed userId in {} request: authenticatedUserId={}, bodyUserId={}",
+                    action, authenticatedUserId, request.getUserId());
+        }
     }
 
     @PutMapping("/{id}/cancel")
@@ -89,8 +96,10 @@ public class OrderController {
     }
 
     /**
-     * Lấy lịch sử đơn hàng của chính người dùng đang đăng nhập (userId lấy từ X-User-Id do Gateway gắn).
-     * Khai báo literal path "/my-orders" nên được Spring ưu tiên hơn pattern "/{id}".
+     * Lấy lịch sử đơn hàng của chính người dùng đang đăng nhập (userId lấy từ
+     * X-User-Id do Gateway gắn).
+     * Khai báo literal path "/my-orders" nên được Spring ưu tiên hơn pattern
+     * "/{id}".
      */
     @GetMapping("/my-orders")
     @Operation(summary = "Lấy lịch sử đơn hàng của tôi", description = "Trích xuất userId từ header X-User-Id, FE không cần truyền userId trên URL")
@@ -118,11 +127,13 @@ public class OrderController {
     }
 
     /**
-     * [Task ECOM-315 / ECOM-171 / ECOM-317] API lấy lịch sử dòng thời gian trạng thái đơn hàng (Timeline).
+     * [Task ECOM-315 / ECOM-171 / ECOM-317] API lấy lịch sử dòng thời gian trạng
+     * thái đơn hàng (Timeline).
      * Phụ trách bởi: Đoàn Mạnh Duy - 28/07/2006
      * - Trích xuất userId từ header X-User-Id.
      * - Kiểm tra quyền sở hữu với authenticatedUserId (chống IDOR).
-     * - Trả về các mốc trạng thái với thời gian thực tế, không suy diễn trạng thái chưa cập nhật.
+     * - Trả về các mốc trạng thái với thời gian thực tế, không suy diễn trạng thái
+     * chưa cập nhật.
      */
     @GetMapping("/{id}/history")
     @Operation(summary = "Xem lịch sử trạng thái đơn hàng (Timeline)", description = "Lấy dòng thời gian các mốc thay đổi trạng thái của đơn hàng theo thời gian thực tế. Kiểm tra quyền sở hữu của authenticatedUserId")

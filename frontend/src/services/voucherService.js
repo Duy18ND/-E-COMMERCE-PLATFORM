@@ -3,11 +3,18 @@
  * Quản lý Voucher / Mã giảm giá – Kết nối REST API Backend qua API Gateway kèm LocalStorage Fallback.
  * Đồng bộ hai chiều giữa Admin và Customer.
  */
-import api from './api.js';
+import api, { isHttpResponseError, toBackendError } from './api.js';
 import { INITIAL_VOUCHERS } from '../mock/mockVouchers.js';
 
 const STORAGE_VOUCHERS_KEY = 'app_vouchers';
 const STORAGE_SAVED_KEY = 'app_user_saved_vouchers';
+
+const rethrowOnBackendFailure = (err, warningLabel, extraMatch = false) => {
+  if (isHttpResponseError(err) || extraMatch) {
+    throw toBackendError(err, 'Lỗi từ hệ thống voucher');
+  }
+  console.warn(`${warningLabel}:`, err.message);
+};
 
 // ─── LocalStorage Helpers ──────────────────────────────────────────────────────
 const loadStoredVouchers = () => {
@@ -123,7 +130,7 @@ const voucherService = {
         return data;
       }
     } catch (err) {
-      console.warn('API /admin/vouchers unavailable, falling back to local storage:', err.message);
+      rethrowOnBackendFailure(err, 'API /admin/vouchers unavailable, falling back to local storage');
     }
     await delay();
     return loadStoredVouchers();
@@ -135,7 +142,7 @@ const voucherService = {
       const data = await api.get(`/admin/vouchers/${id}`);
       if (data) return data;
     } catch (err) {
-      console.warn(`API /admin/vouchers/${id} unavailable, falling back to local storage:`, err.message);
+      rethrowOnBackendFailure(err, `API /admin/vouchers/${id} unavailable, falling back to local storage`);
     }
     await delay();
     const list = loadStoredVouchers();
@@ -170,11 +177,7 @@ const voucherService = {
         return created;
       }
     } catch (err) {
-      // Nếu là lỗi nghiệp vụ từ backend (ví dụ 409 duplicate), ném thẳng lỗi
-      if (err.response?.status === 409 || err.message?.includes('đã tồn tại')) {
-        throw new Error(err.response?.data?.message || err.message);
-      }
-      console.warn('API create voucher error, falling back to local mock:', err.message);
+      rethrowOnBackendFailure(err, 'API create voucher error, falling back to local mock', err.message?.includes('đã tồn tại'));
     }
 
     await delay();
@@ -230,10 +233,11 @@ const voucherService = {
         return updated;
       }
     } catch (err) {
-      if (err.response?.status === 409 || err.message?.includes('đã tồn tại') || err.message?.includes('không được nhỏ hơn')) {
-        throw new Error(err.response?.data?.message || err.message);
-      }
-      console.warn('API update voucher error, falling back to local mock:', err.message);
+      rethrowOnBackendFailure(
+        err,
+        'API update voucher error, falling back to local mock',
+        err.message?.includes('đã tồn tại') || err.message?.includes('không được nhỏ hơn')
+      );
     }
 
     await delay();
@@ -267,7 +271,7 @@ const voucherService = {
     try {
       await api.delete(`/admin/vouchers/${id}`);
     } catch (err) {
-      console.warn('API delete voucher error, falling back to local storage:', err.message);
+      rethrowOnBackendFailure(err, 'API delete voucher error, falling back to local storage');
     }
 
     await delay();
@@ -295,7 +299,7 @@ const voucherService = {
         return toggled;
       }
     } catch (err) {
-      console.warn('API toggleStatus error, falling back to local storage:', err.message);
+      rethrowOnBackendFailure(err, 'API toggleStatus error, falling back to local storage');
     }
 
     await delay();
@@ -318,7 +322,7 @@ const voucherService = {
         return data;
       }
     } catch (err) {
-      console.warn('API /vouchers/active unavailable, falling back to local storage:', err.message);
+      rethrowOnBackendFailure(err, 'API /vouchers/active unavailable, falling back to local storage');
     }
 
     await delay();
@@ -399,10 +403,7 @@ const voucherService = {
         };
       }
     } catch (err) {
-      if (err.response?.status === 400 || err.response?.status === 404) {
-        throw new Error(err.response?.data?.message || err.message);
-      }
-      console.warn('API /vouchers/apply unavailable, falling back to local calculation:', err.message);
+      rethrowOnBackendFailure(err, 'API /vouchers/apply unavailable, falling back to local calculation');
     }
 
     await delay();

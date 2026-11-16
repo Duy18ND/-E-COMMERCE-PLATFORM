@@ -49,6 +49,7 @@ spring:
 kafka:
   topics:
     order-created: order-created
+    order-cancelled: order-cancelled
     payment-success: payment-success
     payment-failed: payment-failed
 

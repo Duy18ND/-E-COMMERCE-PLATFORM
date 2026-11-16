@@ -124,7 +124,7 @@ public class ReviewController {
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles) {
 
-        if (userId == null && !hasAdminRole(userRoles)) {
+        if (!hasAdminRole(userRoles)) {
             requireAuthenticated(userId);
         }
         reviewService.deleteReview(productId, reviewId, userId, userRoles);
@@ -136,6 +136,9 @@ public class ReviewController {
     private void requireAuthenticated(Long userId) {
         if (userId == null) {
             throw new AccessDeniedException("Bạn cần đăng nhập để thực hiện thao tác này (thiếu X-User-Id)");
+        }
+        if (userId <= 0) {
+            throw new AccessDeniedException("Thông tin người dùng xác thực (X-User-Id) không hợp lệ");
         }
     }
 

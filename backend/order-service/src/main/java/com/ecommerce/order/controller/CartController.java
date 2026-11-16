@@ -85,5 +85,8 @@ public class CartController {
         if (userId == null) {
             throw new AccessDeniedException("Vui lòng đăng nhập để thao tác với giỏ hàng (Thiếu X-User-Id)");
         }
+        if (userId <= 0) {
+            throw new AccessDeniedException("Thông tin người dùng xác thực (X-User-Id) không hợp lệ");
+        }
     }
 }

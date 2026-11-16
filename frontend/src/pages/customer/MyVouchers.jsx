@@ -151,9 +151,12 @@ const MyVouchers = () => {
     const load = async () => {
       setLoading(true);
       try {
-        // Get ALL vouchers (including inactive) so we can show expired saved ones
-        const data = await voucherService.getAll();
-        setAllVouchers(data);
+        // Load public vouchers (accessible to Guest/Customer without Admin role)
+        const data = await voucherService.getPublicVouchers();
+        setAllVouchers(Array.isArray(data) ? data : []);
+        setSavedIds(voucherService.getSavedIds());
+      } catch {
+        setAllVouchers([]);
         setSavedIds(voucherService.getSavedIds());
       } finally {
         setLoading(false);
