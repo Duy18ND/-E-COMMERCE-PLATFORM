@@ -86,6 +86,16 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      - name: Sync Compose, Nginx, Database & Backup Scripts to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          source: "backend/docker-compose.prod.yml,backend/.env.prod.example,backend/docker/mysql/init.sql,backend/docker/mysql/migrations/*,backend/docker/nginx/nginx.prod.conf,scripts/backup/*"
+          target: "/tmp/shopmart-deploy"
+
       - name: Execute Remote SSH Deployment on VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -112,8 +122,20 @@ jobs:
             TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
             echo "=== [1/6] Preparing Deployment Directory at ${DEPLOY_DIR} ==="
-            sudo mkdir -p "${DEPLOY_DIR}" "${DEPLOY_DIR}/docker/mysql" "${DEPLOY_DIR}/docker/nginx" "${BACKUP_ROOT}"
+            sudo mkdir -p "${DEPLOY_DIR}" "${DEPLOY_DIR}/docker/mysql/migrations" "${DEPLOY_DIR}/docker/nginx" "${DEPLOY_DIR}/scripts/backup" "${BACKUP_ROOT}"
             sudo chown -R $USER:$USER "${DEPLOY_DIR}"
+            if [ -d "/tmp/shopmart-deploy/backend" ]; then
+              cp -f /tmp/shopmart-deploy/backend/docker-compose.prod.yml "${DEPLOY_DIR}/docker-compose.prod.yml"
+              cp -f /tmp/shopmart-deploy/backend/.env.prod.example "${DEPLOY_DIR}/.env.prod.example"
+              cp -f /tmp/shopmart-deploy/backend/docker/mysql/init.sql "${DEPLOY_DIR}/docker/mysql/init.sql"
+              cp -rf /tmp/shopmart-deploy/backend/docker/mysql/migrations/* "${DEPLOY_DIR}/docker/mysql/migrations/" || true
+              cp -f /tmp/shopmart-deploy/backend/docker/nginx/nginx.prod.conf "${DEPLOY_DIR}/docker/nginx/nginx.prod.conf"
+            fi
+            if [ -d "/tmp/shopmart-deploy/scripts/backup" ]; then
+              cp -rf /tmp/shopmart-deploy/scripts/backup/* "${DEPLOY_DIR}/scripts/backup/" || true
+              chmod +x "${DEPLOY_DIR}/scripts/backup/"*.sh 2>/dev/null || true
+            fi
+            rm -rf /tmp/shopmart-deploy
             cd "${DEPLOY_DIR}"
 
             echo "=== [2/6] Verifying Production Environment Configuration (.env) ==="

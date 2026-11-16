@@ -35,8 +35,9 @@
 							"script": {
 								"exec": [
 									"var jsonData = pm.response.json();",
-									"if (jsonData.data && jsonData.data.token) {",
-									"    pm.collectionVariables.set('user_token', jsonData.data.token);",
+									"var token = jsonData.data && (jsonData.data.accessToken || jsonData.data.token);",
+									"if (token) {",
+									"    pm.collectionVariables.set('user_token', token);",
 									"    pm.collectionVariables.set('userId', jsonData.data.userId || '1');",
 									"}"
 								],
@@ -68,8 +69,9 @@
 							"script": {
 								"exec": [
 									"var jsonData = pm.response.json();",
-									"if (jsonData.data && jsonData.data.token) {",
-									"    pm.collectionVariables.set('admin_token', jsonData.data.token);",
+									"var token = jsonData.data && (jsonData.data.accessToken || jsonData.data.token);",
+									"if (token) {",
+									"    pm.collectionVariables.set('admin_token', token);",
 									"}"
 								],
 								"type": "text/javascript"
@@ -83,7 +85,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"admin@shopmart.com\",\n  \"password\": \"Admin@123\"\n}"
+							"raw": "{\n  \"email\": \"admin@ecommerce.com\",\n  \"password\": \"Admin@123456\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/auth/login",

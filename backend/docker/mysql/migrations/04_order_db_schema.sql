@@ -28,6 +28,23 @@ CREATE TABLE IF NOT EXISTS vouchers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng mã giảm giá voucher cho đơn hàng';
 
+CREATE TABLE IF NOT EXISTS voucher_usages (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    voucher_id      BIGINT         NOT NULL COMMENT 'ID voucher liên kết',
+    voucher_code    VARCHAR(50)    NOT NULL COMMENT 'Mã voucher tại thời điểm áp dụng',
+    user_id         BIGINT         NOT NULL COMMENT 'ID người dùng sử dụng voucher',
+    order_id        BIGINT                  COMMENT 'ID đơn hàng áp dụng voucher',
+    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Số tiền được giảm từ voucher',
+    status          VARCHAR(20)    NOT NULL DEFAULT 'APPLIED' COMMENT 'Trạng thái lượt dùng: APPLIED, RESTORED',
+    used_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Thời điểm sử dụng mã',
+    updated_at      DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_voucher_usage_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE,
+    INDEX idx_voucher_usage_voucher_user (voucher_id, user_id, status),
+    INDEX idx_voucher_usage_code_user (voucher_code, user_id, status),
+    INDEX idx_voucher_usage_order_id (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng lịch sử sử dụng voucher của người dùng (chặn dùng trùng và hoàn lượt khi hủy đơn)';
+
 CREATE TABLE IF NOT EXISTS orders (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id          BIGINT         NOT NULL COMMENT 'ID người dùng đặt hàng',

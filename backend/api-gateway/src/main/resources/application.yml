@@ -143,7 +143,7 @@ spring:
         - id: order-service-public-vouchers
           uri: lb://order-service
           predicates:
-            - Path=/api/v1/vouchers/active
+            - Path=/api/v1/vouchers/active,/api/v1/vouchers
             - Method=GET
           filters:
             - StripPrefix=0

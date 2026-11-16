@@ -151,13 +151,11 @@ const ProductDetail = () => {
     ? 100
     : Math.min(100, Math.round((sold / totalStock) * 100));
 
-  // Gallery images demo
-  const galleryImages = [
-    product.imageUrl,
-    'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=80'
-  ];
+  // Gallery images from product data
+  const galleryImages =
+    Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : [product.imageUrl];
 
   const handleAddToCart = () => {
     if (isAdmin) {
@@ -483,10 +481,10 @@ const ProductDetail = () => {
                     textTransform: 'uppercase'
                   }}
                 >
-                  THƯƠNG HIỆU: {product.storeName ? product.storeName.toUpperCase() : 'APPLE STORE FLAGSHIP'}
+                  THƯƠNG HIỆU: {product.storeName ? product.storeName.toUpperCase() : 'SHOPMART OFFICIAL STORE'}
                 </span>
                 <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                  MÃ SP: {product.sku || 'MBP14-M3P-18-512'}
+                  MÃ SP: {product.sku || `SKU-SP-${String(product.id || 1).padStart(3, '0')}`}
                 </span>
               </div>
 
@@ -564,7 +562,10 @@ const ProductDetail = () => {
                     </div>
                   </div>
 
-                  <FlashCountdown targetEndTime={product.saleEndTime} variant="detail" />
+                  <FlashCountdown
+                    targetEndTime={product.saleEndTime || product.endTime || product.activeFlashSale?.endTime}
+                    variant="detail"
+                  />
                 </div>
               )}
 
@@ -626,8 +627,8 @@ const ProductDetail = () => {
 
                     <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
                       <span>🏷️</span>
-                      <span>So sánh giá thường ngày: 42.990.000 đ</span>
-                      <span style={{ color: '#16a34a', fontWeight: 600 }}>(Rẻ hơn thường lệ 10.500.000 đ)</span>
+                      <span>So sánh giá niêm yết: {formatCurrency(currentOriginalPrice)}</span>
+                      <span style={{ color: '#16a34a', fontWeight: 600 }}>(Rẻ hơn {formatCurrency(savedAmount)})</span>
                     </div>
                   </div>
                 )}
