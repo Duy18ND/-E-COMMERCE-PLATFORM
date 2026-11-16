@@ -62,6 +62,20 @@ public class AdminOrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng thành công", response));
     }
 
+    @GetMapping("/{id}")
+    @Operation(summary = "Xem chi tiết đơn hàng [ADMIN]", description = "Lấy chi tiết đơn hàng bất kỳ trong hệ thống cho Admin. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderByIdForAdmin(
+            @RequestHeader(value = "X-User-Id", required = false) Long adminId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @PathVariable Long id) {
+
+        requireAdminRole(roles);
+
+        Long effectiveAdminId = adminId != null ? adminId : 0L;
+        OrderResponse response = orderService.getOrderById(id, effectiveAdminId, roles);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin chi tiết đơn hàng thành công", response));
+    }
+
     @PutMapping("/{id}/status")
     @Operation(summary = "Cập nhật trạng thái đơn hàng [ADMIN]", description = "Kiểm tra State Machine và hoàn lại tồn kho qua ProductClient nếu trạng thái mới là CANCELLED. Ghi nhận người cập nhật và thời điểm vào order_status_history. Yêu cầu header X-User-Roles chứa ROLE_ADMIN")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(

@@ -28,6 +28,23 @@ CREATE TABLE IF NOT EXISTS vouchers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng mã giảm giá voucher cho đơn hàng';
 
+CREATE TABLE IF NOT EXISTS voucher_usages (
+    id              BIGINT         NOT NULL AUTO_INCREMENT,
+    voucher_id      BIGINT         NOT NULL,
+    voucher_code    VARCHAR(50)    NOT NULL,
+    user_id         BIGINT         NOT NULL,
+    order_id        BIGINT                  DEFAULT NULL,
+    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    status          VARCHAR(20)    NOT NULL DEFAULT 'APPLIED',
+    used_at         DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    KEY idx_voucher_usage_voucher_user (voucher_id, user_id, status),
+    KEY idx_voucher_usage_code_user (voucher_code, user_id, status),
+    KEY idx_voucher_usage_order_id (order_id),
+    CONSTRAINT fk_voucher_usage_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS orders (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id          BIGINT         NOT NULL COMMENT 'ID người dùng đặt hàng',

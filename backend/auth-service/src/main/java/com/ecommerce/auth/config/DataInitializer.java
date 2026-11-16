@@ -7,6 +7,7 @@ import com.ecommerce.auth.repository.RoleRepository;
 import com.ecommerce.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,12 @@ public class DataInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${DEFAULT_ADMIN_EMAIL:admin@ecommerce.com}")
+    private String defaultAdminEmail = "admin@ecommerce.com";
+
+    @Value("${DEFAULT_ADMIN_PASSWORD:Admin@123456}")
+    private String defaultAdminPassword = "Admin@123456";
 
     @Override
     public void run(String... args) {
@@ -39,7 +46,13 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void initDefaultAdmin() {
-        String adminEmail = "admin@ecommerce.com";
+        String adminEmail = (defaultAdminEmail != null && !defaultAdminEmail.isBlank())
+                ? defaultAdminEmail.trim()
+                : "admin@ecommerce.com";
+        String adminPass = (defaultAdminPassword != null && !defaultAdminPassword.isBlank())
+                ? defaultAdminPassword
+                : "Admin@123456";
+
         if (!userRepository.existsByEmail(adminEmail)) {
             Role adminRole = roleRepository.findByName(RoleName.ROLE_ADMIN)
                     .orElseGet(() -> roleRepository.save(new Role(RoleName.ROLE_ADMIN)));
@@ -48,7 +61,7 @@ public class DataInitializer implements CommandLineRunner {
 
             User admin = User.builder()
                     .email(adminEmail)
-                    .password(passwordEncoder.encode("Admin@123456"))
+                    .password(passwordEncoder.encode(adminPass))
                     .fullName("System Administrator")
                     .phone("0900000000")
                     .roles(Set.of(adminRole, userRole))

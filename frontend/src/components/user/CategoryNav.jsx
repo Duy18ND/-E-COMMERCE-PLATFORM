@@ -1,13 +1,35 @@
+import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
+import categoryService from '../../services/categoryService';
 
 /**
  * Thanh điều hướng danh mục sản phẩm nhanh dành riêng cho User/Shop (CategoryNav)
  * Chỉ được render trong UserLayout, không xuất hiện trong AdminLayout.
  */
-const CategoryNav = ({ categories = INITIAL_CATEGORIES }) => {
+const CategoryNav = ({ categories: propCategories }) => {
   const [searchParams] = useSearchParams();
+  const [loadedCategories, setLoadedCategories] = useState(INITIAL_CATEGORIES);
   const activeCategory = searchParams.get('category') || '';
+
+  useEffect(() => {
+    if (Array.isArray(propCategories) && propCategories.length > 0) return undefined;
+    let mounted = true;
+    categoryService
+      .getPublicCategories()
+      .then((list) => {
+        if (mounted && Array.isArray(list) && list.length > 0) {
+          setLoadedCategories(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [propCategories]);
+
+  const categories =
+    Array.isArray(propCategories) && propCategories.length > 0 ? propCategories : loadedCategories;
 
   return (
     <nav

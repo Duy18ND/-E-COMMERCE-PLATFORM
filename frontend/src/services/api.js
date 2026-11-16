@@ -1,9 +1,27 @@
 import axios from 'axios';
 import { getToken, setToken, getRefreshToken, setRefreshToken, clearAuth } from '../utils/auth.js';
 
-const BASE_API_URL =
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
-  'http://localhost:8080/api/v1';
+const resolveBaseApiUrl = () => {
+  const configuredUrl =
+    (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
+    'http://localhost:8080/api/v1';
+
+  // Nếu trình duyệt truy cập từ domain/IP VPS (không phải localhost) nhưng cấu hình vẫn trỏ về localhost,
+  // tự động chuyển sang đường dẫn tương đối '/api/v1' qua Nginx Reverse Proxy để không bao giờ gọi nhầm localhost của user
+  if (
+    typeof window !== 'undefined' &&
+    window.location &&
+    window.location.hostname &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1' &&
+    configuredUrl.includes('localhost')
+  ) {
+    return '/api/v1';
+  }
+  return configuredUrl;
+};
+
+const BASE_API_URL = resolveBaseApiUrl();
 
 const api = axios.create({
   baseURL: BASE_API_URL,
@@ -117,9 +135,10 @@ api.interceptors.response.use(
     }
 
     // Trích xuất lỗi chi tiết từng trường (Field Errors) từ Backend GlobalExceptionHandler (HTTP 400)
+    const rawErrors = responseData?.errors || responseData?.validationErrors;
     const fieldErrors =
-      responseData?.errors && typeof responseData.errors === 'object'
-        ? responseData.errors
+      rawErrors && typeof rawErrors === 'object'
+        ? rawErrors
         : null;
 
     const firstFieldError = fieldErrors ? Object.values(fieldErrors)[0] : null;
