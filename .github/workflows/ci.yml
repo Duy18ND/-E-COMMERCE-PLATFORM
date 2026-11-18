@@ -133,11 +133,29 @@ jobs:
           echo "backend/docker-compose.yml syntax is valid."
 
       - name: Validate Production Docker Compose
+        env:
+          IMAGE_TAG: sha-0000000
+          REDIS_PASSWORD: ci-mock-redis-password
+          EUREKA_USER: ci-mock-eureka-user
+          EUREKA_PASSWORD: ci-mock-eureka-password
+          MYSQL_PASSWORD: ci-mock-mysql-password
+          MYSQL_ROOT_PASSWORD: ci-mock-mysql-root-password
+          JWT_SECRET: ci-mock-jwt-secret-key-for-compose-validation-only
+          INTERNAL_SERVICE_KEY: ci-mock-internal-service-key
         run: |
           docker compose -f backend/docker-compose.prod.yml config --quiet
           echo "backend/docker-compose.prod.yml syntax is valid."
 
       - name: Verify Production Port Hardening (No Private Ports on 0.0.0.0)
+        env:
+          IMAGE_TAG: sha-0000000
+          REDIS_PASSWORD: ci-mock-redis-password
+          EUREKA_USER: ci-mock-eureka-user
+          EUREKA_PASSWORD: ci-mock-eureka-password
+          MYSQL_PASSWORD: ci-mock-mysql-password
+          MYSQL_ROOT_PASSWORD: ci-mock-mysql-root-password
+          JWT_SECRET: ci-mock-jwt-secret-key-for-compose-validation-only
+          INTERNAL_SERVICE_KEY: ci-mock-internal-service-key
         run: |
           node -e "
           const execSync = require('child_process').execSync;
