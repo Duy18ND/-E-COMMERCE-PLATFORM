@@ -97,7 +97,7 @@ spring:
         - id: product-service-public
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products,/api/v1/products/**,/api/v1/flash-sales,/api/v1/flash-sales/**
+            - Path=/api/v1/products/**,/api/v1/products,/api/v1/flash-sales/**,/api/v1/flash-sales
             - Method=GET,OPTIONS
           filters:
             - StripPrefix=0
