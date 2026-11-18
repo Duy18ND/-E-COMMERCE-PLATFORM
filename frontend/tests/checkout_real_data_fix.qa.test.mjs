@@ -57,49 +57,32 @@ const createRealJwt = (claims) => {
   return `${header}.${payload}.real_sig`;
 };
 
-const normalizeTextSegment = (val) =>
-  String(val || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
+const normSeg = (v) => String(v ?? '').trim().replaceAll(/\s+/g, ' ').toLowerCase();
 
-const buildStreetAddressFromDto = (addr) => {
-  if (!addr || typeof addr !== 'object') return '';
-  const cityNorm = normalizeTextSegment(addr.city);
-  const rawParts = [addr.addressLine, addr.ward, addr.district]
-    .map((part) => (part ? String(part).trim() : ''))
-    .filter(Boolean);
-
-  const uniqueParts = [];
-  for (const part of rawParts) {
-    const partNorm = normalizeTextSegment(part);
-    if (cityNorm && partNorm === cityNorm) continue;
-    if (!uniqueParts.some((existing) => normalizeTextSegment(existing) === partNorm)) {
-      uniqueParts.push(part);
+const buildStreetAddressFromDto = (dto) => {
+  if (!dto || typeof dto !== 'object') return '';
+  const targetCity = normSeg(dto.city);
+  const seen = new Set(targetCity ? [targetCity] : []);
+  const segments = [];
+  for (const field of [dto.addressLine, dto.ward, dto.district]) {
+    const trimmed = String(field ?? '').trim();
+    const key = normSeg(trimmed);
+    if (trimmed && !seen.has(key)) {
+      seen.add(key);
+      segments.push(trimmed);
     }
   }
-  return uniqueParts.join(', ');
+  return segments.join(', ');
 };
 
-const composeFullShippingAddress = (streetAddress, city) => {
-  const cleanStreet = String(streetAddress || '').trim().replace(/,+\s*$/, '');
-  const cleanCity = String(city || '').trim();
-  if (!cleanCity) return cleanStreet;
-  if (!cleanStreet) return cleanCity;
-
-  const streetNorm = normalizeTextSegment(cleanStreet);
-  const cityNorm = normalizeTextSegment(cleanCity);
-  const streetSegments = cleanStreet.split(',').map((s) => normalizeTextSegment(s)).filter(Boolean);
-  const lastSegment = streetSegments[streetSegments.length - 1] || '';
-
-  if (
-    streetNorm === cityNorm ||
-    lastSegment === cityNorm ||
-    streetNorm.endsWith(`, ${cityNorm}`)
-  ) {
-    return cleanStreet;
-  }
-  return `${cleanStreet}, ${cleanCity}`;
+const composeFullShippingAddress = (street, cityName) => {
+  let base = String(street ?? '').trim();
+  while (base.endsWith(',')) base = base.slice(0, -1).trimEnd();
+  const cityText = String(cityName ?? '').trim();
+  if (!cityText || !base) return base || cityText;
+  const tail = normSeg(base.split(',').at(-1));
+  const target = normSeg(cityText);
+  return tail === target || normSeg(base) === target ? base : `${base}, ${cityText}`;
 };
 
 test('FIX-CHECKOUT-01: normalizeAuthPayload trong chế độ Backend thật KHÔNG khớp MOCK_USERS theo ID (2 hoặc 12) và không lấy ShopMart Tower', () => {

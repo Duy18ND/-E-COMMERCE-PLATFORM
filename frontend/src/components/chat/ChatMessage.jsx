@@ -1,16 +1,45 @@
 import { formatCurrency } from '../../utils/formatCurrency';
 import ProductSuggestionCard from './ProductSuggestionCard';
 
-const formatSimpleMarkdown = (text = '') => {
-  const escaped = String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  return escaped
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:0.82em;">$1</code>')
-    .replace(/\n/g, '<br />');
+const INLINE_TOKEN_REGEX = /(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\n]+\*)/g;
+
+const renderInlineTokens = (line, lineIdx) => {
+  const parts = String(line).split(INLINE_TOKEN_REGEX);
+  return parts.map((part, tokenIdx) => {
+    const key = `${lineIdx}-${tokenIdx}`;
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+      return (
+        <code
+          key={key}
+          style={{
+            background: '#f1f5f9',
+            padding: '1px 5px',
+            borderRadius: '4px',
+            fontSize: '0.82em'
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return <em key={key}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+};
+
+const renderFormattedContent = (text = '') => {
+  const lines = String(text ?? '').split('\n');
+  return lines.map((line, lineIdx) => (
+    <span key={`line-${lineIdx}`}>
+      {renderInlineTokens(line, lineIdx)}
+      {lineIdx < lines.length - 1 && <br />}
+    </span>
+  ));
 };
 
 const formatMessageTime = (isoString) => {
@@ -61,10 +90,9 @@ const ChatMessage = ({ message, onSelectProduct, onNavigateOrder }) => {
           fontSize: '0.86rem',
           lineHeight: 1.5
         }}
-        dangerouslySetInnerHTML={{
-          __html: formatSimpleMarkdown(message.content)
-        }}
-      />
+      >
+        {renderFormattedContent(message.content)}
+      </div>
 
       {timeStr && (
         <span

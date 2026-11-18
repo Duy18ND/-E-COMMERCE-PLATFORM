@@ -208,10 +208,10 @@ const Vouchers = () => {
   };
 
   useEffect(() => {
-    loadVouchers();
+    void loadVouchers();
 
     const handleDataChange = () => {
-      loadVouchers();
+      void loadVouchers();
     };
     const handleSavedChange = () => {
       setSavedIds(voucherService.getSavedIds());

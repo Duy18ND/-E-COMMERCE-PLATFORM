@@ -724,23 +724,11 @@ export const productService = {
       throw new Error('Số lượng nhập kho phải là số nguyên lớn hơn 0');
     }
 
-    return applyStockMutation(
-      id,
-      () =>
-        api.post(`/products/${id}/inbound`, {
-          quantity: qty,
-          note: String(note ?? '').trim()
-        }),
-      (existing) => {
-        const newStock = Math.max(0, Number(existing.stockQuantity ?? existing.stock ?? 0) + qty);
-        const updatedStatus = newStock > 0 && existing.status === 'OUT_OF_STOCK' ? 'ACTIVE' : existing.status;
-        return {
-          ...existing,
-          stock: newStock,
-          stockQuantity: newStock,
-          status: updatedStatus
-        };
-      }
+    return applyStockMutation(id, () =>
+      api.post(`/products/${id}/inbound`, {
+        quantity: qty,
+        note: String(note ?? '').trim()
+      })
     );
   },
 
@@ -760,27 +748,11 @@ export const productService = {
       throw new Error('Lý do điều chỉnh kho không được để trống');
     }
 
-    return applyStockMutation(
-      id,
-      () =>
-        api.post(`/products/${id}/adjust-stock`, {
-          actualStock: stockVal,
-          reason: cleanReason
-        }),
-      (existing) => {
-        let updatedStatus = existing.status;
-        if (stockVal === 0 && existing.status === 'ACTIVE') {
-          updatedStatus = 'OUT_OF_STOCK';
-        } else if (stockVal > 0 && existing.status === 'OUT_OF_STOCK') {
-          updatedStatus = 'ACTIVE';
-        }
-        return {
-          ...existing,
-          stock: stockVal,
-          stockQuantity: stockVal,
-          status: updatedStatus
-        };
-      }
+    return applyStockMutation(id, () =>
+      api.post(`/products/${id}/adjust-stock`, {
+        actualStock: stockVal,
+        reason: cleanReason
+      })
     );
   }
 };

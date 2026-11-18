@@ -36,7 +36,7 @@ export const useChatbot = () => {
 
   useEffect(() => {
     if (isOpen) {
-      loadConversations();
+      void loadConversations();
     }
   }, [isOpen, user?.id, loadConversations]);
 
@@ -132,7 +132,7 @@ export const useChatbot = () => {
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
-        loadConversations();
+        void loadConversations();
       } catch (err) {
         setError(err?.message || 'Không thể gửi tin nhắn tới Trợ lý AI. Vui lòng thử lại.');
       } finally {

@@ -7,12 +7,29 @@ import { isAuthenticated } from '../utils/auth';
 const GUEST_SESSION_STORAGE_KEY = 'shopmart_guest_chat_session';
 const LOCAL_CONVERSATIONS_KEY = 'shopmart_chat_conversations_fallback';
 
+let fallbackSessionCounter = 0;
+
+const generateCryptoSessionSuffix = () => {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto) {
+    if (typeof globalThis.crypto.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID().slice(0, 8);
+    }
+    if (typeof globalThis.crypto.getRandomValues === 'function') {
+      const array = new Uint32Array(1);
+      globalThis.crypto.getRandomValues(array);
+      return array[0].toString(36);
+    }
+  }
+  fallbackSessionCounter += 1;
+  return `${Date.now().toString(36)}-${fallbackSessionCounter}`;
+};
+
 export const getOrCreateGuestSessionId = () => {
   try {
     if (typeof localStorage !== 'undefined') {
       let existing = localStorage.getItem(GUEST_SESSION_STORAGE_KEY);
       if (!existing) {
-        existing = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        existing = `guest-${Date.now()}-${generateCryptoSessionSuffix()}`;
         localStorage.setItem(GUEST_SESSION_STORAGE_KEY, existing);
       }
       return existing;
@@ -47,6 +64,53 @@ const saveLocalConversations = (conversations) => {
     // Ignore quota errors
   }
 };
+
+const CHAT_STOP_WORDS = new Set([
+  'tôi', 'mình', 'muốn', 'cần', 'tìm', 'mua', 'gợi', 'ý', 'tư', 'vấn',
+  'cho', 'hỏi', 'xem', 'kiểm', 'tra', 'tồn', 'kho', 'còn', 'hàng',
+  'so', 'sánh', 'dưới', 'trên', 'khoảng', 'giá', 'sản', 'phẩm',
+  'triệu', 'tr', 'nghìn', 'k'
+]);
+
+const parsePositiveFloat = (rawToken) => {
+  const num = Number.parseFloat(String(rawToken || '').replace(',', '.'));
+  return Number.isFinite(num) && num > 0 ? num : null;
+};
+
+const extractMaxPriceFromText = (lowerText) => {
+  const tokens = String(lowerText || '')
+    .replaceAll(/[?!;:#]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token.endsWith('triệu') || token.endsWith('tr')) {
+      const unitLen = token.endsWith('triệu') ? 5 : 2;
+      const val = parsePositiveFloat(token.slice(0, token.length - unitLen));
+      if (val !== null) return Math.round(val * 1_000_000);
+    }
+    if ((token === 'triệu' || token === 'tr') && i > 0) {
+      const val = parsePositiveFloat(tokens[i - 1]);
+      if (val !== null) return Math.round(val * 1_000_000);
+    }
+  }
+  return undefined;
+};
+
+const extractCleanSearchKeyword = (cleanMsg) =>
+  String(cleanMsg || '')
+    .replaceAll(/[?!.,;:#]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => {
+      if (!token) return false;
+      const lowerToken = token.toLowerCase();
+      if (CHAT_STOP_WORDS.has(lowerToken)) return false;
+      const firstCode = lowerToken.charCodeAt(0);
+      if (firstCode >= 48 && firstCode <= 57) return false;
+      return true;
+    })
+    .join(' ')
+    .trim();
 
 /**
  * Fallback xử lý thông minh qua productService / orderService thực tế khi microservice chatbot-service (8085)
@@ -119,13 +183,8 @@ const buildRealServiceFallbackReply = async ({ conversationId, question }) => {
   } else {
     try {
       toolsUsed.push('searchProducts');
-      const priceMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:triệu|tr)/);
-      const maxPrice = priceMatch ? Math.round(parseFloat(priceMatch[1].replace(',', '.')) * 1_000_000) : undefined;
-      const kw = cleanMsg
-        .replace(/(\d+(?:[.,]\d+)?)\s*(?:triệu|tr|nghìn|k)/gi, ' ')
-        .replace(/\b(tôi|mình|muốn|cần|tìm|mua|gợi ý|tư vấn|cho|hỏi|xem|kiểm tra|tồn kho|còn hàng|so sánh|dưới|trên|khoảng|giá|sản phẩm)\b/gi, ' ')
-        .replace(/[?!.,;:#]/g, ' ')
-        .trim();
+      const maxPrice = extractMaxPriceFromText(lower);
+      const kw = extractCleanSearchKeyword(cleanMsg);
 
       const res = await productService.getProducts({
         search: kw.length >= 2 ? kw : undefined,

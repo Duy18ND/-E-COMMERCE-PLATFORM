@@ -186,7 +186,7 @@ const AdminOrders = () => {
     return orders.filter((order) => {
       // Lọc theo khoảng ngày đặt hàng nếu có chọn startDate / endDate
       if (startTs !== null || endTs !== null) {
-        const orderTs = order.createdAt ? new Date(order.createdAt).getTime() : NaN;
+        const orderTs = order.createdAt ? new Date(order.createdAt).getTime() : Number.NaN;
         if (Number.isNaN(orderTs)) return false;
         if (startTs !== null && orderTs < startTs) return false;
         if (endTs !== null && orderTs > endTs) return false;

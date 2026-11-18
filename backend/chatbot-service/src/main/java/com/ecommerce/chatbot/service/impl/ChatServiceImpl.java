@@ -80,9 +80,9 @@ public class ChatServiceImpl implements ChatService {
                     + "SELECT\\s+\\*\\s+FROM|act\\s+as\\s+admin|bypass\\s+auth)"
     );
 
-    private static final Pattern ORDER_ID_PATTERN = Pattern.compile("(?i)(?:đơn\\s*(?:hàng)?\\s*(?:số|mã|#)?\\s*|#)(\\d{1,10})");
-    private static final Pattern PRODUCT_ID_PATTERN = Pattern.compile("(?i)(?:sản\\s*phẩm\\s*(?:số|mã|id|#)?\\s*|sp\\s*#?)(\\d{1,10})");
-    private static final Pattern MILLION_PRICE_PATTERN = Pattern.compile("(?i)(\\d+(?:[.,]\\d+)?)\\s*(?:triệu|tr|trieu|m\\b)");
+    private static final Pattern ORDER_ID_PATTERN = Pattern.compile("(?i)(?:đơn\\s{1,3}(?:hàng\\s{0,3})?(?:số\\s{0,3}|mã\\s{0,3}|#\\s{0,3})?|#)(\\d{1,10})");
+    private static final Pattern PRODUCT_ID_PATTERN = Pattern.compile("(?i)(?:sản\\s{1,3}phẩm\\s{0,3}(?:số\\s{0,3}|mã\\s{0,3}|id\\s{0,3}|#\\s{0,3})?|sp\\s{0,3}#?)(\\d{1,10})");
+    private static final Pattern MILLION_PRICE_PATTERN = Pattern.compile("(?i)(\\d{1,4}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b)");
 
     @Override
     @Transactional
@@ -861,7 +861,7 @@ public class ChatServiceImpl implements ChatService {
 
     private String cleanSearchKeyword(String raw) {
         String cleaned = raw
-                .replaceAll("(?i)(\\d+(?:[.,]\\d+)?)\\s*(?:triệu|tr|trieu|m\\b|nghìn|k\\b|đồng|vnđ|vnd)", " ")
+                .replaceAll("(?i)(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b|nghìn|k\\b|đồng|vnđ|vnd)", " ")
                 .replaceAll("(?i)\\b(tôi|mình|muốn|cần|tìm|kiếm|mua|gợi ý|tư vấn|cho|hỏi|xem|kiểm tra|tồn kho|còn hàng|không|shop|ơi|sản phẩm|so sánh|giúp|với|dưới|trên|khoảng|tầm|tối đa|giá|rẻ nhất|tốt nhất|chính hãng|có|nào)\\b", " ")
                 .replaceAll("[?!.,;:\"'()\\[\\]#]", " ")
                 .replaceAll("\\s+", " ")
@@ -948,7 +948,7 @@ public class ChatServiceImpl implements ChatService {
 
     private String formatVnd(BigDecimal amount) {
         if (amount == null) return "Liên hệ";
-        NumberFormat nf = NumberFormat.getInstance(new Locale("vi", "VN"));
+        NumberFormat nf = NumberFormat.getInstance(Locale.of("vi", "VN"));
         return nf.format(amount) + " ₫";
     }
 

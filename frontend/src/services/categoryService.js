@@ -322,7 +322,8 @@ export const categoryService = {
    * Lấy danh sách danh mục quản trị cho Admin [ADMIN] (gọi API GET /api/v1/products/categories)
    * Bắt buộc ném lỗi khi API thất bại (mặc định rejectOnError: true), tuyệt đối không trả dữ liệu giả che lỗi.
    */
-  getAllForAdmin: async (options = { rejectOnError: true }) => {
+  getAllForAdmin: async (options = {}) => {
+    const resolvedOptions = { rejectOnError: true, ...options };
     try {
       const response = await api.get('/products/categories');
       const rawList = extractCategoryListFromResponse(response);
@@ -342,7 +343,7 @@ export const categoryService = {
       }
       return normalizedList;
     } catch (err) {
-      rethrowIfBackendError(err, options, 'Không thể tải danh sách danh mục quản trị từ máy chủ.');
+      rethrowIfBackendError(err, resolvedOptions, 'Không thể tải danh sách danh mục quản trị từ máy chủ.');
       return [...localCategories];
     }
   },
@@ -350,7 +351,8 @@ export const categoryService = {
   /**
    * Tìm kiếm danh mục theo từ khóa (gọi API GET /api/v1/products/categories/search?keyword=...)
    */
-  search: async (keyword = '', options = { rejectOnError: true }) => {
+  search: async (keyword = '', options = {}) => {
+    const resolvedOptions = { rejectOnError: true, ...options };
     const cleanKeyword = String(keyword ?? '').trim();
     try {
       const response = await api.get('/products/categories/search', {
@@ -369,7 +371,7 @@ export const categoryService = {
         })
         .filter(Boolean);
     } catch (err) {
-      rethrowIfBackendError(err, options, 'Không thể tìm kiếm danh mục sản phẩm.');
+      rethrowIfBackendError(err, resolvedOptions, 'Không thể tìm kiếm danh mục sản phẩm.');
       throwBackendError(err, 'Không thể tìm kiếm danh mục sản phẩm.');
     }
   },

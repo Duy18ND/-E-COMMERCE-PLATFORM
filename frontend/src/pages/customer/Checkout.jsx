@@ -277,7 +277,10 @@ export const buildStreetAddressFromDto = (addr) => {
  * Ghép streetAddress và city thành shippingAddress gửi Backend, không ghép tỉnh/thành phố 2 lần.
  */
 export const composeFullShippingAddress = (streetAddress, city) => {
-  const cleanStreet = String(streetAddress || '').trim().replace(/,+\s*$/, '');
+  let cleanStreet = String(streetAddress || '').trim();
+  while (cleanStreet.endsWith(',')) {
+    cleanStreet = cleanStreet.slice(0, -1).trimEnd();
+  }
   const cleanCity = String(city || '').trim();
   if (!cleanCity) return cleanStreet;
   if (!cleanStreet) return cleanCity;
@@ -410,7 +413,7 @@ const Checkout = () => {
       }
     };
 
-    loadCheckoutRecipientData();
+    void loadCheckoutRecipientData();
     return () => {
       isMounted = false;
     };
@@ -426,7 +429,7 @@ const Checkout = () => {
         setSavedVouchers([]);
       }
     };
-    loadSaved();
+    void loadSaved();
 
     window.addEventListener('app_saved_vouchers_changed', loadSaved);
     window.addEventListener('app_vouchers_changed', loadSaved);
@@ -872,14 +875,19 @@ const Checkout = () => {
                   </h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {/* Lựa chọn 1: COD */}
-                    <label style={{
-                      display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
-                      padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer',
-                      border: formData.paymentMethod === PAYMENT_METHOD.COD ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                      backgroundColor: formData.paymentMethod === PAYMENT_METHOD.COD ? '#eff6ff' : '#ffffff',
-                      transition: 'all 0.15s ease'
-                    }}>
+                    <label
+                      htmlFor="payment-method-cod"
+                      aria-label="Thanh toán khi nhận hàng (COD)"
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                        padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer',
+                        border: formData.paymentMethod === PAYMENT_METHOD.COD ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        backgroundColor: formData.paymentMethod === PAYMENT_METHOD.COD ? '#eff6ff' : '#ffffff',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
                       <input
+                        id="payment-method-cod"
                         type="radio"
                         name="paymentMethod"
                         value={PAYMENT_METHOD.COD}
@@ -887,15 +895,14 @@ const Checkout = () => {
                         onChange={handleChange}
                         style={{ marginTop: '3px', accentColor: '#2563eb' }}
                       />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.925rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <span>💵</span>
-                          <span>{PAYMENT_METHOD_LABELS[PAYMENT_METHOD.COD]}</span>
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
+                      <span style={{ minWidth: 0, flex: 1, display: 'block' }}>
+                        <strong style={{ fontWeight: 700, fontSize: '0.925rem', color: '#0f172a', display: 'block' }}>
+                          💵 {PAYMENT_METHOD_LABELS[PAYMENT_METHOD.COD]}
+                        </strong>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
                           Thanh toán bằng tiền mặt khi shipper giao tận nơi và đồng kiểm hàng
-                        </div>
-                      </div>
+                        </span>
+                      </span>
                     </label>
 
                     {/* Lựa chọn 2: Thanh toán trực tuyến */}
@@ -906,13 +913,18 @@ const Checkout = () => {
                       overflow: 'hidden',
                       transition: 'all 0.15s ease'
                     }}>
-                      <label style={{
-                        display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
-                        padding: '0.85rem 1rem', cursor: 'pointer',
-                        backgroundColor: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '#eff6ff' : 'transparent',
-                        borderBottom: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '1px solid #bfdbfe' : 'none'
-                      }}>
+                      <label
+                        htmlFor="payment-method-online"
+                        aria-label="Thanh toán trực tuyến"
+                        style={{
+                          display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                          padding: '0.85rem 1rem', cursor: 'pointer',
+                          backgroundColor: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '#eff6ff' : 'transparent',
+                          borderBottom: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '1px solid #bfdbfe' : 'none'
+                        }}
+                      >
                         <input
+                          id="payment-method-online"
                           type="radio"
                           name="paymentMethod"
                           value={PAYMENT_METHOD.MOCK_ONLINE}
@@ -920,20 +932,17 @@ const Checkout = () => {
                           onChange={handleChange}
                           style={{ marginTop: '3px', accentColor: '#2563eb' }}
                         />
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.35rem' }}>
-                            <div style={{ fontWeight: 700, fontSize: '0.925rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                              <span>💳</span>
-                              <span>{PAYMENT_METHOD_LABELS[PAYMENT_METHOD.MOCK_ONLINE]}</span>
-                            </div>
+                        <span style={{ minWidth: 0, flex: 1, display: 'block' }}>
+                          <strong style={{ fontWeight: 700, fontSize: '0.925rem', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.35rem' }}>
+                            <span>💳 {PAYMENT_METHOD_LABELS[PAYMENT_METHOD.MOCK_ONLINE]}</span>
                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563eb', backgroundColor: '#dbeafe', padding: '2px 8px', borderRadius: '4px' }}>
                               Khuyên dùng
                             </span>
-                          </div>
-                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
+                          </strong>
+                          <span style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
                             Hỗ trợ MoMo, ZaloPay, VietQR / Chuyển khoản ngân hàng và Thẻ quốc tế Visa/Mastercard — Tự động duyệt trạng thái Đã Thanh Toán (PAID)
-                          </div>
-                        </div>
+                          </span>
+                        </span>
                       </label>
 
                       {/* Danh sách 4 phương thức trực tuyến - Chỉ hiển thị khi chọn Thanh toán trực tuyến */}

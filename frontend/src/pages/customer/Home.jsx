@@ -49,7 +49,7 @@ const Home = () => {
     let isMounted = true;
     setLoadingFeatured(true);
 
-    Promise.allSettled([
+    void Promise.allSettled([
       categoryService.getPublicCategories(),
       productService.getAll({ page: 0, size: 8 })
     ])
@@ -63,6 +63,9 @@ const Home = () => {
         } else {
           setFeaturedProducts([]);
         }
+      })
+      .catch(() => {
+        if (isMounted) setFeaturedProducts([]);
       })
       .finally(() => {
         if (isMounted) setLoadingFeatured(false);

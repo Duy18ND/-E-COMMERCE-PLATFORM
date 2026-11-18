@@ -163,10 +163,10 @@ const MyVouchers = () => {
   };
 
   useEffect(() => {
-    loadMyVouchers();
+    void loadMyVouchers();
 
     const handleDataChange = () => {
-      loadMyVouchers();
+      void loadMyVouchers();
     };
     const handleSavedChange = () => {
       setSavedIds(voucherService.getSavedIds());
