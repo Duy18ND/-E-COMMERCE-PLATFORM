@@ -1,7 +1,13 @@
 import api from './api';
 import { INITIAL_PRODUCTS } from './mockData';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
-import { CATEGORY_ALIAS_MAP, CANONICAL_CATEGORIES_BY_ID, matchesCategoryFilter } from './categoryService';
+import {
+  CATEGORY_ALIAS_MAP,
+  CANONICAL_CATEGORIES_BY_ID,
+  encodeImageUrlForBackend,
+  matchesCategoryFilter,
+  resolveStoredImageUrl
+} from './categoryService';
 import { fixUtf8Mojibake } from './voucherService';
 
 const repairMojibakeCategoriesInBackend = async () => {
@@ -93,7 +99,7 @@ export const normalizeProduct = (product) => {
       : {}),
     stock: stockValue,
     stockQuantity: stockValue,
-    imageUrl: product.imageUrl || product.image || DEFAULT_PRODUCT_IMAGE,
+    imageUrl: resolveStoredImageUrl(product.imageUrl || product.image, DEFAULT_PRODUCT_IMAGE),
     description:
       fixUtf8Mojibake(product.description) ||
       'Sản phẩm công nghệ chính hãng phân phối tại hệ thống ShopMart E-Commerce.'
@@ -666,7 +672,10 @@ export const productService = {
       price,
       stockQuantity,
       description: String(productData?.description ?? '').trim(),
-      imageUrl: String(productData?.imageUrl ?? productData?.image ?? '').trim() || DEFAULT_PRODUCT_IMAGE
+      imageUrl: encodeImageUrlForBackend(
+        productData?.imageUrl ?? productData?.image ?? '',
+        DEFAULT_PRODUCT_IMAGE
+      )
     };
 
     try {
@@ -714,9 +723,10 @@ export const productService = {
       price,
       stockQuantity,
       description: String(productData?.description ?? existing.description ?? '').trim(),
-      imageUrl:
-        String(productData?.imageUrl ?? productData?.image ?? existing.imageUrl ?? '').trim() ||
-        DEFAULT_PRODUCT_IMAGE,
+      imageUrl: encodeImageUrlForBackend(
+        productData?.imageUrl ?? productData?.image ?? existing.imageUrl ?? '',
+        DEFAULT_PRODUCT_IMAGE
+      ),
       status: productData?.status || existing.status || 'ACTIVE'
     };
 

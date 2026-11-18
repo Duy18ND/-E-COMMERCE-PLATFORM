@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import categoryService from '../../services/categoryService';
+import categoryService, { readFileAsCompressedDataUrl } from '../../services/categoryService';
 import useToast from '../../hooks/useToast';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -224,24 +224,21 @@ const Categories = () => {
       return;
     }
 
-    // Revoke old object URL to avoid memory leak
-    if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(categoryImagePreview);
+    try {
+      const previewUrl = await readFileAsCompressedDataUrl(file);
+      setCategoryImageFile(file);
+      setCategoryImagePreview(previewUrl);
+      setCategoryImageError('');
+      // Also update formData.image so existing logic still works
+      setFormData((prev) => ({ ...prev, image: previewUrl }));
+    } catch {
+      setCategoryImageError('Không thể đọc file ảnh đã chọn.');
+      showToast({ type: 'error', title: 'Lỗi đọc ảnh', message: 'Không thể đọc file ảnh đã chọn.' });
     }
-
-    const previewUrl = URL.createObjectURL(file);
-    setCategoryImageFile(file);
-    setCategoryImagePreview(previewUrl);
-    setCategoryImageError('');
-    // Also update formData.image so existing logic still works
-    setFormData((prev) => ({ ...prev, image: previewUrl }));
     e.target.value = '';
   };
 
   const handleCategoryImageRemove = () => {
-    if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(categoryImagePreview);
-    }
     setCategoryImageFile(null);
     setCategoryImagePreview('');
     setCategoryImageError('');
