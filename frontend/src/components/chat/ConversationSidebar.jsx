@@ -1,3 +1,5 @@
+import Icon from '../common/Icons';
+
 /**
  * ConversationSidebar.jsx — Danh sách lịch sử các cuộc hội thoại của khách hàng
  */
@@ -108,17 +110,20 @@ const ConversationSidebar = ({
                 type="button"
                 onClick={(e) => handleDeleteClick(e, conv.id)}
                 title="Xóa hội thoại"
+                aria-label="Xóa hội thoại"
                 style={{
                   background: 'transparent',
                   border: 'none',
                   color: '#ef4444',
                   cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  padding: '0.25rem 0.4rem',
-                  borderRadius: '6px'
+                  padding: '0.3rem',
+                  borderRadius: '6px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                🗑️
+                <Icon name="trash" size={15} />
               </button>
             </div>
           ))}

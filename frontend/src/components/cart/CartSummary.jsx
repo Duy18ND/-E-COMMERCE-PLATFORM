@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
+import Icon from '../common/Icons';
 
 const CartSummary = ({
   totalItems = 0,
@@ -57,8 +58,8 @@ const CartSummary = ({
         {/* Giảm giá Flash Sale */}
         {flashDiscountAmount > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626', fontSize: '0.9rem', fontWeight: 600 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span>⚡</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Icon name="flash" size={14} />
               <span>Giảm giá Flash Sale</span>
             </span>
             <span>-{formatCurrency(flashDiscountAmount)}</span>
@@ -68,8 +69,8 @@ const CartSummary = ({
         {/* Giảm giá Coupon / Voucher */}
         {resolvedCouponDiscount > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a', fontSize: '0.9rem', fontWeight: 700 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span>🎫</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Icon name="ticket" size={14} />
               <span>Giảm giá{couponCode ? ` (${couponCode})` : ''}</span>
             </span>
             <span>-{formatCurrency(resolvedCouponDiscount)}</span>
@@ -78,9 +79,9 @@ const CartSummary = ({
 
         {/* Phí vận chuyển */}
         <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '0.9rem' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span>Phí vận chuyển</span>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>ⓘ</span>
+            <Icon name="info" size={13} color="#94a3b8" />
           </span>
           <span style={{ color: '#16a34a', fontWeight: 600 }}>
             {resolvedShippingFee > 0 ? formatCurrency(resolvedShippingFee) : 'Miễn phí (0 đ)'}
@@ -127,7 +128,7 @@ const CartSummary = ({
             marginBottom: '1.25rem'
           }}
         >
-          <span>🎁</span>
+          <Icon name="gift" size={16} />
           <span>Tiết kiệm tổng cộng: {formatCurrency(totalSavings)}</span>
         </div>
       )}
@@ -146,15 +147,16 @@ const CartSummary = ({
           fontSize: '0.825rem'
         }}
       >
-        <span style={{ color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <span>🎟️</span>
+        <span style={{ color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <Icon name="ticket" size={15} />
           <span>Chọn voucher đã lưu khi thanh toán</span>
         </span>
         <Link
           to="/vouchers"
-          style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'none' }}
+          style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
         >
-          Săn mã →
+          <span>Săn mã</span>
+          <Icon name="arrow-right" size={13} className="ui-icon-nudge-right" />
         </Link>
       </div>
 
@@ -178,7 +180,7 @@ const CartSummary = ({
               justifyContent: 'center',
               gap: '0.5rem',
               boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
-              transition: 'all 0.2s ease'
+              transition: 'background-color 150ms ease, transform 150ms ease'
             }}
             onMouseEnter={(e) => {
               if (totalItems > 0) e.currentTarget.style.backgroundColor = '#b91c1c';
@@ -187,8 +189,9 @@ const CartSummary = ({
               if (totalItems > 0) e.currentTarget.style.backgroundColor = '#dc2626';
             }}
           >
+            <Icon name="shield-check" size={17} />
             <span>Tiến hành đặt hàng ngay</span>
-            <span>➔</span>
+            <Icon name="arrow-right" size={16} className="ui-icon-nudge-right" />
           </button>
         </Link>
       )}
@@ -206,7 +209,7 @@ const CartSummary = ({
             gap: '0.35rem'
           }}
         >
-          <span>←</span>
+          <Icon name="arrow-left" size={14} />
           <span>Tiếp tục săn Flash Sale</span>
         </Link>
       </div>
@@ -221,13 +224,23 @@ const CartSummary = ({
           color: '#64748b'
         }}
       >
-        <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>
-          THANH TOÁN AN TOÀN & BẢO MẬT
+        <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <Icon name="shield-check" size={14} color="#16a34a" />
+          <span>THANH TOÁN AN TOÀN & BẢO MẬT</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', color: '#475569' }}>
-          <span style={{ backgroundColor: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>💳 Visa / Master</span>
-          <span style={{ backgroundColor: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>📱 VietQR / MoMo</span>
-          <span style={{ backgroundColor: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>📦 COD kiểm hàng</span>
+          <span style={{ backgroundColor: '#f1f5f9', padding: '4px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <Icon name="card" size={13} color="#2563eb" />
+            <span>Visa / Master</span>
+          </span>
+          <span style={{ backgroundColor: '#f1f5f9', padding: '4px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <Icon name="qr" size={13} color="#2563eb" />
+            <span>VietQR / MoMo</span>
+          </span>
+          <span style={{ backgroundColor: '#f1f5f9', padding: '4px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <Icon name="package" size={13} color="#2563eb" />
+            <span>COD kiểm hàng</span>
+          </span>
         </div>
       </div>
     </div>

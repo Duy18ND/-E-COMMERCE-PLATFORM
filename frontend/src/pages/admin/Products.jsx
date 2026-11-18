@@ -7,6 +7,7 @@ import Button from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
+import Icon from '../../components/common/Icons';
 
 const AdminProducts = () => {
   const { showToast, confirmDialog, notify } = useToast();
@@ -164,7 +165,7 @@ const AdminProducts = () => {
   };
 
   return (
-    <div>
+    <div className="ui-page-enter">
       <div className="flex-between" style={{ marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 className="page-title" style={{ margin: 0 }}>Quản lý sản phẩm</h1>
@@ -173,7 +174,7 @@ const AdminProducts = () => {
           </p>
         </div>
         <Link to="/admin/products/new">
-          <Button variant="primary">➕ Thêm sản phẩm</Button>
+          <Button variant="primary" icon="box-plus">Thêm sản phẩm</Button>
         </Link>
       </div>
 
@@ -198,10 +199,11 @@ const AdminProducts = () => {
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: '#94a3b8',
-                fontSize: '0.9rem'
+                display: 'inline-flex',
+                pointerEvents: 'none'
               }}
             >
-              🔍
+              <Icon name="search" size={16} />
             </span>
             <input
               type="text"
@@ -295,10 +297,14 @@ const AdminProducts = () => {
                 color: '#2563eb',
                 cursor: 'pointer',
                 fontWeight: 600,
-                fontSize: '0.85rem'
+                fontSize: '0.85rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}
             >
-              🔄 Đặt lại bộ lọc
+              <Icon name="refresh" size={14} />
+              <span>Đặt lại bộ lọc</span>
             </button>
           )}
         </div>
@@ -314,14 +320,16 @@ const AdminProducts = () => {
           <div style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
             <ErrorMessage message={error} />
             <div style={{ marginTop: '1rem' }}>
-              <Button variant="primary" size="sm" onClick={loadProducts}>
-                🔄 Thử lại kết nối
+              <Button variant="primary" size="sm" icon="refresh" onClick={loadProducts}>
+                Thử lại kết nối
               </Button>
             </div>
           </div>
         ) : products.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📦</div>
+            <div style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="package" size={26} />
+            </div>
             <p style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.35rem' }}>
               Chưa có sản phẩm nào trong hệ thống
             </p>
@@ -329,12 +337,14 @@ const AdminProducts = () => {
               Danh sách sản phẩm hiện đang trống. Hãy thêm sản phẩm mới để bắt đầu kinh doanh.
             </p>
             <Link to="/admin/products/new">
-              <Button variant="primary" size="sm">➕ Thêm sản phẩm đầu tiên</Button>
+              <Button variant="primary" size="sm" icon="box-plus">Thêm sản phẩm đầu tiên</Button>
             </Link>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
+            <div style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="search" size={26} />
+            </div>
             <p style={{ fontWeight: 600 }}>Không tìm thấy sản phẩm nào phù hợp</p>
             <p style={{ fontSize: '0.85rem' }}>Thử thay đổi từ khóa tìm kiếm hoặc các tiêu chí lọc</p>
           </div>

@@ -65,7 +65,9 @@ const UserLayout = ({ children }) => {
           </div>
         )}
         <Suspense fallback={<Loading message="Đang tải trang..." />}>
-          {children ? children : <Outlet />}
+          <div className="ui-page-enter">
+            {children ? children : <Outlet />}
+          </div>
         </Suspense>
       </main>
 

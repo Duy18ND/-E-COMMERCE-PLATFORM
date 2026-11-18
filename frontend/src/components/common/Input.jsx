@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Icon from './Icons';
 
 const Input = ({
   label,
@@ -178,7 +179,7 @@ const Input = ({
             lineHeight: 1.35
           }}
         >
-          <span>⚠️</span>
+          <Icon name="warning" size={14} color="#dc2626" />
           <span>{error}</span>
         </span>
       )}

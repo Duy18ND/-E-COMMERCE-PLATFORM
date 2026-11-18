@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ProductGrid from '../../components/product/ProductGrid';
 import Loading from '../../components/common/Loading';
+import Icon from '../../components/common/Icons';
 import productService from '../../services/productService';
 import categoryService from '../../services/categoryService';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
@@ -77,7 +78,7 @@ const Home = () => {
   }, []);
 
   return (
-    <div>
+    <div className="ui-page-enter">
       {/* 1. HERO SECTION WITH EXACT STYLE */}
       <section
         className="hero-section"
@@ -113,7 +114,7 @@ const Home = () => {
                   boxShadow: '0 2px 6px rgba(37, 99, 235, 0.08)'
                 }}
               >
-                <span>✨</span>
+                <Icon name="sparkles" size={14} color="#2563eb" />
                 <span>HỆ SINH THÁI CÔNG NGHỆ CHUẨN MỰC</span>
                 <span style={{ color: '#93c5fd' }}>•</span>
                 <span style={{ color: '#2563eb' }}>Chính Hãng 100%</span>
@@ -152,6 +153,7 @@ const Home = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '2.25rem', flexWrap: 'wrap' }}>
                 <Link
                   to="/products"
+                  className="ui-hover-lift"
                   style={{
                     backgroundColor: '#1d4ed8',
                     color: '#ffffff',
@@ -163,13 +165,11 @@ const Home = () => {
                     alignItems: 'center',
                     gap: '0.5rem',
                     boxShadow: '0 8px 20px -4px rgba(29, 78, 216, 0.45)',
-                    transition: 'all 0.2s',
                     textDecoration: 'none'
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
                 >
-                  Khám phá bộ sưu tập ➔
+                  <span>Khám phá bộ sưu tập</span>
+                  <Icon name="arrow-right" size={16} />
                 </Link>
 
                 <Link
@@ -451,7 +451,7 @@ const Home = () => {
                 textTransform: 'uppercase'
               }}
             >
-              <span>⚡</span>
+              <Icon name="flash" size={14} color="#fde047" />
               <span>FLASH SALE ĐỘC QUYỀN</span>
             </div>
             <div style={{ minWidth: 0 }}>
@@ -466,6 +466,7 @@ const Home = () => {
 
           <Link
             to="/flash-sale"
+            className="ui-hover-lift"
             style={{
               backgroundColor: '#ffffff',
               color: '#dc2626',
@@ -478,14 +479,12 @@ const Home = () => {
               gap: '0.4rem',
               textDecoration: 'none',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              transition: 'all 0.2s ease',
               whiteSpace: 'nowrap'
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
           >
+            <Icon name="flash" size={15} color="#dc2626" />
             <span>Săn Flash Sale ngay</span>
-            <span>⚡ ➔</span>
+            <Icon name="arrow-right" size={15} color="#dc2626" />
           </Link>
         </div>
       </section>
@@ -535,7 +534,7 @@ const Home = () => {
                 color: '#2563eb',
                 fontSize: '0.925rem',
                 fontWeight: 600,
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.25rem',
                 textDecoration: 'none'
@@ -543,16 +542,18 @@ const Home = () => {
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
             >
-              Xem tất cả danh mục <span>›</span>
+              <span>Xem tất cả danh mục</span>
+              <Icon name="chevron-right" size={16} />
             </Link>
           </div>
 
           {/* 4 Cards Grid */}
-          <div className="grid-cols-4">
+          <div className="grid-cols-4 ui-stagger">
             {categories.map((cat) => (
               <Link
                 key={cat.id}
                 to={`/products?category=${encodeURIComponent(cat.id)}`}
+                className="ui-hover-lift"
                 style={{
                   backgroundColor: '#ffffff',
                   borderRadius: '16px',
@@ -563,19 +564,8 @@ const Home = () => {
                   flexDirection: 'column',
                   justifyContent: 'space-between',
                   textDecoration: 'none',
-                  transition: 'all 0.25s ease',
                   cursor: 'pointer',
                   minWidth: 0
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 12px 24px -4px rgba(37, 99, 235, 0.12)';
-                  e.currentTarget.style.borderColor = '#dbeafe';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.04)';
-                  e.currentTarget.style.borderColor = '#f1f5f9';
                 }}
               >
                 <div>
@@ -715,7 +705,7 @@ const Home = () => {
                     marginBottom: '1rem'
                   }}
                 >
-                  <span>🎟️</span>
+                  <Icon name="voucher" size={14} color="#fde047" />
                   <span>KHO MÃ GIẢM GIÁ ĐỘC QUYỀN</span>
                 </div>
 
@@ -740,6 +730,7 @@ const Home = () => {
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <Link
                     to="/vouchers"
+                    className="ui-hover-lift"
                     style={{
                       backgroundColor: '#dc2626',
                       color: '#ffffff',
@@ -751,14 +742,11 @@ const Home = () => {
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '0.4rem',
-                      boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)',
-                      transition: 'all 0.2s'
+                      boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
                   >
                     <span>Vào kho voucher</span>
-                    <span>➔</span>
+                    <Icon name="arrow-right" size={15} />
                   </Link>
 
                   <Link
@@ -775,12 +763,12 @@ const Home = () => {
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '0.4rem',
-                      transition: 'all 0.2s'
+                      transition: 'background-color 0.2s ease'
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
                   >
-                    <span>🎒</span>
+                    <Icon name="voucher" size={15} />
                     <span>Mã đã lưu</span>
                   </Link>
                 </div>
@@ -788,6 +776,7 @@ const Home = () => {
 
               {/* Right: 3 Mini Voucher Showcase Cards */}
               <div
+                className="ui-stagger"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fit, minmax(min(170px, 100%), 1fr))',
@@ -797,6 +786,7 @@ const Home = () => {
               >
                 {/* Voucher 1 */}
                 <div
+                  className="ui-hover-lift"
                   style={{
                     backgroundColor: '#ffffff',
                     color: '#0f172a',
@@ -831,15 +821,20 @@ const Home = () => {
                       fontSize: '0.78rem',
                       color: '#2563eb',
                       fontWeight: 700,
-                      textDecoration: 'none'
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
                     }}
                   >
-                    Lưu mã ngay →
+                    <span>Lưu mã ngay</span>
+                    <Icon name="arrow-right" size={13} />
                   </Link>
                 </div>
 
                 {/* Voucher 2 */}
                 <div
+                  className="ui-hover-lift"
                   style={{
                     backgroundColor: '#ffffff',
                     color: '#0f172a',
@@ -874,15 +869,20 @@ const Home = () => {
                       fontSize: '0.78rem',
                       color: '#2563eb',
                       fontWeight: 700,
-                      textDecoration: 'none'
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
                     }}
                   >
-                    Lưu mã ngay →
+                    <span>Lưu mã ngay</span>
+                    <Icon name="arrow-right" size={13} />
                   </Link>
                 </div>
 
                 {/* Voucher 3 */}
                 <div
+                  className="ui-hover-lift"
                   style={{
                     backgroundColor: '#ffffff',
                     color: '#0f172a',
@@ -917,10 +917,14 @@ const Home = () => {
                       fontSize: '0.78rem',
                       color: '#2563eb',
                       fontWeight: 700,
-                      textDecoration: 'none'
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
                     }}
                   >
-                    Lưu mã ngay →
+                    <span>Lưu mã ngay</span>
+                    <Icon name="arrow-right" size={13} />
                   </Link>
                 </div>
               </div>
@@ -974,7 +978,7 @@ const Home = () => {
                 color: '#2563eb',
                 fontSize: '0.925rem',
                 fontWeight: 600,
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.25rem',
                 textDecoration: 'none'
@@ -982,7 +986,8 @@ const Home = () => {
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
             >
-              Xem tất cả sản phẩm <span>›</span>
+              <span>Xem tất cả sản phẩm</span>
+              <Icon name="chevron-right" size={16} />
             </Link>
           </div>
 

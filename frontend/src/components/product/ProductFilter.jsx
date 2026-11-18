@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Icon from '../common/Icons';
 
 const PRICE_PRESETS = [
   { label: 'Tất cả mức giá', min: '', max: '' },
@@ -163,10 +164,14 @@ const ProductFilter = ({
             fontSize: '0.85rem',
             fontWeight: 700,
             color: '#475569',
-            marginRight: '0.25rem'
+            marginRight: '0.25rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.35rem'
           }}
         >
-          Danh mục:
+          <Icon name="sliders" size={14} color="#2563eb" />
+          <span>Danh mục:</span>
         </span>
         <button
           type="button"
@@ -367,10 +372,14 @@ const ProductFilter = ({
             border: '1px solid #fecaca',
             color: '#dc2626',
             fontSize: '0.825rem',
-            fontWeight: 600
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem'
           }}
         >
-          ⚠️ {validationError}
+          <Icon name="warning" size={15} />
+          <span>{validationError}</span>
         </div>
       )}
 
@@ -434,9 +443,10 @@ const ProductFilter = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <label
               htmlFor="sort-order-select"
-              style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}
+              style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
             >
-              Sắp xếp:
+              <Icon name="sort" size={14} color="#64748b" />
+              <span>Sắp xếp:</span>
             </label>
             <select
               id="sort-order-select"
@@ -471,10 +481,14 @@ const ProductFilter = ({
                 color: '#dc2626',
                 fontSize: '0.8rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
               }}
             >
-              ✕ Đặt lại bộ lọc
+              <Icon name="x" size={13} />
+              <span>Đặt lại bộ lọc</span>
             </button>
           )}
         </div>

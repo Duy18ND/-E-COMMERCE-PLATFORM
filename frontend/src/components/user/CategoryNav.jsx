@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
 import categoryService from '../../services/categoryService';
+import Icon from '../common/Icons';
 
 /**
  * Thanh điều hướng danh mục sản phẩm nhanh dành riêng cho User/Shop (CategoryNav)
@@ -40,8 +41,10 @@ const CategoryNav = ({ categories: propCategories }) => {
         <Link
           to="/products"
           className={`category-nav-pill ${!activeCategory ? 'active' : ''}`}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
         >
-          Tất cả danh mục
+          <Icon name="layers" size={13} />
+          <span>Tất cả danh mục</span>
         </Link>
         {categories.map((cat) => {
           const slug = cat.id || cat.slug || cat.name;

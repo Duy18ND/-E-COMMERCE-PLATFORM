@@ -6,6 +6,7 @@ import Button from '../../components/common/Button';
 import Modal from '../../components/common/Modal';
 import Pagination from '../../components/admin/Pagination';
 import useNotification from '../../hooks/useNotification';
+import Icon from '../../components/common/Icons';
 
 const AdminSales = () => {
   const navigate = useNavigate();
@@ -200,64 +201,64 @@ const AdminSales = () => {
 
         {/* Top Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <button
-            onClick={handleExportReport}
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '10px',
-              padding: '0.65rem 1.25rem',
-              fontSize: '0.875rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <span>📥</span>
-            <span>Xuất Báo Cáo</span>
-          </button>
-
-          <Link to="/admin/sales/new" style={{ textDecoration: 'none' }}>
             <button
+              onClick={handleExportReport}
               style={{
-                backgroundColor: '#dc2626',
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
                 color: '#ffffff',
-                border: 'none',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
                 borderRadius: '10px',
-                padding: '0.65rem 1.35rem',
+                padding: '0.65rem 1.25rem',
                 fontSize: '0.875rem',
-                fontWeight: 800,
+                fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.4rem',
-                boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)',
-                transition: 'all 0.15s ease'
+                transition: 'background-color 0.15s ease'
               }}
             >
-              <span>➕</span>
-              <span>Tạo chương trình Sale mới</span>
+              <Icon name="download" size={16} />
+              <span>Xuất Báo Cáo</span>
             </button>
-          </Link>
+
+            <Link to="/admin/sales/new" style={{ textDecoration: 'none' }}>
+              <button
+                className="ui-hover-lift"
+                style={{
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.65rem 1.35rem',
+                  fontSize: '0.875rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)'
+                }}
+              >
+                <Icon name="plus" size={16} />
+                <span>Tạo chương trình Sale mới</span>
+              </button>
+            </Link>
+          </div>
         </div>
-      </div>
 
       {/* 2. SIX METRIC KPI CARDS (THEO ĐÚNG ẢNH MẪU 4) */}
       <div
-        className="admin-kpi-6"
+        className="admin-kpi-6 ui-stagger"
         style={{
           marginBottom: '1.5rem'
         }}
       >
         {/* Card 1: Tổng chương trình */}
-        <div className="card" style={{ padding: '1rem' }}>
+        <div className="card ui-kpi-card" style={{ padding: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
             <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#64748b' }}>TỔNG CHƯƠNG TRÌNH</span>
-            <span style={{ color: '#2563eb' }}>🏷️</span>
+            <Icon name="tag" size={16} color="#2563eb" />
           </div>
           <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a' }}>{metrics.total}</div>
           <div style={{ fontSize: '0.725rem', color: '#16a34a', fontWeight: 700, marginTop: '2px' }}>
@@ -266,15 +267,16 @@ const AdminSales = () => {
         </div>
 
         {/* Card 2: Đang hoạt động */}
-        <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #2563eb' }}>
+        <div className="card ui-kpi-card" style={{ padding: '1rem', borderLeft: '4px solid #2563eb' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
             <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#64748b' }}>ĐANG HOẠT ĐỘNG</span>
-            <span style={{ color: '#2563eb' }}>⚡</span>
+            <Icon name="flash" size={16} color="#2563eb" />
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
             <span style={{ fontSize: '1.65rem', fontWeight: 900, color: '#2563eb' }}>{metrics.active}</span>
-            <span style={{ fontSize: '0.65rem', backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
-              ● Active
+            <span style={{ fontSize: '0.65rem', backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Icon name="dot" size={8} color="#2563eb" />
+              <span>Active</span>
             </span>
           </div>
           <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px' }}>
@@ -283,10 +285,10 @@ const AdminSales = () => {
         </div>
 
         {/* Card 3: Sắp diễn ra */}
-        <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #ea580c' }}>
+        <div className="card ui-kpi-card" style={{ padding: '1rem', borderLeft: '4px solid #ea580c' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
             <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#64748b' }}>SẮP DIỄN RA</span>
-            <span style={{ color: '#ea580c' }}>⏱️</span>
+            <Icon name="clock" size={16} color="#ea580c" />
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
             <span style={{ fontSize: '1.65rem', fontWeight: 900, color: '#ea580c' }}>{metrics.upcoming}</span>
@@ -300,10 +302,10 @@ const AdminSales = () => {
         </div>
 
         {/* Card 4: Đã kết thúc */}
-        <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #64748b' }}>
+        <div className="card ui-kpi-card" style={{ padding: '1rem', borderLeft: '4px solid #64748b' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
             <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#64748b' }}>ĐÃ KẾT THÚC</span>
-            <span style={{ color: '#64748b' }}>✓</span>
+            <Icon name="check-circle" size={16} color="#64748b" />
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
             <span style={{ fontSize: '1.65rem', fontWeight: 900, color: '#475569' }}>{metrics.ended}</span>
@@ -317,10 +319,10 @@ const AdminSales = () => {
         </div>
 
         {/* Card 5: Sản phẩm đang sale */}
-        <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #8b5cf6' }}>
+        <div className="card ui-kpi-card" style={{ padding: '1rem', borderLeft: '4px solid #8b5cf6' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
             <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#64748b' }}>SẢN PHẨM ĐANG SALE</span>
-            <span style={{ color: '#8b5cf6' }}>📦</span>
+            <Icon name="package" size={16} color="#8b5cf6" />
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
             <span style={{ fontSize: '1.65rem', fontWeight: 900, color: '#6d28d9' }}>{metrics.totalSkus}</span>
@@ -332,10 +334,10 @@ const AdminSales = () => {
         </div>
 
         {/* Card 6: Tổng doanh thu */}
-        <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #16a34a' }}>
+        <div className="card ui-kpi-card" style={{ padding: '1rem', borderLeft: '4px solid #16a34a' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
             <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#64748b' }}>TỔNG DOANH THU</span>
-            <span style={{ color: '#16a34a' }}>💰</span>
+            <Icon name="wallet" size={16} color="#16a34a" />
           </div>
           <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#16a34a', whiteSpace: 'nowrap' }}>
             {formatCurrency(metrics.totalRevenue)}
@@ -372,10 +374,10 @@ const AdminSales = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.25rem'
+              flexShrink: 0
             }}
           >
-            🔥
+            <Icon name="flame" size={20} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -404,8 +406,12 @@ const AdminSales = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
           <div>
             <div style={{ fontSize: '0.725rem', color: '#9a3412' }}>Tỷ lệ chuyển đổi</div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#16a34a' }}>
-              12.8% <span style={{ fontSize: '0.75rem' }}>↑ 3.2%</span>
+            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#16a34a', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>12.8%</span>
+              <span style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                <Icon name="trend" size={13} />
+                <span>+3.2%</span>
+              </span>
             </div>
           </div>
 
@@ -442,8 +448,8 @@ const AdminSales = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           {/* Search Box */}
           <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '380px' }}>
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
-              🔍
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'inline-flex', pointerEvents: 'none' }}>
+              <Icon name="search" size={16} />
             </span>
             <input
               type="text"
@@ -520,23 +526,27 @@ const AdminSales = () => {
                 backgroundColor: '#ffffff'
               }}
             >
-              <option value="this_month">📅 Tháng này</option>
-              <option value="this_week">📅 Tuần này</option>
-              <option value="all_time">📅 Toàn thời gian</option>
+              <option value="this_month">Tháng này</option>
+              <option value="this_week">Tuần này</option>
+              <option value="all_time">Toàn thời gian</option>
             </select>
 
             <button
               onClick={handleResetData}
               title="Đặt lại dữ liệu mẫu ban đầu"
               style={{
-                padding: '0.5rem',
+                padding: '0.5rem 0.65rem',
                 borderRadius: '8px',
                 border: '1px solid #cbd5e1',
                 backgroundColor: '#ffffff',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#475569'
               }}
             >
-              🔄
+              <Icon name="refresh" size={15} />
             </button>
           </div>
         </div>
@@ -545,11 +555,13 @@ const AdminSales = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span>Đang áp dụng:</span>
-            <span style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
-              Kênh: Website + App Omnichannel ✕
+            <span style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span>Kênh: Website + App Omnichannel</span>
+              <Icon name="x" size={12} />
             </span>
-            <span style={{ backgroundColor: '#fef2f2', color: '#b91c1c', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
-              Giảm giá &gt; 15% ✕
+            <span style={{ backgroundColor: '#fef2f2', color: '#b91c1c', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span>Giảm giá &gt; 15%</span>
+              <Icon name="x" size={12} />
             </span>
             {(searchTerm || statusFilter !== 'ALL') && (
               <button
@@ -574,7 +586,9 @@ const AdminSales = () => {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {filteredCampaigns.length === 0 ? (
           <div style={{ padding: '3.5rem', textAlign: 'center', color: '#64748b' }}>
-            <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>🏷️</span>
+            <div style={{ width: '60px', height: '60px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="tag" size={28} />
+            </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
               Không tìm thấy chiến dịch nào
             </h3>
@@ -688,16 +702,19 @@ const AdminSales = () => {
                         {/* Status badge pill */}
                         <div style={{ marginTop: '4px' }}>
                           {isCampActive ? (
-                            <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                              <span>⏱️</span> Còn 03h 42m
+                            <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Icon name="clock" size={12} color="#dc2626" />
+                              <span>Còn 03h 42m</span>
                             </span>
                           ) : camp.status === 'UPCOMING' ? (
-                            <span style={{ fontSize: '0.7rem', color: '#ea580c', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                              <span>⏳</span> Bắt đầu sau 3 ngày
+                            <span style={{ fontSize: '0.7rem', color: '#ea580c', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Icon name="pending" size={12} color="#ea580c" />
+                              <span>Bắt đầu sau 3 ngày</span>
                             </span>
                           ) : (
-                            <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                              <span>✓</span> Đã chốt số
+                            <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Icon name="check" size={12} color="#16a34a" />
+                              <span>Đã chốt số</span>
                             </span>
                           )}
                         </div>
@@ -786,7 +803,8 @@ const AdminSales = () => {
                               cursor: 'pointer'
                             }}
                           >
-                            👁️ Xem
+                            <Icon name="eye" size={13} />
+                            <span>Xem</span>
                           </button>
 
                           {/* Edit */}
@@ -801,10 +819,14 @@ const AdminSales = () => {
                                 color: '#1d4ed8',
                                 fontSize: '0.75rem',
                                 fontWeight: 600,
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
                               }}
                             >
-                              ✏️ Sửa
+                              <Icon name="edit" size={13} />
+                              <span>Sửa</span>
                             </button>
                           </Link>
 
@@ -820,16 +842,21 @@ const AdminSales = () => {
                               color: isCampActive ? '#c2410c' : '#166534',
                               fontSize: '0.75rem',
                               fontWeight: 600,
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
                             }}
                           >
-                            {isCampActive ? '⏸️ Tắt' : '▶️ Bật'}
+                            <Icon name={isCampActive ? 'pause-circle' : 'play'} size={13} />
+                            <span>{isCampActive ? 'Tắt' : 'Bật'}</span>
                           </button>
 
                           {/* Delete */}
                           <button
                             onClick={() => handleDelete(camp.id, camp.name)}
                             title="Xóa chiến dịch"
+                            aria-label={`Xóa chiến dịch ${camp.name}`}
                             style={{
                               padding: '5px 8px',
                               borderRadius: '6px',
@@ -838,10 +865,13 @@ const AdminSales = () => {
                               color: '#dc2626',
                               fontSize: '0.75rem',
                               fontWeight: 600,
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                           >
-                            🗑️
+                            <Icon name="trash" size={13} />
                           </button>
                         </div>
                       </td>
@@ -916,7 +946,10 @@ const AdminSales = () => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
               <Link to="/flash-sale">
                 <Button variant="outline" size="sm">
-                  Xem trên trang Khách Hàng ➔
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span>Xem trên trang Khách Hàng</span>
+                    <Icon name="arrow-right" size={14} />
+                  </span>
                 </Button>
               </Link>
               <Button variant="primary" size="sm" onClick={() => setPreviewCampaign(null)}>

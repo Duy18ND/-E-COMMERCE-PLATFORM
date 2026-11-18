@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useChatbot } from '../../hooks/useChatbot';
 import ChatWindow from './ChatWindow';
+import Icon from '../common/Icons';
 
 /**
  * ChatbotWidget.jsx — Nút nổi & Cửa sổ Trợ lý Mua sắm AI thông minh cho khách hàng ShopMart.
@@ -53,23 +54,23 @@ const ChatbotWidget = () => {
           type="button"
           onClick={() => setIsOpen(true)}
           aria-label="Mở Trợ lý Mua sắm AI"
+          className="ui-hover-lift"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '0.55rem',
-            padding: '0.8rem 1.15rem',
+            padding: '0.8rem 1.2rem',
             borderRadius: '999px',
-            border: 'none',
+            border: '1px solid rgba(255,255,255,0.18)',
             background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
             color: '#ffffff',
             fontWeight: 700,
             fontSize: '0.92rem',
             cursor: 'pointer',
-            boxShadow: '0 10px 25px rgba(37, 99, 235, 0.38)',
-            transition: 'transform 0.2s ease'
+            boxShadow: '0 10px 25px rgba(37, 99, 235, 0.35)'
           }}
         >
-          <span style={{ fontSize: '1.2rem' }}>🤖</span>
+          <Icon name="bot" size={20} color="#ffffff" />
           <span>Trợ lý AI</span>
         </button>
       )}

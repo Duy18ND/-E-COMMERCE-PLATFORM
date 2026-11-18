@@ -1,31 +1,36 @@
+import Icon from './Icons';
+
 const Loading = ({ message = 'Đang tải dữ liệu...' }) => {
   return (
     <div
+      role="status"
+      aria-live="polite"
+      className="ui-page-enter"
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '3rem 1rem'
+        padding: '3rem 1rem',
+        gap: '0.85rem'
       }}
     >
       <div
         style={{
-          width: '40px',
-          height: '40px',
-          border: '4px solid #e2e8f0',
-          borderTop: '4px solid #2563eb',
+          width: '44px',
+          height: '44px',
           borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
+          backgroundColor: '#eff6ff',
+          border: '1px solid #dbeafe',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#2563eb'
         }}
-      />
-      <p style={{ marginTop: '1rem', color: '#64748b', fontSize: '0.95rem' }}>{message}</p>
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
+      >
+        <Icon name="loader" size={22} spin strokeWidth={2.2} />
+      </div>
+      <p style={{ color: '#64748b', fontSize: '0.92rem', fontWeight: 500 }}>{message}</p>
     </div>
   );
 };

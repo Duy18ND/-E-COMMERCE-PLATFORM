@@ -5,6 +5,7 @@ import reviewService, {
   validateReviewInput
 } from '../../services/reviewService';
 import useNotification from '../../hooks/useNotification';
+import Icon from '../common/Icons';
 
 const QUICK_REVIEW_SUGGESTIONS = [
   'Sản phẩm chính hãng, đóng gói rất cẩn thận.',
@@ -232,7 +233,7 @@ const ProductReviewForm = ({
               gap: '0.45rem'
             }}
           >
-            <span>⭐</span>
+            <Icon name="star-filled" size={18} color="#f59e0b" />
             <span>{isEditMode ? 'Chỉnh sửa đánh giá của bạn' : 'Viết đánh giá sản phẩm sau mua'}</span>
           </h3>
           <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: '#64748b' }}>
@@ -254,7 +255,7 @@ const ProductReviewForm = ({
             border: '1px solid #86efac'
           }}
         >
-          <span>✓</span>
+          <Icon name="check" size={13} strokeWidth={2.4} />
           <span>Đã mua hàng xác thực</span>
         </span>
       </div>
@@ -425,13 +426,18 @@ const ProductReviewForm = ({
                     cursor: submitting ? 'not-allowed' : 'pointer',
                     fontSize: '2rem',
                     lineHeight: 1,
-                    color: isSelected ? '#f59e0b' : '#cbd5e1',
-                    transform: hoverRating === star ? 'scale(1.18)' : 'scale(1)',
-                    transition: 'transform 0.15s ease, color 0.15s ease',
-                    textShadow: isSelected ? '0 2px 6px rgba(245, 158, 11, 0.35)' : 'none'
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: hoverRating === star ? 'scale(1.16)' : 'scale(1)',
+                    transition: 'transform 0.15s ease'
                   }}
                 >
-                  ★
+                  <Icon
+                    name={isSelected ? 'star-filled' : 'star'}
+                    size={28}
+                    color={isSelected ? '#f59e0b' : '#cbd5e1'}
+                  />
                 </button>
               );
             })}
@@ -469,9 +475,18 @@ const ProductReviewForm = ({
           <div
             role="alert"
             data-testid="rating-error"
-            style={{ marginTop: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: '#dc2626' }}
+            style={{
+              marginTop: '0.4rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
           >
-            ⚠️ {fieldErrors.rating}
+            <Icon name="warning" size={14} color="#dc2626" />
+            <span>{fieldErrors.rating}</span>
           </div>
         )}
       </div>
@@ -535,9 +550,18 @@ const ProductReviewForm = ({
           <div
             role="alert"
             data-testid="comment-error"
-            style={{ marginTop: '0.35rem', fontSize: '0.8rem', fontWeight: 600, color: '#dc2626' }}
+            style={{
+              marginTop: '0.35rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
           >
-            ⚠️ {fieldErrors.comment}
+            <Icon name="warning" size={14} color="#dc2626" />
+            <span>{fieldErrors.comment}</span>
           </div>
         )}
 
@@ -566,7 +590,7 @@ const ProductReviewForm = ({
                 fontSize: '0.74rem',
                 color: '#334155',
                 cursor: submitting ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s'
+                transition: 'background-color 0.15s ease, border-color 0.15s ease'
               }}
             >
               + {item}
@@ -588,10 +612,14 @@ const ProductReviewForm = ({
             color: '#b91c1c',
             fontSize: '0.85rem',
             fontWeight: 600,
-            marginBottom: '1rem'
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.45rem'
           }}
         >
-          ❌ {submitError}
+          <Icon name="error" size={16} color="#dc2626" />
+          <span>{submitError}</span>
         </div>
       )}
 
@@ -607,10 +635,14 @@ const ProductReviewForm = ({
             color: '#166534',
             fontSize: '0.85rem',
             fontWeight: 600,
-            marginBottom: '1rem'
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.45rem'
           }}
         >
-          ✅ {submitSuccess}
+          <Icon name="success" size={16} color="#16a34a" />
+          <span>{submitSuccess}</span>
         </div>
       )}
 
@@ -640,10 +672,14 @@ const ProductReviewForm = ({
               color: '#475569',
               fontWeight: 700,
               fontSize: '0.875rem',
-              cursor: submitting ? 'not-allowed' : 'pointer'
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem'
             }}
           >
-            Hủy đánh giá
+            <Icon name="cancel" size={15} />
+            <span>Hủy đánh giá</span>
           </button>
         )}
 
@@ -666,7 +702,7 @@ const ProductReviewForm = ({
             boxShadow: submitting ? 'none' : '0 4px 12px rgba(37, 99, 235, 0.25)'
           }}
         >
-          <span>{submitting ? '⏳' : '⭐'}</span>
+          <Icon name={submitting ? 'loader' : 'star-filled'} size={15} spin={submitting} />
           <span>
             {submitting
               ? 'Đang gửi đánh giá...'

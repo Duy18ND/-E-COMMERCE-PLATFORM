@@ -1,17 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import chatbotService from '../services/chatbotService';
 import { useAuth } from './useAuth';
 
 export const QUICK_PROMPTS = [
-  '🔍 Gợi ý laptop dưới 30 triệu',
-  '⚖️ So sánh Dell XPS 15 và MacBook Air M2',
-  '📦 Kiểm tra tồn kho Laptop Dell XPS 15',
-  '🚚 Chính sách vận chuyển & bảo hành',
-  '🧾 Kiểm tra đơn hàng của tôi'
+  'Gợi ý laptop dưới 30 triệu',
+  'So sánh Dell XPS 15 và MacBook Air M2',
+  'Kiểm tra tồn kho Laptop Dell XPS 15',
+  'Chính sách vận chuyển & bảo hành',
+  'Kiểm tra đơn hàng của tôi'
 ];
 
 export const useChatbot = () => {
   const { user } = useAuth();
+  const prevUserIdRef = useRef(user?.id ?? null);
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'history'
   const [conversations, setConversations] = useState([]);
@@ -33,6 +34,19 @@ export const useChatbot = () => {
       setLoadingHistory(false);
     }
   }, []);
+
+  // Đặt lại phiên hội thoại khi chuyển đổi giữa khách vãng lai <-> tài khoản đăng nhập
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (prevUserIdRef.current !== currentUserId) {
+      prevUserIdRef.current = currentUserId;
+      setConversationId(null);
+      setMessages([]);
+      setConversations([]);
+      setError('');
+      setActiveTab('chat');
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (isOpen) {
@@ -134,6 +148,9 @@ export const useChatbot = () => {
         setMessages((prev) => [...prev, assistantMsg]);
         void loadConversations();
       } catch (err) {
+        if ((err?.status === 403 || err?.status === 404) && conversationId) {
+          setConversationId(null);
+        }
         setError(err?.message || 'Không thể gửi tin nhắn tới Trợ lý AI. Vui lòng thử lại.');
       } finally {
         setSending(false);

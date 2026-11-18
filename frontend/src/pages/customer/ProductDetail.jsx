@@ -8,6 +8,7 @@ import productService from '../../services/productService';
 import saleService from '../../services/saleService';
 import FlashCountdown from '../../components/sale/FlashCountdown';
 import Loading from '../../components/common/Loading';
+import Icon from '../../components/common/Icons';
 import ProductReviewsSection, { renderRatingStars } from '../../components/product/ProductReviewsSection';
 
 const ProductDetail = () => {
@@ -82,8 +83,10 @@ const ProductDetail = () => {
 
   if (!product) {
     return (
-      <div className="container page-container" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📦</div>
+      <div className="container page-container ui-page-enter" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+          <Icon name="empty-box" size={30} />
+        </div>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>Không tìm thấy sản phẩm</h2>
         <p style={{ color: '#64748b', margin: '0.5rem 0 1.5rem' }}>
           Sản phẩm có thể đã ngừng kinh doanh hoặc đường dẫn không đúng.
@@ -249,15 +252,15 @@ const ProductDetail = () => {
   };
 
   return (
-    <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', paddingBottom: '3.5rem' }}>
+    <div className="ui-page-enter" style={{ backgroundColor: '#f8fafc', minHeight: '100vh', paddingBottom: '3.5rem' }}>
       {/* 1. BREADCRUMBS & FLASH SALE ACTIVE PILL */}
       <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9', padding: '0.85rem 0' }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.85rem', color: '#64748b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', fontSize: '0.85rem', color: '#64748b' }}>
             <Link to="/" style={{ color: '#64748b' }}>Trang chủ</Link>
-            <span>›</span>
+            <Icon name="chevron-right" size={14} color="#94a3b8" />
             <Link to="/products" style={{ color: '#64748b' }}>{product.category || 'Sản phẩm'}</Link>
-            <span>›</span>
+            <Icon name="chevron-right" size={14} color="#94a3b8" />
             <span style={{ color: '#0f172a', fontWeight: 600 }}>{product.shortName || product.name}</span>
           </div>
 
@@ -277,7 +280,7 @@ const ProductDetail = () => {
                 letterSpacing: '0.04em'
               }}
             >
-              <span>⚡</span>
+              <Icon name="flash" size={14} />
               <span>ĐANG DIỄN RA FLASH SALE</span>
             </div>
           )}
@@ -310,10 +313,14 @@ const ProductDetail = () => {
                       fontSize: '0.72rem',
                       padding: '4px 9px',
                       borderRadius: '8px',
-                      boxShadow: '0 2px 6px rgba(220, 38, 38, 0.4)'
+                      boxShadow: '0 2px 6px rgba(220, 38, 38, 0.4)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem'
                     }}
                   >
-                    ⚡ FLASH SALE CHÍNH HÃNG
+                    <Icon name="flash" size={12} color="#fde047" />
+                    <span>FLASH SALE CHÍNH HÃNG</span>
                   </span>
                 )}
                 <span
@@ -422,7 +429,7 @@ const ProductDetail = () => {
                   }}
                   onClick={() => notify.info('Tính năng xem ảnh 360° tương tác đang được phát triển.')}
                 >
-                  <span style={{ fontSize: '1.1rem' }}>🔄</span>
+                  <Icon name="refresh" size={16} color="#2563eb" />
                   <span>360°</span>
                 </div>
               </div>
@@ -438,18 +445,18 @@ const ProductDetail = () => {
                   borderTop: '1px solid #f1f5f9'
                 }}
               >
-                <div style={{ textAlign: 'center', minWidth: 0 }}>
-                  <div style={{ fontSize: '1.15rem', marginBottom: '2px' }}>🛡️</div>
+                <div style={{ textAlign: 'center', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                  <Icon name="shield-check" size={18} color="#2563eb" />
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>100% Chính Hãng</div>
                   <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Apple VN (VNA)</div>
                 </div>
-                <div style={{ textAlign: 'center', minWidth: 0 }}>
-                  <div style={{ fontSize: '1.15rem', marginBottom: '2px' }}>🔄</div>
+                <div style={{ textAlign: 'center', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                  <Icon name="refresh" size={18} color="#16a34a" />
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>1 Đổi 1 - 30 Ngày</div>
                   <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Lỗi phần cứng</div>
                 </div>
-                <div style={{ textAlign: 'center', minWidth: 0 }}>
-                  <div style={{ fontSize: '1.15rem', marginBottom: '2px' }}>🚚</div>
+                <div style={{ textAlign: 'center', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                  <Icon name="truck" size={18} color="#ea580c" />
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>Freeship Tốc Độ</div>
                   <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Giao 2H nội thành</div>
                 </div>
@@ -518,8 +525,9 @@ const ProductDetail = () => {
                   </span>
                 </a>
                 <span>•</span>
-                <div style={{ color: '#dc2626', fontWeight: 600 }}>
-                  🔥 Đã bán {sold} chiếc trong đợt sale
+                <div style={{ color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Icon name="flame" size={15} color="#dc2626" />
+                  <span>Đã bán {sold} chiếc trong đợt sale</span>
                 </div>
                 <span>•</span>
                 <button
@@ -529,9 +537,10 @@ const ProductDetail = () => {
                     }
                     notify.success('Đã sao chép liên kết sản phẩm vào bộ nhớ tạm!');
                   }}
-                  style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.82rem' }}
+                  style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}
                 >
-                  🔗 Chia sẻ
+                  <Icon name="link" size={14} />
+                  <span>Chia sẻ</span>
                 </button>
               </div>
 
@@ -557,7 +566,7 @@ const ProductDetail = () => {
                       ĐỢT GIẢM GIÁ GIỜ VÀNG ĐẶC BIỆT
                     </div>
                     <div style={{ fontSize: '0.95rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <span>⚡</span>
+                      <Icon name="flash" size={16} color="#fde047" />
                       <span>FLASH SALE GIẢM {currentDiscount}%</span>
                     </div>
                   </div>
@@ -608,25 +617,25 @@ const ProductDetail = () => {
                   <div style={{ marginTop: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                     <div
                       style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '0.35rem',
                         fontSize: '0.78rem',
                         fontWeight: 700,
                         color: '#dc2626',
                         backgroundColor: '#fee2e2',
                         padding: '4px 10px',
-                        borderRadius: '6px'
+                        borderRadius: '6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '0.35rem'
                       }}
                     >
-                      <span>🎁</span>
+                      <Icon name="gift" size={14} color="#dc2626" />
                       <span>Tiết kiệm ngay: {formatCurrency(savedAmount)}</span>
                       <span style={{ fontWeight: 400, opacity: 0.85 }}>(Áp dụng độc quyền trực tuyến đến hết khung giờ)</span>
                     </div>
 
                     <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
-                      <span>🏷️</span>
+                      <Icon name="tag" size={13} color="#64748b" />
                       <span>So sánh giá niêm yết: {formatCurrency(currentOriginalPrice)}</span>
                       <span style={{ color: '#16a34a', fontWeight: 600 }}>(Rẻ hơn {formatCurrency(savedAmount)})</span>
                     </div>
@@ -637,8 +646,9 @@ const ProductDetail = () => {
                 {isSale && (
                   <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', fontSize: '0.75rem', marginBottom: '0.35rem' }}>
-                      <span style={{ color: '#475569', fontWeight: 600 }}>
-                        🔥 Đã bán {sold}/{totalStock} suất
+                      <span style={{ color: '#475569', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <Icon name="flame" size={14} color="#dc2626" />
+                        <span>Đã bán {sold}/{totalStock} suất</span>
                       </span>
                       <span style={{ color: '#dc2626', fontWeight: 800 }}>
                         {isOutOfStock ? 'ĐÃ HẾT SUẤT FLASH SALE!' : `CHỈ CÒN LẠI ${remainingStock} SUẤT CUỐI CÙNG!`}
@@ -775,10 +785,14 @@ const ProductDetail = () => {
                     style={{
                       fontSize: '0.825rem',
                       fontWeight: 800,
-                      color: isOutOfStock ? '#dc2626' : '#16a34a'
+                      color: isOutOfStock ? '#dc2626' : '#16a34a',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
                     }}
                   >
-                    {isOutOfStock ? '🔴 Hết hàng (0 sản phẩm)' : `🟢 ${stockStatusMessage}`}
+                    <Icon name={isOutOfStock ? 'out-of-stock' : 'in-stock'} size={15} />
+                    <span>{isOutOfStock ? 'Hết hàng (0 sản phẩm)' : stockStatusMessage}</span>
                   </span>
                 </div>
 
@@ -788,24 +802,26 @@ const ProductDetail = () => {
                     <button
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       disabled={isOutOfStock || quantity <= 1}
-                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: isOutOfStock ? 'not-allowed' : 'pointer', fontWeight: 700 }}
+                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: isOutOfStock ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      aria-label="Giảm số lượng"
                     >
-                      -
+                      <Icon name="minus" size={14} />
                     </button>
                     <span style={{ minWidth: '36px', textAlign: 'center', fontWeight: 800, fontSize: '0.95rem' }}>{isOutOfStock ? 0 : quantity}</span>
                     <button
                       onClick={() => setQuantity((q) => Math.min(maxOrderQuantity, q + 1))}
                       disabled={isOutOfStock || quantity >= maxOrderQuantity}
-                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: isOutOfStock || quantity >= maxOrderQuantity ? 'not-allowed' : 'pointer', fontWeight: 700 }}
+                      style={{ width: '32px', height: '32px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: isOutOfStock || quantity >= maxOrderQuantity ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      aria-label="Tăng số lượng"
                     >
-                      +
+                      <Icon name="plus" size={14} />
                     </button>
                   </div>
                 </div>
 
                 {isSale && (
                   <div style={{ fontSize: '0.75rem', color: '#ea580c', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <span>⚠️</span>
+                    <Icon name="warning" size={14} color="#ea580c" />
                     <span>Tối đa 2 sản phẩm/khách hàng theo quy định Flash Sale</span>
                   </div>
                 )}
@@ -821,10 +837,15 @@ const ProductDetail = () => {
                     borderRadius: '10px',
                     color: '#92400e',
                     fontSize: '0.85rem',
-                    marginBottom: '1.25rem'
+                    marginBottom: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    flexWrap: 'wrap'
                   }}
                 >
-                  🛡️ <strong>Tài khoản Quản trị viên (Admin):</strong> Bạn đang ở chế độ xem trước, không thể mua hàng.
+                  <Icon name="shield-check" size={16} color="#b45309" />
+                  <span><strong>Tài khoản Quản trị viên (Admin):</strong> Bạn đang ở chế độ xem trước, không thể mua hàng.</span>
                 </div>
               )}
 
@@ -846,16 +867,17 @@ const ProductDetail = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.4rem',
-                    transition: 'all 0.2s'
+                    transition: 'background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.12s ease'
                   }}
                 >
-                  <span>🛒</span>
-                  <span>{isOutOfStock ? (isSale ? 'Đã hết suất' : 'Tạm hết hàng') : isAdded ? '✓ Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
+                  <Icon name={isOutOfStock ? 'empty-box' : isAdded ? 'check' : 'cart-plus'} size={17} />
+                  <span>{isOutOfStock ? (isSale ? 'Đã hết suất' : 'Tạm hết hàng') : isAdded ? 'Đã thêm vào giỏ' : 'Thêm vào giỏ'}</span>
                 </button>
 
                 <button
                   onClick={handleBuyNow}
                   disabled={isAdmin || isOutOfStock}
+                  className={!isAdmin && !isOutOfStock ? 'ui-hover-lift' : undefined}
                   style={{
                     backgroundColor: isOutOfStock ? '#94a3b8' : '#dc2626',
                     border: 'none',
@@ -869,17 +891,10 @@ const ProductDetail = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.4rem',
-                    boxShadow: isOutOfStock ? 'none' : '0 4px 14px rgba(220, 38, 38, 0.4)',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isAdmin && !isOutOfStock) e.currentTarget.style.backgroundColor = '#b91c1c';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isAdmin && !isOutOfStock) e.currentTarget.style.backgroundColor = '#dc2626';
+                    boxShadow: isOutOfStock ? 'none' : '0 4px 14px rgba(220, 38, 38, 0.4)'
                   }}
                 >
-                  <span>⚡</span>
+                  <Icon name="flash" size={17} />
                   <span>{isOutOfStock ? (isSale ? 'ĐÃ HẾT SUẤT' : 'SẢN PHẨM ĐÃ HẾT HÀNG') : 'MUA NGAY VỚI GIÁ FLASH SALE'}</span>
                 </button>
               </div>
@@ -898,15 +913,15 @@ const ProductDetail = () => {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ color: '#2563eb', fontWeight: 800 }}>✓</span>
+                  <Icon name="check" size={14} color="#2563eb" strokeWidth={2.5} />
                   <span>Bảo hành 24 tháng</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ color: '#2563eb', fontWeight: 800 }}>✓</span>
+                  <Icon name="check" size={14} color="#2563eb" strokeWidth={2.5} />
                   <span>1 đổi 1 trong 30 ngày</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ color: '#2563eb', fontWeight: 800 }}>✓</span>
+                  <Icon name="check" size={14} color="#2563eb" strokeWidth={2.5} />
                   <span>Freeship toàn quốc</span>
                 </div>
               </div>
@@ -915,11 +930,11 @@ const ProductDetail = () => {
         </div>
 
         {/* 3. THREE FEATURE CARDS AT BOTTOM (NHƯ TRONG ẢNH MẪU 2) */}
-        <div className="grid-cols-3" style={{ gap: '1.25rem', marginTop: '2rem' }}>
+        <div className="grid-cols-3 ui-stagger" style={{ gap: '1.25rem', marginTop: '2rem' }}>
           {/* Card 1: Đặc quyền Deal Flash Sale */}
           <div className="card" style={{ padding: 'clamp(1.1rem, 2vw, 1.5rem)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#dc2626' }}>
-              <span style={{ fontSize: '1.25rem' }}>⚡</span>
+              <Icon name="flash" size={20} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Đặc quyền Deal Flash Sale
               </h3>
@@ -928,16 +943,16 @@ const ProductDetail = () => {
               Chương trình trợ giá độc quyền từ đối tác Apple Việt Nam cho 100 khách hàng nhanh nhất trong ngày. Giá flash sale sẽ lập tức trở về mức niêm yết khi hết 15 suất còn lại hoặc khi đồng hồ đếm ngược kết thúc.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', color: '#0f172a' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <span style={{ color: '#16a34a' }}>✓</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Icon name="check" size={14} color="#16a34a" strokeWidth={2.5} />
                 <span>Hàng mới nguyên seal (Unopened / Chưa Active)</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <span style={{ color: '#16a34a' }}>✓</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Icon name="check" size={14} color="#16a34a" strokeWidth={2.5} />
                 <span>Kích hoạt đủ 12 tháng AppleCare chính hãng</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <span style={{ color: '#16a34a' }}>✓</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Icon name="check" size={14} color="#16a34a" strokeWidth={2.5} />
                 <span>Hỗ trợ trả góp 0% lãi suất qua thẻ tín dụng</span>
               </div>
             </div>
@@ -946,26 +961,26 @@ const ProductDetail = () => {
           {/* Card 2: Hộp sản phẩm bao gồm */}
           <div className="card" style={{ padding: 'clamp(1.1rem, 2vw, 1.5rem)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#2563eb' }}>
-              <span style={{ fontSize: '1.25rem' }}>📦</span>
+              <Icon name="package" size={20} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Hộp sản phẩm bao gồm
               </h3>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.65rem' }}>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>💻</div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name="device" size={22} color="#2563eb" />
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>MacBook Pro 14 M3 Pro</div>
               </div>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>🔌</div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name="link" size={22} color="#475569" />
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Cáp MagSafe 3</div>
               </div>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>⚡</div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name="flash" size={22} color="#ea580c" />
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Củ sạc USB-C 70W / 96W</div>
               </div>
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.4rem', marginBottom: '2px' }}>📖</div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '10px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name="clipboard" size={22} color="#475569" />
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Sách hướng dẫn sử dụng</div>
               </div>
             </div>
@@ -974,7 +989,7 @@ const ProductDetail = () => {
           {/* Card 3: Cần tư vấn đặt giữ chỗ? */}
           <div className="card" style={{ padding: 'clamp(1.1rem, 2vw, 1.5rem)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#ea580c' }}>
-              <span style={{ fontSize: '1.25rem' }}>📞</span>
+              <Icon name="phone" size={20} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Cần tư vấn đặt giữ chỗ?
               </h3>

@@ -1,3 +1,5 @@
+import Icon from '../common/Icons';
+
 /**
  * ChatInput.jsx — Khung nhập câu hỏi với hỗ trợ nhấn Enter để gửi
  */
@@ -13,6 +15,8 @@ const ChatInput = ({ input, setInput, sending, onSend }) => {
       onSend();
     }
   };
+
+  const disabled = sending || !input.trim();
 
   return (
     <form
@@ -47,24 +51,27 @@ const ChatInput = ({ input, setInput, sending, onSend }) => {
       />
       <button
         type="submit"
-        disabled={sending || !input.trim()}
+        disabled={disabled}
         style={{
-          backgroundColor: sending || !input.trim() ? '#94a3b8' : '#2563eb',
+          backgroundColor: disabled ? '#94a3b8' : '#2563eb',
           color: '#ffffff',
           border: 'none',
           borderRadius: '10px',
           padding: '0.62rem 0.95rem',
           fontWeight: 700,
           fontSize: '0.84rem',
-          cursor: sending || !input.trim() ? 'not-allowed' : 'pointer',
-          transition: 'background-color 0.15s ease'
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.35rem',
+          transition: 'background-color 150ms ease'
         }}
       >
-        Gửi
+        <span>Gửi</span>
+        <Icon name="arrow-right" size={14} className="ui-icon-nudge-right" />
       </button>
     </form>
   );
 };
 
 export default ChatInput;
-

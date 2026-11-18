@@ -8,6 +8,7 @@ import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
 import useNotification from '../../hooks/useNotification';
+import Icon from '../../components/common/Icons';
 
 // Danh sách các trạng thái Backend hỗ trợ cho bộ lọc ECOM-291
 const STATUS_OPTIONS = [
@@ -38,27 +39,27 @@ const QUICK_FILTER_TABS = [
 // Quy trình chuyển đổi trạng thái đồng bộ với State Machine trong OrderServiceImpl Backend
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [
-    { target: ORDER_STATUS.CONFIRMED, label: '✓ Duyệt / Xác nhận đơn', variant: 'primary' },
-    { target: ORDER_STATUS.PAID, label: '💳 Xác nhận đã thu tiền', variant: 'primary', onlineOnly: true },
-    { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
+    { target: ORDER_STATUS.CONFIRMED, label: 'Duyệt / Xác nhận đơn', icon: 'check', variant: 'primary' },
+    { target: ORDER_STATUS.PAID, label: 'Xác nhận đã thu tiền', icon: 'payment', variant: 'primary', onlineOnly: true },
+    { target: ORDER_STATUS.CANCELLED, label: 'Hủy đơn hàng', icon: 'cancel', variant: 'danger' }
   ],
   [ORDER_STATUS.PAID]: [
-    { target: ORDER_STATUS.CONFIRMED, label: '✓ Duyệt / Xác nhận đơn', variant: 'primary' },
-    { target: ORDER_STATUS.PROCESSING, label: '📦 Chuẩn bị hàng ngay', variant: 'primary' },
-    { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
+    { target: ORDER_STATUS.CONFIRMED, label: 'Duyệt / Xác nhận đơn', icon: 'check', variant: 'primary' },
+    { target: ORDER_STATUS.PROCESSING, label: 'Chuẩn bị hàng ngay', icon: 'package', variant: 'primary' },
+    { target: ORDER_STATUS.CANCELLED, label: 'Hủy đơn hàng', icon: 'cancel', variant: 'danger' }
   ],
   [ORDER_STATUS.CONFIRMED]: [
-    { target: ORDER_STATUS.PROCESSING, label: '📦 Bắt đầu đóng gói', variant: 'primary' },
-    { target: ORDER_STATUS.SHIPPING, label: '🚚 Bàn giao vận chuyển', variant: 'primary' },
-    { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
+    { target: ORDER_STATUS.PROCESSING, label: 'Bắt đầu đóng gói', icon: 'package', variant: 'primary' },
+    { target: ORDER_STATUS.SHIPPING, label: 'Bàn giao vận chuyển', icon: 'shipping', variant: 'primary' },
+    { target: ORDER_STATUS.CANCELLED, label: 'Hủy đơn hàng', icon: 'cancel', variant: 'danger' }
   ],
   [ORDER_STATUS.PROCESSING]: [
-    { target: ORDER_STATUS.SHIPPING, label: '🚚 Bàn giao vận chuyển', variant: 'primary' },
-    { target: ORDER_STATUS.CANCELLED, label: '✕ Hủy đơn hàng', variant: 'danger' }
+    { target: ORDER_STATUS.SHIPPING, label: 'Bàn giao vận chuyển', icon: 'shipping', variant: 'primary' },
+    { target: ORDER_STATUS.CANCELLED, label: 'Hủy đơn hàng', icon: 'cancel', variant: 'danger' }
   ],
   [ORDER_STATUS.SHIPPING]: [
-    { target: ORDER_STATUS.DELIVERED, label: '✓ Giao thành công (Hoàn thành)', variant: 'success' },
-    { target: ORDER_STATUS.CANCELLED, label: '✕ Giao thất bại / Hủy đơn', variant: 'danger' }
+    { target: ORDER_STATUS.DELIVERED, label: 'Giao thành công (Hoàn thành)', icon: 'completed', variant: 'success' },
+    { target: ORDER_STATUS.CANCELLED, label: 'Giao thất bại / Hủy đơn', icon: 'cancel', variant: 'danger' }
   ],
   [ORDER_STATUS.DELIVERED]: [],
   [ORDER_STATUS.CANCELLED]: [],
@@ -450,7 +451,8 @@ const AdminOrders = () => {
           }}
           title="Làm mới dữ liệu từ máy chủ"
         >
-          <span>🔄</span> {loading ? 'Đang tải...' : 'Làm mới dữ liệu'}
+          <Icon name="refresh" size={14} spin={loading} />
+          <span>{loading ? 'Đang tải...' : 'Làm mới dữ liệu'}</span>
         </button>
       </div>
 
@@ -470,10 +472,14 @@ const AdminOrders = () => {
                 borderRadius: '6px',
                 fontWeight: 600,
                 fontSize: '0.85rem',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              🔄 Thử lại kết nối
+              <Icon name="refresh" size={14} />
+              <span>Thử lại kết nối</span>
             </button>
           </div>
         </div>
@@ -539,10 +545,11 @@ const AdminOrders = () => {
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: '#94a3b8',
-                fontSize: '0.9rem'
+                display: 'inline-flex',
+                pointerEvents: 'none'
               }}
             >
-              🔍
+              <Icon name="search" size={15} />
             </span>
             <input
               type="text"
@@ -623,8 +630,9 @@ const AdminOrders = () => {
             paddingTop: '0.25rem'
           }}
         >
-          <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#475569' }}>
-            📅 Lọc theo ngày đặt hàng:
+          <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+            <Icon name="calendar" size={14} color="#64748b" />
+            <span>Lọc theo ngày đặt hàng:</span>
           </span>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             <label htmlFor="order-filter-start-date" style={{ fontSize: '0.8rem', color: '#64748b' }}>
@@ -687,7 +695,10 @@ const AdminOrders = () => {
                 cursor: 'pointer'
               }}
             >
-              ✕ Xóa lọc ngày
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name="close" size={12} />
+                <span>Xóa lọc ngày</span>
+              </span>
             </button>
           )}
         </div>
@@ -700,7 +711,7 @@ const AdminOrders = () => {
               <span> (Trạng thái: <strong>{ORDER_STATUS_LABELS[statusFilter] || statusFilter}</strong>)</span>
             )}
             {(startDate || endDate) && (
-              <span> (Ngày đặt: <strong>{startDate || '...'} → {endDate || '...'}</strong>)</span>
+              <span> (Ngày đặt: <strong>{startDate || '...'} — {endDate || '...'}</strong>)</span>
             )}
           </span>
           {(searchTerm || statusFilter || startDate || endDate || sortBy !== 'id') && (
@@ -716,10 +727,11 @@ const AdminOrders = () => {
                 fontSize: '0.85rem',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.25rem'
+                gap: '0.3rem'
               }}
             >
-              🔄 Đặt lại bộ lọc
+              <Icon name="refresh" size={14} />
+              <span>Đặt lại bộ lọc</span>
             </button>
           )}
         </div>
@@ -735,7 +747,9 @@ const AdminOrders = () => {
         ) : error && orders.length === 0 ? (
           /* API ERROR STATE */
           <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#dc2626' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#fef2f2', color: '#dc2626', marginBottom: '0.75rem' }}>
+              <Icon name="warning" size={28} />
+            </div>
             <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#991b1b', margin: '0 0 0.5rem' }}>
               Không thể tải danh sách đơn hàng từ máy chủ
             </p>
@@ -753,16 +767,22 @@ const AdminOrders = () => {
                 borderRadius: '6px',
                 fontWeight: 600,
                 fontSize: '0.875rem',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              🔄 Thử lại kết nối
+              <Icon name="refresh" size={14} />
+              <span>Thử lại kết nối</span>
             </button>
           </div>
         ) : displayedOrders.length === 0 ? (
           /* EMPTY STATE */
           <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>📑</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#f1f5f9', color: '#64748b', marginBottom: '0.75rem' }}>
+              <Icon name="clipboard" size={28} />
+            </div>
             <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#1e293b', margin: '0 0 0.5rem' }}>
               Không có đơn hàng nào phù hợp
             </p>
@@ -829,14 +849,15 @@ const AdminOrders = () => {
                             {order.receiverName || order.userEmail || `Khách hàng #${order.userId || order.id}`}
                           </div>
                           {order.receiverPhone && (
-                            <div style={{ fontSize: '0.775rem', color: '#64748b', whiteSpace: 'nowrap' }}>
-                              📞 {order.receiverPhone}
+                            <div style={{ fontSize: '0.775rem', color: '#64748b', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', marginTop: '2px' }}>
+                              <Icon name="phone" size={12} color="#64748b" />
+                              <span>{order.receiverPhone}</span>
                             </div>
                           )}
                         </td>
 
                         {/* 3. Ngày đặt hàng */}
-                        <td style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'nowrap' }}>
+                        <td style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                           {order.createdAt
                             ? new Date(order.createdAt).toLocaleString('vi-VN', {
                                 year: 'numeric',
@@ -849,7 +870,7 @@ const AdminOrders = () => {
                         </td>
 
                         {/* 4. Tổng tiền */}
-                        <td style={{ fontWeight: 700, color: '#2563eb', fontSize: '0.95rem', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                        <td style={{ fontWeight: 700, color: '#2563eb', fontSize: '0.95rem', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                           <span style={{ whiteSpace: 'nowrap', display: 'inline-block' }}>
                             {formatCurrency(order.totalAmount || 0)}
                           </span>
@@ -865,11 +886,14 @@ const AdminOrders = () => {
                               backgroundColor: '#f1f5f9',
                               color: '#334155',
                               fontWeight: 600,
-                              display: 'inline-block',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
                               whiteSpace: 'nowrap'
                             }}
                           >
-                            {order.paymentMethod === 'MOCK_ONLINE' ? '💳 Trực tuyến' : '💵 COD'}
+                            <Icon name={order.paymentMethod === 'MOCK_ONLINE' ? 'card' : 'wallet'} size={13} color="#475569" />
+                            <span>{order.paymentMethod === 'MOCK_ONLINE' ? 'Trực tuyến' : 'COD'}</span>
                           </span>
                         </td>
 
@@ -878,18 +902,21 @@ const AdminOrders = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
                             <OrderStatus status={order.status} />
                             {order.status === ORDER_STATUS.PAID && (
-                              <span style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 600 }}>
-                                ⏳ Chờ Shop duyệt đơn
+                              <span style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <Icon name="clock" size={11} color="#2563eb" />
+                                <span>Chờ Shop duyệt đơn</span>
                               </span>
                             )}
                             {order.status === ORDER_STATUS.PENDING && (
-                              <span style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: 600 }}>
-                                {order.paymentMethod === 'MOCK_ONLINE' ? '⏳ Chờ khách TT / Duyệt' : '⏳ Chờ Shop duyệt đơn'}
+                              <span style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <Icon name="clock" size={11} color="#b45309" />
+                                <span>{order.paymentMethod === 'MOCK_ONLINE' ? 'Chờ khách TT / Duyệt' : 'Chờ Shop duyệt đơn'}</span>
                               </span>
                             )}
                             {order.status === ORDER_STATUS.CONFIRMED && (
-                              <span style={{ fontSize: '0.7rem', color: '#0369a1', fontWeight: 600 }}>
-                                ✓ Shop đã duyệt
+                              <span style={{ fontSize: '0.7rem', color: '#0369a1', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <Icon name="check" size={11} color="#0369a1" />
+                                <span>Shop đã duyệt</span>
                               </span>
                             )}
                           </div>
@@ -920,7 +947,8 @@ const AdminOrders = () => {
                               }}
                               title="Xem chi tiết đơn hàng"
                             >
-                              <span>👁️</span> Chi tiết
+                              <Icon name="eye" size={14} />
+                              <span>Chi tiết</span>
                             </button>
 
                             {/* Các nút chuyển trạng thái theo quy trình */}
@@ -942,6 +970,7 @@ const AdminOrders = () => {
                                   whiteSpace: 'nowrap',
                                   display: 'inline-flex',
                                   alignItems: 'center',
+                                  gap: '0.3rem',
                                   border:
                                     trans.variant === 'danger'
                                       ? '1px solid #fecaca'
@@ -963,18 +992,21 @@ const AdminOrders = () => {
                                   transition: 'all 0.15s ease'
                                 }}
                               >
-                                {trans.label}
+                                <Icon name={trans.icon || 'arrow-right'} size={13} />
+                                <span>{trans.label}</span>
                               </button>
                             ))}
 
                             {isDelivered && (
-                              <span style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 600, height: '30px', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', padding: '0 0.25rem' }}>
-                                ✓ Hoàn tất
+                              <span style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 600, height: '30px', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap', padding: '0 0.25rem' }}>
+                                <Icon name="check-circle" size={13} color="#166534" />
+                                <span>Hoàn tất</span>
                               </span>
                             )}
                             {isCancelled && (
-                              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic', height: '30px', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', padding: '0 0.25rem' }}>
-                                ✕ Đã hủy
+                              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic', height: '30px', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap', padding: '0 0.25rem' }}>
+                                <Icon name="x-circle" size={13} color="#94a3b8" />
+                                <span>Đã hủy</span>
                               </span>
                             )}
                           </div>
@@ -1102,10 +1134,14 @@ const AdminOrders = () => {
                         borderRadius: '6px',
                         fontWeight: 600,
                         fontSize: '0.825rem',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
                       }}
                     >
-                      🔄 Thử lại tải chi tiết
+                      <Icon name="refresh" size={13} />
+                      <span>Thử lại tải chi tiết</span>
                     </button>
                   </div>
                 </div>
@@ -1220,8 +1256,9 @@ const AdminOrders = () => {
                   padding: '1.1rem'
                 }}
               >
-                <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-                  ⚙️ Cập nhật trạng thái đơn hàng
+                <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Icon name="settings" size={16} color="#2563eb" />
+                  <span>Cập nhật trạng thái đơn hàng</span>
                 </h4>
                 {(ORDER_TRANSITIONS[selectedOrder.status] || []).length === 0 ? (
                   <div style={{ fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic' }}>
@@ -1303,8 +1340,9 @@ const AdminOrders = () => {
                     </div>
 
                     {statusFormError && (
-                      <div style={{ color: '#dc2626', fontSize: '0.8rem', fontWeight: 600 }}>
-                        ⚠️ {statusFormError}
+                      <div style={{ color: '#dc2626', fontSize: '0.8rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Icon name="warning" size={14} color="#dc2626" />
+                        <span>{statusFormError}</span>
                       </div>
                     )}
 
@@ -1320,10 +1358,14 @@ const AdminOrders = () => {
                           color: '#ffffff',
                           fontWeight: 600,
                           fontSize: '0.85rem',
-                          cursor: actionLoading ? 'not-allowed' : 'pointer'
+                          cursor: actionLoading ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
                         }}
                       >
-                        {actionLoading ? '⏳ Đang cập nhật...' : '💾 Lưu trạng thái mới'}
+                        <Icon name={actionLoading ? 'loader' : 'save'} size={14} spin={actionLoading} />
+                        <span>{actionLoading ? 'Đang cập nhật...' : 'Lưu trạng thái mới'}</span>
                       </button>
                     </div>
                   </form>

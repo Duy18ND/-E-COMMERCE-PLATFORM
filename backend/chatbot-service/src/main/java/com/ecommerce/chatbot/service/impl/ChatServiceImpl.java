@@ -591,7 +591,10 @@ public class ChatServiceImpl implements ChatService {
                 6
         );
 
-        // Broaden search if strict keyword yielded empty but category/brand token exists
+        // Include out-of-stock matches if in-stock filter returns empty, then broaden multi-word keywords
+        if (products.isEmpty() && StringUtils.hasText(keyword)) {
+            products = productTools.searchProducts(keyword, null, minPrice, maxPrice, null, sort, 6);
+        }
         if (products.isEmpty() && StringUtils.hasText(keyword) && keyword.contains(" ")) {
             String firstToken = keyword.split("\\s+")[0];
             products = productTools.searchProducts(firstToken, null, minPrice, maxPrice, null, sort, 6);

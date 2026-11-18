@@ -5,6 +5,7 @@ import useCart from '../../hooks/useCart';
 import useAuth from '../../hooks/useAuth';
 import useToast from '../../hooks/useToast';
 import saleService from '../../services/saleService';
+import Icon from '../common/Icons';
 
 const FlashSaleProductCard = ({ product }) => {
   const { addToCart } = useCart();
@@ -120,18 +121,7 @@ const FlashSaleProductCard = ({ product }) => {
         justifyContent: 'space-between',
         height: '100%',
         minWidth: 0,
-        position: 'relative',
-        transition: 'all 0.25s ease'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = '0 14px 28px -4px rgba(220, 38, 38, 0.12)';
-        e.currentTarget.style.borderColor = '#fecaca';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.04)';
-        e.currentTarget.style.borderColor = '#f1f5f9';
+        position: 'relative'
       }}
     >
       <div style={{ minWidth: 0 }}>
@@ -165,12 +155,12 @@ const FlashSaleProductCard = ({ product }) => {
                 borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '2px',
+                gap: '3px',
                 zIndex: 2,
-                boxShadow: '0 2px 6px rgba(220, 38, 38, 0.4)'
+                boxShadow: '0 2px 6px rgba(220, 38, 38, 0.35)'
               }}
             >
-              <span>⚡</span>
+              <Icon name="flash" size={11} />
               <span>-{discountPercent}%</span>
             </div>
           )}
@@ -204,11 +194,8 @@ const FlashSaleProductCard = ({ product }) => {
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
-                transition: 'transform 0.35s ease'
+                objectFit: 'cover'
               }}
-              onMouseEnter={(e) => (e.target.style.transform = 'scale(1.06)')}
-              onMouseLeave={(e) => (e.target.style.transform = 'scale(1)')}
             />
           </Link>
         </div>
@@ -224,7 +211,7 @@ const FlashSaleProductCard = ({ product }) => {
             marginBottom: '0.3rem'
           }}
         >
-          <span style={{ color: '#2563eb', fontWeight: 700 }}>✓</span>
+          <Icon name="shield-check" size={13} color="#2563eb" />
           <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {product.storeName || 'ShopMart Official'}
           </span>
@@ -278,8 +265,8 @@ const FlashSaleProductCard = ({ product }) => {
         {/* Progress Bar & Sold Count */}
         <div style={{ marginBottom: '0.85rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.2rem', fontSize: '0.7rem', marginBottom: '0.25rem' }}>
-            <span style={{ color: '#ea580c', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '2px' }}>
-              <span>🔥</span>
+            <span style={{ color: '#ea580c', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <Icon name="flame" size={13} color="#ea580c" />
               <span>{product.statusText || 'Đang bán chạy'}</span>
             </span>
             <span style={{ color: '#64748b', fontWeight: 600 }}>
@@ -326,9 +313,12 @@ const FlashSaleProductCard = ({ product }) => {
             fontSize: 'clamp(0.76rem, 1.5vw, 0.85rem)',
             fontWeight: 700,
             cursor: isAdmin || isSoldOut ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s ease',
+            transition: 'background-color 150ms ease, transform 150ms ease',
             boxShadow: isSoldOut ? 'none' : '0 2px 6px rgba(220, 38, 38, 0.3)',
-            textAlign: 'center',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.3rem',
             whiteSpace: 'nowrap'
           }}
           onMouseEnter={(e) => {
@@ -338,13 +328,15 @@ const FlashSaleProductCard = ({ product }) => {
             if (!isAdmin && !isSoldOut) e.currentTarget.style.backgroundColor = '#dc2626';
           }}
         >
-          {isSoldOut ? 'Đã cháy hàng' : 'Mua ngay'}
+          <Icon name={isSoldOut ? 'out-of-stock' : 'bag-arrow'} size={14} />
+          <span>{isSoldOut ? 'Đã cháy hàng' : 'Mua ngay'}</span>
         </button>
 
         {/* Add to cart icon button */}
         <button
           onClick={handleAddToCart}
           disabled={isAdmin || isSoldOut}
+          aria-label="Thêm vào giỏ hàng"
           title={isSoldOut ? 'Đã hết suất Flash Sale' : 'Thêm vào giỏ hàng'}
           style={{
             width: '34px',
@@ -358,7 +350,7 @@ const FlashSaleProductCard = ({ product }) => {
             justifyContent: 'center',
             cursor: isAdmin || isSoldOut ? 'not-allowed' : 'pointer',
             opacity: isSoldOut ? 0.55 : 1,
-            transition: 'all 0.15s ease',
+            transition: 'background-color 150ms ease, border-color 150ms ease, color 150ms ease',
             flexShrink: 0
           }}
           onMouseEnter={(e) => {
@@ -376,20 +368,13 @@ const FlashSaleProductCard = ({ product }) => {
             }
           }}
         >
-          {isAdding ? (
-            <span style={{ fontSize: '0.85rem', fontWeight: 800 }}>✓</span>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-          )}
+          {isAdding ? <Icon name="check" size={16} strokeWidth={2.5} /> : <Icon name="cart-plus" size={16} />}
         </button>
 
         {/* Wishlist Heart Icon Button */}
         <button
           onClick={handleToggleWishlist}
+          aria-label={isWishlisted ? 'Bỏ yêu thích' : 'Yêu thích sản phẩm'}
           title={isWishlisted ? 'Bỏ yêu thích' : 'Yêu thích sản phẩm'}
           style={{
             width: '34px',
@@ -402,7 +387,7 @@ const FlashSaleProductCard = ({ product }) => {
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            transition: 'all 0.15s ease',
+            transition: 'background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease',
             flexShrink: 0
           }}
           onMouseEnter={(e) => {
@@ -418,16 +403,7 @@ const FlashSaleProductCard = ({ product }) => {
             }
           }}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill={isWishlisted ? '#dc2626' : 'none'}
-            stroke={isWishlisted ? '#dc2626' : 'currentColor'}
-            strokeWidth="2"
-          >
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
+          <Icon name={isWishlisted ? 'heart-filled' : 'heart'} size={16} />
         </button>
       </div>
     </div>

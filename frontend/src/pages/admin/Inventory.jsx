@@ -6,6 +6,7 @@ import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
 import StockAdjustmentModal from '../../components/admin/StockAdjustmentModal';
+import Icon from '../../components/common/Icons';
 
 const Inventory = () => {
   const { notify } = useToast();
@@ -180,10 +181,11 @@ const Inventory = () => {
           <Button
             variant="outline"
             size="sm"
+            icon={isLoading ? 'loader' : 'refresh'}
             onClick={loadInventory}
             disabled={isLoading}
           >
-            {isLoading ? '⏳ Đang tải...' : '🔄 Làm mới'}
+            {isLoading ? 'Đang tải...' : 'Làm mới'}
           </Button>
         </div>
       </div>
@@ -193,8 +195,8 @@ const Inventory = () => {
         <div style={{ marginBottom: '1rem' }}>
           <ErrorMessage message={error} />
           <div style={{ marginTop: '0.5rem' }}>
-            <Button variant="outline" size="sm" onClick={loadInventory}>
-              🔄 Thử lại kết nối
+            <Button variant="outline" size="sm" icon="refresh" onClick={loadInventory}>
+              Thử lại kết nối
             </Button>
           </div>
         </div>
@@ -219,7 +221,21 @@ const Inventory = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <span style={{ fontSize: '1.35rem' }}>{metrics.outOfStock > 0 ? '🚨' : '⚠️'}</span>
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: metrics.outOfStock > 0 ? '#fee2e2' : '#fef3c7',
+                color: metrics.outOfStock > 0 ? '#dc2626' : '#d97706',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
+            >
+              <Icon name={metrics.outOfStock > 0 ? 'error' : 'warning'} size={20} />
+            </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
                 Cảnh báo tồn kho cần xử lý: {metrics.outOfStock} mặt hàng hết hàng, {metrics.lowStock} mặt hàng sắp hết hàng!
@@ -234,24 +250,26 @@ const Inventory = () => {
               <Button
                 variant="danger"
                 size="sm"
+                icon="out-of-stock"
                 onClick={() => {
                   setStockStatusFilter('OUT_OF_STOCK');
                   setCurrentPage(1);
                 }}
               >
-                ⛔ Xem hàng đã hết ({metrics.outOfStock})
+                Xem hàng đã hết ({metrics.outOfStock})
               </Button>
             )}
             {metrics.lowStock > 0 && (
               <Button
                 variant="outline"
                 size="sm"
+                icon="warning"
                 onClick={() => {
                   setStockStatusFilter('LOW_STOCK');
                   setCurrentPage(1);
                 }}
               >
-                ⚠️ Xem sắp hết ({metrics.lowStock})
+                Xem sắp hết ({metrics.lowStock})
               </Button>
             )}
           </div>
@@ -261,7 +279,7 @@ const Inventory = () => {
       {/* METRIC CARDS */}
       <div className="grid-cols-4" style={{ marginBottom: '1.5rem' }}>
         <div
-          className="card"
+          className="card ui-kpi-card"
           onClick={() => {
             setStockStatusFilter('');
             setCurrentPage(1);
@@ -269,11 +287,13 @@ const Inventory = () => {
           style={{
             padding: '1.25rem',
             cursor: 'pointer',
-            transition: 'transform 0.15s ease',
             border: stockStatusFilter === '' ? '2px solid #3b82f6' : '1px solid #e2e8f0'
           }}
         >
-          <span style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: 600 }}>TỔNG MẶT HÀNG</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: 600 }}>TỔNG MẶT HÀNG</span>
+            <Icon name="package" size={18} color="#2563eb" />
+          </div>
           <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0f172a', marginTop: '0.25rem' }}>
             {metrics.total}
           </div>
@@ -281,7 +301,7 @@ const Inventory = () => {
         </div>
 
         <div
-          className="card"
+          className="card ui-kpi-card"
           onClick={() => {
             setStockStatusFilter('IN_STOCK');
             setCurrentPage(1);
@@ -295,7 +315,7 @@ const Inventory = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.825rem', color: '#166534', fontWeight: 600 }}>CÒN ĐỦ HÀNG</span>
-            <span>✅</span>
+            <Icon name="in-stock" size={18} color="#16a34a" />
           </div>
           <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#16a34a', marginTop: '0.25rem' }}>
             {metrics.inStock}
@@ -304,7 +324,7 @@ const Inventory = () => {
         </div>
 
         <div
-          className="card"
+          className="card ui-kpi-card"
           onClick={() => {
             setStockStatusFilter('LOW_STOCK');
             setCurrentPage(1);
@@ -318,7 +338,7 @@ const Inventory = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.825rem', color: '#92400e', fontWeight: 600 }}>SẮP HẾT HÀNG</span>
-            <span>⚠️</span>
+            <Icon name="warning" size={18} color="#d97706" />
           </div>
           <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#d97706', marginTop: '0.25rem' }}>
             {metrics.lowStock}
@@ -327,7 +347,7 @@ const Inventory = () => {
         </div>
 
         <div
-          className="card"
+          className="card ui-kpi-card"
           onClick={() => {
             setStockStatusFilter('OUT_OF_STOCK');
             setCurrentPage(1);
@@ -341,7 +361,7 @@ const Inventory = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.825rem', color: '#991b1b', fontWeight: 600 }}>ĐÃ HẾT HÀNG</span>
-            <span>⛔</span>
+            <Icon name="out-of-stock" size={18} color="#dc2626" />
           </div>
           <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#dc2626', marginTop: '0.25rem' }}>
             {metrics.outOfStock}
@@ -371,10 +391,11 @@ const Inventory = () => {
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: '#94a3b8',
-                fontSize: '0.9rem'
+                display: 'inline-flex',
+                pointerEvents: 'none'
               }}
             >
-              🔍
+              <Icon name="search" size={16} />
             </span>
             <input
               type="text"
@@ -457,10 +478,14 @@ const Inventory = () => {
                 color: '#2563eb',
                 cursor: 'pointer',
                 fontWeight: 600,
-                fontSize: '0.85rem'
+                fontSize: '0.85rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}
             >
-              🔄 Đặt lại bộ lọc
+              <Icon name="refresh" size={14} />
+              <span>Đặt lại bộ lọc</span>
             </button>
           )}
         </div>
@@ -476,14 +501,16 @@ const Inventory = () => {
           <div style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
             <ErrorMessage message={error} />
             <div style={{ marginTop: '1rem' }}>
-              <Button variant="primary" size="sm" onClick={loadInventory}>
-                🔄 Thử lại kết nối
+              <Button variant="primary" size="sm" icon="refresh" onClick={loadInventory}>
+                Thử lại kết nối
               </Button>
             </div>
           </div>
         ) : filteredInventory.length === 0 ? (
           <div style={{ padding: '3.5rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📦</div>
+            <div style={{ width: '60px', height: '60px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="package" size={28} />
+            </div>
             <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f172a' }}>Không tìm thấy mặt hàng nào phù hợp</p>
             <p style={{ fontSize: '0.85rem' }}>Thử thay đổi từ khóa tìm kiếm hoặc bỏ chọn bộ lọc trạng thái</p>
             <Button variant="secondary" size="sm" onClick={handleResetFilter} style={{ marginTop: '0.75rem' }}>
@@ -509,6 +536,12 @@ const Inventory = () => {
                     const currentStock = Number(item.stockQuantity ?? item.stock ?? 0);
                     const threshold = Number(item.minThreshold || 5);
                     const statusInfo = getInventoryStatus(currentStock, threshold);
+                    const statusIconName =
+                      statusInfo.status === 'OUT_OF_STOCK'
+                        ? 'out-of-stock'
+                        : statusInfo.status === 'LOW_STOCK'
+                          ? 'warning'
+                          : 'in-stock';
 
                     return (
                       <tr
@@ -568,14 +601,14 @@ const Inventory = () => {
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '0.3rem',
+                              gap: '0.35rem',
                               padding: '0.35rem 0.65rem',
                               borderRadius: '9999px',
                               fontSize: '0.8rem',
                               fontWeight: 700
                             }}
                           >
-                            <span>{statusInfo.icon}</span>
+                            <Icon name={statusIconName} size={13} />
                             <span>{statusInfo.label}</span>
                           </span>
                         </td>
@@ -583,6 +616,7 @@ const Inventory = () => {
                           <Button
                             variant="primary"
                             size="sm"
+                            icon="settings"
                             onClick={() => handleOpenAdjustmentModal(item)}
                             style={{
                               display: 'inline-flex',
@@ -592,8 +626,7 @@ const Inventory = () => {
                               padding: '0.4rem 0.75rem'
                             }}
                           >
-                            <span>⚙️</span>
-                            <span>Điều chỉnh kho</span>
+                            Điều chỉnh kho
                           </Button>
                         </td>
                       </tr>

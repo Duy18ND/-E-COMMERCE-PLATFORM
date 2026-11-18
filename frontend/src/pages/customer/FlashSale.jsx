@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import saleService from '../../services/saleService';
 import FlashCountdown from '../../components/sale/FlashCountdown';
 import FlashSaleProductCard from '../../components/sale/FlashSaleProductCard';
+import Icon from '../../components/common/Icons';
 
 const FlashSale = () => {
   const productsRef = useRef(null);
@@ -69,7 +70,7 @@ const FlashSale = () => {
     switch (currentCampaignStatus) {
       case 'UPCOMING':
         return {
-          icon: '⏳',
+          icon: 'clock',
           badge: 'SẮP DIỄN RA',
           title: 'Chương trình Flash Sale chưa bắt đầu',
           desc: 'Khung giờ vàng sắp mở bán. Hãy thêm sản phẩm vào danh sách Yêu thích để sẵn sàng săn deal ngay khi mở suất!',
@@ -79,7 +80,7 @@ const FlashSale = () => {
         };
       case 'ENDED':
         return {
-          icon: '🏁',
+          icon: 'check-circle',
           badge: 'ĐÃ KẾT THÚC',
           title: 'Chương trình Flash Sale đã kết thúc',
           desc: 'Khung giờ Flash Sale này đã khép lại. Quý khách vui lòng chuyển sang khung giờ đang diễn ra hoặc sắp mở bán.',
@@ -89,7 +90,7 @@ const FlashSale = () => {
         };
       case 'PAUSED':
         return {
-          icon: '⏸️',
+          icon: 'pause-circle',
           badge: 'TẠM DỪNG',
           title: 'Chiến dịch Flash Sale đang tạm dừng',
           desc: 'Ban quản trị đang tạm dừng chiến dịch để cập nhật tồn kho khuyến mãi. Vui lòng quay lại sau ít phút.',
@@ -99,7 +100,7 @@ const FlashSale = () => {
         };
       default:
         return {
-          icon: '⚡',
+          icon: 'flash',
           badge: 'ĐANG DIỄN RA',
           title: 'Flash Sale giờ vàng đang mở bán',
           desc: 'Giá ưu đãi độc quyền áp dụng trực tiếp khi đặt hàng. Số lượng suất ưu đãi có hạn!',
@@ -205,7 +206,7 @@ const FlashSale = () => {
                   marginBottom: '1.15rem'
                 }}
               >
-                <span>⚡</span>
+                <Icon name="flash" size={14} />
                 <span>{activeCampaign?.categoryTag || 'CHƯƠNG TRÌNH ĐỘC QUYỀN 24 GIỜ'}</span>
               </div>
 
@@ -217,14 +218,19 @@ const FlashSale = () => {
                   lineHeight: 1.15,
                   letterSpacing: '-0.02em',
                   marginBottom: '0.85rem',
-                  color: '#ffffff'
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  flexWrap: 'wrap'
                 }}
               >
+                <Icon name="flash" size={32} color="#fb923c" />
                 {activeCampaign?.name ? (
-                  <>⚡ {activeCampaign.name}</>
+                  <span>{activeCampaign.name}</span>
                 ) : (
-                  <>
-                    ⚡ FLASH SALE{' '}
+                  <span>
+                    FLASH SALE{' '}
                     <span
                       style={{
                         background: 'linear-gradient(90deg, #f87171 0%, #fb923c 100%)',
@@ -234,7 +240,7 @@ const FlashSale = () => {
                     >
                       CÔNG NGHỆ
                     </span>
-                  </>
+                  </span>
                 )}
               </h1>
 
@@ -263,6 +269,7 @@ const FlashSale = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
                 <button
                   onClick={scrollToProducts}
+                  className="ui-hover-lift"
                   style={{
                     backgroundColor: '#dc2626',
                     color: '#ffffff',
@@ -275,13 +282,10 @@ const FlashSale = () => {
                     alignItems: 'center',
                     gap: '0.5rem',
                     boxShadow: '0 8px 24px -4px rgba(220, 38, 38, 0.6)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
+                    cursor: 'pointer'
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#b91c1c')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#dc2626')}
                 >
-                  <span>🔥</span>
+                  <Icon name="flame" size={16} color="#fde047" />
                   <span>Săn sale ngay</span>
                 </button>
 
@@ -299,13 +303,13 @@ const FlashSale = () => {
                     alignItems: 'center',
                     gap: '0.4rem',
                     cursor: 'pointer',
-                    transition: 'all 0.2s'
+                    transition: 'background-color 0.2s ease'
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)')}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
                 >
                   <span>Xem khung giờ tiếp theo</span>
-                  <span>↓</span>
+                  <Icon name="chevron-down" size={16} />
                 </button>
               </div>
             </div>
@@ -378,7 +382,7 @@ const FlashSale = () => {
                       Cam kết bảo hành chính hãng 100%
                     </div>
                   </div>
-                  <span style={{ color: '#22c55e', fontSize: '1.4rem', flexShrink: 0 }}>✓</span>
+                  <Icon name="check-circle" size={22} color="#22c55e" style={{ flexShrink: 0 }} />
                 </div>
               </div>
             </div>
@@ -412,7 +416,7 @@ const FlashSale = () => {
                     backgroundColor: isSelected ? '#fef2f2' : '#f8fafc',
                     border: isSelected ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
                     cursor: 'pointer',
-                    transition: 'all 0.2s ease',
+                    transition: 'background-color 0.2s ease, border-color 0.2s ease',
                     minWidth: 0
                   }}
                 >
@@ -426,11 +430,13 @@ const FlashSale = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '1.05rem',
                       flexShrink: 0
                     }}
                   >
-                    {slot.status === 'ACTIVE' ? '⚡' : slot.status === 'UPCOMING' ? '⏱️' : '✓'}
+                    <Icon
+                      name={slot.status === 'ACTIVE' ? 'flash' : slot.status === 'UPCOMING' ? 'clock' : 'check'}
+                      size={18}
+                    />
                   </div>
 
                   <div style={{ overflow: 'hidden', minWidth: 0 }}>
@@ -554,8 +560,8 @@ const FlashSale = () => {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.25rem 0.65rem',
+                gap: '0.35rem',
+                padding: '0.28rem 0.7rem',
                 borderRadius: '9999px',
                 backgroundColor: campaignStateBanner.color,
                 color: '#ffffff',
@@ -564,7 +570,7 @@ const FlashSale = () => {
                 letterSpacing: '0.03em'
               }}
             >
-              <span>{campaignStateBanner.icon}</span>
+              <Icon name={campaignStateBanner.icon} size={13} />
               <span>{campaignStateBanner.badge}</span>
             </span>
             <div>
@@ -601,11 +607,10 @@ const FlashSale = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '2.5rem',
                 marginBottom: '1.25rem'
               }}
             >
-              ⚡
+              <Icon name="flash" size={32} />
             </div>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.5rem' }}>
               Hiện chưa có sản phẩm Flash Sale
@@ -616,6 +621,7 @@ const FlashSale = () => {
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link
                 to="/products"
+                className="ui-hover-lift"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -631,7 +637,7 @@ const FlashSale = () => {
                 }}
               >
                 <span>Khám phá sản phẩm</span>
-                <span>→</span>
+                <Icon name="arrow-right" size={16} />
               </Link>
               <button
                 onClick={() => {
@@ -665,7 +671,9 @@ const FlashSale = () => {
               border: '1px solid #e2e8f0'
             }}
           >
-            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.75rem' }}>🔍</span>
+            <div style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="search" size={26} />
+            </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
               Không có sản phẩm trong bộ lọc này
             </h3>
@@ -706,7 +714,7 @@ const FlashSale = () => {
 
       {/* 5. VALUE PROPOSITION BOTTOM TRUST BANNERS (NHƯ TRONG ẢNH MẪU 1) */}
       <section className="container" style={{ marginTop: '3.5rem' }}>
-        <div className="grid-cols-4" style={{ gap: '1rem' }}>
+        <div className="grid-cols-4 ui-stagger" style={{ gap: '1rem' }}>
           <div
             className="card"
             style={{
@@ -728,12 +736,11 @@ const FlashSale = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.35rem',
                 flexShrink: 0,
                 boxShadow: '0 2px 6px rgba(37, 99, 235, 0.15)'
               }}
             >
-              🛡️
+              <Icon name="shield-check" size={20} />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
@@ -766,19 +773,18 @@ const FlashSale = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.35rem',
                 flexShrink: 0,
                 boxShadow: '0 2px 6px rgba(220, 38, 38, 0.15)'
               }}
             >
-              ⚡
+              <Icon name="flash" size={20} />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
                 Giao Hỏa Tốc 2H
               </div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                Áp dụng nội thành TP.HCM & Hà Nội
+                Áp dụng nội thành TP.HCM &amp; Hà Nội
               </div>
             </div>
           </div>
@@ -804,12 +810,11 @@ const FlashSale = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.35rem',
                 flexShrink: 0,
                 boxShadow: '0 2px 6px rgba(234, 88, 12, 0.15)'
               }}
             >
-              🔄
+              <Icon name="refresh" size={20} />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
@@ -842,12 +847,11 @@ const FlashSale = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.35rem',
                 flexShrink: 0,
                 boxShadow: '0 2px 6px rgba(124, 58, 237, 0.15)'
               }}
             >
-              💳
+              <Icon name="card" size={20} />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>

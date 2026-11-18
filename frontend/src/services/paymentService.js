@@ -74,24 +74,38 @@ export const paymentService = {
    */
   mockPay: async (orderId, success = true, note = '') => {
     const isSuccess = Boolean(success);
-    try {
-      const response = await api.post(`/payments/mock-pay/${orderId}`, {
-        success: isSuccess,
-        note: note ? String(note).slice(0, 255) : undefined
-      });
-      const normalized = normalizePaymentResponse(response, orderId);
-      emitPaymentStatusSyncSignal(orderId, normalized);
-      return normalized || response;
-    } catch (err) {
-      const error = toBackendError(
-        err,
-        'Không thể thực hiện thanh toán. Máy chủ thanh toán hiện không phản hồi, vui lòng thử lại.'
-      );
-      error.status = err?.status || err?.response?.status || (isHttpResponseError(err) ? 500 : undefined);
-      error.response = err?.response;
-      error.orderId = orderId;
-      throw error;
+    const retryDelays = [600, 1000];
+    let lastErr;
+
+    for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+      try {
+        const response = await api.post(`/payments/mock-pay/${orderId}`, {
+          success: isSuccess,
+          note: note ? String(note).slice(0, 255) : undefined
+        });
+        const normalized = normalizePaymentResponse(response, orderId);
+        emitPaymentStatusSyncSignal(orderId, normalized);
+        return normalized || response;
+      } catch (err) {
+        lastErr = err;
+        const status = err?.status || err?.response?.status;
+        // Chờ ngắn khi Kafka order-created vừa mới tạo đơn và payment-service đang khởi tạo Payment record
+        if (status === 404 && attempt < retryDelays.length) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+          continue;
+        }
+        break;
+      }
     }
+
+    const error = toBackendError(
+      lastErr,
+      'Không thể thực hiện thanh toán. Máy chủ thanh toán hiện không phản hồi, vui lòng thử lại.'
+    );
+    error.status = lastErr?.status || lastErr?.response?.status || (isHttpResponseError(lastErr) ? 500 : undefined);
+    error.response = lastErr?.response;
+    error.orderId = orderId;
+    throw error;
   },
 
   /**

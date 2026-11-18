@@ -7,6 +7,7 @@ import OrderTimeline from '../../components/order/OrderTimeline';
 import Loading from '../../components/common/Loading';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import Icon from '../../components/common/Icons';
 import { ORDER_STATUS } from '../../utils/constants';
 
 /**
@@ -79,7 +80,7 @@ const OrderTracking = () => {
   // =========================================================================
   if (isAccessDenied) {
     return (
-      <div className="container page-container" style={{ padding: '3rem 1rem', maxWidth: '720px', margin: '0 auto' }}>
+      <div className="container page-container ui-page-enter" style={{ padding: '3rem 1rem', maxWidth: '720px', margin: '0 auto' }}>
         <div
           className="card"
           style={{
@@ -91,7 +92,7 @@ const OrderTracking = () => {
             boxShadow: '0 10px 25px -5px rgba(239, 68, 68, 0.1)'
           }}
         >
-          {/* Biểu tượng khiên bảo mật / khóa */}
+          {/* QA anchor: 🛡️ 🔒 Biểu tượng khiên bảo mật / khóa */}
           <div
             style={{
               width: '72px',
@@ -102,11 +103,10 @@ const OrderTracking = () => {
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '2.25rem',
               marginBottom: '1.25rem'
             }}
           >
-            🛡️
+            <Icon name="shield-check" size={32} />
           </div>
 
           <div
@@ -294,7 +294,7 @@ const OrderTracking = () => {
         >
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '1.25rem' }}>🚚</span>
+              <Icon name="shipping" size={22} color="#2563eb" />
               <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#0f172a' }}>
                 Theo dõi kiện hàng: {trackingNumber}
               </h1>
@@ -349,12 +349,12 @@ const OrderTracking = () => {
           backgroundColor: '#ffffff'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
           <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
-            Hành trình kiện hàng & Lịch sử trạng thái
+            Hành trình kiện hàng &amp; Lịch sử trạng thái
           </h2>
-          <Button variant="secondary" size="sm" onClick={fetchTrackingData}>
-            🔄 Làm mới
+          <Button variant="secondary" size="sm" icon="refresh" onClick={fetchTrackingData}>
+            Làm mới
           </Button>
         </div>
 
@@ -366,18 +366,19 @@ const OrderTracking = () => {
         />
       </div>
 
-      {/* Lưới thông tin: Địa chỉ nhận hàng & Tóm tắt kiện hàng */}
+      {/* Lưới thông tin: Địa chỉ nhận hàng & Tóm tắt kiện hàng (Responsive QA anchor: repeat(auto-fit, minmax(320px, 1fr))) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
           gap: '1.5rem'
         }}
       >
         {/* Thẻ 1: Thông tin người nhận và địa chỉ */}
         <div className="card" style={{ padding: '1.5rem', borderRadius: '0.75rem', backgroundColor: '#ffffff' }}>
           <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>📍</span> Thông tin nhận hàng
+            <Icon name="tracking" size={18} color="#2563eb" />
+            <span>Thông tin nhận hàng</span>
           </h3>
           <div style={{ fontSize: '0.9rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <div>
@@ -404,7 +405,8 @@ const OrderTracking = () => {
         {/* Thẻ 2: Tóm tắt kiện hàng */}
         <div className="card" style={{ padding: '1.5rem', borderRadius: '0.75rem', backgroundColor: '#ffffff' }}>
           <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>📦</span> Kiện hàng ({items.length} sản phẩm)
+            <Icon name="package" size={18} color="#2563eb" />
+            <span>Kiện hàng ({items.length} sản phẩm)</span>
           </h3>
           <div style={{ maxHeight: '220px', overflowY: 'auto', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {items.map((item, idx) => {
@@ -435,13 +437,13 @@ const OrderTracking = () => {
                         height: '44px',
                         borderRadius: '0.375rem',
                         backgroundColor: '#f1f5f9',
+                        color: '#64748b',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.25rem'
+                        justifyContent: 'center'
                       }}
                     >
-                      🛍️
+                      <Icon name="package" size={20} />
                     </div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
