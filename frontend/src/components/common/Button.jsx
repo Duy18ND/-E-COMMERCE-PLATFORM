@@ -69,6 +69,13 @@ const Button = ({
   const colorStyles = getColors();
 
   const isDisabled = disabled || loading;
+  const iconSize = size === 'sm' ? 14 : size === 'lg' ? 18 : 16;
+  const renderedIcon =
+    typeof icon === 'string' && icon.trim() ? (
+      <Icon name={icon.trim()} size={iconSize} spin={icon.trim() === 'loader'} />
+    ) : (
+      icon
+    );
 
   const baseStyles = {
     padding: getPadding(),
@@ -116,7 +123,7 @@ const Button = ({
       }}
       {...props}
     >
-      {loading ? <Icon name="loader" size={15} spin /> : icon}
+      {loading ? <Icon name="loader" size={15} spin /> : renderedIcon}
       {children}
     </button>
   );
