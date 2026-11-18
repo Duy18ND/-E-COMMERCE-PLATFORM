@@ -1,6 +1,7 @@
 import api, { isHttpResponseError, toBackendError } from './api';
 import { INITIAL_CATEGORIES } from './mockData';
 import { MOCK_CATEGORIES } from '../mock/mockCategories';
+import { fixUtf8Mojibake } from './voucherService';
 
 const STORAGE_KEY = 'shopmart_admin_categories';
 
@@ -50,19 +51,20 @@ export const CATEGORY_ALIAS_MAP = {
 export const normalizeCategory = (cat, index = 0) => {
   if (!cat) return null;
   if (typeof cat === 'string') {
+    const cleanCat = fixUtf8Mojibake(cat);
     const matched = INITIAL_CATEGORIES.find(
       (c) =>
-        c.id.toLowerCase() === cat.toLowerCase() ||
-        c.name.toLowerCase() === cat.toLowerCase() ||
-        c.aliases?.includes(cat.toLowerCase())
+        c.id.toLowerCase() === cleanCat.toLowerCase() ||
+        c.name.toLowerCase() === cleanCat.toLowerCase() ||
+        c.aliases?.includes(cleanCat.toLowerCase())
     );
     return (
       matched || {
-        id: cat,
-        slug: cat.toLowerCase().replace(/\s+/g, '-'),
-        name: cat,
-        description: `Danh mục ${cat}`,
-        desc: `Danh mục ${cat}`,
+        id: cleanCat,
+        slug: cleanCat.toLowerCase().replace(/\s+/g, '-'),
+        name: cleanCat,
+        description: `Danh mục ${cleanCat}`,
+        desc: `Danh mục ${cleanCat}`,
         count: '100+ SP',
         iconBg: '#eff6ff',
         iconColor: '#2563eb',
@@ -74,7 +76,7 @@ export const normalizeCategory = (cat, index = 0) => {
     );
   }
 
-  const rawName = (cat.name || '').trim();
+  const rawName = fixUtf8Mojibake((cat.name || '').trim());
   const rawId = String(cat.id ?? index + 1).trim();
 
   // Tìm preset giao diện tương ứng trong INITIAL_CATEGORIES
@@ -87,7 +89,7 @@ export const normalizeCategory = (cat, index = 0) => {
   const preset = matchedPreset || INITIAL_CATEGORIES[index % INITIAL_CATEGORIES.length];
 
   const image = cat.imageUrl || cat.image || preset.image;
-  const description = cat.description || cat.desc || preset.description;
+  const description = fixUtf8Mojibake(cat.description || cat.desc || preset.description);
   const parsedCount = Number(cat.productCount ?? 0);
   const productCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
 

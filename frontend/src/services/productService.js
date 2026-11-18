@@ -2,6 +2,7 @@ import api from './api';
 import { INITIAL_PRODUCTS } from './mockData';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
 import { CATEGORY_ALIAS_MAP, matchesCategoryFilter } from './categoryService';
+import { fixUtf8Mojibake } from './voucherService';
 
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
@@ -42,10 +43,11 @@ export const resolveCategorySlug = (categoryValue, explicitCategoryId = '') => {
 export const normalizeProduct = (product) => {
   if (!product || typeof product !== 'object') return null;
 
-  const categoryName =
+  const categoryName = fixUtf8Mojibake(
     typeof product.category === 'object'
       ? product.category?.name || 'Chưa phân loại'
-      : product.category || 'Chưa phân loại';
+      : product.category || 'Chưa phân loại'
+  );
 
   const stockValue = Number(product.stockQuantity ?? product.stock ?? 0);
   const priceValue = Number(product.price ?? 0);
@@ -60,7 +62,7 @@ export const normalizeProduct = (product) => {
   return {
     ...product,
     id: product.id,
-    name: product.name || 'Sản phẩm ShopMart',
+    name: fixUtf8Mojibake(product.name) || 'Sản phẩm ShopMart',
     category: categoryName,
     categoryId: resolveCategorySlug(categoryName, product.categoryId),
     price: priceValue,
@@ -78,7 +80,7 @@ export const normalizeProduct = (product) => {
     stockQuantity: stockValue,
     imageUrl: product.imageUrl || product.image || DEFAULT_PRODUCT_IMAGE,
     description:
-      product.description ||
+      fixUtf8Mojibake(product.description) ||
       'Sản phẩm công nghệ chính hãng phân phối tại hệ thống ShopMart E-Commerce.'
   };
 };

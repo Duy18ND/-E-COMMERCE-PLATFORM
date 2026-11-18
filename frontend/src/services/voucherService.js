@@ -9,6 +9,75 @@ import { INITIAL_VOUCHERS } from '../mock/mockVouchers.js';
 const STORAGE_VOUCHERS_KEY = 'app_vouchers';
 const STORAGE_SAVED_KEY = 'app_user_saved_vouchers';
 
+const CP1252_REVERSE_MAP = {
+  0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85,
+  0x2020: 0x86, 0x2021: 0x87, 0x02c6: 0x88, 0x2030: 0x89, 0x0160: 0x8a,
+  0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e, 0x2018: 0x91, 0x2019: 0x92,
+  0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+  0x02dc: 0x98, 0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c,
+  0x017e: 0x9e, 0x0178: 0x9f
+};
+
+const CANONICAL_VOUCHER_TEXT = {
+  GIAM20K: { name: 'Giảm 20K đơn đầu ngày', description: 'Giảm 20.000đ cho đơn hàng từ 200.000đ' },
+  GIAM50K: { name: 'Ưu đãi mua sắm 50K', description: 'Giảm 50.000đ cho đơn hàng từ 500.000đ' },
+  SALE10: { name: 'Siêu sale công nghệ 10%', description: 'Giảm 10% tối đa 100.000đ cho đơn từ 300.000đ' },
+  TECHVIP: { name: 'Đặc quyền Tech VIP 15%', description: 'Giảm 15% tối đa 300.000đ cho đơn từ 1.000.000đ' },
+  FREESHIP: { name: 'Miễn phí vận chuyển toàn quốc', description: 'Giảm 30.000đ phí giao hàng cho đơn từ 150.000đ' },
+  WELCOME100: { name: 'Chào mừng thành viên mới', description: 'Giảm ngay 100.000đ cho đơn hàng đầu tiên từ 800.000đ' },
+  WELCOME50: { name: 'Voucher chào mừng 50K', description: 'Giảm 50.000đ cho đơn hàng từ 200.000đ' },
+  VIP20: { name: 'Ưu đãi thành viên VIP 20%', description: 'Giảm 20% tối đa 200.000đ cho đơn từ 500.000đ' }
+};
+
+export const fixUtf8Mojibake = (str) => {
+  if (typeof str !== 'string' || !str) return str;
+  let hasNonAscii = false;
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    if (code >= 0x80) hasNonAscii = true;
+    if (code <= 0xff) {
+      bytes[i] = code;
+    } else if (CP1252_REVERSE_MAP[code] !== undefined) {
+      bytes[i] = CP1252_REVERSE_MAP[code];
+    } else {
+      return str;
+    }
+  }
+  if (!hasNonAscii) return str;
+  try {
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return decoded || str;
+  } catch {
+    return str;
+  }
+};
+
+const hasMojibakeSignature = (str) =>
+  typeof str === 'string' &&
+  (/áº|á»|Ä‘|Æ°|Æ¡|Ã |Ã¡|Ã¢|Ã£|Ãª|Ã´|Ã¹|Ãº|\uFFFD/.test(str) || fixUtf8Mojibake(str) !== str);
+
+export const normalizeVoucher = (voucher) => {
+  if (!voucher || typeof voucher !== 'object') return voucher;
+  const codeKey = String(voucher.code || '').trim().toUpperCase();
+  const canonical = CANONICAL_VOUCHER_TEXT[codeKey];
+  let name = fixUtf8Mojibake(voucher.name);
+  let description = fixUtf8Mojibake(voucher.description);
+  if (canonical) {
+    if (hasMojibakeSignature(voucher.name) || hasMojibakeSignature(name)) {
+      name = canonical.name;
+    }
+    if (hasMojibakeSignature(voucher.description) || hasMojibakeSignature(description)) {
+      description = canonical.description;
+    }
+  }
+  return {
+    ...voucher,
+    name,
+    description
+  };
+};
+
 const notifyVouchersChanged = () => {
   try {
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -111,8 +180,8 @@ const voucherService = {
   async getAll() {
     try {
       const data = await api.get('/admin/vouchers');
-      if (Array.isArray(data)) return data;
-      if (Array.isArray(data?.content)) return data.content;
+      if (Array.isArray(data)) return data.map(normalizeVoucher);
+      if (Array.isArray(data?.content)) return data.content.map(normalizeVoucher);
       return [];
     } catch (err) {
       throw toBackendError(err, 'Không thể tải danh sách mã giảm giá từ máy chủ.');
@@ -124,7 +193,7 @@ const voucherService = {
     try {
       const data = await api.get(`/admin/vouchers/${id}`);
       if (!data) throw new Error('Không tìm thấy voucher');
-      return data;
+      return normalizeVoucher(data);
     } catch (err) {
       throw toBackendError(err, 'Không thể tải chi tiết mã giảm giá.');
     }
@@ -212,10 +281,10 @@ const voucherService = {
     try {
       const data = await api.get('/vouchers/active');
       if (Array.isArray(data)) {
-        return data;
+        return data.map(normalizeVoucher);
       }
       if (Array.isArray(data?.content)) {
-        return data.content;
+        return data.content.map(normalizeVoucher);
       }
       return [];
     } catch (err) {
@@ -259,9 +328,9 @@ const voucherService = {
     try {
       const activeFromApi = await api.get('/vouchers/active');
       const list = Array.isArray(activeFromApi)
-        ? activeFromApi
+        ? activeFromApi.map(normalizeVoucher)
         : Array.isArray(activeFromApi?.content)
-          ? activeFromApi.content
+          ? activeFromApi.content.map(normalizeVoucher)
           : [];
       const ids = this.getSavedIds();
       return list.filter((v) => ids.includes(Number(v.id)));
@@ -290,7 +359,7 @@ const voucherService = {
       });
       if (res && res.voucher) {
         return {
-          voucher: res.voucher,
+          voucher: normalizeVoucher(res.voucher),
           discountAmount: Number(res.discountAmount) || 0
         };
       }
