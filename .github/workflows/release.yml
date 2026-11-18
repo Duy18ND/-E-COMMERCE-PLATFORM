@@ -5,18 +5,13 @@ on:
     workflows: ["Continuous Integration (CI)"]
     types: [ completed ]
     branches: [ main ]
-  push:
-    tags: [ 'v*.*.*' ]
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: 'Custom Image Tag (optional; leave empty for default sha-xxxxxxx tag; "latest" is rejected)'
-        required: false
-        default: ''
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: release-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   # ─────────────────────────────────────────────────────────────
@@ -25,7 +20,16 @@ jobs:
   build-and-push:
     name: Build & Push ${{ matrix.service.name }}
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
+    permissions:
+      contents: read
+      packages: write
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'Continuous Integration (CI)' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
@@ -56,16 +60,23 @@ jobs:
               VITE_USE_MOCK_AUTH=false
 
     steps:
-      - name: Resolve Exact Release Commit & Branch Policy
+      - name: Checkout Trusted Repository History
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve & Verify Exact Release Commit in Trusted Main History
         id: resolve-ref
         env:
           EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
           WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
           WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
-          GITHUB_SHA_VAL: ${{ github.sha }}
-          GITHUB_REF_VAL: ${{ github.ref }}
+          WORKFLOW_RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          GITHUB_REPO: ${{ github.repository }}
           REPO_OWNER: ${{ github.repository_owner }}
-          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           OWNER_LC=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
           if ! [[ "$OWNER_LC" =~ ^[a-z0-9._-]+$ ]]; then
@@ -73,64 +84,42 @@ jobs:
             exit 1
           fi
 
-          if [ "$EVENT_NAME" = "workflow_run" ]; then
-            if [ "$WORKFLOW_RUN_BRANCH" != "main" ]; then
-              echo "::error ::workflow_run releases are restricted to the 'main' branch."
-              exit 1
-            fi
-            if ! [[ "$WORKFLOW_RUN_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-              echo "::error ::Invalid or missing workflow_run.head_sha."
-              exit 1
-            fi
-            CHECKOUT_REF="$WORKFLOW_RUN_SHA"
-            EXPECTED_SHA="$WORKFLOW_RUN_SHA"
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$GITHUB_REF_VAL" != "refs/heads/main" ]; then
-              echo "::error ::Manual workflow_dispatch release is restricted to refs/heads/main (received '${GITHUB_REF_VAL}')."
-              exit 1
-            fi
-            if ! [[ "$GITHUB_SHA_VAL" =~ ^[0-9a-fA-F]{40}$ ]]; then
-              echo "::error ::Invalid or missing github.sha."
-              exit 1
-            fi
-            if [ -n "$INPUT_IMAGE_TAG" ]; then
-              LOWER_TAG=$(printf '%s' "$INPUT_IMAGE_TAG" | tr '[:upper:]' '[:lower:]')
-              if [ "$LOWER_TAG" = "latest" ]; then
-                echo "::error ::Custom image_tag 'latest' is forbidden for manual release."
-                exit 1
-              fi
-              if ! [[ "$INPUT_IMAGE_TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$ ]]; then
-                echo "::error ::Invalid Docker image_tag '${INPUT_IMAGE_TAG}'."
-                exit 1
-              fi
-            fi
-            CHECKOUT_REF="$GITHUB_REF_VAL"
-            EXPECTED_SHA="$GITHUB_SHA_VAL"
-          else
-            if ! [[ "$GITHUB_SHA_VAL" =~ ^[0-9a-fA-F]{40}$ ]]; then
-              echo "::error ::Invalid or missing github.sha."
-              exit 1
-            fi
-            CHECKOUT_REF="$GITHUB_REF_VAL"
-            EXPECTED_SHA="$GITHUB_SHA_VAL"
+          if [ "$EVENT_NAME" != "workflow_run" ]; then
+            echo "::error ::Release is strictly restricted to workflow_run after Continuous Integration (CI) succeeds on main."
+            exit 1
+          fi
+          if [ "$WORKFLOW_RUN_NAME" != "Continuous Integration (CI)" ] || [ "$WORKFLOW_RUN_CONCLUSION" != "success" ]; then
+            echo "::error ::workflow_run must originate from a successful 'Continuous Integration (CI)' run."
+            exit 1
+          fi
+          if [ "$WORKFLOW_RUN_EVENT" != "push" ] || [ "$WORKFLOW_RUN_HEAD_REPO" != "$GITHUB_REPO" ]; then
+            echo "::error ::Refusing workflow_run from pull_request or external fork repository."
+            exit 1
+          fi
+          if [ "$WORKFLOW_RUN_BRANCH" != "main" ]; then
+            echo "::error ::workflow_run releases are restricted to the 'main' branch."
+            exit 1
+          fi
+          if ! [[ "$WORKFLOW_RUN_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error ::Invalid or missing workflow_run.head_sha."
+            exit 1
+          fi
+          EXPECTED_SHA="$WORKFLOW_RUN_SHA"
+
+          MAIN_HEAD=$(git rev-parse --verify "refs/remotes/origin/main^{commit}" 2>/dev/null || git rev-parse --verify "refs/heads/main^{commit}" 2>/dev/null || true)
+          RESOLVED_COMMIT=$(git rev-parse --verify "${EXPECTED_SHA}^{commit}" 2>/dev/null || true)
+          if [ -z "$MAIN_HEAD" ] || [ -z "$RESOLVED_COMMIT" ] || [ "$RESOLVED_COMMIT" != "$EXPECTED_SHA" ]; then
+            echo "::error ::Target commit '${EXPECTED_SHA}' could not be resolved in trusted repository history."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$EXPECTED_SHA" "$MAIN_HEAD"; then
+            echo "::error ::Commit '${EXPECTED_SHA}' does not belong to 'main' branch history. Refusing to release non-main or untrusted code."
+            exit 1
+          fi
+          if [ "$MAIN_HEAD" != "$EXPECTED_SHA" ]; then
+            git checkout --detach "$EXPECTED_SHA"
           fi
 
-          echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
-          echo "checkout_ref=${CHECKOUT_REF}" >> "$GITHUB_OUTPUT"
-          echo "expected_sha=${EXPECTED_SHA}" >> "$GITHUB_OUTPUT"
-          echo "custom_tag=${INPUT_IMAGE_TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout Exact Release Commit (Full History for 7-Char Prefix Uniqueness)
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ steps.resolve-ref.outputs.checkout_ref }}
-          fetch-depth: 0
-
-      - name: Verify Exact Commit & Unique 7-Char SHA Prefix
-        id: release-meta
-        env:
-          EXPECTED_SHA: ${{ steps.resolve-ref.outputs.expected_sha }}
-        run: |
           FULL_SHA=$(git rev-parse HEAD)
           if [ "$FULL_SHA" != "$EXPECTED_SHA" ]; then
             echo "::error ::Checked-out commit '${FULL_SHA}' does not match expected release commit '${EXPECTED_SHA}'."
@@ -142,8 +131,10 @@ jobs:
             echo "::error ::7-char SHA prefix '${PREFIX_7}' is not unique or does not resolve to '${FULL_SHA}'."
             exit 1
           fi
+
+          echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
           echo "sha_tag=sha-${PREFIX_7}" >> "$GITHUB_OUTPUT"
-          echo "Verified unique 7-char SHA tag: sha-${PREFIX_7} -> ${FULL_SHA}"
+          echo "Verified unique 7-char SHA tag on main: sha-${PREFIX_7} -> ${FULL_SHA}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -161,17 +152,14 @@ jobs:
         with:
           images: ghcr.io/${{ steps.resolve-ref.outputs.owner_lc }}/${{ matrix.service.name }}
           tags: |
-            type=raw,value=${{ steps.release-meta.outputs.sha_tag }}
-            type=raw,value=latest,enable=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' }}
-            type=ref,event=tag
-            type=raw,value=${{ steps.resolve-ref.outputs.custom_tag }},enable=${{ steps.resolve-ref.outputs.custom_tag != '' }}
+            type=raw,value=${{ steps.resolve-ref.outputs.sha_tag }}
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ${{ matrix.service.context }}
           file: ${{ matrix.service.dockerfile }}
-          push: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
+          push: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Continuous Integration (CI)' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: ${{ matrix.service.build-args }}
