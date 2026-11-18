@@ -204,7 +204,7 @@ const Categories = () => {
   const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
   const MAX_IMAGE_SIZE_MB = 5;
 
-  const handleCategoryImageChange = (e) => {
+  const handleCategoryImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
