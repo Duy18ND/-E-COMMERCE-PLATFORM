@@ -2,9 +2,9 @@ name: Continuous Integration (CI)
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [ master, main ]
   push:
-    branches: [ devops-phuong, master ]
+    branches: [ devops-phuong, master, main ]
   workflow_dispatch:
 
 permissions:

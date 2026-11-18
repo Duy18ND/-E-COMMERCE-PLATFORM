@@ -199,6 +199,8 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
@@ -228,7 +230,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-ecommerce-internal-service-secret-2026}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-product_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
@@ -267,7 +269,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-ecommerce-internal-service-secret-2026}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
