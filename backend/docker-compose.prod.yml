@@ -141,7 +141,7 @@ services:
   #  4. Discovery Server (Eureka) — INTERNAL ONLY
   # ─────────────────────────────────────────────
   discovery-server:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/discovery-server:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/discovery-server:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: .
       dockerfile: discovery-server/Dockerfile
@@ -174,7 +174,7 @@ services:
   #  5. Auth Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   auth-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/auth-service:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/auth-service:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: .
       dockerfile: auth-service/Dockerfile
@@ -199,6 +199,8 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
     networks:
       - ecommerce-network
@@ -213,7 +215,7 @@ services:
   #  5. Product Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   product-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/product-service:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/product-service:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: .
       dockerfile: product-service/Dockerfile
@@ -228,7 +230,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-ecommerce-internal-service-secret-2026}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-product_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
@@ -252,7 +254,7 @@ services:
   #  5. Order Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   order-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/order-service:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/order-service:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: .
       dockerfile: order-service/Dockerfile
@@ -267,7 +269,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-ecommerce-internal-service-secret-2026}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
@@ -286,7 +288,7 @@ services:
   #  5. Payment Service — INTERNAL ONLY
   # ─────────────────────────────────────────────
   payment-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/payment-service:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/payment-service:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: .
       dockerfile: payment-service/Dockerfile
@@ -319,7 +321,7 @@ services:
   #  6. API Gateway — INTERNAL ONLY
   # ─────────────────────────────────────────────
   api-gateway:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/api-gateway:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/api-gateway:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
@@ -361,7 +363,7 @@ services:
   #  7. Frontend — INTERNAL ONLY
   # ─────────────────────────────────────────────
   frontend:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/frontend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/frontend:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: ../frontend
       dockerfile: Dockerfile
