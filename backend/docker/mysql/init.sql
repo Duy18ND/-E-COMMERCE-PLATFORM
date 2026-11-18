@@ -4,6 +4,9 @@
 --  Safe for initial setup and idempotent (IF NOT EXISTS)
 -- ═══════════════════════════════════════════════════════════════
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 -- ─────────────────────────────────────────────────────────────
 --  1. Create 4 isolated databases
 -- ─────────────────────────────────────────────────────────────

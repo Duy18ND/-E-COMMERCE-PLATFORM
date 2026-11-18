@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import paymentService from '../../services/paymentService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { buildVietQrPayload, generateQrSvgDataUri } from '../../utils/qrCodeGenerator';
@@ -298,15 +299,15 @@ const QrPaymentModal = ({
   const expired = secondsLeft <= 0;
   const urgent = secondsLeft > 0 && secondsLeft <= 60;
 
-  return (
+  const modalContent = (
     <div
       className="shopmart-dialog-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby="qr-payment-title"
       style={{
-        position: 'fixed', inset: 0, zIndex: 1100,
-        backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)',
+        position: 'fixed', inset: 0, zIndex: 9999,
+        backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '1rem', overflowY: 'auto'
       }}
@@ -315,19 +316,33 @@ const QrPaymentModal = ({
         @keyframes qrPayPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
         @keyframes qrPayScan { 0% { top: 6%; } 50% { top: 88%; } 100% { top: 6%; } }
         @keyframes qrPayPop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+        .qr-modal-grid {
+          display: grid;
+          grid-template-columns: 240px minmax(0, 1fr);
+          gap: 1.15rem;
+          align-items: start;
+        }
+        @media (max-width: 680px) {
+          .qr-modal-grid {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
 
       <div
         className="shopmart-dialog-box"
         style={{
-          position: 'relative', width: '100%', maxWidth: '460px', maxHeight: 'calc(100dvh - 2rem)',
-          overflowY: 'auto', backgroundColor: '#ffffff', borderRadius: '18px'
+          position: 'relative', width: '100%', maxWidth: '760px', maxHeight: 'calc(100dvh - 2rem)',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          backgroundColor: '#ffffff', borderRadius: '18px',
+          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.35)'
         }}
       >
-        {/* ── Header ── */}
+        {/* ── Header cố định ── */}
         <div style={{
+          flexShrink: 0,
           background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)', color: '#ffffff',
-          padding: '1rem 1.25rem', borderRadius: '18px 18px 0 0',
+          padding: '0.95rem 1.25rem', borderRadius: '18px 18px 0 0',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem'
         }}>
           <div style={{ minWidth: 0 }}>
@@ -335,7 +350,7 @@ const QrPaymentModal = ({
               <Icon name="qr" size={18} />
               <span>Quét mã QR để thanh toán</span>
             </h2>
-            <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', opacity: 0.88 }}>
+            <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', opacity: 0.9 }}>
               Đơn hàng <strong>#{orderId}</strong> · Hỗ trợ mọi ứng dụng ngân hàng (VietQR / Napas 247)
             </p>
           </div>
@@ -355,13 +370,17 @@ const QrPaymentModal = ({
           </button>
         </div>
 
-        <div style={{ padding: '1.1rem 1.25rem 1.25rem' }}>
+        {/* ── Body cuộn mượt ── */}
+        <div style={{
+          flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+          padding: '1.1rem 1.25rem 1.25rem'
+        }}>
           {/* ── Countdown + trạng thái chờ ── */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem',
             backgroundColor: expired ? '#fef2f2' : urgent ? '#fff7ed' : '#f8fafc',
             border: `1px solid ${expired ? '#fecaca' : urgent ? '#fed7aa' : '#e2e8f0'}`,
-            borderRadius: '10px', padding: '0.6rem 0.85rem', marginBottom: '1rem'
+            borderRadius: '10px', padding: '0.55rem 0.85rem', marginBottom: '0.95rem'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
               {phase === 'success' ? (
@@ -399,7 +418,7 @@ const QrPaymentModal = ({
           {expired && !finished && (
             <div style={{
               fontSize: '0.78rem', color: '#b91c1c', backgroundColor: '#fef2f2', border: '1px solid #fecaca',
-              borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '1rem',
+              borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.95rem',
               display: 'flex', alignItems: 'flex-start', gap: '0.4rem'
             }}>
               <Icon name="warning" size={15} color="#dc2626" style={{ marginTop: '1px' }} />
@@ -407,246 +426,266 @@ const QrPaymentModal = ({
             </div>
           )}
 
-          {/* ── Khung mã QR ── */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+          <div className="qr-modal-grid">
+            {/* ── Cột trái: Khung mã QR ── */}
             <div style={{
-              position: 'relative', width: '250px', maxWidth: '100%', aspectRatio: '1 / 1',
-              borderRadius: '14px', border: '2px solid #dbeafe', backgroundColor: '#ffffff',
-              boxShadow: '0 6px 20px rgba(37, 99, 235, 0.12)', overflow: 'hidden',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px',
+              padding: '0.85rem'
             }}>
-              {qrBroken || !qrSrc ? (
-                <div style={{ textAlign: 'center', padding: '1rem', color: '#64748b', fontSize: '0.8rem' }}>
-                  <div style={{ color: '#94a3b8', marginBottom: '0.45rem', display: 'flex', justifyContent: 'center' }}>
-                    <Icon name="qr" size={34} />
-                  </div>
-                  Không tải được ảnh mã QR.<br />Vui lòng chuyển khoản theo thông tin bên dưới.
-                  <div style={{ marginTop: '0.6rem' }}>
-                    <button
-                      type="button"
-                      onClick={handleRetryQr}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                        padding: '0.35rem 0.7rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
-                        background: '#ffffff', color: '#0f172a', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
-                      }}
-                    >
-                      <Icon name="refresh" size={13} /> Thử tải lại QR
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <img
-                    key={qrSrc}
-                    src={qrSrc}
-                    alt={`Mã VietQR thanh toán đơn hàng #${orderId}`}
-                    onLoad={handleQrLoad}
-                    onError={handleQrError}
-                    style={{
-                      width: '100%', height: '100%', objectFit: 'contain',
-                      filter: finished ? 'blur(2px) grayscale(0.6)' : 'none', transition: 'filter 0.2s'
-                    }}
-                  />
-                  {qrLoading && !finished && (
-                    <div style={{
-                      position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)',
-                      backgroundColor: 'rgba(15, 23, 42, 0.78)', color: '#ffffff', fontSize: '0.68rem',
-                      fontWeight: 600, padding: '0.18rem 0.55rem', borderRadius: '999px', whiteSpace: 'nowrap'
-                    }}>
-                      Đang tạo mã QR...
-                    </div>
-                  )}
-                  {!qrLoading && qrMode === 'offline' && !finished && (
-                    <div style={{
-                      position: 'absolute', bottom: '6px', left: '50%', transform: 'translateX(-50%)',
-                      backgroundColor: 'rgba(22, 163, 74, 0.9)', color: '#ffffff', fontSize: '0.65rem',
-                      fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '999px', whiteSpace: 'nowrap'
-                    }}>
-                      VietQR Offline (EMVCo)
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Vạch quét động */}
-              {!finished && !qrBroken && (
-                <span style={{
-                  position: 'absolute', left: '6%', right: '6%', height: '2px',
-                  background: 'linear-gradient(90deg, transparent, #2563eb, transparent)',
-                  boxShadow: '0 0 8px #3b82f6', animation: 'qrPayScan 2.6s ease-in-out infinite'
-                }} />
-              )}
-
-              {/* Overlay kết quả */}
-              {finished && (
-                <div style={{
-                  position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                  backgroundColor: 'rgba(255,255,255,0.85)'
-                }}>
-                  <div style={{
-                    width: '72px', height: '72px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff',
-                    backgroundColor: phase === 'success' ? '#16a34a' : '#dc2626',
-                    boxShadow: `0 8px 24px ${phase === 'success' ? 'rgba(22,163,74,0.4)' : 'rgba(220,38,38,0.4)'}`,
-                    animation: 'qrPayPop 0.4s ease-out'
-                  }}>
-                    <Icon name={phase === 'success' ? 'check' : 'x'} size={34} strokeWidth={2.5} />
-                  </div>
-                  <strong style={{ color: phase === 'success' ? '#166534' : '#991b1b', fontSize: '0.95rem' }}>
-                    {phase === 'success' ? 'Thanh toán thành công!' : 'Thanh toán thất bại'}
-                  </strong>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Thông tin chuyển khoản ── */}
-          <div style={{
-            backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px',
-            padding: '0.25rem 0.9rem', marginBottom: '1rem'
-          }}>
-            <div style={infoRowStyle}>
-              <span style={infoLabelStyle}>Ngân hàng</span>
-              <span style={infoValueStyle}>{BANK_NAME}</span>
-            </div>
-            <div style={infoRowStyle}>
-              <span style={infoLabelStyle}>Số tài khoản</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ ...infoValueStyle, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{ACCOUNT_NO}</span>
-                <button type="button" style={{ ...copyBtnStyle(copiedKey === 'account'), display: 'inline-flex', alignItems: 'center', gap: '3px' }} onClick={() => handleCopy('account', ACCOUNT_NO)}>
-                  <Icon name={copiedKey === 'account' ? 'check' : 'copy'} size={12} />
-                  <span>{copiedKey === 'account' ? 'Đã chép' : 'Sao chép'}</span>
-                </button>
-              </span>
-            </div>
-            <div style={infoRowStyle}>
-              <span style={infoLabelStyle}>Chủ tài khoản</span>
-              <span style={infoValueStyle}>{ACCOUNT_NAME}</span>
-            </div>
-            <div style={infoRowStyle}>
-              <span style={infoLabelStyle}>Số tiền</span>
-              <span style={{ ...infoValueStyle, color: '#dc2626', fontSize: '1.05rem', fontWeight: 900 }}>
-                {formatCurrency(Number(payableAmount) || 0)}
-              </span>
-            </div>
-            <div style={{ ...infoRowStyle, borderBottom: 'none' }}>
-              <span style={infoLabelStyle}>Nội dung CK</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-                <span style={{ ...infoValueStyle, fontFamily: 'monospace', color: '#1d4ed8' }}>{transferContent}</span>
-                <button type="button" style={{ ...copyBtnStyle(copiedKey === 'content'), display: 'inline-flex', alignItems: 'center', gap: '3px' }} onClick={() => handleCopy('content', transferContent)}>
-                  <Icon name={copiedKey === 'content' ? 'check' : 'copy'} size={12} />
-                  <span>{copiedKey === 'content' ? 'Đã chép' : 'Sao chép'}</span>
-                </button>
-              </span>
-            </div>
-          </div>
-
-          {/* ── Thông báo kết quả / lỗi ── */}
-          {phase === 'success' && (
-            <div style={{
-              backgroundColor: '#f0fdf4', border: '1px solid #86efac', color: '#166534',
-              borderRadius: '10px', padding: '0.7rem 0.85rem', fontSize: '0.82rem', marginBottom: '1rem',
-              display: 'flex', alignItems: 'center', gap: '0.5rem'
-            }}>
-              <Spinner color="#16a34a" />
-              <span>Thanh toán thành công! Đang cập nhật trạng thái <strong>ĐÃ THANH TOÁN (PAID)</strong> và chuyển đến chi tiết đơn hàng...</span>
-            </div>
-          )}
-          {phase === 'failed' && (
-            <div style={{
-              backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b',
-              borderRadius: '10px', padding: '0.7rem 0.85rem', fontSize: '0.82rem', marginBottom: '1rem', lineHeight: 1.5
-            }}>
-              <strong>Thanh toán thất bại.</strong> Hệ thống đã kích hoạt Saga Rollback: tự động hoàn lại tồn kho sản phẩm
-              và hoàn lượt sử dụng Voucher. Đang chuyển đến chi tiết đơn hàng...
-            </div>
-          )}
-          {errorMsg && (
-            <div role="alert" style={{
-              backgroundColor: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412',
-              borderRadius: '10px', padding: '0.6rem 0.85rem', fontSize: '0.8rem', marginBottom: '1rem',
-              display: 'flex', alignItems: 'center', gap: '0.45rem'
-            }}>
-              <Icon name="warning" size={15} color="#ea580c" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {/* ── Bảng điều khiển Demo / Test Thanh Toán ── */}
-          <div style={{
-            border: '2px dashed #c4b5fd', backgroundColor: '#faf5ff',
-            borderRadius: '12px', padding: '0.85rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.3rem', flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: '0.88rem', color: '#5b21b6', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                <Icon name="sparkles" size={15} color="#7c3aed" />
-                <span>Bảng điều khiển Demo / Test Thanh Toán</span>
-              </strong>
-              <span style={{
-                fontSize: '0.65rem', fontWeight: 800, color: '#7c3aed', backgroundColor: '#ede9fe',
-                padding: '0.12rem 0.45rem', borderRadius: '9999px', letterSpacing: '0.05em'
+              <div style={{
+                position: 'relative', width: '215px', maxWidth: '100%', aspectRatio: '1 / 1',
+                borderRadius: '12px', border: '2px solid #dbeafe', backgroundColor: '#ffffff',
+                boxShadow: '0 6px 20px rgba(37, 99, 235, 0.12)', overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
-                TEST MODE
+                {qrBroken || !qrSrc ? (
+                  <div style={{ textAlign: 'center', padding: '1rem', color: '#64748b', fontSize: '0.8rem' }}>
+                    <div style={{ color: '#94a3b8', marginBottom: '0.45rem', display: 'flex', justifyContent: 'center' }}>
+                      <Icon name="qr" size={34} />
+                    </div>
+                    Không tải được ảnh mã QR.<br />Vui lòng chuyển khoản theo thông tin bên dưới.
+                    <div style={{ marginTop: '0.6rem' }}>
+                      <button
+                        type="button"
+                        onClick={handleRetryQr}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                          padding: '0.35rem 0.7rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
+                          background: '#ffffff', color: '#0f172a', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
+                        }}
+                      >
+                        <Icon name="refresh" size={13} /> Thử tải lại QR
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <img
+                      key={qrSrc}
+                      src={qrSrc}
+                      alt={`Mã VietQR thanh toán đơn hàng #${orderId}`}
+                      onLoad={handleQrLoad}
+                      onError={handleQrError}
+                      style={{
+                        width: '100%', height: '100%', objectFit: 'contain',
+                        filter: finished ? 'blur(2px) grayscale(0.6)' : 'none', transition: 'filter 0.2s'
+                      }}
+                    />
+                    {qrLoading && !finished && (
+                      <div style={{
+                        position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)',
+                        backgroundColor: 'rgba(15, 23, 42, 0.78)', color: '#ffffff', fontSize: '0.68rem',
+                        fontWeight: 600, padding: '0.18rem 0.55rem', borderRadius: '999px', whiteSpace: 'nowrap'
+                      }}>
+                        Đang tạo mã QR...
+                      </div>
+                    )}
+                    {!qrLoading && qrMode === 'offline' && !finished && (
+                      <div style={{
+                        position: 'absolute', bottom: '6px', left: '50%', transform: 'translateX(-50%)',
+                        backgroundColor: 'rgba(22, 163, 74, 0.9)', color: '#ffffff', fontSize: '0.65rem',
+                        fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '999px', whiteSpace: 'nowrap'
+                      }}>
+                        VietQR Offline (EMVCo)
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Vạch quét động */}
+                {!finished && !qrBroken && (
+                  <span style={{
+                    position: 'absolute', left: '6%', right: '6%', height: '2px',
+                    background: 'linear-gradient(90deg, transparent, #2563eb, transparent)',
+                    boxShadow: '0 0 8px #3b82f6', animation: 'qrPayScan 2.6s ease-in-out infinite'
+                  }} />
+                )}
+
+                {/* Overlay kết quả */}
+                {finished && (
+                  <div style={{
+                    position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                    backgroundColor: 'rgba(255,255,255,0.85)'
+                  }}>
+                    <div style={{
+                      width: '72px', height: '72px', borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff',
+                      backgroundColor: phase === 'success' ? '#16a34a' : '#dc2626',
+                      boxShadow: `0 8px 24px ${phase === 'success' ? 'rgba(22,163,74,0.4)' : 'rgba(220,38,38,0.4)'}`,
+                      animation: 'qrPayPop 0.4s ease-out'
+                    }}>
+                      <Icon name={phase === 'success' ? 'check' : 'x'} size={34} strokeWidth={2.5} />
+                    </div>
+                    <strong style={{ color: phase === 'success' ? '#166534' : '#991b1b', fontSize: '0.95rem' }}>
+                      {phase === 'success' ? 'Thanh toán thành công!' : 'Thanh toán thất bại'}
+                    </strong>
+                  </div>
+                )}
+              </div>
+
+              <span style={{
+                marginTop: '0.6rem', fontSize: '0.73rem', color: '#64748b', textAlign: 'center', lineHeight: 1.4
+              }}>
+                Mở App Ngân hàng / Ví điện tử bất kỳ để quét mã VietQR
               </span>
             </div>
-            <p style={{ margin: '0 0 0.75rem', fontSize: '0.74rem', color: '#6b7280', lineHeight: 1.45 }}>
-              Không cần chuyển tiền thật — bấm nút để gọi API <code>POST /payments/mock-pay/{orderId}</code> giả lập kết quả giao dịch.
-            </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-              <button
-                type="button"
-                disabled={busy || finished}
-                onClick={() => runPayment(true)}
-                style={{
-                  ...testBtnBase, border: 'none', color: '#ffffff',
-                  backgroundColor: busy || finished ? '#86efac' : '#16a34a',
-                  boxShadow: busy || finished ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.35)',
-                  cursor: busy || finished ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {phase === 'confirming' ? <Spinner /> : <Icon name="success" size={16} />}
-                <span>{phase === 'confirming' ? 'Đang xác nhận giao dịch...' : 'Xác nhận đã chuyển khoản (Test Thành Công)'}</span>
-              </button>
+            {/* ── Cột phải: Thông tin chuyển khoản + Bảng điều khiển Demo/Test ── */}
+            <div style={{ minWidth: 0 }}>
+              {/* ── Thông tin chuyển khoản ── */}
+              <div style={{
+                backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px',
+                padding: '0.2rem 0.9rem', marginBottom: '0.85rem'
+              }}>
+                <div style={infoRowStyle}>
+                  <span style={infoLabelStyle}>Ngân hàng</span>
+                  <span style={infoValueStyle}>{BANK_NAME}</span>
+                </div>
+                <div style={infoRowStyle}>
+                  <span style={infoLabelStyle}>Số tài khoản</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ ...infoValueStyle, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{ACCOUNT_NO}</span>
+                    <button type="button" style={{ ...copyBtnStyle(copiedKey === 'account'), display: 'inline-flex', alignItems: 'center', gap: '3px' }} onClick={() => handleCopy('account', ACCOUNT_NO)}>
+                      <Icon name={copiedKey === 'account' ? 'check' : 'copy'} size={12} />
+                      <span>{copiedKey === 'account' ? 'Đã chép' : 'Sao chép'}</span>
+                    </button>
+                  </span>
+                </div>
+                <div style={infoRowStyle}>
+                  <span style={infoLabelStyle}>Chủ tài khoản</span>
+                  <span style={infoValueStyle}>{ACCOUNT_NAME}</span>
+                </div>
+                <div style={infoRowStyle}>
+                  <span style={infoLabelStyle}>Số tiền</span>
+                  <span style={{ ...infoValueStyle, color: '#dc2626', fontSize: '1.05rem', fontWeight: 900 }}>
+                    {formatCurrency(Number(payableAmount) || 0)}
+                  </span>
+                </div>
+                <div style={{ ...infoRowStyle, borderBottom: 'none' }}>
+                  <span style={infoLabelStyle}>Nội dung CK</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                    <span style={{ ...infoValueStyle, fontFamily: 'monospace', color: '#1d4ed8' }}>{transferContent}</span>
+                    <button type="button" style={{ ...copyBtnStyle(copiedKey === 'content'), display: 'inline-flex', alignItems: 'center', gap: '3px' }} onClick={() => handleCopy('content', transferContent)}>
+                      <Icon name={copiedKey === 'content' ? 'check' : 'copy'} size={12} />
+                      <span>{copiedKey === 'content' ? 'Đã chép' : 'Sao chép'}</span>
+                    </button>
+                  </span>
+                </div>
+              </div>
 
-              <button
-                type="button"
-                disabled={busy || finished}
-                onClick={() => runPayment(false)}
-                style={{
-                  ...testBtnBase, color: '#b91c1c',
-                  border: '1.5px solid #fca5a5',
-                  backgroundColor: busy || finished ? '#fef2f2' : '#fff1f2',
-                  cursor: busy || finished ? 'not-allowed' : 'pointer',
-                  opacity: busy && phase !== 'cancelling' ? 0.6 : 1
-                }}
-              >
-                {phase === 'cancelling' ? <Spinner color="#dc2626" /> : <Icon name="error" size={16} />}
-                <span>{phase === 'cancelling' ? 'Đang hủy giao dịch...' : 'Giả lập Lỗi / Hủy thanh toán (Test Saga Rollback)'}</span>
-              </button>
+              {/* ── Thông báo kết quả / lỗi ── */}
+              {phase === 'success' && (
+                <div style={{
+                  backgroundColor: '#f0fdf4', border: '1px solid #86efac', color: '#166534',
+                  borderRadius: '10px', padding: '0.65rem 0.85rem', fontSize: '0.82rem', marginBottom: '0.85rem',
+                  display: 'flex', alignItems: 'center', gap: '0.5rem'
+                }}>
+                  <Spinner color="#16a34a" />
+                  <span>Thanh toán thành công! Đang cập nhật trạng thái <strong>ĐÃ THANH TOÁN (PAID)</strong> và chuyển đến chi tiết đơn hàng...</span>
+                </div>
+              )}
+              {phase === 'failed' && (
+                <div style={{
+                  backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b',
+                  borderRadius: '10px', padding: '0.65rem 0.85rem', fontSize: '0.82rem', marginBottom: '0.85rem', lineHeight: 1.5
+                }}>
+                  <strong>Thanh toán thất bại.</strong> Hệ thống đã kích hoạt Saga Rollback: tự động hoàn lại tồn kho sản phẩm
+                  và hoàn lượt sử dụng Voucher. Đang chuyển đến chi tiết đơn hàng...
+                </div>
+              )}
+              {errorMsg && (
+                <div role="alert" style={{
+                  backgroundColor: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412',
+                  borderRadius: '10px', padding: '0.6rem 0.85rem', fontSize: '0.8rem', marginBottom: '0.85rem',
+                  display: 'flex', alignItems: 'center', gap: '0.45rem'
+                }}>
+                  <Icon name="warning" size={15} color="#ea580c" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
 
-              <button
-                type="button"
-                disabled={busy || finished}
-                onClick={() => onPayLater?.()}
-                style={{
-                  ...testBtnBase, color: '#334155', fontWeight: 700,
-                  border: '1px solid #cbd5e1', backgroundColor: '#ffffff',
-                  cursor: busy || finished ? 'not-allowed' : 'pointer',
-                  opacity: busy ? 0.6 : 1
-                }}
-              >
-                <Icon name="clock" size={15} />
-                <span>Thanh toán sau</span>
-              </button>
+              {/* ── Bảng điều khiển Demo / Test Thanh Toán ── */}
+              <div style={{
+                border: '2px dashed #c4b5fd', backgroundColor: '#faf5ff',
+                borderRadius: '12px', padding: '0.8rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                  <strong style={{ fontSize: '0.86rem', color: '#5b21b6', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="sparkles" size={15} color="#7c3aed" />
+                    <span>Bảng điều khiển Demo / Test Thanh Toán</span>
+                  </strong>
+                  <span style={{
+                    fontSize: '0.65rem', fontWeight: 800, color: '#7c3aed', backgroundColor: '#ede9fe',
+                    padding: '0.12rem 0.45rem', borderRadius: '9999px', letterSpacing: '0.05em'
+                  }}>
+                    TEST MODE
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 0.65rem', fontSize: '0.73rem', color: '#6b7280', lineHeight: 1.4 }}>
+                  Không cần chuyển tiền thật — bấm nút để gọi API <code>POST /payments/mock-pay/{orderId}</code> giả lập kết quả giao dịch.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    disabled={busy || finished}
+                    onClick={() => runPayment(true)}
+                    style={{
+                      ...testBtnBase, padding: '0.65rem 0.9rem', border: 'none', color: '#ffffff',
+                      backgroundColor: busy || finished ? '#86efac' : '#16a34a',
+                      boxShadow: busy || finished ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.35)',
+                      cursor: busy || finished ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {phase === 'confirming' ? <Spinner /> : <Icon name="success" size={16} />}
+                    <span>{phase === 'confirming' ? 'Đang xác nhận giao dịch...' : 'Xác nhận đã chuyển khoản (Test Thành Công)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={busy || finished}
+                    onClick={() => runPayment(false)}
+                    style={{
+                      ...testBtnBase, padding: '0.65rem 0.9rem', color: '#b91c1c',
+                      border: '1.5px solid #fca5a5',
+                      backgroundColor: busy || finished ? '#fef2f2' : '#fff1f2',
+                      cursor: busy || finished ? 'not-allowed' : 'pointer',
+                      opacity: busy && phase !== 'cancelling' ? 0.6 : 1
+                    }}
+                  >
+                    {phase === 'cancelling' ? <Spinner color="#dc2626" /> : <Icon name="error" size={16} />}
+                    <span>{phase === 'cancelling' ? 'Đang hủy giao dịch...' : 'Giả lập Lỗi / Hủy thanh toán (Test Saga Rollback)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={busy || finished}
+                    onClick={() => onPayLater?.()}
+                    style={{
+                      ...testBtnBase, padding: '0.6rem 0.9rem', color: '#334155', fontWeight: 700,
+                      border: '1px solid #cbd5e1', backgroundColor: '#ffffff',
+                      cursor: busy || finished ? 'not-allowed' : 'pointer',
+                      opacity: busy ? 0.6 : 1
+                    }}
+                  >
+                    <Icon name="clock" size={15} />
+                    <span>Thanh toán sau</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 };
 
 export default QrPaymentModal;

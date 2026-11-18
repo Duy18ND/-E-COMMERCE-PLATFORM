@@ -2,6 +2,7 @@ package com.ecommerce.gateway.controller;
 
 import com.ecommerce.gateway.dto.ApiResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,6 +15,19 @@ import reactor.core.publisher.Mono;
  */
 @RestController
 @RequestMapping("/fallback")
+@CrossOrigin(
+        origins = {
+                "http://localhost",
+                "http://127.0.0.1",
+                "http://localhost:80",
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:8080"
+        },
+        allowCredentials = "true"
+)
 public class FallbackController {
 
     @RequestMapping("/auth")
