@@ -6,6 +6,7 @@ import Modal from '../common/Modal';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
+import categoryService from '../../services/categoryService';
 import voucherService from '../../services/voucherService';
 import userService, { isValidVietnamesePhone } from '../../services/userService';
 
@@ -15,6 +16,7 @@ const UserHeader = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
+  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
 
   // Dropdown, Mobile Drawer & Modal states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -41,6 +43,22 @@ const UserHeader = () => {
     setIsMobileMenuOpen(false);
     setIsCategoryMenuOpen(false);
   }, [location.pathname, location.search]);
+
+  // Load real categories from Backend API on mount
+  useEffect(() => {
+    let mounted = true;
+    categoryService
+      .getPublicCategories()
+      .then((list) => {
+        if (mounted && Array.isArray(list) && list.length > 0) {
+          setCategories(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Sync profile data when user changes or modal opens
   useEffect(() => {
@@ -259,7 +277,7 @@ const UserHeader = () => {
                   >
                     Tất cả sản phẩm
                   </Link>
-                  {INITIAL_CATEGORIES.map((cat) => (
+                  {categories.map((cat) => (
                     <Link
                       key={cat.id}
                       to={`/products?category=${encodeURIComponent(cat.id)}`}
@@ -481,7 +499,7 @@ const UserHeader = () => {
                 >
                   Tất cả sản phẩm
                 </Link>
-                {INITIAL_CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <Link
                     key={cat.id}
                     to={`/products?category=${encodeURIComponent(cat.id)}`}

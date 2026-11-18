@@ -23,6 +23,10 @@ CREATE DATABASE IF NOT EXISTS payment_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
+CREATE DATABASE IF NOT EXISTS chatbot_db
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
 -- ─────────────────────────────────────────────────────────────
 --  2. User Privileges (Dev: ecommerce_user & Prod: ecommerce_prod_user)
 -- ─────────────────────────────────────────────────────────────
@@ -31,12 +35,14 @@ GRANT ALL PRIVILEGES ON auth_db.*    TO 'ecommerce_user'@'%';
 GRANT ALL PRIVILEGES ON product_db.* TO 'ecommerce_user'@'%';
 GRANT ALL PRIVILEGES ON order_db.*   TO 'ecommerce_user'@'%';
 GRANT ALL PRIVILEGES ON payment_db.* TO 'ecommerce_user'@'%';
+GRANT ALL PRIVILEGES ON chatbot_db.* TO 'ecommerce_user'@'%';
 
 CREATE USER IF NOT EXISTS 'ecommerce_prod_user'@'%' IDENTIFIED BY 'ecommerce_prod_pass';
 GRANT ALL PRIVILEGES ON auth_db.*    TO 'ecommerce_prod_user'@'%';
 GRANT ALL PRIVILEGES ON product_db.* TO 'ecommerce_prod_user'@'%';
 GRANT ALL PRIVILEGES ON order_db.*   TO 'ecommerce_prod_user'@'%';
 GRANT ALL PRIVILEGES ON payment_db.* TO 'ecommerce_prod_user'@'%';
+GRANT ALL PRIVILEGES ON chatbot_db.* TO 'ecommerce_prod_user'@'%';
 
 FLUSH PRIVILEGES;
 
@@ -330,6 +336,7 @@ USE payment_db;
 CREATE TABLE IF NOT EXISTS payments (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id         BIGINT         NOT NULL COMMENT 'ID đơn hàng liên kết',
+    user_id          BIGINT                  COMMENT 'ID người dùng thanh toán',
     amount           DECIMAL(15, 2) NOT NULL COMMENT 'Số tiền thanh toán',
     payment_method   VARCHAR(50)    NOT NULL COMMENT 'Phương thức: COD, MOCK_ONLINE, VNPAY',
     status           VARCHAR(20)    NOT NULL COMMENT 'Trạng thái thanh toán: PENDING, SUCCESS, FAILED',
@@ -337,6 +344,37 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at       DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at       DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     INDEX idx_payment_order_id (order_id),
+    INDEX idx_payment_user_id (user_id),
     INDEX idx_payment_transaction_code (transaction_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng lịch sử giao dịch thanh toán';
+
+-- ─────────────────────────────────────────────────────────────
+--  7. Chatbot Service Database (chatbot_db)
+-- ─────────────────────────────────────────────────────────────
+USE chatbot_db;
+
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id               VARCHAR(36)  NOT NULL PRIMARY KEY COMMENT 'UUID phiên hội thoại',
+    user_id          BIGINT       NULL     COMMENT 'ID người dùng đã đăng nhập (NULL nếu là khách vãng lai)',
+    guest_session_id VARCHAR(64)  NULL     COMMENT 'Mã phiên hội thoại của khách vãng lai',
+    title            VARCHAR(200) NOT NULL DEFAULT 'Cuộc trò chuyện mới' COMMENT 'Tiêu đề cuộc hội thoại',
+    status           VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, ARCHIVED, DELETED',
+    created_at       DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at       DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_chat_conv_user_updated (user_id, status, updated_at),
+    INDEX idx_chat_conv_guest (guest_session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng lưu phiên hội thoại Trợ lý Mua sắm AI';
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id VARCHAR(36) NOT NULL COMMENT 'ID phiên hội thoại liên kết',
+    role            VARCHAR(20) NOT NULL COMMENT 'USER, ASSISTANT, SYSTEM, TOOL',
+    content         TEXT        NOT NULL COMMENT 'Nội dung tin nhắn',
+    metadata_json   TEXT        NULL     COMMENT 'Dữ liệu JSON sản phẩm gợi ý / đơn hàng tra cứu',
+    created_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_chat_msg_conversation FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    INDEX idx_chat_msg_conv_created (conversation_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bảng lưu lịch sử tin nhắn trong từng hội thoại AI';

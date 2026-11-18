@@ -316,6 +316,43 @@ services:
       start_period: 45s
 
   # ─────────────────────────────────────────────
+  #  5b. Chatbot Service (AI Shopping Assistant) — INTERNAL ONLY
+  # ─────────────────────────────────────────────
+  chatbot-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/chatbot-service:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: chatbot-service/Dockerfile
+    container_name: ecommerce-chatbot-service
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/chatbot_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_prod_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-${AI_API_KEY:-}}
+      GEMINI_MODEL: ${GEMINI_MODEL:-${AI_MODEL:-gemini-3.5-flash}}
+      AI_BASE_URL: ${AI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8085/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+
+  # ─────────────────────────────────────────────
   #  6. API Gateway — INTERNAL ONLY
   # ─────────────────────────────────────────────
   api-gateway:
@@ -337,6 +374,8 @@ services:
       order-service:
         condition: service_healthy
       payment-service:
+        condition: service_healthy
+      chatbot-service:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod

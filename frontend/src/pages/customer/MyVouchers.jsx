@@ -19,28 +19,28 @@ const daysLeft = (endDate) => {
 };
 
 const TABS = [
-  { key: 'USABLE',   label: '✅ Có thể sử dụng' },
+  { key: 'USABLE', label: '✅ Có thể sử dụng' },
   { key: 'EXPIRING', label: '⏰ Sắp hết hạn' },
-  { key: 'EXPIRED',  label: '🚫 Đã hết hạn / Hết lượt' },
+  { key: 'EXPIRED', label: '🚫 Đã hết hạn / Hết lượt' },
 ];
 
 // ─── Single saved voucher card ────────────────────────────────────────────────
 const SavedVoucherCard = ({ voucher, onUnsave }) => {
-  const status    = getVoucherStatus(voucher);
-  const days      = daysLeft(voucher.endDate);
+  const status = getVoucherStatus(voucher);
+  const days = daysLeft(voucher.endDate);
   const remaining = voucher.quantity - voucher.usedQuantity;
-  const isUsable  = status === 'ACTIVE';
+  const isUsable = status === 'ACTIVE';
   const isExpired = ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(status);
 
   const borderColor = isUsable ? '#bfdbfe' : '#e2e8f0';
-  const bgColor     = isUsable ? '#eff6ff' : '#f8fafc';
+  const bgColor = isUsable ? '#eff6ff' : '#f8fafc';
 
   const statusLabel = {
-    ACTIVE:   { text: '✅ Có thể sử dụng', color: '#16a34a', bg: '#dcfce7' },
-    UPCOMING: { text: '🕐 Sắp diễn ra',   color: '#d97706', bg: '#fef3c7' },
-    EXPIRED:  { text: '⏰ Đã hết hạn',    color: '#dc2626', bg: '#fef2f2' },
-    SOLD_OUT: { text: '🚫 Đã hết lượt',   color: '#7c3aed', bg: '#ede9fe' },
-    INACTIVE: { text: '🔒 Tạm dừng',      color: '#64748b', bg: '#f1f5f9' },
+    ACTIVE: { text: '✅ Có thể sử dụng', color: '#16a34a', bg: '#dcfce7' },
+    UPCOMING: { text: '🕐 Sắp diễn ra', color: '#d97706', bg: '#fef3c7' },
+    EXPIRED: { text: '⏰ Đã hết hạn', color: '#dc2626', bg: '#fef2f2' },
+    SOLD_OUT: { text: '🚫 Đã hết lượt', color: '#7c3aed', bg: '#ede9fe' },
+    INACTIVE: { text: '🔒 Tạm dừng', color: '#64748b', bg: '#f1f5f9' },
   }[status] || { text: status, color: '#64748b', bg: '#f1f5f9' };
 
   return (
@@ -142,11 +142,11 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const MyVouchers = () => {
-  const [allVouchers, setAllVouchers]   = useState([]);
-  const [savedIds,    setSavedIds]      = useState([]);
-  const [tab,         setTab]           = useState('USABLE');
-  const [loading,     setLoading]       = useState(true);
-  const [error,       setError]         = useState('');
+  const [allVouchers, setAllVouchers] = useState([]);
+  const [savedIds, setSavedIds] = useState([]);
+  const [tab, setTab] = useState('USABLE');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const loadMyVouchers = async () => {
     setLoading(true);
@@ -195,22 +195,22 @@ const MyVouchers = () => {
   );
 
   const tabCounts = useMemo(() => {
-    const usable   = mySavedVouchers.filter((v) => getVoucherStatus(v) === 'ACTIVE').length;
+    const usable = mySavedVouchers.filter((v) => getVoucherStatus(v) === 'ACTIVE').length;
     const expiring = mySavedVouchers.filter((v) => {
       const d = daysLeft(v.endDate);
       return getVoucherStatus(v) === 'ACTIVE' && d <= 7 && d > 0;
     }).length;
-    const expired  = mySavedVouchers.filter((v) => ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(getVoucherStatus(v))).length;
+    const expired = mySavedVouchers.filter((v) => ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(getVoucherStatus(v))).length;
     return { USABLE: usable, EXPIRING: expiring, EXPIRED: expired };
   }, [mySavedVouchers]);
 
   const displayed = useMemo(() => {
     return mySavedVouchers.filter((v) => {
-      const s    = getVoucherStatus(v);
+      const s = getVoucherStatus(v);
       const days = daysLeft(v.endDate);
-      if (tab === 'USABLE')   return s === 'ACTIVE';
+      if (tab === 'USABLE') return s === 'ACTIVE';
       if (tab === 'EXPIRING') return s === 'ACTIVE' && days <= 7 && days > 0;
-      if (tab === 'EXPIRED')  return ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(s);
+      if (tab === 'EXPIRED') return ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(s);
       return true;
     });
   }, [mySavedVouchers, tab]);

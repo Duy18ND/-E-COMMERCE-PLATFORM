@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -69,6 +70,7 @@ public class FlashSaleService {
     /**
      * Initialises (or resets) the Flash Sale stock for a product in Redis.
      */
+    @CacheEvict(value = "products", allEntries = true)
     public void initFlashSaleStock(Long productId, int stock) {
         String key = buildKey(productId);
         ValueOperations<String, Object> ops = redisTemplate.opsForValue();
@@ -83,6 +85,7 @@ public class FlashSaleService {
      * and synchronises soldQuantity in the database when an active campaign item exists.
      */
     @Transactional
+    @CacheEvict(value = "products", allEntries = true)
     public void reserveFlashSaleStock(Long productId, int quantity) {
         String key = buildKey(productId);
 
@@ -137,6 +140,7 @@ public class FlashSaleService {
      * soldQuantity in the database for the active campaign item.
      */
     @Transactional
+    @CacheEvict(value = "products", allEntries = true)
     public void restoreFlashSaleStock(Long productId, int quantity) {
         if (productId == null || quantity <= 0) {
             return;
@@ -181,6 +185,7 @@ public class FlashSaleService {
     // -----------------------------------------------------------------------
 
     @Transactional
+    @CacheEvict(value = "products", allEntries = true)
     public FlashSaleCampaignResponse createCampaign(CreateFlashSaleCampaignRequest request) {
         validateCampaignRequest(request);
 
@@ -222,6 +227,7 @@ public class FlashSaleService {
     }
 
     @Transactional
+    @CacheEvict(value = "products", allEntries = true)
     public FlashSaleCampaignResponse updateCampaign(Long id, CreateFlashSaleCampaignRequest request) {
         validateCampaignRequest(request);
 
@@ -293,6 +299,7 @@ public class FlashSaleService {
     }
 
     @Transactional
+    @CacheEvict(value = "products", allEntries = true)
     public FlashSaleCampaignResponse updateCampaignStatus(Long id, String status) {
         String normalizedStatus = status != null ? status.trim().toUpperCase() : "";
         if (!ALLOWED_STATUSES.contains(normalizedStatus)) {
@@ -329,6 +336,7 @@ public class FlashSaleService {
     }
 
     @Transactional
+    @CacheEvict(value = "products", allEntries = true)
     public void deleteCampaign(Long id) {
         FlashSaleCampaign campaign = campaignRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chiến dịch Flash Sale với ID: " + id));

@@ -5,6 +5,7 @@ import CategoryNav from '../components/user/CategoryNav';
 import Footer from '../components/layout/Footer';
 import ErrorMessage from '../components/common/ErrorMessage';
 import Loading from '../components/common/Loading';
+import ChatbotWidget from '../components/chat/ChatbotWidget';
 
 /**
  * UserLayout — Cấu trúc giao diện dành riêng cho Khách hàng (User/Shop):
@@ -69,6 +70,7 @@ const UserLayout = ({ children }) => {
       </main>
 
       <Footer />
+      <ChatbotWidget />
     </div>
   );
 };

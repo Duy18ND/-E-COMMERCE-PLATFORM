@@ -219,3 +219,67 @@ test('ECOM-146 (ECOM-147 → ECOM-150): Kiểm thử cấu hình Docker Multi-st
   assert.match(frontendDockerfile, /FROM node:20-alpine AS builder[\s\S]*?FROM nginx:1\.27-alpine/, 'Frontend Dockerfile phải là multi-stage build');
   assert.match(backendDockerignore, /gradle\.properties/, 'backend/.dockerignore phải loại trừ gradle.properties chứa đường dẫn cục bộ');
 });
+
+test('AI SHOPPING ASSISTANT: Kiểm thử tích hợp Chatbot Service (Gemini), API Gateway, MySQL chatbot_db và bộ component ChatbotWidget (Frontend)', () => {
+  const settingsGradle = readBackend('settings.gradle');
+  const gatewayYaml = readBackend('api-gateway/src/main/resources/application.yml');
+  const initSql = readBackend('docker/mysql/init.sql');
+  const composeYml = readBackend('docker-compose.yml');
+  const chatbotAppYml = readBackend('chatbot-service/src/main/resources/application.yml');
+  const chatControllerJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/controller/ChatController.java');
+  const chatServiceJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/service/impl/ChatServiceImpl.java');
+  const productToolsJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/tool/ProductShoppingTools.java');
+  const orderToolsJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/tool/CustomerOrderTools.java');
+  const supportToolsJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/tool/CustomerSupportTools.java');
+  const chatbotServiceFe = readSrc('services/chatbotService.js');
+  const useChatbotFe = readSrc('hooks/useChatbot.js');
+  const chatbotWidgetFe = readSrc('components/chat/ChatbotWidget.jsx');
+  const chatWindowFe = readSrc('components/chat/ChatWindow.jsx');
+  const chatHeaderFe = readSrc('components/chat/ChatHeader.jsx');
+  const chatMessageFe = readSrc('components/chat/ChatMessage.jsx');
+  const chatInputFe = readSrc('components/chat/ChatInput.jsx');
+  const typingIndicatorFe = readSrc('components/chat/TypingIndicator.jsx');
+  const productCardFe = readSrc('components/chat/ProductSuggestionCard.jsx');
+  const sidebarFe = readSrc('components/chat/ConversationSidebar.jsx');
+  const userLayoutFe = readSrc('layouts/UserLayout.jsx');
+
+  // 1. Kiểm tra đăng ký module chatbot-service, database chatbot_db, Gemini env và route API Gateway
+  assert.match(settingsGradle, /include 'chatbot-service'/, 'settings.gradle phải khai báo module chatbot-service');
+  assert.match(initSql, /CREATE DATABASE IF NOT EXISTS chatbot_db/, 'init.sql phải khởi tạo database chatbot_db');
+  assert.match(initSql, /CREATE TABLE IF NOT EXISTS chat_conversations/, 'init.sql phải tạo bảng chat_conversations');
+  assert.match(initSql, /CREATE TABLE IF NOT EXISTS chat_messages/, 'init.sql phải tạo bảng chat_messages');
+  assert.match(gatewayYaml, /id: chatbot-service[\s\S]*?Path=\/api\/v1\/chatbot\/\*\*/, 'API Gateway phải định tuyến /api/v1/chatbot/** và /api/chatbot/** sang lb://chatbot-service');
+  assert.match(composeYml, /chatbot-service:[\s\S]*?GEMINI_API_KEY:/, 'docker-compose.yml phải có cấu hình container chatbot-service với GEMINI_API_KEY');
+  assert.match(chatbotAppYml, /GEMINI_API_KEY/, 'application.yml của chatbot-service phải sử dụng biến môi trường GEMINI_API_KEY');
+  assert.match(chatbotAppYml, /max-messages:\s*\$\{AI_MEMORY_MAX_MESSAGES:20\}/, 'Chat memory phải giới hạn cửa sổ mặc định 20 tin nhắn');
+
+  // 2. Kiểm tra đầy đủ REST endpoints và 10 AI Tools (Product, Order, Customer Support Policies)
+  assert.match(chatControllerJava, /@PostMapping\(\{"\/chat",\s*"\/messages"\}\)/, 'ChatController phải hỗ trợ POST /chat và /messages');
+  assert.match(chatControllerJava, /@PostMapping\("\/conversations"\)/, 'ChatController phải hỗ trợ POST /conversations');
+  assert.match(chatControllerJava, /@GetMapping\("\/conversations"\)/, 'ChatController phải hỗ trợ GET /conversations');
+  assert.match(chatControllerJava, /@DeleteMapping\("\/conversations\/\{conversationId\}"\)/, 'ChatController phải hỗ trợ DELETE /conversations/{id}');
+  assert.match(productToolsJava, /searchProducts\(/, 'ProductShoppingTools phải có tool searchProducts');
+  assert.match(productToolsJava, /getProductDetail\(/, 'ProductShoppingTools phải có tool getProductDetail');
+  assert.match(productToolsJava, /compareProducts\(/, 'ProductShoppingTools phải có tool compareProducts');
+  assert.match(productToolsJava, /getProductStock\(/, 'ProductShoppingTools phải có tool getProductStock');
+  assert.match(orderToolsJava, /getMyOrders\(/, 'CustomerOrderTools phải có tool getMyOrders');
+  assert.match(orderToolsJava, /getOrderStatus\(/, 'CustomerOrderTools phải có tool getOrderStatus chống IDOR');
+  assert.match(supportToolsJava, /getShippingPolicy\(/, 'CustomerSupportTools phải có tool getShippingPolicy');
+  assert.match(supportToolsJava, /getPaymentPolicy\(/, 'CustomerSupportTools phải có tool getPaymentPolicy');
+  assert.match(supportToolsJava, /getReturnPolicy\(/, 'CustomerSupportTools phải có tool getReturnPolicy');
+  assert.match(supportToolsJava, /getWarrantyPolicy\(/, 'CustomerSupportTools phải có tool getWarrantyPolicy');
+  assert.match(chatServiceJava, /PROMPT_INJECTION_PATTERN/, 'ChatServiceImpl phải có bảo vệ chống Prompt Injection');
+
+  // 3. Kiểm tra tích hợp bộ Component Frontend (ChatbotWidget, ChatWindow, ChatHeader, ChatMessage, ChatInput, TypingIndicator, ProductSuggestionCard, ConversationSidebar, useChatbot, chatbotService)
+  assert.match(chatbotServiceFe, /api\.post\(\s*'\/chatbot\/chat'/, 'chatbotService.js phải gọi POST /chatbot/chat');
+  assert.match(useChatbotFe, /export const useChatbot/, 'useChatbot.js phải cung cấp custom hook quản lý trạng thái hội thoại');
+  assert.match(chatbotWidgetFe, /data-testid="ai-shopping-assistant-widget"/, 'ChatbotWidget.jsx phải render widget trợ lý AI');
+  assert.match(chatWindowFe, /ChatHeader/, 'ChatWindow.jsx phải kết hợp ChatHeader, ChatMessage, ChatInput, TypingIndicator, ConversationSidebar');
+  assert.match(chatHeaderFe, /Trợ lý Mua sắm AI/, 'ChatHeader.jsx phải hiển thị tiêu đề Trợ lý Mua sắm AI');
+  assert.match(chatMessageFe, /ProductSuggestionCard/, 'ChatMessage.jsx phải hiển thị thẻ sản phẩm gợi ý ProductSuggestionCard');
+  assert.match(chatInputFe, /maxLength=\{1000\}/, 'ChatInput.jsx phải giới hạn độ dài tin nhắn 1000 ký tự');
+  assert.match(typingIndicatorFe, /data-testid="ai-typing-indicator"/, 'TypingIndicator.jsx phải hiển thị trạng thái AI đang phản hồi');
+  assert.match(productCardFe, /formatCurrency/, 'ProductSuggestionCard.jsx phải hiển thị giá thực tế sản phẩm');
+  assert.match(sidebarFe, /Các cuộc hội thoại đã lưu/, 'ConversationSidebar.jsx phải hiển thị lịch sử hội thoại');
+  assert.match(userLayoutFe, /<ChatbotWidget \/>/, 'UserLayout.jsx phải nhúng <ChatbotWidget /> cho khách hàng');
+});
