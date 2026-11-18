@@ -14,6 +14,9 @@ const QUICK_REVIEW_SUGGESTIONS = [
   'Đáng đồng tiền bát gạo, sẽ tiếp tục ủng hộ shop!'
 ];
 
+const EMPTY_PRODUCT = {};
+const EMPTY_ELIGIBLE_ORDERS = [];
+
 /**
  * Form đánh giá sao và nội dung nhận xét sau khi mua hàng.
  * Tích hợp trực tiếp với API Backend:
@@ -21,10 +24,10 @@ const QUICK_REVIEW_SUGGESTIONS = [
  * - PUT /api/v1/products/{productId}/reviews/{reviewId} (cập nhật đánh giá đã gửi)
  */
 const ProductReviewForm = ({
-  product = {},
+  product = EMPTY_PRODUCT,
   orderId = null,
   orderInfo = null,
-  eligibleOrders = [],
+  eligibleOrders = EMPTY_ELIGIBLE_ORDERS,
   initialReview = null,
   onSuccess,
   onCancel,
@@ -41,16 +44,24 @@ const ProductReviewForm = ({
     product?.image ||
     'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=300&q=80';
 
+  const initialReviewId = initialReview?.id ?? null;
+  const initialReviewOrderId = initialReview?.orderId ?? null;
+  const initialReviewRating = initialReview?.rating ? Number(initialReview.rating) : 0;
+  const initialReviewComment = initialReview?.comment || '';
+  const orderInfoId = orderInfo?.id ?? null;
+  const firstEligibleOrderId =
+    Array.isArray(eligibleOrders) && eligibleOrders.length > 0 ? eligibleOrders[0]?.id ?? '' : '';
+
   const defaultSelectedOrderId =
-    initialReview?.orderId ??
+    initialReviewOrderId ??
     orderId ??
-    orderInfo?.id ??
-    (eligibleOrders.length > 0 ? eligibleOrders[0].id : '');
+    orderInfoId ??
+    firstEligibleOrderId;
 
   const [selectedOrderId, setSelectedOrderId] = useState(defaultSelectedOrderId || '');
-  const [rating, setRating] = useState(initialReview?.rating ? Number(initialReview.rating) : 0);
+  const [rating, setRating] = useState(initialReviewRating);
   const [hoverRating, setHoverRating] = useState(0);
-  const [comment, setComment] = useState(initialReview?.comment || '');
+  const [comment, setComment] = useState(initialReviewComment);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
@@ -58,17 +69,26 @@ const ProductReviewForm = ({
 
   useEffect(() => {
     setSelectedOrderId(
-      initialReview?.orderId ??
+      initialReviewOrderId ??
       orderId ??
-      orderInfo?.id ??
-      (eligibleOrders.length > 0 ? eligibleOrders[0].id : '')
+      orderInfoId ??
+      firstEligibleOrderId
     );
-    setRating(initialReview?.rating ? Number(initialReview.rating) : 0);
-    setComment(initialReview?.comment || '');
+    setRating(initialReviewRating);
+    setComment(initialReviewComment);
     setFieldErrors({});
     setSubmitError('');
     setSubmitSuccess('');
-  }, [initialReview, orderId, orderInfo, eligibleOrders]);
+  }, [
+    resolvedProductId,
+    initialReviewId,
+    initialReviewOrderId,
+    initialReviewRating,
+    initialReviewComment,
+    orderId,
+    orderInfoId,
+    firstEligibleOrderId
+  ]);
 
   const activeStarValue = hoverRating || rating;
   const currentCharCount = comment.length;
