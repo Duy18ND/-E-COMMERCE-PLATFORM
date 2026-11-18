@@ -321,7 +321,7 @@ services:
   #  5b. Chatbot Service (AI Shopping Assistant) — INTERNAL ONLY
   # ─────────────────────────────────────────────
   chatbot-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/chatbot-service:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_REPO_OWNER:-duy18nd}/chatbot-service:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable SHA tag}
     build:
       context: .
       dockerfile: chatbot-service/Dockerfile

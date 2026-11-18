@@ -42,19 +42,23 @@ public class KafkaOrderProducer {
         String key = String.valueOf(payload.getOrderId());
         log.info("Publishing {} to topic [{}] with key [{}]: {}", eventName, topic, key, payload);
 
-        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, payload);
+        try {
+            CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, payload);
 
-        future.whenComplete((result, ex) -> {
-            if (ex != null) {
-                log.error("Failed to publish {} for orderId {}: {}", eventName, payload.getOrderId(), ex.getMessage(), ex);
-            } else {
-                log.info("{} published successfully for orderId {} to topic [{}] partition [{}] at offset [{}]",
-                        eventName,
-                        payload.getOrderId(),
-                        result.getRecordMetadata().topic(),
-                        result.getRecordMetadata().partition(),
-                        result.getRecordMetadata().offset());
-            }
-        });
+            future.whenComplete((result, ex) -> {
+                if (ex != null) {
+                    log.error("Failed to publish {} for orderId {}: {}", eventName, payload.getOrderId(), ex.getMessage(), ex);
+                } else {
+                    log.info("{} published successfully for orderId {} to topic [{}] partition [{}] at offset [{}]",
+                            eventName,
+                            payload.getOrderId(),
+                            result.getRecordMetadata().topic(),
+                            result.getRecordMetadata().partition(),
+                            result.getRecordMetadata().offset());
+                }
+            });
+        } catch (Exception ex) {
+            log.error("Failed to enqueue {} for orderId {} (Kafka unavailable): {}", eventName, payload.getOrderId(), ex.getMessage());
+        }
     }
 }

@@ -7,11 +7,12 @@
  * ==============================================================================
  */
 
-import { test, describe, beforeEach } from 'node:test';
+import { test, describe, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import api from '../src/services/api.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,8 +61,19 @@ const createSampleVoucher = (overrides = {}) => ({
 });
 
 describe('ECOM-170: KIỂM THỬ ĐIỀU KIỆN TỐI THIỂU, THỜI HẠN VOUCHER VÀ KẾT HỢP FLASH SALE', () => {
+  const originalAdapter = api.defaults.adapter;
+
   beforeEach(() => {
     storageMap.clear();
+    api.defaults.adapter = async () => {
+      const offlineErr = new Error('Offline unit test isolation');
+      offlineErr.code = 'ECONNREFUSED';
+      throw offlineErr;
+    };
+  });
+
+  after(() => {
+    api.defaults.adapter = originalAdapter;
   });
 
   // ===========================================================================

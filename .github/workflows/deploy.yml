@@ -251,7 +251,7 @@ jobs:
             }
             trap cleanup_on_exit EXIT
 
-            APP_SERVICES="discovery-server auth-service product-service order-service payment-service api-gateway frontend"
+            APP_SERVICES="discovery-server auth-service product-service order-service payment-service chatbot-service api-gateway frontend"
             INFRA_SERVICES="zookeeper kafka mysql redis nginx"
             MANAGED_CONFIG_FILES="docker-compose.yml docker-compose.prod.yml .env.prod.example docker/mysql/init.sql docker/nginx/nginx.prod.conf"
 
@@ -270,6 +270,7 @@ jobs:
                 product-service)  echo "ecommerce-product-service" ;;
                 order-service)    echo "ecommerce-order-service" ;;
                 payment-service)  echo "ecommerce-payment-service" ;;
+                chatbot-service)  echo "ecommerce-chatbot-service" ;;
                 api-gateway)      echo "ecommerce-api-gateway" ;;
                 frontend)         echo "ecommerce-frontend" ;;
                 nginx)            echo "ecommerce-nginx" ;;
@@ -772,7 +773,8 @@ jobs:
                 if ! update_stage "discovery-server" "mysql redis kafka"; then DEPLOY_OK=false; fi
                 if [ "$DEPLOY_OK" = "true" ] && ! update_stage "auth-service product-service" "mysql redis discovery-server"; then DEPLOY_OK=false; fi
                 if [ "$DEPLOY_OK" = "true" ] && ! update_stage "order-service payment-service" "mysql kafka discovery-server"; then DEPLOY_OK=false; fi
-                if [ "$DEPLOY_OK" = "true" ] && ! update_stage "api-gateway" "discovery-server redis auth-service product-service order-service payment-service"; then DEPLOY_OK=false; fi
+                if [ "$DEPLOY_OK" = "true" ] && ! update_stage "chatbot-service" "mysql discovery-server product-service order-service"; then DEPLOY_OK=false; fi
+                if [ "$DEPLOY_OK" = "true" ] && ! update_stage "api-gateway" "discovery-server redis auth-service product-service order-service payment-service chatbot-service"; then DEPLOY_OK=false; fi
                 if [ "$DEPLOY_OK" = "true" ] && ! update_stage "frontend" "api-gateway"; then DEPLOY_OK=false; fi
               fi
             fi
@@ -851,7 +853,7 @@ jobs:
               ROLLBACK_OK=false
             fi
 
-            for svc in discovery-server auth-service product-service order-service payment-service api-gateway frontend; do
+            for svc in discovery-server auth-service product-service order-service payment-service chatbot-service api-gateway frontend; do
               cname=$(container_name_for "$svc")
               prev_ref="${PREV_IMAGE_REF[$svc]}"
               prev_id="${PREV_IMAGE_ID[$svc]}"
