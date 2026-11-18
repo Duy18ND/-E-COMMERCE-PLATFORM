@@ -2,6 +2,14 @@
 #  Payment Service — Development Profile (dev)
 # ═══════════════════════════════════════════════════════════════
 spring:
+  datasource:
+    hikari:
+      username: ${DB_USERNAME:ecommerce_user}
+      password: ${DB_PASSWORD:${MYSQL_PASSWORD:ecommerce_pass}}
+  kafka:
+    consumer:
+      group-id: payment-service-dev-v2
+      auto-offset-reset: earliest
   jpa:
     show-sql: true
     hibernate:

@@ -1,7 +1,29 @@
 import api from './api';
 import { INITIAL_PRODUCTS } from './mockData';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
-import { CATEGORY_ALIAS_MAP, matchesCategoryFilter } from './categoryService';
+import {
+  CATEGORY_ALIAS_MAP,
+  CANONICAL_CATEGORIES_BY_ID,
+  encodeImageUrlForBackend,
+  matchesCategoryFilter,
+  resolveStoredImageUrl
+} from './categoryService';
+import { fixUtf8Mojibake } from './voucherService';
+
+const repairMojibakeCategoriesInBackend = async () => {
+  const seeds = Object.values(CANONICAL_CATEGORIES_BY_ID || {});
+  for (const seed of seeds) {
+    try {
+      await api.put(`/products/categories/${seed.id}`, {
+        name: seed.name,
+        description: seed.description,
+        imageUrl: seed.imageUrl
+      });
+    } catch {
+      // Bỏ qua nếu danh mục đã đúng hoặc ID không tồn tại
+    }
+  }
+};
 
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
@@ -42,10 +64,11 @@ export const resolveCategorySlug = (categoryValue, explicitCategoryId = '') => {
 export const normalizeProduct = (product) => {
   if (!product || typeof product !== 'object') return null;
 
-  const categoryName =
+  const categoryName = fixUtf8Mojibake(
     typeof product.category === 'object'
       ? product.category?.name || 'Chưa phân loại'
-      : product.category || 'Chưa phân loại';
+      : product.category || 'Chưa phân loại'
+  );
 
   const stockValue = Number(product.stockQuantity ?? product.stock ?? 0);
   const priceValue = Number(product.price ?? 0);
@@ -60,7 +83,7 @@ export const normalizeProduct = (product) => {
   return {
     ...product,
     id: product.id,
-    name: product.name || 'Sản phẩm ShopMart',
+    name: fixUtf8Mojibake(product.name) || 'Sản phẩm ShopMart',
     category: categoryName,
     categoryId: resolveCategorySlug(categoryName, product.categoryId),
     price: priceValue,
@@ -76,9 +99,9 @@ export const normalizeProduct = (product) => {
       : {}),
     stock: stockValue,
     stockQuantity: stockValue,
-    imageUrl: product.imageUrl || product.image || DEFAULT_PRODUCT_IMAGE,
+    imageUrl: resolveStoredImageUrl(product.imageUrl || product.image, DEFAULT_PRODUCT_IMAGE),
     description:
-      product.description ||
+      fixUtf8Mojibake(product.description) ||
       'Sản phẩm công nghệ chính hãng phân phối tại hệ thống ShopMart E-Commerce.'
   };
 };
@@ -649,11 +672,25 @@ export const productService = {
       price,
       stockQuantity,
       description: String(productData?.description ?? '').trim(),
-      imageUrl: String(productData?.imageUrl ?? productData?.image ?? '').trim() || DEFAULT_PRODUCT_IMAGE
+      imageUrl: encodeImageUrlForBackend(
+        productData?.imageUrl ?? productData?.image ?? '',
+        DEFAULT_PRODUCT_IMAGE
+      )
     };
 
     try {
-      const created = await api.post('/products', payload);
+      let created;
+      try {
+        created = await api.post('/products', payload);
+      } catch (firstErr) {
+        const msg = String(firstErr?.response?.data?.message || firstErr?.message || '');
+        if ((firstErr?.status === 404 || firstErr?.response?.status === 404) && msg.includes('Danh mục')) {
+          await repairMojibakeCategoriesInBackend();
+          created = await api.post('/products', payload);
+        } else {
+          throw firstErr;
+        }
+      }
       const normalized = normalizeProduct(created);
       localProducts = [normalized, ...localProducts.filter((p) => String(p.id) !== String(normalized.id))];
       return normalized;
@@ -686,14 +723,26 @@ export const productService = {
       price,
       stockQuantity,
       description: String(productData?.description ?? existing.description ?? '').trim(),
-      imageUrl:
-        String(productData?.imageUrl ?? productData?.image ?? existing.imageUrl ?? '').trim() ||
-        DEFAULT_PRODUCT_IMAGE,
+      imageUrl: encodeImageUrlForBackend(
+        productData?.imageUrl ?? productData?.image ?? existing.imageUrl ?? '',
+        DEFAULT_PRODUCT_IMAGE
+      ),
       status: productData?.status || existing.status || 'ACTIVE'
     };
 
     try {
-      const updated = await api.put(`/products/${id}`, payload);
+      let updated;
+      try {
+        updated = await api.put(`/products/${id}`, payload);
+      } catch (firstErr) {
+        const msg = String(firstErr?.response?.data?.message || firstErr?.message || '');
+        if ((firstErr?.status === 404 || firstErr?.response?.status === 404) && msg.includes('Danh mục')) {
+          await repairMojibakeCategoriesInBackend();
+          updated = await api.put(`/products/${id}`, payload);
+        } else {
+          throw firstErr;
+        }
+      }
       const normalized = normalizeProduct(updated);
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;

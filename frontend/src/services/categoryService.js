@@ -1,8 +1,156 @@
 import api, { isHttpResponseError, toBackendError } from './api';
 import { INITIAL_CATEGORIES } from './mockData';
 import { MOCK_CATEGORIES } from '../mock/mockCategories';
+import { fixUtf8Mojibake } from './voucherService';
 
 const STORAGE_KEY = 'shopmart_admin_categories';
+const LOCAL_IMAGE_PREFIX = 'shopmart_img_';
+const DEFAULT_CATEGORY_FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80';
+
+/**
+ * Đọc và nén file ảnh từ máy tính sang Data URL (Base64) thay vì dùng blob: URL tạm thời
+ * (tránh lỗi GET blob:http://localhost:3000/... net::ERR_FILE_NOT_FOUND khi chuyển trang hoặc F5).
+ */
+export const readFileAsCompressedDataUrl = (file, maxDimension = 640, quality = 0.82) =>
+  new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error('Không tìm thấy file ảnh'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Không thể đọc file ảnh'));
+    reader.onload = () => {
+      const rawDataUrl = String(reader.result || '');
+      if (typeof Image === 'undefined' || typeof document === 'undefined') {
+        resolve(rawDataUrl);
+        return;
+      }
+      const img = new Image();
+      img.onerror = () => resolve(rawDataUrl);
+      img.onload = () => {
+        try {
+          let width = img.naturalWidth || img.width || maxDimension;
+          let height = img.naturalHeight || img.height || maxDimension;
+          if (width > maxDimension || height > maxDimension) {
+            if (width >= height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(rawDataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const outputMime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const compressed = canvas.toDataURL(outputMime, quality);
+          resolve(compressed && compressed.length < rawDataUrl.length ? compressed : rawDataUrl);
+        } catch {
+          resolve(rawDataUrl);
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+
+/**
+ * Lưu Data URL vào localStorage và trả về URL ngắn (< 500 ký tự) để lưu vào Backend DB,
+ * đồng thời loại bỏ các đường dẫn `blob:` tạm thời bị lỗi ERR_FILE_NOT_FOUND.
+ */
+export const encodeImageUrlForBackend = (
+  rawImageUrl,
+  fallbackUrl = DEFAULT_CATEGORY_FALLBACK_IMAGE
+) => {
+  const raw = String(rawImageUrl ?? '').trim();
+  if (!raw || raw.startsWith('blob:')) {
+    return fallbackUrl;
+  }
+  if (raw.startsWith('data:image/')) {
+    const key = `${LOCAL_IMAGE_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, raw);
+      }
+      return `${fallbackUrl}#local-img=${key}`;
+    } catch {
+      return fallbackUrl;
+    }
+  }
+  if (raw.length > 500) {
+    return fallbackUrl;
+  }
+  return raw;
+};
+
+/**
+ * Khôi phục ảnh hiển thị từ URL trong Backend DB:
+ * - Nếu là `#local-img=<key>`, lấy Data URL từ localStorage.
+ * - Nếu là `blob:http://...` đã hết hạn, tự động thay bằng ảnh fallback để không bị lỗi net::ERR_FILE_NOT_FOUND.
+ */
+export const resolveStoredImageUrl = (
+  rawImageUrl,
+  fallbackUrl = DEFAULT_CATEGORY_FALLBACK_IMAGE
+) => {
+  const raw = String(rawImageUrl ?? '').trim();
+  if (!raw || raw.startsWith('blob:')) {
+    return fallbackUrl;
+  }
+  if (raw.includes('#local-img=')) {
+    const [baseUrl, key] = raw.split('#local-img=');
+    try {
+      if (key && typeof window !== 'undefined' && window.localStorage) {
+        const cached = window.localStorage.getItem(key.trim());
+        if (cached && cached.startsWith('data:image/')) {
+          return cached;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return baseUrl || fallbackUrl;
+  }
+  return raw;
+};
+
+export const CANONICAL_CATEGORIES_BY_ID = {
+  1: {
+    id: 1,
+    name: 'Điện thoại & Tablet',
+    description: 'iPhone, Galaxy, iPad thế hệ mới chính hãng phân phối',
+    imageUrl: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80'
+  },
+  2: {
+    id: 2,
+    name: 'Laptop & Workstation',
+    description: 'MacBook, Dell XPS, ThinkPad phục vụ học tập, đồ họa, lập trình',
+    imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80'
+  },
+  3: {
+    id: 3,
+    name: 'Phụ Kiện & Âm Thanh',
+    description: 'Tai nghe hi-res, bàn phím cơ, chuột không dây và củ sạc nhanh',
+    imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80'
+  },
+  4: {
+    id: 4,
+    name: 'Nhà Thông Minh & Gia Dụng',
+    description: 'Robot hút bụi, máy lọc không khí và đèn thông minh tiện nghi',
+    imageUrl: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=400&q=80'
+  }
+};
+
+const isCorruptedCategoryText = (str) =>
+  typeof str === 'string' &&
+  (/áº|á»|Ä‘|Äi|Æ°|Æ¡|Ã |Ã¡|Ã¢|Ã£|Ãª|Ã´|Ã¹|Ãº|Ã‚|\uFFFD/.test(str) || fixUtf8Mojibake(str) !== str);
 
 /**
  * Bản đồ ánh xạ danh mục chuẩn giữa slug/ID trên URL và các biến thể tên danh mục
@@ -50,19 +198,20 @@ export const CATEGORY_ALIAS_MAP = {
 export const normalizeCategory = (cat, index = 0) => {
   if (!cat) return null;
   if (typeof cat === 'string') {
+    const cleanCat = fixUtf8Mojibake(cat);
     const matched = INITIAL_CATEGORIES.find(
       (c) =>
-        c.id.toLowerCase() === cat.toLowerCase() ||
-        c.name.toLowerCase() === cat.toLowerCase() ||
-        c.aliases?.includes(cat.toLowerCase())
+        c.id.toLowerCase() === cleanCat.toLowerCase() ||
+        c.name.toLowerCase() === cleanCat.toLowerCase() ||
+        c.aliases?.includes(cleanCat.toLowerCase())
     );
     return (
       matched || {
-        id: cat,
-        slug: cat.toLowerCase().replace(/\s+/g, '-'),
-        name: cat,
-        description: `Danh mục ${cat}`,
-        desc: `Danh mục ${cat}`,
+        id: cleanCat,
+        slug: cleanCat.toLowerCase().replace(/\s+/g, '-'),
+        name: cleanCat,
+        description: `Danh mục ${cleanCat}`,
+        desc: `Danh mục ${cleanCat}`,
         count: '100+ SP',
         iconBg: '#eff6ff',
         iconColor: '#2563eb',
@@ -74,8 +223,12 @@ export const normalizeCategory = (cat, index = 0) => {
     );
   }
 
-  const rawName = (cat.name || '').trim();
   const rawId = String(cat.id ?? index + 1).trim();
+  const canonicalSeed = CANONICAL_CATEGORIES_BY_ID[Number(rawId)];
+  let rawName = fixUtf8Mojibake((cat.name || '').trim());
+  if (canonicalSeed && (isCorruptedCategoryText(cat.name) || isCorruptedCategoryText(rawName))) {
+    rawName = canonicalSeed.name;
+  }
 
   // Tìm preset giao diện tương ứng trong INITIAL_CATEGORIES
   const matchedPreset = INITIAL_CATEGORIES.find(
@@ -86,8 +239,11 @@ export const normalizeCategory = (cat, index = 0) => {
   );
   const preset = matchedPreset || INITIAL_CATEGORIES[index % INITIAL_CATEGORIES.length];
 
-  const image = cat.imageUrl || cat.image || preset.image;
-  const description = cat.description || cat.desc || preset.description;
+  const image = resolveStoredImageUrl(cat.imageUrl || cat.image, preset.image);
+  let description = fixUtf8Mojibake(cat.description || cat.desc || preset.description);
+  if (canonicalSeed && (isCorruptedCategoryText(cat.description) || isCorruptedCategoryText(description))) {
+    description = canonicalSeed.description;
+  }
   const parsedCount = Number(cat.productCount ?? 0);
   const productCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
 
@@ -415,16 +571,16 @@ export const categoryService = {
       throw valErr;
     }
 
-    const imageUrl =
-      (categoryData.imageUrl ?? categoryData.image ?? '').trim() ||
-      'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80';
+    const rawImage = (categoryData.imageUrl ?? categoryData.image ?? '').trim();
+    const backendImageUrl = encodeImageUrlForBackend(rawImage, DEFAULT_CATEGORY_FALLBACK_IMAGE);
+    const displayImageUrl = resolveStoredImageUrl(backendImageUrl, DEFAULT_CATEGORY_FALLBACK_IMAGE);
     const description =
       (categoryData.description ?? '').trim() || 'Chưa có mô tả cho danh mục này.';
 
     const payload = {
       name: trimmedName,
       description,
-      imageUrl
+      imageUrl: backendImageUrl
     };
 
     try {
@@ -434,8 +590,8 @@ export const categoryService = {
         id: String(createdFromApi?.id ?? `CAT${String(localCategories.length + 1).padStart(3, '0')}`),
         backendId: createdFromApi?.id,
         name: createdFromApi?.name || trimmedName,
-        image: createdFromApi?.imageUrl || imageUrl,
-        imageUrl: createdFromApi?.imageUrl || imageUrl,
+        image: resolveStoredImageUrl(createdFromApi?.imageUrl, displayImageUrl),
+        imageUrl: resolveStoredImageUrl(createdFromApi?.imageUrl, displayImageUrl),
         description: createdFromApi?.description || description,
         productCount: Number(createdFromApi?.productCount ?? 0),
         status: categoryData.status || 'ACTIVE',
@@ -461,8 +617,8 @@ export const categoryService = {
       const newCategory = {
         id: nextId,
         name: trimmedName,
-        image: imageUrl,
-        imageUrl,
+        image: displayImageUrl,
+        imageUrl: displayImageUrl,
         description,
         productCount: 0,
         status: categoryData.status || 'ACTIVE',
@@ -485,11 +641,19 @@ export const categoryService = {
       valErr.errorType = 'DATA_ERROR';
       throw valErr;
     }
-    const imageUrl =
+    const rawImage =
       categoryData.imageUrl !== undefined
         ? categoryData.imageUrl.trim()
         : categoryData.image !== undefined
         ? categoryData.image.trim()
+        : undefined;
+    const imageUrl =
+      rawImage !== undefined
+        ? encodeImageUrlForBackend(rawImage, DEFAULT_CATEGORY_FALLBACK_IMAGE)
+        : undefined;
+    const displayImageUrl =
+      imageUrl !== undefined
+        ? resolveStoredImageUrl(imageUrl, DEFAULT_CATEGORY_FALLBACK_IMAGE)
         : undefined;
     const description =
       categoryData.description !== undefined ? categoryData.description.trim() : undefined;
@@ -504,14 +668,18 @@ export const categoryService = {
       const updatedFromApi = await api.put(`/products/categories/${id}`, payload);
       if (updatedFromApi) {
         const normalized = normalizeCategory(updatedFromApi);
+        const resolvedImg = resolveStoredImageUrl(
+          updatedFromApi.imageUrl || imageUrl,
+          displayImageUrl || normalized?.image || DEFAULT_CATEGORY_FALLBACK_IMAGE
+        );
         const resultItem = {
           ...normalized,
           ...updatedFromApi,
           id: String(updatedFromApi.id ?? id),
           backendId: updatedFromApi.id ?? id,
           name: updatedFromApi.name || trimmedName,
-          image: updatedFromApi.imageUrl || imageUrl || normalized?.image,
-          imageUrl: updatedFromApi.imageUrl || imageUrl || normalized?.imageUrl,
+          image: resolvedImg,
+          imageUrl: resolvedImg,
           description: updatedFromApi.description ?? description ?? normalized?.description,
           status: categoryData.status || normalized?.status || 'ACTIVE'
         };

@@ -1,9 +1,10 @@
+import { createPortal } from 'react-dom';
 import Button from './Button';
 
 const Modal = ({ isOpen, onClose, title, children, footer }) => {
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
       className="shopmart-dialog-overlay"
       role="dialog"
@@ -91,6 +92,11 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 };
 
 export default Modal;

@@ -2,6 +2,10 @@
 #  Product Service — Development Profile (dev)
 # ═══════════════════════════════════════════════════════════════
 spring:
+  datasource:
+    hikari:
+      username: ${DB_USERNAME:ecommerce_user}
+      password: ${DB_PASSWORD:${MYSQL_PASSWORD:ecommerce_pass}}
   jpa:
     show-sql: true
     hibernate:

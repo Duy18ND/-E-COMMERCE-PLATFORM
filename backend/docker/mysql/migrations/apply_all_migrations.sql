@@ -4,6 +4,9 @@
 --  DO NOT DROP TABLES, DO NOT TRUNCATE DATA
 -- ═══════════════════════════════════════════════════════════════
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 -- 1. Create databases if not exists
 CREATE DATABASE IF NOT EXISTS auth_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS product_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

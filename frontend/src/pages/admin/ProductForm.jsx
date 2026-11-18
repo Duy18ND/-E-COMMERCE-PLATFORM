@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import productService from '../../services/productService';
-import categoryService from '../../services/categoryService';
+import categoryService, { readFileAsCompressedDataUrl } from '../../services/categoryService';
 import useToast from '../../hooks/useToast';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -126,7 +126,7 @@ const ProductForm = () => {
   };
 
   // ─── Image handlers ───────────────────────────────────────────────────────
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -144,23 +144,20 @@ const ProductForm = () => {
       return;
     }
 
-    // Revoke previous blob URL
-    if (imagePreview && imagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview);
+    try {
+      const dataUrl = await readFileAsCompressedDataUrl(file);
+      setImageFile(file);
+      setImagePreview(dataUrl);
+      setImageError('');
+      setFormData((prev) => ({ ...prev, imageUrl: dataUrl }));
+    } catch {
+      setImageError('Không thể đọc file ảnh đã chọn.');
+      showInlineToast('Không thể đọc file ảnh đã chọn.');
     }
-
-    const blobUrl = URL.createObjectURL(file);
-    setImageFile(file);
-    setImagePreview(blobUrl);
-    setImageError('');
-    setFormData((prev) => ({ ...prev, imageUrl: blobUrl }));
     e.target.value = '';
   };
 
   const handleImageRemove = () => {
-    if (imagePreview && imagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview);
-    }
     setImageFile(null);
     setImagePreview('');
     setImageError('');

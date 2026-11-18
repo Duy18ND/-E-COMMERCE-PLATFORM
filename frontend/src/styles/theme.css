@@ -45,7 +45,7 @@
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -168,11 +168,11 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 
 /* ---------- Page, Section & Card Motion ---------- */
 .ui-page-enter {
-  animation: ui-fade-up var(--dur-normal) var(--ease-out) both;
+  animation: ui-fade-up var(--dur-normal) var(--ease-out) backwards;
 }
 
 .ui-stagger > * {
-  animation: ui-fade-up var(--dur-normal) var(--ease-out) both;
+  animation: ui-fade-up var(--dur-normal) var(--ease-out) backwards;
   animation-delay: calc(min(var(--i, 0), 8) * 35ms);
 }
 

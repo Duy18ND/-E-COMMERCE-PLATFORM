@@ -109,7 +109,11 @@ const Input = ({
               transition: 'color 0.18s ease'
             }}
           >
-            {leftIcon}
+            {typeof leftIcon === 'string' && leftIcon.trim() ? (
+              <Icon name={leftIcon.trim()} size={18} />
+            ) : (
+              leftIcon
+            )}
           </span>
         )}
 
