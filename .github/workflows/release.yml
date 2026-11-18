@@ -52,6 +52,9 @@ jobs:
           - name: api-gateway
             context: backend
             dockerfile: backend/api-gateway/Dockerfile
+          - name: chatbot-service
+            context: backend
+            dockerfile: backend/chatbot-service/Dockerfile
           - name: frontend
             context: frontend
             dockerfile: frontend/Dockerfile

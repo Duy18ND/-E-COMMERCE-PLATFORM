@@ -1,4 +1,4 @@
-import api from './api';
+import api, { isHttpResponseError, toBackendError } from './api';
 import { INITIAL_CATEGORIES } from './mockData';
 import { MOCK_CATEGORIES } from '../mock/mockCategories';
 
@@ -78,28 +78,31 @@ export const normalizeCategory = (cat, index = 0) => {
   const rawId = String(cat.id ?? index + 1).trim();
 
   // Tìm preset giao diện tương ứng trong INITIAL_CATEGORIES
-  const preset =
-    INITIAL_CATEGORIES.find(
-      (c) =>
-        c.id.toLowerCase() === rawId.toLowerCase() ||
-        c.name.toLowerCase() === rawName.toLowerCase() ||
-        c.aliases?.some((a) => rawName.toLowerCase().includes(a))
-    ) || INITIAL_CATEGORIES[index % INITIAL_CATEGORIES.length];
+  const matchedPreset = INITIAL_CATEGORIES.find(
+    (c) =>
+      c.id.toLowerCase() === rawId.toLowerCase() ||
+      c.name.toLowerCase() === rawName.toLowerCase() ||
+      c.aliases?.some((a) => rawName.toLowerCase().includes(a))
+  );
+  const preset = matchedPreset || INITIAL_CATEGORIES[index % INITIAL_CATEGORIES.length];
 
   const image = cat.imageUrl || cat.image || preset.image;
   const description = cat.description || cat.desc || preset.description;
+  const parsedCount = Number(cat.productCount ?? 0);
+  const productCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
 
   return {
     ...preset,
     ...cat,
-    id: preset?.id || rawId,
-    backendId: cat.id ?? preset?.id,
-    slug: preset?.slug || rawId.toLowerCase(),
+    id: matchedPreset ? matchedPreset.id : rawId,
+    backendId: cat.id ?? matchedPreset?.id ?? preset?.id,
+    slug: matchedPreset?.slug || rawId.toLowerCase(),
     name: rawName || preset.name,
     description,
     desc: cat.desc || description,
     image,
     imageUrl: image,
+    productCount,
     count: cat.count || (cat.productCount ? `${cat.productCount} SP` : preset.count),
     status: cat.status || 'ACTIVE'
   };
@@ -175,6 +178,107 @@ const saveCategories = (categories) => {
   }
 };
 
+const isNetworkUnavailableError = (err) =>
+  !isHttpResponseError(err) &&
+  !err?.response &&
+  err?.errorType !== 'DATA_ERROR' &&
+  !(typeof err?.status === 'number' && err.status >= 400);
+
+/**
+ * Phân loại lỗi API Danh mục rõ ràng theo 4 nhóm:
+ * - AUTH_ERROR: Lỗi xác thực / phân quyền (HTTP 401, 403)
+ * - DATA_ERROR: Lỗi dữ liệu / ràng buộc nghiệp vụ (HTTP 400, 404, 409, 422, fieldErrors hoặc sai cấu trúc dữ liệu)
+ * - HTTP_ERROR: Lỗi máy chủ hoặc HTTP khác (HTTP 5xx...)
+ * - NETWORK_ERROR: Mất kết nối mạng hoặc hết thời gian chờ (Timeout)
+ */
+export const classifyCategoryApiError = (err, fallbackMessage = 'Lỗi hệ thống danh mục sản phẩm') => {
+  const status = err?.response?.status ?? err?.status;
+  const fieldErrors =
+    err?.fieldErrors ||
+    (err?.response?.data?.errors && typeof err.response.data.errors === 'object'
+      ? err.response.data.errors
+      : null);
+  const firstFieldError = fieldErrors ? Object.values(fieldErrors)[0] : null;
+
+  let errorType = 'HTTP_ERROR';
+  if (err?.errorType === 'DATA_ERROR') {
+    errorType = 'DATA_ERROR';
+  } else if (status === 401 || status === 403) {
+    errorType = 'AUTH_ERROR';
+  } else if (
+    status === 400 ||
+    status === 404 ||
+    status === 409 ||
+    status === 422 ||
+    Boolean(fieldErrors)
+  ) {
+    errorType = 'DATA_ERROR';
+  } else if (isNetworkUnavailableError(err)) {
+    errorType = 'NETWORK_ERROR';
+  }
+
+  const rawBackendMsg =
+    firstFieldError ||
+    err?.response?.data?.message ||
+    (typeof err?.response?.data === 'string' && err.response.data.trim()
+      ? err.response.data.trim()
+      : null);
+
+  let resolvedMessage = rawBackendMsg;
+  if (!resolvedMessage) {
+    if (status === 401) {
+      resolvedMessage = 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ (HTTP 401). Vui lòng đăng nhập lại.';
+    } else if (status === 403) {
+      resolvedMessage = 'Bạn không có quyền thực hiện thao tác quản trị danh mục này (HTTP 403).';
+    } else if (status === 400 || status === 422) {
+      resolvedMessage = 'Dữ liệu danh mục không hợp lệ (HTTP 400). Vui lòng kiểm tra lại thông tin.';
+    } else if (status === 404) {
+      resolvedMessage = 'Không tìm thấy danh mục yêu cầu trên máy chủ (HTTP 404).';
+    } else if (status === 409) {
+      resolvedMessage = 'Danh mục đã tồn tại hoặc đang có dữ liệu ràng buộc (HTTP 409).';
+    } else if (typeof status === 'number' && status >= 500) {
+      resolvedMessage = `Máy chủ đang gặp sự cố khi xử lý danh mục (HTTP ${status}). Vui lòng thử lại sau.`;
+    } else if (errorType === 'NETWORK_ERROR') {
+      resolvedMessage =
+        err?.message && !/^(Network Error|Failed to fetch)$/i.test(String(err.message).trim())
+          ? err.message
+          : 'Không thể kết nối đến máy chủ danh mục sản phẩm. Vui lòng kiểm tra kết nối mạng.';
+    } else {
+      resolvedMessage = err?.message || fallbackMessage;
+    }
+  }
+
+  const mapped = toBackendError(err, resolvedMessage);
+  mapped.message = resolvedMessage;
+  if (status !== undefined) mapped.status = status;
+  if (fieldErrors) mapped.fieldErrors = fieldErrors;
+  mapped.errorType = errorType;
+  return mapped;
+};
+
+const throwBackendError = (err, fallbackMessage = 'Lỗi hệ thống danh mục sản phẩm') => {
+  throw classifyCategoryApiError(err, fallbackMessage);
+};
+
+const rethrowIfBackendError = (
+  err,
+  options = {},
+  fallbackMessage = 'Lỗi hệ thống danh mục sản phẩm'
+) => {
+  if (options?.rejectOnError !== false || !isNetworkUnavailableError(err)) {
+    throwBackendError(err, fallbackMessage);
+  }
+};
+
+const extractCategoryListFromResponse = (response) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.content)) return response.content;
+  if (Array.isArray(response?.data)) return response.data;
+  const dataErr = new Error('Dữ liệu danh mục trả về từ máy chủ không đúng định dạng.');
+  dataErr.errorType = 'DATA_ERROR';
+  throw dataErr;
+};
+
 export const categoryService = {
   /**
    * Lấy danh sách danh mục công khai cho Guest / Customer (gọi API GET /api/v1/products/categories)
@@ -185,30 +289,16 @@ export const categoryService = {
     }
     try {
       const response = await api.get('/products/categories');
-      const rawList = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.content)
-        ? response.content
-        : Array.isArray(response?.data)
-        ? response.data
-        : [];
+      const rawList = extractCategoryListFromResponse(response);
 
-      if (rawList.length > 0) {
-        return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
-      }
-      return INITIAL_CATEGORIES.map((item, idx) => normalizeCategory(item, idx));
+      return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
     } catch (err) {
-      if (options?.rejectOnError) {
-        throw err;
-      }
-      return INITIAL_CATEGORIES.map((item, idx) => normalizeCategory(item, idx));
+      throwBackendError(err, 'Không thể tải danh mục sản phẩm từ máy chủ.');
     }
   },
 
   /**
-   * Lấy danh sách danh mục: thử gọi API GET /api/v1/products/categories trước,
-   * nếu gọi cho storefront (`{ publicOnly: true }`) thì trả về danh mục chuẩn cho Guest,
-   * nếu ở trang Admin hoặc offline thì fallback về localCategories.
+   * Lấy danh sách danh mục từ API GET /api/v1/products/categories
    */
   getAll: async (options = {}) => {
     if (options?.publicOnly) {
@@ -216,66 +306,88 @@ export const categoryService = {
     }
     try {
       const response = await api.get('/products/categories');
-      const rawList = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.content)
-        ? response.content
-        : [];
-      if (rawList.length > 0) {
-        return rawList.map((item, idx) => normalizeCategory(item, idx));
+      const rawList = extractCategoryListFromResponse(response);
+      const normalizedList = rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
+      if (normalizedList.length > 0) {
+        saveCategories(normalizedList);
       }
-    } catch {
-      if (options?.rejectOnError) {
-        throw new Error('Không thể kết nối máy chủ danh mục sản phẩm.');
-      }
+      return normalizedList;
+    } catch (err) {
+      rethrowIfBackendError(err, options, 'Không thể kết nối máy chủ danh mục sản phẩm.');
+      throwBackendError(err, 'Không thể kết nối máy chủ danh mục sản phẩm.');
     }
-    return [...localCategories];
+  },
+
+  /**
+   * Lấy danh sách danh mục quản trị cho Admin [ADMIN] (gọi API GET /api/v1/products/categories)
+   * Bắt buộc ném lỗi khi API thất bại (mặc định rejectOnError: true), tuyệt đối không trả dữ liệu giả che lỗi.
+   */
+  getAllForAdmin: async (options = {}) => {
+    const resolvedOptions = { rejectOnError: true, ...options };
+    try {
+      const response = await api.get('/products/categories');
+      const rawList = extractCategoryListFromResponse(response);
+      const normalizedList = rawList
+        .map((item, idx) => {
+          const normalized = normalizeCategory(item, idx);
+          if (!normalized) return null;
+          return {
+            ...normalized,
+            id: item?.id !== undefined && item?.id !== null ? String(item.id) : normalized.id,
+            backendId: item?.id ?? normalized.backendId
+          };
+        })
+        .filter(Boolean);
+      if (normalizedList.length > 0) {
+        saveCategories(normalizedList);
+      }
+      return normalizedList;
+    } catch (err) {
+      rethrowIfBackendError(err, resolvedOptions, 'Không thể tải danh sách danh mục quản trị từ máy chủ.');
+      return [...localCategories];
+    }
   },
 
   /**
    * Tìm kiếm danh mục theo từ khóa (gọi API GET /api/v1/products/categories/search?keyword=...)
    */
-  search: async (keyword = '') => {
+  search: async (keyword = '', options = {}) => {
+    const resolvedOptions = { rejectOnError: true, ...options };
     const cleanKeyword = String(keyword ?? '').trim();
     try {
       const response = await api.get('/products/categories/search', {
         params: cleanKeyword ? { keyword: cleanKeyword } : {}
       });
-      const rawList = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.content)
-        ? response.content
-        : Array.isArray(response?.data)
-        ? response.data
-        : [];
-      if (rawList.length > 0 || cleanKeyword) {
-        return rawList.map((item, idx) => normalizeCategory(item, idx)).filter(Boolean);
-      }
-    } catch {
-      // Fallback tìm kiếm trên localCategories khi offline
+      const rawList = extractCategoryListFromResponse(response);
+      return rawList
+        .map((item, idx) => {
+          const normalized = normalizeCategory(item, idx);
+          if (!normalized) return null;
+          return {
+            ...normalized,
+            id: item?.id !== undefined && item?.id !== null ? String(item.id) : normalized.id,
+            backendId: item?.id ?? normalized.backendId
+          };
+        })
+        .filter(Boolean);
+    } catch (err) {
+      rethrowIfBackendError(err, resolvedOptions, 'Không thể tìm kiếm danh mục sản phẩm.');
+      throwBackendError(err, 'Không thể tìm kiếm danh mục sản phẩm.');
     }
-    if (!cleanKeyword) return [...localCategories];
-    const q = cleanKeyword.toLowerCase();
-    return localCategories.filter(
-      (c) =>
-        c.name?.toLowerCase().includes(q) ||
-        String(c.id).toLowerCase().includes(q) ||
-        c.description?.toLowerCase().includes(q)
-    );
   },
 
   /**
    * Lấy danh mục theo ID hoặc Slug (gọi API GET /api/v1/products/categories/{id})
    */
-  getById: async (id) => {
+  getById: async (id, options = {}) => {
     try {
       const numId = Number(id);
       if (Number.isInteger(numId) && numId > 0) {
         const apiCat = await api.get(`/products/categories/${numId}`);
         if (apiCat) return normalizeCategory(apiCat);
       }
-    } catch {
-      // Fallback sang dữ liệu cục bộ nếu không kết nối được Backend
+    } catch (err) {
+      rethrowIfBackendError(err, options, 'Không thể tải thông tin danh mục từ máy chủ.');
     }
 
     const publicMatch = INITIAL_CATEGORIES.find(
@@ -298,7 +410,9 @@ export const categoryService = {
   create: async (categoryData) => {
     const trimmedName = String(categoryData?.name ?? '').trim();
     if (!trimmedName) {
-      throw new Error('Tên danh mục không được để trống');
+      const valErr = new Error('Tên danh mục không được để trống');
+      valErr.errorType = 'DATA_ERROR';
+      throw valErr;
     }
 
     const imageUrl =
@@ -318,6 +432,7 @@ export const categoryService = {
       const normalized = {
         ...normalizeCategory(createdFromApi),
         id: String(createdFromApi?.id ?? `CAT${String(localCategories.length + 1).padStart(3, '0')}`),
+        backendId: createdFromApi?.id,
         name: createdFromApi?.name || trimmedName,
         image: createdFromApi?.imageUrl || imageUrl,
         imageUrl: createdFromApi?.imageUrl || imageUrl,
@@ -329,9 +444,8 @@ export const categoryService = {
       saveCategories([normalized, ...localCategories.filter((c) => String(c.id) !== String(normalized.id))]);
       return normalized;
     } catch (err) {
-      if (categoryData?.rejectOnError) {
-        throw err;
-      }
+      rethrowIfBackendError(err, categoryData, 'Không thể thêm danh mục mới.');
+
       const maxNum = localCategories.reduce((max, cat) => {
         const match = String(cat.id).match(/^CAT(\d+)$/i);
         if (match) {
@@ -364,8 +478,13 @@ export const categoryService = {
   /**
    * Cập nhật danh mục [ADMIN] (gọi API PUT /api/v1/products/categories/{id})
    */
-  update: async (id, categoryData) => {
+  update: async (id, categoryData = {}) => {
     const trimmedName = categoryData.name ? categoryData.name.trim() : '';
+    if (!trimmedName) {
+      const valErr = new Error('Tên danh mục không được để trống');
+      valErr.errorType = 'DATA_ERROR';
+      throw valErr;
+    }
     const imageUrl =
       categoryData.imageUrl !== undefined
         ? categoryData.imageUrl.trim()
@@ -384,32 +503,37 @@ export const categoryService = {
     try {
       const updatedFromApi = await api.put(`/products/categories/${id}`, payload);
       if (updatedFromApi) {
+        const normalized = normalizeCategory(updatedFromApi);
+        const resultItem = {
+          ...normalized,
+          ...updatedFromApi,
+          id: String(updatedFromApi.id ?? id),
+          backendId: updatedFromApi.id ?? id,
+          name: updatedFromApi.name || trimmedName,
+          image: updatedFromApi.imageUrl || imageUrl || normalized?.image,
+          imageUrl: updatedFromApi.imageUrl || imageUrl || normalized?.imageUrl,
+          description: updatedFromApi.description ?? description ?? normalized?.description,
+          status: categoryData.status || normalized?.status || 'ACTIVE'
+        };
         const synced = localCategories.map((c) =>
-          String(c.id).toLowerCase() === String(id).toLowerCase()
-            ? {
-                ...c,
-                ...updatedFromApi,
-                id: c.id,
-                name: updatedFromApi.name || trimmedName || c.name,
-                image: updatedFromApi.imageUrl || imageUrl || c.image,
-                imageUrl: updatedFromApi.imageUrl || imageUrl || c.imageUrl,
-                description: updatedFromApi.description ?? description ?? c.description,
-                status: categoryData.status || c.status
-              }
+          String(c.id).toLowerCase() === String(id).toLowerCase() ||
+          String(c.backendId) === String(id)
+            ? { ...c, ...resultItem }
             : c
         );
         saveCategories(synced);
-        return normalizeCategory(updatedFromApi);
+        return resultItem;
       }
     } catch (err) {
-      if (categoryData?.rejectOnError) {
-        throw err;
-      }
+      rethrowIfBackendError(err, categoryData, 'Không thể cập nhật danh mục.');
     }
 
     let updatedItem = null;
     const updated = localCategories.map((c) => {
-      if (String(c.id).toLowerCase() === String(id).toLowerCase()) {
+      if (
+        String(c.id).toLowerCase() === String(id).toLowerCase() ||
+        String(c.backendId) === String(id)
+      ) {
         updatedItem = {
           ...c,
           ...categoryData,
@@ -436,22 +560,33 @@ export const categoryService = {
   /**
    * Xóa danh mục [ADMIN] (gọi API DELETE /api/v1/products/categories/{id})
    */
-  delete: async (id) => {
+  delete: async (id, options = {}) => {
     try {
       await api.delete(`/products/categories/${id}`);
-    } catch {
-      // Fallback xóa trên localCategories khi chạy offline
+      const updated = localCategories.filter(
+        (c) =>
+          String(c.id).toLowerCase() !== String(id).toLowerCase() &&
+          String(c.backendId) !== String(id)
+      );
+      saveCategories(updated);
+      return { success: true, id };
+    } catch (err) {
+      rethrowIfBackendError(err, options, 'Không thể xóa danh mục.');
     }
 
     const exists = localCategories.some(
-      (c) => String(c.id).toLowerCase() === String(id).toLowerCase()
+      (c) =>
+        String(c.id).toLowerCase() === String(id).toLowerCase() ||
+        String(c.backendId) === String(id)
     );
     if (!exists) {
       throw new Error(`Danh mục mã '${id}' không tồn tại!`);
     }
 
     const updated = localCategories.filter(
-      (c) => String(c.id).toLowerCase() !== String(id).toLowerCase()
+      (c) =>
+        String(c.id).toLowerCase() !== String(id).toLowerCase() &&
+        String(c.backendId) !== String(id)
     );
     saveCategories(updated);
     return { success: true, id };

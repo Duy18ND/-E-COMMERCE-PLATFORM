@@ -59,16 +59,56 @@ export const normalizeRoles = (rawRoles, rawAuthorities) => {
   return normalized.length > 0 ? Array.from(new Set(normalized)) : ['ROLE_USER'];
 };
 
+const isMockTokenValue = (token) =>
+  typeof token === 'string' && token.startsWith('mock-');
+
 /**
- * Chuẩn hóa đối tượng phản hồi đăng nhập/đăng ký để tương thích đồng nhất giữa Backend AuthResponse và Frontend
+ * Tìm bản ghi user tương ứng trong danh sách Mock (chỉ dùng cho Mock Auth, ưu tiên khớp email trước id)
  */
-export const normalizeAuthPayload = (data, fallbackInfo = {}) => {
+const findMockUserMatch = (resolvedEmail, resolvedId) => {
+  const list = loadMockUsers();
+  if (resolvedEmail) {
+    const emailLower = String(resolvedEmail).trim().toLowerCase();
+    const byEmail = list.find((u) => String(u.email || '').trim().toLowerCase() === emailLower);
+    if (byEmail) return byEmail;
+  }
+  if (resolvedId !== null && resolvedId !== undefined && resolvedId !== '') {
+    return list.find((u) => String(u.id) === String(resolvedId)) || null;
+  }
+  return null;
+};
+
+/**
+ * Chuẩn hóa đối tượng phản hồi đăng nhập/đăng ký để tương thích đồng nhất giữa Backend AuthResponse và Frontend.
+ * Khi xác thực qua Backend thật (isMockMode = false), tuyệt đối KHÔNG ghép dữ liệu từ MOCK_USERS
+ * và KHÔNG tự gán số điện thoại / địa chỉ hardcode.
+ */
+export const normalizeAuthPayload = (data, fallbackInfo = {}, options = {}) => {
   if (!data || typeof data !== 'object') {
     return null;
   }
 
   const resolvedId = data.userId ?? data.id ?? fallbackInfo.userId ?? fallbackInfo.id ?? null;
+  const resolvedEmail = data.email || data.username || fallbackInfo.email || '';
   const roles = normalizeRoles(data.roles || fallbackInfo.roles, data.authorities);
+  const tokenCandidate = data.accessToken || fallbackInfo.accessToken || '';
+  const isMockMode =
+    typeof options.isMock === 'boolean'
+      ? options.isMock
+      : Boolean(USE_MOCK_AUTH || isMockTokenValue(tokenCandidate));
+
+  // Chỉ bổ sung dữ liệu từ MOCK_USERS khi đang chạy chế độ Mock Auth
+  const mockMatch = isMockMode ? findMockUserMatch(resolvedEmail, resolvedId) : null;
+
+  const avatarRemoved = Boolean(data.avatarRemoved ?? fallbackInfo.avatarRemoved ?? false);
+  const resolvedAvatar = avatarRemoved
+    ? ''
+    : data.avatarUrl ??
+      data.avatar ??
+      fallbackInfo.avatarUrl ??
+      fallbackInfo.avatar ??
+      (isMockMode ? (mockMatch?.avatarUrl ?? mockMatch?.avatar) : undefined) ??
+      '';
 
   return {
     accessToken: data.accessToken || fallbackInfo.accessToken || null,
@@ -77,10 +117,17 @@ export const normalizeAuthPayload = (data, fallbackInfo = {}) => {
     expiresIn: data.expiresIn || 86400000,
     id: resolvedId,
     userId: resolvedId,
-    email: data.email || data.username || fallbackInfo.email || '',
-    fullName: data.fullName || fallbackInfo.fullName || 'Người dùng',
-    phone: data.phone ?? fallbackInfo.phone ?? '',
-    address: data.address ?? fallbackInfo.address ?? '',
+    email: resolvedEmail,
+    fullName: data.fullName || fallbackInfo.fullName || (isMockMode ? mockMatch?.fullName : '') || 'Người dùng',
+    phone: isMockMode
+      ? data.phone || fallbackInfo.phone || mockMatch?.phone || '0912345678'
+      : data.phone ?? fallbackInfo.phone ?? '',
+    address: isMockMode
+      ? data.address || fallbackInfo.address || mockMatch?.address || '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội'
+      : data.address ?? fallbackInfo.address ?? '',
+    avatarUrl: resolvedAvatar,
+    avatar: resolvedAvatar,
+    avatarRemoved,
     roles
   };
 };
@@ -107,7 +154,7 @@ export const authService = {
           email: cleanEmail,
           password
         });
-        return normalizeAuthPayload(responseData, { email: cleanEmail });
+        return normalizeAuthPayload(responseData, { email: cleanEmail }, { isMock: false });
       } catch (err) {
         // Nếu Backend đang chạy và trả về lỗi xác thực (400, 401, 403...), ném đúng lỗi của Backend
         if (!isBackendUnreachable(err)) {
@@ -124,17 +171,23 @@ export const authService = {
       throw new Error('Email hoặc mật khẩu không chính xác.');
     }
 
-    return normalizeAuthPayload({
-      accessToken: `mock-auth-token-${user.id}-${Date.now()}`,
-      refreshToken: `mock-refresh-token-${user.id}-${Date.now()}`,
-      userId: user.id,
-      id: user.id,
-      email: user.email,
-      fullName: user.fullName,
-      phone: user.phone || '',
-      address: user.address || '',
-      roles: Array.isArray(user.roles) ? [...user.roles] : ['ROLE_USER']
-    });
+    return normalizeAuthPayload(
+      {
+        accessToken: `mock-auth-token-${user.id}-${Date.now()}`,
+        refreshToken: `mock-refresh-token-${user.id}-${Date.now()}`,
+        userId: user.id,
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        phone: user.phone || '0912345678',
+        address: user.address || '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
+        avatarUrl: user.avatarUrl || user.avatar || '',
+        avatar: user.avatar || user.avatarUrl || '',
+        roles: Array.isArray(user.roles) ? [...user.roles] : ['ROLE_USER']
+      },
+      {},
+      { isMock: true }
+    );
   },
 
   /**
@@ -145,7 +198,7 @@ export const authService = {
   register: async ({ email, password, fullName, phone, address }) => {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanFullName = (fullName || '').trim();
-    const cleanPhone = (phone || '').trim();
+    const cleanPhone = (phone || '').replace(/\s+/g, '');
     const cleanAddress = (address || '').trim();
 
     if (!USE_MOCK_AUTH) {
@@ -157,12 +210,17 @@ export const authService = {
           ...(cleanPhone ? { phone: cleanPhone } : {})
         };
         const responseData = await api.post('/auth/register', registerPayload);
-        return normalizeAuthPayload(responseData, {
-          email: cleanEmail,
-          fullName: cleanFullName,
-          phone: cleanPhone,
-          address: cleanAddress
-        });
+
+        return normalizeAuthPayload(
+          responseData,
+          {
+            email: cleanEmail,
+            fullName: cleanFullName,
+            phone: cleanPhone,
+            address: cleanAddress
+          },
+          { isMock: false }
+        );
       } catch (err) {
         // Nếu Backend đang chạy và trả về lỗi (400 Validation, 409 Conflict trùng email...), ném đúng lỗi của Backend
         if (!isBackendUnreachable(err)) {
@@ -172,6 +230,7 @@ export const authService = {
       }
     }
 
+    const mockAddress = cleanAddress || '123 Đường Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội';
     mockUsersList = loadMockUsers();
     if (mockUsersList.some((u) => u.email.toLowerCase() === cleanEmail)) {
       throw new Error(`Email '${cleanEmail}' đã tồn tại trong hệ thống`);
@@ -182,25 +241,37 @@ export const authService = {
       email: cleanEmail,
       password,
       fullName: cleanFullName,
-      phone: cleanPhone,
-      address: cleanAddress,
-      roles: ['ROLE_USER']
+      name: cleanFullName,
+      phone: cleanPhone || '0912345678',
+      address: mockAddress,
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
+      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
+      role: 'USER',
+      roles: ['ROLE_USER'],
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString()
     };
 
     mockUsersList.push(newUser);
     saveMockUsers(mockUsersList);
 
-    return normalizeAuthPayload({
-      accessToken: `mock-auth-token-${newUser.id}-${Date.now()}`,
-      refreshToken: `mock-refresh-token-${newUser.id}-${Date.now()}`,
-      userId: newUser.id,
-      id: newUser.id,
-      email: newUser.email,
-      fullName: newUser.fullName,
-      phone: newUser.phone,
-      address: newUser.address,
-      roles: newUser.roles
-    });
+    return normalizeAuthPayload(
+      {
+        accessToken: `mock-auth-token-${newUser.id}-${Date.now()}`,
+        refreshToken: `mock-refresh-token-${newUser.id}-${Date.now()}`,
+        userId: newUser.id,
+        id: newUser.id,
+        email: newUser.email,
+        fullName: newUser.fullName,
+        phone: newUser.phone,
+        address: newUser.address,
+        avatarUrl: newUser.avatarUrl,
+        avatar: newUser.avatar,
+        roles: newUser.roles
+      },
+      {},
+      { isMock: true }
+    );
   },
 
   /**
@@ -211,16 +282,25 @@ export const authService = {
     if (!tokenToUse) {
       throw new Error('Không tìm thấy Refresh Token');
     }
-    if (USE_MOCK_AUTH || tokenToUse.startsWith('mock-')) {
+    if (USE_MOCK_AUTH || isMockTokenValue(tokenToUse)) {
       const saved = getUser();
-      return normalizeAuthPayload({
-        accessToken: `mock-auth-token-${saved?.id || 1}-${Date.now()}`,
-        refreshToken: tokenToUse,
-        ...saved
-      });
+      return normalizeAuthPayload(
+        {
+          accessToken: `mock-auth-token-${saved?.id || 1}-${Date.now()}`,
+          refreshToken: tokenToUse,
+          ...saved
+        },
+        {},
+        { isMock: true }
+      );
     }
     const responseData = await api.post('/auth/refresh', { refreshToken: tokenToUse });
-    return normalizeAuthPayload(responseData, getUser() || {});
+    const saved = getUser();
+    return normalizeAuthPayload(
+      responseData,
+      saved ? { email: saved.email, fullName: saved.fullName, roles: saved.roles } : {},
+      { isMock: false }
+    );
   },
 
   /**
@@ -228,7 +308,7 @@ export const authService = {
    */
   logout: async () => {
     const token = getToken();
-    if (!token || USE_MOCK_AUTH || token.startsWith('mock-')) {
+    if (!token || USE_MOCK_AUTH || isMockTokenValue(token)) {
       return { success: true };
     }
     try {
@@ -250,33 +330,84 @@ export const authService = {
       throw new Error('Phiên đăng nhập không tồn tại');
     }
 
-    if (!USE_MOCK_AUTH && !token.startsWith('mock-')) {
+    const isMockSession = USE_MOCK_AUTH || isMockTokenValue(token);
+
+    if (!isMockSession) {
       try {
         const responseData = await api.get('/auth/me');
         const jwtClaims = parseJwtPayload(token) || {};
-        return normalizeAuthPayload(responseData, {
-          ...saved,
-          userId: jwtClaims.userId ?? saved?.id,
-          email: jwtClaims.sub ?? saved?.email,
-          fullName: jwtClaims.fullName ?? saved?.fullName,
-          roles: jwtClaims.roles ?? saved?.roles
-        });
+        const apiEmail = responseData?.email || responseData?.username || jwtClaims.sub || '';
+        const apiId = responseData?.id ?? responseData?.userId ?? jwtClaims.userId ?? null;
+        const isSameSavedUser = Boolean(
+          saved &&
+            ((saved.email && apiEmail && String(saved.email).toLowerCase() === String(apiEmail).toLowerCase()) ||
+              (saved.id != null && apiId != null && String(saved.id) === String(apiId)))
+        );
+
+        return normalizeAuthPayload(
+          responseData,
+          {
+            userId: jwtClaims.userId,
+            email: jwtClaims.sub,
+            fullName: jwtClaims.fullName,
+            roles: jwtClaims.roles,
+            ...(isSameSavedUser
+              ? {
+                  avatarUrl: saved?.avatarUrl,
+                  avatar: saved?.avatar,
+                  avatarRemoved: saved?.avatarRemoved
+                }
+              : {})
+          },
+          { isMock: false }
+        );
       } catch (err) {
         if (!isBackendUnreachable(err)) {
           throw err;
         }
+        // Khi backend tạm không kết nối được với JWT thật: chỉ trả về claims/session an toàn, KHÔNG trộn MOCK_USERS
+        const jwtClaims = parseJwtPayload(token);
+        if (jwtClaims && jwtClaims.sub) {
+          return normalizeAuthPayload(
+            {
+              userId: jwtClaims.userId ?? saved?.id ?? null,
+              email: jwtClaims.sub,
+              fullName: jwtClaims.fullName ?? saved?.fullName ?? 'Người dùng',
+              roles: jwtClaims.roles ?? saved?.roles ?? ['ROLE_USER']
+            },
+            {},
+            { isMock: false }
+          );
+        }
+        if (saved && saved.email) {
+          return normalizeAuthPayload(
+            {
+              userId: saved.userId ?? saved.id ?? null,
+              email: saved.email,
+              fullName: saved.fullName ?? 'Người dùng',
+              roles: saved.roles ?? ['ROLE_USER']
+            },
+            {},
+            { isMock: false }
+          );
+        }
+        throw err;
       }
     }
 
     if (!saved || !saved.email) {
       const jwtClaims = parseJwtPayload(token);
       if (jwtClaims && jwtClaims.sub) {
-        return normalizeAuthPayload({
-          userId: jwtClaims.userId || 1,
-          email: jwtClaims.sub,
-          fullName: jwtClaims.fullName || 'Người dùng',
-          roles: jwtClaims.roles || ['ROLE_USER']
-        });
+        return normalizeAuthPayload(
+          {
+            userId: jwtClaims.userId || 1,
+            email: jwtClaims.sub,
+            fullName: jwtClaims.fullName || 'Người dùng',
+            roles: jwtClaims.roles || ['ROLE_USER']
+          },
+          {},
+          { isMock: true }
+        );
       }
       throw new Error('Phiên đăng nhập không tồn tại');
     }
@@ -287,10 +418,54 @@ export const authService = {
     );
 
     if (user) {
-      return normalizeAuthPayload(user, saved);
+      return normalizeAuthPayload(user, saved, { isMock: true });
     }
 
-    return normalizeAuthPayload(saved);
+    return normalizeAuthPayload(saved, {}, { isMock: true });
+  },
+
+  /**
+   * Đồng bộ cập nhật thông tin tài khoản ở Frontend Mock Data (localStorage) — chỉ áp dụng trong chế độ Mock Auth
+   */
+  updateMockUser: (updatedProfile = {}) => {
+    try {
+      const token = getToken();
+      if (!USE_MOCK_AUTH && !isMockTokenValue(token)) {
+        return;
+      }
+      const list = loadMockUsers();
+      const targetId = updatedProfile.id ?? updatedProfile.userId;
+      const targetEmail = String(updatedProfile.email || '').trim().toLowerCase();
+
+      const updatedList = list.map((u) => {
+        const isMatch =
+          (targetId !== undefined && targetId !== null && String(u.id) === String(targetId)) ||
+          (targetEmail && String(u.email || '').toLowerCase() === targetEmail);
+
+        if (!isMatch) return u;
+
+        const nextAvatar = updatedProfile.avatarRemoved
+          ? ''
+          : updatedProfile.avatarUrl ?? updatedProfile.avatar ?? u.avatarUrl ?? u.avatar;
+
+        return {
+          ...u,
+          fullName: updatedProfile.fullName ?? u.fullName,
+          name: updatedProfile.fullName ?? u.name,
+          email: updatedProfile.email ?? u.email,
+          phone: updatedProfile.phone ?? u.phone,
+          address: updatedProfile.address ?? u.address,
+          avatar: nextAvatar,
+          avatarUrl: nextAvatar,
+          avatarRemoved: Boolean(updatedProfile.avatarRemoved)
+        };
+      });
+
+      mockUsersList = updatedList;
+      saveMockUsers(updatedList);
+    } catch (e) {
+      // Bỏ qua lỗi lưu trữ
+    }
   }
 };
 

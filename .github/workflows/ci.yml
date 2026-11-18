@@ -119,7 +119,8 @@ jobs:
           test -f backend/payment-service/Dockerfile
           test -f backend/discovery-server/Dockerfile
           test -f backend/api-gateway/Dockerfile
-          echo "All 7 Dockerfiles are present."
+          test -f backend/chatbot-service/Dockerfile
+          echo "All 8 Dockerfiles are present."
 
       - name: Verify Bind Mount Files Exist
         run: |

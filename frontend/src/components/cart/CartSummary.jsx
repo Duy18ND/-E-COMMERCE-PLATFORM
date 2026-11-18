@@ -6,10 +6,21 @@ const CartSummary = ({
   totalPrice = 0,
   totalOriginalPrice = 0,
   totalDiscount = 0,
+  couponCode = null,
+  couponDiscount = 0,
+  shippingFee = 0,
+  finalTotal,
   showCheckoutButton = true
 }) => {
   const origPrice = totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice + totalDiscount;
-  const discountAmount = totalDiscount > 0 ? totalDiscount : Math.max(0, origPrice - totalPrice);
+  const flashDiscountAmount = totalDiscount > 0 ? totalDiscount : Math.max(0, origPrice - totalPrice);
+  const resolvedCouponDiscount = Math.max(0, Number(couponDiscount) || 0);
+  const resolvedShippingFee = Math.max(0, Number(shippingFee) || 0);
+  const effectiveTotal =
+    finalTotal !== undefined && finalTotal !== null
+      ? Number(finalTotal)
+      : Math.max(0, Number(totalPrice) - resolvedCouponDiscount) + resolvedShippingFee;
+  const totalSavings = flashDiscountAmount + resolvedCouponDiscount;
 
   return (
     <div
@@ -44,13 +55,24 @@ const CartSummary = ({
         </div>
 
         {/* Giảm giá Flash Sale */}
-        {discountAmount > 0 && (
+        {flashDiscountAmount > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626', fontSize: '0.9rem', fontWeight: 600 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span>⚡</span>
               <span>Giảm giá Flash Sale</span>
             </span>
-            <span>-{formatCurrency(discountAmount)}</span>
+            <span>-{formatCurrency(flashDiscountAmount)}</span>
+          </div>
+        )}
+
+        {/* Giảm giá Coupon / Voucher */}
+        {resolvedCouponDiscount > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a', fontSize: '0.9rem', fontWeight: 700 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>🎫</span>
+              <span>Giảm giá{couponCode ? ` (${couponCode})` : ''}</span>
+            </span>
+            <span>-{formatCurrency(resolvedCouponDiscount)}</span>
           </div>
         )}
 
@@ -60,7 +82,9 @@ const CartSummary = ({
             <span>Phí vận chuyển</span>
             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>ⓘ</span>
           </span>
-          <span style={{ color: '#16a34a', fontWeight: 600 }}>Miễn phí (0 đ)</span>
+          <span style={{ color: '#16a34a', fontWeight: 600 }}>
+            {resolvedShippingFee > 0 ? formatCurrency(resolvedShippingFee) : 'Miễn phí (0 đ)'}
+          </span>
         </div>
       </div>
 
@@ -79,14 +103,14 @@ const CartSummary = ({
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#dc2626', lineHeight: 1 }}>
-              {formatCurrency(totalPrice)}
+              {formatCurrency(effectiveTotal)}
             </div>
           </div>
         </div>
       </div>
 
       {/* Tiết kiệm tổng cộng Banner */}
-      {discountAmount > 0 && (
+      {totalSavings > 0 && (
         <div
           style={{
             backgroundColor: '#fee2e2',
@@ -104,7 +128,7 @@ const CartSummary = ({
           }}
         >
           <span>🎁</span>
-          <span>Tiết kiệm tổng cộng: {formatCurrency(discountAmount)}</span>
+          <span>Tiết kiệm tổng cộng: {formatCurrency(totalSavings)}</span>
         </div>
       )}
 

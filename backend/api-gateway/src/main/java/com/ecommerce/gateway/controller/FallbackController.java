@@ -47,4 +47,12 @@ public class FallbackController {
                 "Dịch vụ thanh toán (Payment Service) tạm thời không khả dụng hoặc quá thời gian phản hồi. Vui lòng thử lại sau."
         ));
     }
+
+    @RequestMapping("/chatbot")
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Mono<ApiResponse<Object>> chatbotFallback() {
+        return Mono.just(ApiResponse.error(
+                "Trợ lý Mua sắm AI (Chatbot Service) tạm thời không khả dụng hoặc quá thời gian phản hồi. Vui lòng thử lại sau."
+        ));
+    }
 }

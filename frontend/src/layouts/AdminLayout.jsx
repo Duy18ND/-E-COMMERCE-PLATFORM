@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import AdminHeader from '../components/admin/AdminHeader';
 import AdminSidebar from '../components/admin/AdminSidebar';
+import Loading from '../components/common/Loading';
 
 /**
  * AdminLayout — Cấu trúc giao diện dành riêng cho Quản trị viên (Admin Portal):
@@ -37,7 +38,9 @@ const AdminLayout = ({ children }) => {
           onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
         />
         <main className="admin-main-content">
-          {children ? children : <Outlet />}
+          <Suspense fallback={<Loading message="Đang tải trang quản trị..." />}>
+            {children ? children : <Outlet />}
+          </Suspense>
         </main>
       </div>
     </div>

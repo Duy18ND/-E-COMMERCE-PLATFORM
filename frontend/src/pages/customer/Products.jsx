@@ -71,13 +71,13 @@ const Products = () => {
     categoryService
       .getPublicCategories()
       .then((catData) => {
-        if (active && Array.isArray(catData) && catData.length > 0) {
+        if (active && Array.isArray(catData)) {
           setCategories(catData);
         }
       })
       .catch(() => {
         if (active) {
-          setCategories(INITIAL_CATEGORIES);
+          setCategories([]);
         }
       });
 

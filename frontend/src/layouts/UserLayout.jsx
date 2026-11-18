@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import UserHeader from '../components/user/UserHeader';
 import CategoryNav from '../components/user/CategoryNav';
 import Footer from '../components/layout/Footer';
 import ErrorMessage from '../components/common/ErrorMessage';
+import Loading from '../components/common/Loading';
+import ChatbotWidget from '../components/chat/ChatbotWidget';
 
 /**
  * UserLayout — Cấu trúc giao diện dành riêng cho Khách hàng (User/Shop):
@@ -43,7 +45,9 @@ const UserLayout = ({ children }) => {
           </div>
         )}
         <main className="main-content user-main-content auth-main-content">
-          {children ? children : <Outlet />}
+          <Suspense fallback={<Loading message="Đang tải trang..." />}>
+            {children ? children : <Outlet />}
+          </Suspense>
         </main>
       </div>
     );
@@ -60,10 +64,13 @@ const UserLayout = ({ children }) => {
             <ErrorMessage message={accessDeniedMsg} onClose={() => setAccessDeniedMsg('')} />
           </div>
         )}
-        {children ? children : <Outlet />}
+        <Suspense fallback={<Loading message="Đang tải trang..." />}>
+          {children ? children : <Outlet />}
+        </Suspense>
       </main>
 
       <Footer />
+      <ChatbotWidget />
     </div>
   );
 };

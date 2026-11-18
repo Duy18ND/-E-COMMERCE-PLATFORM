@@ -5,12 +5,14 @@ import productService from '../../services/productService';
 import useToast from '../../hooks/useToast';
 import Button from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
+import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
 
 const AdminProducts = () => {
   const { showToast, confirmDialog, notify } = useToast();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,6 +26,7 @@ const AdminProducts = () => {
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const data = await productService.getAdminProducts();
       if (Array.isArray(data)) {
@@ -35,12 +38,16 @@ const AdminProducts = () => {
             stockQuantity: Number(p.stockQuantity ?? p.stock ?? 0)
           }))
         );
-      }
-    } catch (err) {
-      if (err?.response) {
+      } else {
         setProducts([]);
       }
-      // Fallback sang danh sách hiện tại khi offline
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể tải danh sách sản phẩm quản trị từ máy chủ. Vui lòng thử lại!'
+      );
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -302,6 +309,28 @@ const AdminProducts = () => {
         {loading ? (
           <div style={{ padding: '2.5rem', textAlign: 'center' }}>
             <Loading message="Đang tải danh sách sản phẩm quản trị..." />
+          </div>
+        ) : error ? (
+          <div style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
+            <ErrorMessage message={error} />
+            <div style={{ marginTop: '1rem' }}>
+              <Button variant="primary" size="sm" onClick={loadProducts}>
+                🔄 Thử lại kết nối
+              </Button>
+            </div>
+          </div>
+        ) : products.length === 0 ? (
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📦</div>
+            <p style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.35rem' }}>
+              Chưa có sản phẩm nào trong hệ thống
+            </p>
+            <p style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Danh sách sản phẩm hiện đang trống. Hãy thêm sản phẩm mới để bắt đầu kinh doanh.
+            </p>
+            <Link to="/admin/products/new">
+              <Button variant="primary" size="sm">➕ Thêm sản phẩm đầu tiên</Button>
+            </Link>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>

@@ -371,6 +371,45 @@ const normalizeOrderStatus = (status) => {
   return upper;
 };
 
+const normalizeOrderItemFromBackend = (item) => {
+  if (!item || typeof item !== 'object') return null;
+  const quantity = Math.max(1, Math.trunc(toFiniteNumber(item.quantity, 1)));
+  const priceAtPurchase = toFiniteNumber(item.priceAtPurchase ?? item.unitPrice ?? item.price, 0);
+  const price = toFiniteNumber(item.price ?? item.priceAtPurchase ?? item.unitPrice, priceAtPurchase);
+  const computedSubTotal = priceAtPurchase * quantity;
+  const subTotal =
+    item.subTotal !== null && item.subTotal !== undefined
+      ? toFiniteNumber(item.subTotal, computedSubTotal)
+      : computedSubTotal;
+
+  return {
+    ...item,
+    id: item.id ?? null,
+    productId: item.productId ?? null,
+    productName: item.productName || item.name || '',
+    name: item.name || item.productName || '',
+    quantity,
+    priceAtPurchase,
+    price,
+    subTotal
+  };
+};
+
+const normalizeStatusHistoryFromBackend = (entry) => {
+  if (!entry || typeof entry !== 'object') return null;
+  return {
+    ...entry,
+    id: entry.id ?? null,
+    orderId: entry.orderId ?? null,
+    status: normalizeOrderStatus(entry.status),
+    previousStatus: entry.previousStatus ? normalizeOrderStatus(entry.previousStatus) : null,
+    createdAt: normalizeOrderDate(entry.createdAt)
+  };
+};
+
+/**
+ * Chuẩn hóa đối tượng đơn hàng trả về từ Backend OrderResponse
+ */
 export const normalizeOrderFromBackend = (rawOrder) => {
   if (!rawOrder || typeof rawOrder !== 'object') return null;
 
@@ -383,23 +422,39 @@ export const normalizeOrderFromBackend = (rawOrder) => {
         ? toFiniteNumber(rawOrder.subtotal, totalAmount)
         : totalAmount;
   const shippingFee = Math.max(0, toFiniteNumber(rawOrder.shippingFee, 0));
+  const voucherCode = rawOrder.voucherCode ?? rawOrder.couponCode ?? null;
+
+  const rawItems = Array.isArray(rawOrder.items)
+    ? rawOrder.items
+    : Array.isArray(rawOrder.orderItems)
+      ? rawOrder.orderItems
+      : [];
+  const items = rawItems.map(normalizeOrderItemFromBackend).filter(Boolean);
+
+  const rawHistories = Array.isArray(rawOrder.statusHistories) ? rawOrder.statusHistories : [];
+  const statusHistories = rawHistories.map(normalizeStatusHistoryFromBackend).filter(Boolean);
 
   return {
     ...rawOrder,
     id: rawOrder.id ?? null,
     userId: rawOrder.userId ?? null,
-    receiverName: rawOrder.receiverName || '',
-    receiverPhone: rawOrder.receiverPhone || '',
-    shippingAddress: rawOrder.shippingAddress || '',
-    status: normalizeOrderStatus(rawOrder.status) || ORDER_STATUS.PENDING,
-    paymentMethod: rawOrder.paymentMethod ? String(rawOrder.paymentMethod).trim().toUpperCase() : 'COD',
+    receiverName: rawOrder.receiverName ?? rawOrder.customerName ?? '',
+    receiverPhone: rawOrder.receiverPhone ?? rawOrder.customerPhone ?? '',
+    userEmail: rawOrder.userEmail ?? rawOrder.customerEmail ?? '',
+    shippingAddress: rawOrder.shippingAddress ?? '',
+    subtotal: subtotalAmount,
     subtotalAmount,
+    voucherCode,
+    couponCode: rawOrder.couponCode ?? voucherCode,
     discountAmount,
     shippingFee,
     totalAmount,
-    finalAmount: totalAmount,
+    status: normalizeOrderStatus(rawOrder.status),
+    paymentMethod: rawOrder.paymentMethod ? String(rawOrder.paymentMethod).trim().toUpperCase() : '',
     createdAt: normalizeOrderDate(rawOrder.createdAt),
-    updatedAt: normalizeOrderDate(rawOrder.updatedAt)
+    updatedAt: normalizeOrderDate(rawOrder.updatedAt),
+    items,
+    statusHistories
   };
 };
 
@@ -411,16 +466,24 @@ export const orderService = {
     shippingAddress,
     note,
     paymentMethod,
-    voucherId = null,
+    onlinePaymentProvider = null,
+    onlinePaymentProviderLabel = null,
+    couponCode = null,
     voucherCode = null,
-    discountAmount = 0,
+    voucherId = null,
+    subtotal = null,
     subtotalAmount = null,
     originalAmount = null,
     productDiscountAmount = 0,
+    discountAmount = 0,
+    shippingFee = 0,
+    totalAmount = null,
     finalTotal = null
-  }) => {
+  } = {}) => {
+    const rawCouponCode = couponCode || voucherCode || null;
     const normalizedVoucherCode =
-      typeof voucherCode === 'string' && voucherCode.trim() ? voucherCode.trim().toUpperCase() : null;
+      typeof rawCouponCode === 'string' && rawCouponCode.trim() ? rawCouponCode.trim().toUpperCase() : null;
+    const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
 
     try {
       const apiOrder = await api.post('/orders/checkout', {
@@ -432,6 +495,12 @@ export const orderService = {
         voucherCode: normalizedVoucherCode
       });
 
+      // Chỉ xóa giỏ hàng sau khi Backend xác nhận tạo đơn hàng thành công
+      if (apiOrder && apiOrder.id !== undefined && apiOrder.id !== null) {
+        await cartService.clearCart().catch(() => {});
+      }
+
+      // Ưu tiên dữ liệu tài chính thực tế từ Backend trả về
       if (apiOrder && typeof apiOrder === 'object') {
         const backendSubtotal =
           apiOrder.subtotalAmount !== null && apiOrder.subtotalAmount !== undefined
@@ -442,7 +511,9 @@ export const orderService = {
             ? backendSubtotal
             : (subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
                 ? Number(subtotalAmount)
-                : Number(apiOrder.totalAmount ?? 0));
+                : (subtotal !== null && subtotal !== undefined && Number(subtotal) > 0
+                    ? Number(subtotal)
+                    : Number(apiOrder.totalAmount ?? 0)));
         const backendDiscount =
           apiOrder.discountAmount !== null && apiOrder.discountAmount !== undefined
             ? Number(apiOrder.discountAmount)
@@ -451,6 +522,7 @@ export const orderService = {
           backendDiscount !== null
             ? Math.min(effectiveSubtotal, Math.max(0, backendDiscount))
             : Math.min(effectiveSubtotal, Math.max(0, Number(discountAmount) || 0));
+        const effectiveShipping = Math.max(0, Number(apiOrder.shippingFee ?? shippingFee ?? 0) || 0);
         const effectiveProductDiscount =
           apiOrder.productDiscountAmount !== null && apiOrder.productDiscountAmount !== undefined
             ? Math.max(0, Number(apiOrder.productDiscountAmount))
@@ -461,8 +533,10 @@ export const orderService = {
             : null;
         const computedFinal =
           finalTotal !== null && finalTotal !== undefined && Number(finalTotal) >= 0 && effectiveSubtotal > 0
-            ? Math.min(Number(finalTotal), Math.max(0, effectiveSubtotal - effectiveDiscount))
-            : Math.max(0, effectiveSubtotal - effectiveDiscount);
+            ? Math.min(Number(finalTotal), Math.max(0, effectiveSubtotal - effectiveDiscount)) + effectiveShipping
+            : totalAmount !== null && totalAmount !== undefined && Number(totalAmount) >= 0 && effectiveSubtotal > 0
+              ? Math.min(Number(totalAmount), Math.max(0, effectiveSubtotal - effectiveDiscount) + effectiveShipping)
+              : Math.max(0, effectiveSubtotal - effectiveDiscount) + effectiveShipping;
         const resolvedTotal = backendTotal !== null ? backendTotal : computedFinal;
         const resolvedOriginal =
           apiOrder.originalAmount !== null && apiOrder.originalAmount !== undefined
@@ -475,117 +549,32 @@ export const orderService = {
 
         return {
           ...apiOrder,
+          onlinePaymentProvider: apiOrder.onlinePaymentProvider ?? (isOnlinePay ? onlinePaymentProvider : null),
+          onlinePaymentProviderLabel:
+            apiOrder.onlinePaymentProviderLabel ?? (isOnlinePay ? onlinePaymentProviderLabel : null),
+          paidAt: apiOrder.paidAt ?? (apiOrder.status === ORDER_STATUS.PAID ? new Date().toISOString() : null),
+          couponCode: apiOrder.couponCode ?? normalizedVoucherCode,
+          voucherCode: apiOrder.voucherCode ?? normalizedVoucherCode,
           voucherId: voucherId ?? apiOrder.voucherId ?? null,
-          voucherCode: apiOrder.voucherCode || normalizedVoucherCode,
           originalAmount: resolvedOriginal,
+          subtotal: effectiveSubtotal,
           subtotalAmount: effectiveSubtotal,
           productDiscountAmount: effectiveProductDiscount,
           discountAmount: effectiveDiscount,
+          shippingFee: effectiveShipping,
           totalAmount: resolvedTotal
         };
       }
       return apiOrder;
     } catch (err) {
-      if (isHttpResponseError(err)) {
-        throw err;
-      }
-      // Fallback Mock Order Creation: Cho phép test xác nhận đơn hàng 100% không bị lỗi
-      const cartData = await cartService.getCart();
-      const orders = getStoredOrders();
-
-      const newId = Math.floor(1004 + Math.random() * 8990);
-
-      const rawCartSubtotal = Number(cartData?.totalPrice ?? cartData?.totalAmount) || 32490000;
-      const resolvedSubtotal =
-        subtotalAmount !== null && subtotalAmount !== undefined && Number(subtotalAmount) > 0
-          ? Number(subtotalAmount)
-          : rawCartSubtotal;
-      const resolvedDiscountAmount = Math.min(
-        resolvedSubtotal,
-        Math.max(0, Number(discountAmount) || 0)
+      // Tuyệt đối không tạo đơn hàng giả trong localStorage và không xóa giỏ hàng khi Backend thất bại (400, 403, 409, 500 hoặc lỗi kết nối)
+      const backendMessage = err?.response?.data?.message || err?.message;
+      const checkoutError = new Error(
+        backendMessage || 'Đặt hàng thất bại. Không thể kết nối tới máy chủ, vui lòng thử lại.'
       );
-      const resolvedProductDiscount = Math.max(
-        0,
-        Number(productDiscountAmount) || Number(cartData?.totalDiscount) || 0
-      );
-      const resolvedOriginalAmount = Math.max(
-        Number(originalAmount) || 0,
-        Number(cartData?.totalOriginalPrice) || 0,
-        resolvedSubtotal + resolvedProductDiscount
-      );
-      // Đảm bảo totalAmount luôn bằng Math.max(0, subtotalAmount - discountAmount), không bao giờ lấy giá gốc
-      const resolvedTotalAmount = Math.max(0, resolvedSubtotal - resolvedDiscountAmount);
-
-      const createdAtIso = new Date().toISOString();
-      const createdOrder = {
-        id: newId,
-        receiverName: receiverName || 'Khách hàng ShopMart',
-        receiverPhone: receiverPhone || '0912 345 678',
-        userEmail: 'user@test.com',
-        shippingAddress: shippingAddress || '123 Đường Cầu Giấy, Hà Nội',
-        note: note || '',
-        paymentMethod: paymentMethod || 'COD',
-        voucherId: voucherId || null,
-        voucherCode: normalizedVoucherCode,
-        originalAmount: resolvedOriginalAmount,
-        subtotalAmount: resolvedSubtotal,
-        productDiscountAmount: resolvedProductDiscount,
-        discountAmount: resolvedDiscountAmount,
-        // Đơn mới tạo luôn giữ trạng thái PENDING chờ xác nhận hoặc thanh toán QR
-        status: ORDER_STATUS.PENDING,
-        totalAmount: resolvedTotalAmount,
-        createdAt: createdAtIso,
-        statusHistories: [
-          {
-            id: Date.now(),
-            orderId: newId,
-            status: ORDER_STATUS.PENDING,
-            statusDescription: STATUS_DESCRIPTIONS[ORDER_STATUS.PENDING] || 'Đơn hàng đã được đặt thành công, đang chờ xác nhận',
-            previousStatus: null,
-            action: 'CREATE_ORDER',
-            updatedBy: 'Khách hàng',
-            actorRole: 'ROLE_USER',
-            note: note || 'Đơn hàng được khởi tạo thành công',
-            createdAt: createdAtIso
-          }
-        ],
-        items: (cartData.items && cartData.items.length > 0)
-          ? cartData.items.map((i) => ({
-              id: i.id || i.itemId,
-              productId: i.productId,
-              name: i.name,
-              productName: i.name,
-              originalPrice: i.originalPrice ?? i.price,
-              priceAtPurchase: i.salePrice ?? i.unitPrice ?? i.price,
-              price: i.salePrice ?? i.unitPrice ?? i.price,
-              quantity: i.quantity,
-              subTotal: i.subTotal,
-              imageUrl: i.imageUrl
-            }))
-          : [
-              {
-                id: 'item-demo',
-                productId: 'fs-1',
-                name: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-                productName: 'MacBook Pro 14 M3 Pro (18GB / 512GB SSD)',
-                originalPrice: 49990000,
-                priceAtPurchase: 32490000,
-                price: 32490000,
-                quantity: 1,
-                subTotal: 32490000,
-                imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80'
-              }
-            ]
-      };
-
-      // Lưu vào danh sách đơn và bảng tra cứu giá đã giảm
-      orders.unshift(createdOrder);
-      setStoredOrders(orders);
-
-      // Dọn sạch giỏ sau khi đặt hàng thành công
-      await cartService.clearCart();
-
-      return createdOrder;
+      checkoutError.status = err?.status || err?.response?.status;
+      checkoutError.response = err?.response;
+      throw checkoutError;
     }
   },
 
@@ -594,62 +583,30 @@ export const orderService = {
     return await orderService.checkout(orderData);
   },
 
-  // Lịch sử đơn hàng của user đang đăng nhập (GET /api/orders/my-orders)
+  // Lịch sử đơn hàng của user đang đăng nhập (GET /api/v1/orders/my-orders)
   getMyOrders: async () => {
     try {
       const list = await api.get('/orders/my-orders');
-      return Array.isArray(list) ? list : [];
+      const arr = Array.isArray(list) ? list : Array.isArray(list?.content) ? list.content : [];
+      return arr.map((order) => normalizeOrderFromBackend(order) || order);
     } catch (err) {
-      if (isHttpResponseError(err)) {
+      if (err.response?.status === 401 || err.response?.status === 403 || err.response?.status || isHttpResponseError(err)) {
         throw err;
       }
-      return getStoredOrders();
+      throw err;
     }
   },
 
   // Chi tiết đơn hàng của user (GET /api/orders/{orderId})
   getOrderById: async (id) => {
-    const applyQrOverrideIfNeeded = (orderObj) => {
-      const withPrice = orderObj;
-      if (!withPrice || withPrice.status !== ORDER_STATUS.PENDING) return withPrice;
-      try {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          const raw = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
-          const overrides = raw ? JSON.parse(raw) : null;
-          const ov = overrides?.[String(withPrice.id ?? id)];
-          if (ov && ov.status) {
-            const histories = Array.isArray(withPrice.statusHistories) ? withPrice.statusHistories : [];
-            const hasEntry = histories.some((h) => h.status === ov.status);
-            return {
-              ...withPrice,
-              status: ov.status,
-              updatedAt: ov.updatedAt || withPrice.updatedAt,
-              statusHistories: hasEntry || !ov.historyEntry ? histories : [...histories, ov.historyEntry]
-            };
-          }
-        }
-      } catch (e) {
-        // Bỏ qua lỗi đọc sessionStorage
-      }
-      return withPrice;
-    };
-
     try {
       const data = await api.get(`/orders/${id}`);
-      return applyQrOverrideIfNeeded(data);
+      return normalizeOrderFromBackend(data) || data;
     } catch (err) {
-      if (err.response?.status === 403) {
+      if (err.response?.status === 401 || err.response?.status === 403 || err.response?.status || isHttpResponseError(err)) {
         throw err;
       }
-      if (isHttpResponseError(err)) {
-        throw err;
-      }
-      const orders = getStoredOrders();
-      const found = orders.find((o) => String(o.id) === String(id));
-      if (!found) {
-        throw new Error(`Không tìm thấy đơn hàng #${id}`);
-      }
-      return applyQrOverrideIfNeeded(found);
+      throw err;
     }
   },
 
@@ -663,66 +620,36 @@ export const orderService = {
         actorRole: 'ROLE_USER',
         action: 'ORDER_CANCELLED'
       });
-      return response;
+      return normalizeOrderFromBackend(response) || response;
     } catch (err) {
-      if (err.response?.status === 403) {
-        throw err;
-      }
-      if (isHttpResponseError(err)) {
-        throw err;
-      }
-      const nowIso = new Date().toISOString();
-      const orders = getStoredOrders();
-      const updatedOrders = orders.map((o) => {
-        if (String(o.id) === String(id)) {
-          const prevStatus = o.status || ORDER_STATUS.PENDING;
-          const existingHistories = Array.isArray(o.statusHistories) ? o.statusHistories : [];
-          const cancelEntry = {
-            id: Date.now(),
-            orderId: o.id,
-            status: ORDER_STATUS.CANCELLED,
-            statusDescription: STATUS_DESCRIPTIONS[ORDER_STATUS.CANCELLED],
-            previousStatus: prevStatus,
-            action: 'ORDER_CANCELLED',
-            updatedBy: o.userEmail || 'CUSTOMER',
-            actorRole: 'ROLE_USER',
-            note: 'Khách hàng hủy đơn hàng',
-            createdAt: nowIso
-          };
-          return {
-            ...o,
-            status: ORDER_STATUS.CANCELLED,
-            updatedAt: nowIso,
-            statusHistories: [...existingHistories, cancelEntry]
-          };
-        }
-        return o;
-      });
-      setStoredOrders(updatedOrders);
-      const updatedOrder = updatedOrders.find((o) => String(o.id) === String(id));
-      notifyOrderStatusSync({
-        orderId: id,
-        status: ORDER_STATUS.CANCELLED,
-        actorRole: 'ROLE_USER',
-        action: 'ORDER_CANCELLED'
-      });
-      return updatedOrder;
+      // Không tự động chuyển trạng thái đơn hàng thành CANCELLED ở Frontend khi API thất bại
+      const backendMessage = err?.response?.data?.message || err?.message;
+      const cancelError = new Error(
+        backendMessage || `Không thể hủy đơn hàng #${id}. Vui lòng thử lại.`
+      );
+      cancelError.status = err?.status || err?.response?.status;
+      cancelError.response = err?.response;
+      throw cancelError;
     }
   },
 
   // Admin xem toàn bộ đơn hàng có phân trang & lọc trạng thái (GET /api/v1/admin/orders)
-  getAllOrders: async (params) => {
+  // Không tự thay thế lỗi API bằng dữ liệu mock để UI hiển thị chính xác Error State & nút Thử lại.
+  getAllOrders: async (params = {}) => {
     try {
       const response = await api.get('/admin/orders', { params });
 
       // Nếu Backend trả về PagedResponse { content, pageNumber, pageSize, totalElements, totalPages, last }
       if (response && Array.isArray(response.content)) {
+        const normalizedContent = response.content
+          .map((item) => normalizeOrderFromBackend(item))
+          .filter(Boolean);
         return {
-          content: response.content,
-          totalElements: response.totalElements ?? response.content.length,
+          content: normalizedContent,
+          totalElements: response.totalElements ?? normalizedContent.length,
           totalPages: response.totalPages ?? 1,
-          pageNumber: response.pageNumber ?? 0,
-          pageSize: response.pageSize ?? 10,
+          pageNumber: response.pageNumber ?? (params?.page || 0),
+          pageSize: response.pageSize ?? (params?.size || 10),
           last: response.last ?? true
         };
       }
@@ -731,52 +658,59 @@ export const orderService = {
       if (Array.isArray(response)) {
         const page = params?.page || 0;
         const size = params?.size || 10;
+        const normalizedContent = response
+          .map((item) => normalizeOrderFromBackend(item))
+          .filter(Boolean);
         return {
-          content: response,
-          totalElements: response.length,
-          totalPages: Math.max(1, Math.ceil(response.length / size)),
+          content: normalizedContent,
+          totalElements: normalizedContent.length,
+          totalPages: Math.max(1, Math.ceil(normalizedContent.length / size)),
           pageNumber: page,
           pageSize: size,
           last: true
         };
       }
 
-      return response;
+      // Không tự động biến response không hợp lệ / null thành dữ liệu giả
+      throw new Error('Dữ liệu danh sách đơn hàng từ máy chủ không hợp lệ.');
     } catch (err) {
-      // Fallback lưu trữ cục bộ nếu không kết nối được máy chủ Backend
-      let orders = getStoredOrders();
-      if (params?.status) {
-        orders = orders.filter((o) => o.status === params.status);
+      // Nếu response trả về HTTP error (401, 403, 400, 404, 500...) qua err.response hoặc err.status thì bắt buộc throw error để component xử lý
+      if (
+        err?.response?.status === 401 ||
+        err?.response?.status === 403 ||
+        err?.response?.status ||
+        err?.status ||
+        isHttpResponseError(err)
+      ) {
+        throw err;
       }
-
-      const page = params?.page || 0;
-      const size = params?.size || 10;
-      const totalElements = orders.length;
-      const totalPages = Math.max(1, Math.ceil(totalElements / size));
-      const startIndex = page * size;
-      const content = orders.slice(startIndex, startIndex + size);
-
-      return {
-        content,
-        totalElements,
-        totalPages,
-        pageNumber: page,
-        pageSize: size,
-        last: page >= totalPages - 1
-      };
+      throw err;
     }
   },
 
-  // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId} hoặc /api/v1/admin/orders/{orderId})
+  // Admin xem chi tiết đơn hàng (GET /api/v1/orders/{orderId})
   getAdminOrderById: async (id) => {
+    if (id === null || id === undefined || String(id).trim() === '') {
+      throw new Error('Mã đơn hàng không hợp lệ.');
+    }
     try {
-      return await api.get(`/orders/${id}`);
-    } catch (err) {
-      try {
-        return await api.get(`/admin/orders/${id}`);
-      } catch (adminErr) {
-        return orderService.getOrderById(id);
+      const data = await api.get(`/orders/${id}`);
+      const normalized = normalizeOrderFromBackend(data);
+      if (!normalized || (normalized.id === null && !normalized.status)) {
+        throw new Error('Dữ liệu chi tiết đơn hàng từ máy chủ không hợp lệ.');
       }
+      return normalized;
+    } catch (err) {
+      if (
+        err?.response?.status === 401 ||
+        err?.response?.status === 403 ||
+        err?.response?.status ||
+        err?.status ||
+        isHttpResponseError(err)
+      ) {
+        throw err;
+      }
+      throw err;
     }
   },
 
@@ -785,33 +719,51 @@ export const orderService = {
   getOrderStatusHistory: async (id) => {
     try {
       const response = await api.get(`/orders/${id}/history`);
-      if (Array.isArray(response)) {
-        return response;
-      }
-      if (response && Array.isArray(response.data)) {
-        return response.data;
-      }
-      return [];
+      const list = Array.isArray(response)
+        ? response
+        : response && Array.isArray(response.data)
+          ? response.data
+          : [];
+      return list.map(normalizeStatusHistoryFromBackend).filter(Boolean);
     } catch (err) {
-      // Nếu là lỗi bảo mật 403 (IDOR) thì ném lỗi để UI hiển thị thông báo phân quyền
-      if (err.response?.status === 403) {
+      // Nếu là lỗi xác thực 401 hoặc bảo mật 403 (IDOR) thì ném lỗi để UI hiển thị thông báo phân quyền
+      if (
+        err?.response?.status === 401 ||
+        err?.response?.status === 403 ||
+        err?.status === 401 ||
+        err?.status === 403
+      ) {
         throw err;
       }
 
       // Thử gọi qua endpoint admin nếu người dùng có vai trò Admin
       try {
         const adminRes = await api.get(`/admin/orders/${id}/history`);
-        if (Array.isArray(adminRes)) return adminRes;
-        if (adminRes && Array.isArray(adminRes.data)) return adminRes.data;
+        const adminList = Array.isArray(adminRes)
+          ? adminRes
+          : adminRes && Array.isArray(adminRes.data)
+            ? adminRes.data
+            : [];
+        return adminList.map(normalizeStatusHistoryFromBackend).filter(Boolean);
       } catch (adminErr) {
-        // Tiếp tục xử lý fallback
+        if (
+          adminErr?.response?.status ||
+          adminErr?.status ||
+          isHttpResponseError(adminErr) ||
+          err?.response?.status ||
+          err?.status ||
+          isHttpResponseError(err)
+        ) {
+          throw adminErr?.response?.status || adminErr?.status ? adminErr : err;
+        }
+        // Tiếp tục xử lý fallback chỉ khi mất kết nối với máy chủ
       }
 
-      // Fallback Mock History khi chạy offline hoặc Backend chưa có dữ liệu DB
+      // Fallback Mock History khi chạy offline trên dữ liệu mock localStorage
       const orders = getStoredOrders();
       const order = orders.find((o) => String(o.id) === String(id));
       if (!order) {
-        return [];
+        throw err;
       }
 
       const baseTime = new Date(order.createdAt || Date.now()).getTime();
@@ -938,11 +890,18 @@ export const orderService = {
           statusDescription: 'Đơn hàng đã bị hủy',
           previousStatus: ORDER_STATUS.PENDING,
           action: 'CANCEL_ORDER',
-          updatedBy: 'Khách hàng',
-          actorRole: 'ROLE_USER',
-          note: 'Khách hàng yêu cầu hủy đơn hàng',
+          updatedBy: order.cancelledBy || 'ADMIN:1',
+          actorRole: 'ROLE_ADMIN',
+          note: order.statusNote || 'Đơn hàng đã bị hủy theo yêu cầu',
           createdAt: new Date(baseTime + 20 * 60000).toISOString()
         });
+      } else if (order.statusNote && mockHistories.length > 0) {
+        const lastIdx = mockHistories.length - 1;
+        mockHistories[lastIdx] = {
+          ...mockHistories[lastIdx],
+          note: order.statusNote,
+          createdAt: order.statusUpdatedAt || mockHistories[lastIdx].createdAt
+        };
       }
 
       // [Task ECOM-313] Đồng bộ các bản ghi cập nhật trạng thái thực tế từ Admin / Customer đã lưu trong order.statusHistories
@@ -972,23 +931,25 @@ export const orderService = {
     note = typeof note === 'string' ? note.trim() : '';
     try {
       const response = await api.put(`/admin/orders/${id}/status`, { status, note });
+      const normalized = normalizeOrderFromBackend(response) || response;
       notifyOrderStatusSync({
         orderId: id,
-        status,
+        status: normalized?.status || status,
         note,
         actorRole: 'ROLE_ADMIN',
         action: 'ADMIN_STATUS_UPDATE'
       });
-      return response;
+      return normalized;
     } catch (err) {
-      if (err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 404) {
-        throw err;
-      }
-      if (isHttpResponseError(err)) {
+      if (err?.response?.status || err?.status || isHttpResponseError(err)) {
         throw err;
       }
       const nowIso = new Date().toISOString();
       const orders = getStoredOrders();
+      const targetExists = orders.some((o) => String(o.id) === String(id));
+      if (!targetExists) {
+        throw err;
+      }
       const updatedOrders = orders.map((o) => {
         if (String(o.id) === String(id)) {
           const prevStatus = o.status || ORDER_STATUS.PENDING;
@@ -1013,6 +974,7 @@ export const orderService = {
             status,
             updatedAt: nowIso,
             statusHistories: [...existingHistories, historyRecord]
+
           };
         }
         return o;
@@ -1036,7 +998,7 @@ export const orderService = {
    */
   subscribeOrderStatusSync: (onSync, targetOrderId = null) => {
     if (typeof window === 'undefined' || typeof onSync !== 'function') {
-      return () => {};
+      return () => { };
     }
 
     const handleCustomSync = (event) => {

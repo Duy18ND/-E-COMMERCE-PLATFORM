@@ -79,6 +79,8 @@ const AdminOrders = () => {
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -96,8 +98,9 @@ const AdminOrders = () => {
   const [statusNote, setStatusNote] = useState('');
   const [statusFormError, setStatusFormError] = useState('');
 
-  // Race condition guard ref
+  // Race condition guard refs
   const requestIdRef = useRef(0);
+  const detailRequestIdRef = useRef(0);
 
   // Tải danh sách đơn hàng từ Backend GET /api/v1/admin/orders
   const fetchOrders = useCallback(async () => {
@@ -137,8 +140,19 @@ const AdminOrders = () => {
       }
     } catch (err) {
       if (currentRequestId === requestIdRef.current) {
-        setError(err.message || 'Không thể tải danh sách đơn hàng từ máy chủ. Vui lòng thử lại!');
+        const status = err?.response?.status ?? err?.status;
+        const resolvedErrorMsg =
+          err?.response?.data?.message ||
+          err?.message ||
+          (status === 401
+            ? 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ (HTTP 401). Vui lòng đăng nhập lại.'
+            : status === 403
+            ? 'Bạn không có quyền truy cập danh sách đơn hàng quản trị (HTTP 403).'
+            : 'Không thể tải danh sách đơn hàng từ máy chủ. Vui lòng thử lại!');
+        setError(resolvedErrorMsg);
         setOrders([]);
+        setTotalElements(0);
+        setTotalPages(1);
       }
     } finally {
       if (currentRequestId === requestIdRef.current) {
@@ -151,19 +165,51 @@ const AdminOrders = () => {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Bộ lọc tìm kiếm Client-side bổ trợ (Mã đơn, Tên khách hàng, SĐT)
+  // Bộ lọc tìm kiếm & khoảng ngày đặt hàng Client-side bổ trợ (Mã đơn, Tên khách hàng, SĐT, Khoảng ngày)
   const displayedOrders = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return orders;
-    }
     const term = searchTerm.toLowerCase().trim();
+    const cleanIdTerm = term.replace(/^#/, '');
+    const cleanPhoneTerm = term.replace(/\s+/g, '');
+
+    let startTs = null;
+    if (startDate) {
+      const parsedStart = new Date(`${startDate}T00:00:00`).getTime();
+      if (!Number.isNaN(parsedStart)) startTs = parsedStart;
+    }
+
+    let endTs = null;
+    if (endDate) {
+      const parsedEnd = new Date(`${endDate}T23:59:59.999`).getTime();
+      if (!Number.isNaN(parsedEnd)) endTs = parsedEnd;
+    }
+
     return orders.filter((order) => {
-      const orderId = String(order.id || '');
-      const customerName = (order.receiverName || order.userEmail || '').toLowerCase();
-      const phone = String(order.receiverPhone || '');
-      return orderId.includes(term) || customerName.includes(term) || phone.includes(term);
+      // Lọc theo khoảng ngày đặt hàng nếu có chọn startDate / endDate
+      if (startTs !== null || endTs !== null) {
+        const orderTs = order.createdAt ? new Date(order.createdAt).getTime() : Number.NaN;
+        if (Number.isNaN(orderTs)) return false;
+        if (startTs !== null && orderTs < startTs) return false;
+        if (endTs !== null && orderTs > endTs) return false;
+      }
+
+      if (!term) return true;
+
+      const orderId = String(order.id || '').toLowerCase();
+      const customerName = `${order.receiverName || ''} ${order.userEmail || ''} ${order.customerName || ''}`.toLowerCase();
+      const phone = String(order.receiverPhone || order.customerPhone || '').replace(/\s+/g, '');
+
+      const matchesId =
+        orderId.includes(term) ||
+        (cleanIdTerm && orderId.includes(cleanIdTerm)) ||
+        `#${orderId}` === term;
+
+      return (
+        matchesId ||
+        customerName.includes(term) ||
+        (cleanPhoneTerm && phone.includes(cleanPhoneTerm))
+      );
     });
-  }, [orders, searchTerm]);
+  }, [orders, searchTerm, startDate, endDate]);
 
   // Handler khi thay đổi bộ lọc trạng thái -> Đặt lại về trang 1
   const handleStatusFilterChange = (newStatus) => {
@@ -174,6 +220,26 @@ const AdminOrders = () => {
   // Handler khi thay đổi tìm kiếm -> Reset về trang 1
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  // Handler khi thay đổi khoảng ngày đặt hàng -> Reset về trang 1
+  const handleStartDateChange = (e) => {
+    const val = e.target.value;
+    setStartDate(val);
+    if (val && endDate && val > endDate) {
+      setEndDate(val);
+    }
+    setCurrentPage(1);
+  };
+
+  const handleEndDateChange = (e) => {
+    const val = e.target.value;
+    setEndDate(val);
+    if (val && startDate && val < startDate) {
+      setStartDate(val);
+    }
+    setCurrentPage(1);
   };
 
   // Handler khi thay đổi sắp xếp
@@ -202,6 +268,8 @@ const AdminOrders = () => {
   const handleResetFilter = () => {
     setSearchTerm('');
     setStatusFilter('');
+    setStartDate('');
+    setEndDate('');
     setSortBy('id');
     setSortDir('desc');
     setCurrentPage(1);
@@ -209,6 +277,7 @@ const AdminOrders = () => {
 
   // Mở modal xem chi tiết đơn hàng
   const handleViewDetail = async (orderSummary) => {
+    const currentDetailRequestId = ++detailRequestIdRef.current;
     setSelectedOrder(orderSummary);
     setDetailLoading(true);
     setDetailError('');
@@ -216,20 +285,31 @@ const AdminOrders = () => {
     try {
       // Gọi API lấy dữ liệu chi tiết đầy đủ (items, timeline histories)
       const fullDetail = await orderService.getAdminOrderById(orderSummary.id);
+      if (currentDetailRequestId !== detailRequestIdRef.current) return;
       if (fullDetail) {
         setSelectedOrder(fullDetail);
       }
     } catch (err) {
-      setDetailError(err.message || 'Không thể lấy đầy đủ chi tiết đơn hàng từ API.');
+      if (currentDetailRequestId === detailRequestIdRef.current) {
+        setDetailError(
+          err?.response?.data?.message ||
+            err?.message ||
+            'Không thể lấy đầy đủ chi tiết đơn hàng từ API.'
+        );
+      }
     } finally {
-      setDetailLoading(false);
+      if (currentDetailRequestId === detailRequestIdRef.current) {
+        setDetailLoading(false);
+      }
     }
   };
 
   // Đóng modal xem chi tiết
   const handleCloseDetail = useCallback(() => {
     if (actionLoading) return;
+    detailRequestIdRef.current += 1;
     setSelectedOrder(null);
+    setDetailLoading(false);
     setDetailError('');
     setStatusNote('');
     setStatusFormError('');
@@ -268,18 +348,19 @@ const AdminOrders = () => {
       confirmText: actionLabel,
       cancelText: 'Quay lại'
     });
-    if (!confirmed) return false;
+    if (!confirmed) return;
 
     setActionLoading(true);
     try {
       const updatedOrder = await orderService.updateOrderStatus(orderId, targetStatus, customNote);
+      const resolvedStatus = updatedOrder?.status || targetStatus;
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, ...updatedOrder, status: targetStatus } : o))
+        prev.map((o) => (String(o.id) === String(orderId) ? { ...o, ...updatedOrder, status: resolvedStatus } : o))
       );
       // Nếu đang mở modal của đơn hàng này thì cập nhật luôn cả lịch sử timeline
-      if (selectedOrder && selectedOrder.id === orderId) {
+      if (selectedOrder && String(selectedOrder.id) === String(orderId)) {
         let refreshedHistories = updatedOrder?.statusHistories;
-        if (!refreshedHistories) {
+        if (!Array.isArray(refreshedHistories) || refreshedHistories.length === 0) {
           try {
             refreshedHistories = await orderService.getOrderStatusHistory(orderId);
           } catch {
@@ -289,14 +370,16 @@ const AdminOrders = () => {
         setSelectedOrder((prev) => ({
           ...prev,
           ...updatedOrder,
-          status: targetStatus,
+          status: resolvedStatus,
           statusHistories: refreshedHistories || prev.statusHistories
         }));
       }
       notify.success(`Cập nhật đơn hàng #${orderId} sang "${actionLabel}" thành công!`);
       return true;
     } catch (err) {
-      notify.error(`Lỗi khi cập nhật trạng thái đơn hàng: ${err.message}`);
+      notify.error(
+        `Lỗi khi cập nhật trạng thái đơn hàng: ${err?.response?.data?.message || err?.message || 'Vui lòng thử lại'}`
+      );
       return false;
     } finally {
       setActionLoading(false);
@@ -530,6 +613,85 @@ const AdminOrders = () => {
           </select>
         </div>
 
+        {/* Bộ lọc theo khoảng ngày đặt hàng */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
+            paddingTop: '0.25rem'
+          }}
+        >
+          <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#475569' }}>
+            📅 Lọc theo ngày đặt hàng:
+          </span>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="order-filter-start-date" style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Từ ngày:
+            </label>
+            <input
+              id="order-filter-start-date"
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={handleStartDateChange}
+              style={{
+                padding: '0.42rem 0.65rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.84rem',
+                color: '#0f172a',
+                backgroundColor: '#ffffff',
+                outline: 'none'
+              }}
+            />
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="order-filter-end-date" style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Đến ngày:
+            </label>
+            <input
+              id="order-filter-end-date"
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={handleEndDateChange}
+              style={{
+                padding: '0.42rem 0.65rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.84rem',
+                color: '#0f172a',
+                backgroundColor: '#ffffff',
+                outline: 'none'
+              }}
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setCurrentPage(1);
+              }}
+              style={{
+                background: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: '#475569',
+                cursor: 'pointer'
+              }}
+            >
+              ✕ Xóa lọc ngày
+            </button>
+          )}
+        </div>
+
         {/* Thống kê kết quả & Nút đặt lại bộ lọc */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <span style={{ color: '#64748b' }}>
@@ -537,8 +699,11 @@ const AdminOrders = () => {
             {statusFilter && (
               <span> (Trạng thái: <strong>{ORDER_STATUS_LABELS[statusFilter] || statusFilter}</strong>)</span>
             )}
+            {(startDate || endDate) && (
+              <span> (Ngày đặt: <strong>{startDate || '...'} → {endDate || '...'}</strong>)</span>
+            )}
           </span>
-          {(searchTerm || statusFilter || sortBy !== 'id') && (
+          {(searchTerm || statusFilter || startDate || endDate || sortBy !== 'id') && (
             <button
               type="button"
               onClick={handleResetFilter}
@@ -567,6 +732,33 @@ const AdminOrders = () => {
           <div style={{ padding: '3.5rem 1rem' }}>
             <Loading message="Đang tải dữ liệu đơn hàng từ máy chủ..." />
           </div>
+        ) : error && orders.length === 0 ? (
+          /* API ERROR STATE */
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#dc2626' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+            <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#991b1b', margin: '0 0 0.5rem' }}>
+              Không thể tải danh sách đơn hàng từ máy chủ
+            </p>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 1.25rem' }}>
+              {error}
+            </p>
+            <button
+              type="button"
+              onClick={fetchOrders}
+              style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.55rem 1.25rem',
+                borderRadius: '6px',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Thử lại kết nối
+            </button>
+          </div>
         ) : displayedOrders.length === 0 ? (
           /* EMPTY STATE */
           <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
@@ -577,9 +769,9 @@ const AdminOrders = () => {
             <p style={{ fontSize: '0.875rem', margin: '0 0 1rem' }}>
               {statusFilter
                 ? `Không tìm thấy đơn hàng nào ở trạng thái "${ORDER_STATUS_LABELS[statusFilter] || statusFilter}".`
-                : 'Thử thay đổi từ khóa tìm kiếm hoặc đặt lại bộ lọc.'}
+                : 'Thử thay đổi từ khóa tìm kiếm, khoảng ngày đặt hoặc đặt lại bộ lọc.'}
             </p>
-            {(searchTerm || statusFilter) && (
+            {(searchTerm || statusFilter || startDate || endDate) && (
               <button
                 type="button"
                 onClick={handleResetFilter}
@@ -895,7 +1087,29 @@ const AdminOrders = () => {
                 </div>
               )}
 
-              {detailError && <ErrorMessage message={detailError} />}
+              {detailError && (
+                <div>
+                  <ErrorMessage message={detailError} />
+                  <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleViewDetail(selectedOrder)}
+                      style={{
+                        backgroundColor: '#ef4444',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '0.4rem 0.9rem',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        fontSize: '0.825rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔄 Thử lại tải chi tiết
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Thông tin khách hàng & Giao nhận */}
               <div

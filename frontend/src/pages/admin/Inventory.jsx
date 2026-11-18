@@ -472,6 +472,15 @@ const Inventory = () => {
           <div style={{ padding: '3rem', textAlign: 'center' }}>
             <Loading message="Đang đồng bộ dữ liệu tồn kho..." />
           </div>
+        ) : error ? (
+          <div style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
+            <ErrorMessage message={error} />
+            <div style={{ marginTop: '1rem' }}>
+              <Button variant="primary" size="sm" onClick={loadInventory}>
+                🔄 Thử lại kết nối
+              </Button>
+            </div>
+          </div>
         ) : filteredInventory.length === 0 ? (
           <div style={{ padding: '3.5rem', textAlign: 'center', color: '#64748b' }}>
             <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📦</div>

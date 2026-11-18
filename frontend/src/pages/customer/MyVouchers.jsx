@@ -19,28 +19,28 @@ const daysLeft = (endDate) => {
 };
 
 const TABS = [
-  { key: 'USABLE',   label: '✅ Có thể sử dụng' },
+  { key: 'USABLE', label: '✅ Có thể sử dụng' },
   { key: 'EXPIRING', label: '⏰ Sắp hết hạn' },
-  { key: 'EXPIRED',  label: '🚫 Đã hết hạn / Hết lượt' },
+  { key: 'EXPIRED', label: '🚫 Đã hết hạn / Hết lượt' },
 ];
 
 // ─── Single saved voucher card ────────────────────────────────────────────────
 const SavedVoucherCard = ({ voucher, onUnsave }) => {
-  const status    = getVoucherStatus(voucher);
-  const days      = daysLeft(voucher.endDate);
+  const status = getVoucherStatus(voucher);
+  const days = daysLeft(voucher.endDate);
   const remaining = voucher.quantity - voucher.usedQuantity;
-  const isUsable  = status === 'ACTIVE';
+  const isUsable = status === 'ACTIVE';
   const isExpired = ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(status);
 
   const borderColor = isUsable ? '#bfdbfe' : '#e2e8f0';
-  const bgColor     = isUsable ? '#eff6ff' : '#f8fafc';
+  const bgColor = isUsable ? '#eff6ff' : '#f8fafc';
 
   const statusLabel = {
-    ACTIVE:   { text: '✅ Có thể sử dụng', color: '#16a34a', bg: '#dcfce7' },
-    UPCOMING: { text: '🕐 Sắp diễn ra',   color: '#d97706', bg: '#fef3c7' },
-    EXPIRED:  { text: '⏰ Đã hết hạn',    color: '#dc2626', bg: '#fef2f2' },
-    SOLD_OUT: { text: '🚫 Đã hết lượt',   color: '#7c3aed', bg: '#ede9fe' },
-    INACTIVE: { text: '🔒 Tạm dừng',      color: '#64748b', bg: '#f1f5f9' },
+    ACTIVE: { text: '✅ Có thể sử dụng', color: '#16a34a', bg: '#dcfce7' },
+    UPCOMING: { text: '🕐 Sắp diễn ra', color: '#d97706', bg: '#fef3c7' },
+    EXPIRED: { text: '⏰ Đã hết hạn', color: '#dc2626', bg: '#fef2f2' },
+    SOLD_OUT: { text: '🚫 Đã hết lượt', color: '#7c3aed', bg: '#ede9fe' },
+    INACTIVE: { text: '🔒 Tạm dừng', color: '#64748b', bg: '#f1f5f9' },
   }[status] || { text: status, color: '#64748b', bg: '#f1f5f9' };
 
   return (
@@ -142,30 +142,31 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const MyVouchers = () => {
-  const [allVouchers, setAllVouchers]   = useState([]);
-  const [savedIds,    setSavedIds]      = useState([]);
-  const [tab,         setTab]           = useState('USABLE');
-  const [loading,     setLoading]       = useState(true);
+  const [allVouchers, setAllVouchers] = useState([]);
+  const [savedIds, setSavedIds] = useState([]);
+  const [tab, setTab] = useState('USABLE');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadMyVouchers = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await voucherService.getPublicVouchers();
+      setAllVouchers(Array.isArray(data) ? data : []);
+      setSavedIds(voucherService.getSavedIds());
+    } catch (err) {
+      setError(err?.message || 'Không thể tải danh sách mã giảm giá từ máy chủ.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        // Load public vouchers (accessible to Guest/Customer without Admin role)
-        const data = await voucherService.getPublicVouchers();
-        setAllVouchers(Array.isArray(data) ? data : []);
-        setSavedIds(voucherService.getSavedIds());
-      } catch {
-        setAllVouchers([]);
-        setSavedIds(voucherService.getSavedIds());
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    void loadMyVouchers();
 
     const handleDataChange = () => {
-      load();
+      void loadMyVouchers();
     };
     const handleSavedChange = () => {
       setSavedIds(voucherService.getSavedIds());
@@ -194,22 +195,22 @@ const MyVouchers = () => {
   );
 
   const tabCounts = useMemo(() => {
-    const usable   = mySavedVouchers.filter((v) => getVoucherStatus(v) === 'ACTIVE').length;
+    const usable = mySavedVouchers.filter((v) => getVoucherStatus(v) === 'ACTIVE').length;
     const expiring = mySavedVouchers.filter((v) => {
       const d = daysLeft(v.endDate);
       return getVoucherStatus(v) === 'ACTIVE' && d <= 7 && d > 0;
     }).length;
-    const expired  = mySavedVouchers.filter((v) => ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(getVoucherStatus(v))).length;
+    const expired = mySavedVouchers.filter((v) => ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(getVoucherStatus(v))).length;
     return { USABLE: usable, EXPIRING: expiring, EXPIRED: expired };
   }, [mySavedVouchers]);
 
   const displayed = useMemo(() => {
     return mySavedVouchers.filter((v) => {
-      const s    = getVoucherStatus(v);
+      const s = getVoucherStatus(v);
       const days = daysLeft(v.endDate);
-      if (tab === 'USABLE')   return s === 'ACTIVE';
+      if (tab === 'USABLE') return s === 'ACTIVE';
       if (tab === 'EXPIRING') return s === 'ACTIVE' && days <= 7 && days > 0;
-      if (tab === 'EXPIRED')  return ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(s);
+      if (tab === 'EXPIRED') return ['EXPIRED', 'SOLD_OUT', 'INACTIVE'].includes(s);
       return true;
     });
   }, [mySavedVouchers, tab]);
@@ -241,6 +242,21 @@ const MyVouchers = () => {
         <div style={{ textAlign: 'center', padding: '5rem', color: '#94a3b8' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
           Đang tải mã giảm giá của bạn...
+        </div>
+      ) : error ? (
+        <div style={{ textAlign: 'center', padding: '4rem 1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '14px' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+          <h3 style={{ color: '#991b1b', fontWeight: 700, marginBottom: '0.5rem' }}>Không thể tải mã giảm giá của bạn</h3>
+          <p style={{ color: '#b91c1c', fontSize: '0.875rem', marginBottom: '1.25rem' }}>{error}</p>
+          <button
+            onClick={loadMyVouchers}
+            style={{
+              padding: '0.6rem 1.5rem', borderRadius: '8px', border: 'none',
+              backgroundColor: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            🔄 Thử lại kết nối
+          </button>
         </div>
       ) : mySavedVouchers.length === 0 ? (
         /* Empty state */

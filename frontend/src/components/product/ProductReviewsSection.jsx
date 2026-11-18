@@ -1179,7 +1179,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
 
               const reviewerName =
                 review.userFullName ||
-                (isOwnReview ? `${user?.fullName || 'Bạn'} (Bạn)` : review.reviewerName || 'Khách hàng đã mua hàng');
+                (isOwnReview ? `${user?.fullName || 'Bạn'} (Bạn)` : review.reviewerName || 'Khách hàng');
 
               const avatarUrl =
                 !failedAvatarIds[review.id] &&

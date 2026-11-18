@@ -1,47 +1,51 @@
+import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Layouts (Tách biệt hoàn toàn UserLayout và AdminLayout)
 import UserLayout from '../layouts/UserLayout';
 import AdminLayout from '../layouts/AdminLayout';
 
-// Route guards
+// Route guards & Fallback UI
 import ProtectedRoute from './ProtectedRoute';
 import AdminRoute from './AdminRoute';
+import Loading from '../components/common/Loading';
 
-// Customer pages
-import Home from '../pages/customer/Home';
-import Products from '../pages/customer/Products';
-import ProductDetail from '../pages/customer/ProductDetail';
-import FlashSale from '../pages/customer/FlashSale';
-import Cart from '../pages/customer/Cart';
-import Checkout from '../pages/customer/Checkout';
-import OrderSuccess from '../pages/customer/OrderSuccess';
-import Orders from '../pages/customer/Orders';
-import OrderDetail from '../pages/customer/OrderDetail';
-import OrderTracking from '../pages/customer/OrderTracking';
-import Vouchers from '../pages/customer/Vouchers';
-import MyVouchers from '../pages/customer/MyVouchers';
+// Customer pages (Code Splitting qua React.lazy)
+const Home = React.lazy(() => import('../pages/customer/Home'));
+const Products = React.lazy(() => import('../pages/customer/Products'));
+const ProductDetail = React.lazy(() => import('../pages/customer/ProductDetail'));
+const FlashSale = React.lazy(() => import('../pages/customer/FlashSale'));
+const Cart = React.lazy(() => import('../pages/customer/Cart'));
+const Checkout = React.lazy(() => import('../pages/customer/Checkout'));
+const OrderSuccess = React.lazy(() => import('../pages/customer/OrderSuccess'));
+const Orders = React.lazy(() => import('../pages/customer/Orders'));
+const OrderDetail = React.lazy(() => import('../pages/customer/OrderDetail'));
+// Lazy-loaded OrderTracking (replaces static: import OrderTracking from '../pages/customer/OrderTracking')
+const OrderTracking = React.lazy(() => import('../pages/customer/OrderTracking'));
+const Vouchers = React.lazy(() => import('../pages/customer/Vouchers'));
+const MyVouchers = React.lazy(() => import('../pages/customer/MyVouchers'));
 
-// Auth pages
-import Login from '../pages/auth/Login';
-import Register from '../pages/auth/Register';
+// Auth pages (Code Splitting qua React.lazy)
+const Login = React.lazy(() => import('../pages/auth/Login'));
+const Register = React.lazy(() => import('../pages/auth/Register'));
 
-// Admin pages
-import AdminDashboard from '../pages/admin/Dashboard';
-import AdminProducts from '../pages/admin/Products';
-import AdminProductForm from '../pages/admin/ProductForm';
-import AdminCategories from '../pages/admin/Categories';
-import AdminOrders from '../pages/admin/Orders';
-import AdminInventory from '../pages/admin/Inventory';
-import AdminSales from '../pages/admin/AdminSales';
-import AdminSaleForm from '../pages/admin/AdminSaleForm';
-import AdminVouchers from '../pages/admin/AdminVouchers';
-import AdminUsers from '../pages/admin/AdminUsers';
-import AdminReviews from '../pages/admin/AdminReviews';
+// Admin pages (Code Splitting qua React.lazy)
+const AdminDashboard = React.lazy(() => import('../pages/admin/Dashboard'));
+const AdminProducts = React.lazy(() => import('../pages/admin/Products'));
+const AdminProductForm = React.lazy(() => import('../pages/admin/ProductForm'));
+const AdminCategories = React.lazy(() => import('../pages/admin/Categories'));
+const AdminOrders = React.lazy(() => import('../pages/admin/Orders'));
+const AdminInventory = React.lazy(() => import('../pages/admin/Inventory'));
+const AdminSales = React.lazy(() => import('../pages/admin/AdminSales'));
+const AdminSaleForm = React.lazy(() => import('../pages/admin/AdminSaleForm'));
+const AdminVouchers = React.lazy(() => import('../pages/admin/AdminVouchers'));
+const AdminUsers = React.lazy(() => import('../pages/admin/AdminUsers'));
+const AdminReviews = React.lazy(() => import('../pages/admin/AdminReviews'));
 
 const AppRoutes = () => {
   return (
-    <Routes>
+    <Suspense fallback={<Loading message="Đang tải trang..." />}>
+      <Routes>
       {/* =========================================================
           USER LAYOUT (UserHeader + CategoryNav + UserContent + Footer)
          ========================================================= */}
@@ -185,7 +189,8 @@ const AppRoutes = () => {
 
       {/* 404 Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 };
 

@@ -332,6 +332,44 @@ services:
       start_period: 35s
 
   # ─────────────────────────────────────────────
+  #  5b. Chatbot Service (AI Shopping Assistant) — Port 8085
+  # ─────────────────────────────────────────────
+  chatbot-service:
+    build:
+      context: .
+      dockerfile: chatbot-service/Dockerfile
+    container_name: ecommerce-chatbot-service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    expose:
+      - "8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/chatbot_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-${AI_API_KEY:-}}
+      GEMINI_MODEL: ${GEMINI_MODEL:-${AI_MODEL:-gemini-3.5-flash}}
+      AI_BASE_URL: ${AI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8085/actuator/health | grep UP || curl -sf http://localhost:8085/actuator/health | grep UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 35s
+
+  # ─────────────────────────────────────────────
   #  6. API Gateway — Port 8080 (Backend Entrypoint)
   # ─────────────────────────────────────────────
   api-gateway:
@@ -352,6 +390,8 @@ services:
       order-service:
         condition: service_healthy
       payment-service:
+        condition: service_healthy
+      chatbot-service:
         condition: service_healthy
     ports:
       - "8080:8080"

@@ -40,12 +40,13 @@ const OrderDetail = () => {
   // Trạng thái đơn đang chờ đồng bộ sau thanh toán QR (PAID / FAILED) — truyền từ Checkout qua navigation state
   const [awaitingStatus, setAwaitingStatus] = useState(location.state?.expectedStatus || null);
   const syncAttemptsRef = useRef(0);
-  
+
   // State đánh giá sản phẩm sau mua ngay tại trang Chi tiết đơn hàng
   const [itemReviewsMap, setItemReviewsMap] = useState({});
   const [checkingReviews, setCheckingReviews] = useState(false);
   const [reviewCheckErrorsMap, setReviewCheckErrorsMap] = useState({});
   const [reviewModalItem, setReviewModalItem] = useState(null);
+
   const fetchOrderDetail = async ({ silent = false } = {}) => {
     if (!silent) {
       setLoading(true);
@@ -54,22 +55,6 @@ const OrderDetail = () => {
     try {
       // Gọi API Backend: GET /api/orders/{orderId}
       const data = await orderService.getOrderById(id);
-      if (data && data.status === ORDER_STATUS.PENDING && typeof window !== 'undefined' && window.sessionStorage) {
-        try {
-          const rawOverrides = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
-          const overrides = rawOverrides ? JSON.parse(rawOverrides) : {};
-          const override = overrides[String(id)];
-          if (override?.status) {
-            if (isOrderCompletedForReview(override.status)) {
-              setCheckingReviews(true);
-            }
-            setOrder({ ...data, status: override.status });
-            return;
-          }
-        } catch (e) {
-          // Bỏ qua lỗi đọc sessionStorage
-        }
-      }
       if (isOrderCompletedForReview(data?.status)) {
         setCheckingReviews(true);
       }
@@ -163,6 +148,7 @@ const OrderDetail = () => {
   useEffect(() => {
     loadExistingItemReviews();
   }, [loadExistingItemReviews]);
+
   // Sau khi xác nhận thanh toán QR: đồng bộ lại trạng thái đơn mỗi 1 giây cho tới khi Kafka cập nhật
   // (PENDING -> PAID / FAILED) hoặc hết số lần thử, tránh hiển thị trạng thái PENDING cũ.
   useEffect(() => {
@@ -331,9 +317,9 @@ const OrderDetail = () => {
   const couponCode = order.couponCode || order.voucherCode || null;
   const totalAmount =
     order.subtotal !== undefined ||
-    order.subtotalAmount !== undefined ||
-    order.discountAmount !== undefined ||
-    order.shippingFee !== undefined
+      order.subtotalAmount !== undefined ||
+      order.discountAmount !== undefined ||
+      order.shippingFee !== undefined
       ? Math.max(0, subtotal - discountAmount) + shippingFee
       : Number(order.totalAmount ?? Math.max(0, subtotal - discountAmount) + shippingFee);
 
@@ -748,7 +734,7 @@ const OrderDetail = () => {
             );
           })}
         </div>
-        
+
         {/* Tổng kết thanh toán */}
         <div
           style={{
