@@ -217,6 +217,18 @@ class AuthServiceTest {
     }
 
     @Test
+    void shouldNotThrowOnLogoutWhenRedisIsUnavailable() {
+        String token = "sample_access_token";
+        when(jwtTokenProvider.getRemainingExpirationMs(token)).thenReturn(50000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        doThrow(new org.springframework.data.redis.RedisConnectionFailureException("Unable to connect to Redis"))
+                .when(valueOperations)
+                .set(anyString(), any(), anyLong(), any(TimeUnit.class));
+
+        authService.logout("Bearer " + token);
+    }
+
+    @Test
     void shouldThrowAccessDeniedWhenRefreshingBlockedAccount() {
         TokenRefreshRequest request = TokenRefreshRequest.builder()
                 .refreshToken("blocked_user_refresh_token")

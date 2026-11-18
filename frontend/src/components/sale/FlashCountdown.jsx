@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Icon from '../common/Icons';
 
 /**
  * FlashCountdown - Đồng hồ đếm ngược thời gian thực cho chiến dịch Flash Sale
@@ -63,7 +64,7 @@ const FlashCountdown = ({ targetEndTime, variant = 'hero', onExpire }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
-          <span style={{ fontSize: '1rem' }}>⏱️</span>
+          <Icon name="clock" size={16} />
           <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>KẾT THÚC SAU:</span>
         </div>
 
@@ -220,8 +221,8 @@ const FlashCountdown = ({ targetEndTime, variant = 'hero', onExpire }) => {
 
   // Default compact
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 700, fontSize: '0.85rem', color: '#dc2626' }}>
-      <span>⏱️</span>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '0.85rem', color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>
+      <Icon name="clock" size={14} />
       <span>{pad(timeLeft.hours)}:{pad(timeLeft.minutes)}:{pad(timeLeft.seconds)}</span>
     </div>
   );

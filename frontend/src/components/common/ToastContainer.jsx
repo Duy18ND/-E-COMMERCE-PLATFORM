@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
+import Icon from './Icons';
 
 const ToastItem = ({ toast, onClose }) => {
   const { id, type = 'info', title, message, product, quantity = 1, closing } = toast;
@@ -8,36 +9,16 @@ const ToastItem = ({ toast, onClose }) => {
   const renderIcon = () => {
     switch (type) {
       case 'cart':
+        return <Icon name="cart" size={14} strokeWidth={2.4} />;
       case 'success':
-        return (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        );
+        return <Icon name="check" size={14} strokeWidth={2.8} />;
       case 'error':
-        return (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        );
+        return <Icon name="x" size={14} strokeWidth={2.6} />;
       case 'warning':
-        return (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-        );
+        return <Icon name="warning" size={14} strokeWidth={2.4} />;
       case 'info':
       default:
-        return (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-        );
+        return <Icon name="info" size={14} strokeWidth={2.4} />;
     }
   };
 
@@ -81,7 +62,7 @@ const ToastItem = ({ toast, onClose }) => {
           aria-label="Đóng thông báo"
           title="Đóng"
         >
-          &times;
+          <Icon name="x" size={14} />
         </button>
       </div>
 
@@ -95,8 +76,8 @@ const ToastItem = ({ toast, onClose }) => {
               className="toast-product-thumb"
             />
           ) : (
-            <div className="toast-product-fallback">
-              🛍️
+            <div className="toast-product-fallback" style={{ color: '#2563eb' }}>
+              <Icon name="package" size={20} />
             </div>
           )}
 
@@ -132,7 +113,7 @@ const ToastItem = ({ toast, onClose }) => {
             onClick={() => onClose(id)}
           >
             <span>Xem giỏ hàng</span>
-            <span style={{ fontSize: '1rem', lineHeight: 1 }}>&rarr;</span>
+            <Icon name="arrow-right" size={14} className="ui-icon-nudge-right" />
           </Link>
         </div>
       )}

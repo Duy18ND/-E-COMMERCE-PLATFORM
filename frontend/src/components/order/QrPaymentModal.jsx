@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import paymentService from '../../services/paymentService';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { buildVietQrPayload, generateQrSvgDataUri } from '../../utils/qrCodeGenerator';
+import Icon from '../common/Icons';
 
 /**
  * QrPaymentModal — Màn hình quét mã QR chuyển khoản (chuẩn VietQR) cho đơn thanh toán trực tuyến.
@@ -36,12 +38,21 @@ const toIntAmount = (amount) => {
 
 export const buildVietQrUrl = (orderId, amount) => {
   const safeAmount = toIntAmount(amount);
-  return `https://img.vietqr.io/image/${BANK_ID}-${ACCOUNT_NO}-compact2.png?amount=${safeAmount}&addInfo=THANH%20TOAN%20DON%20${orderId}&accountName=E%20COMMERCE%20PLATFORM`;
+  const addInfo = encodeURIComponent(`THANH TOAN DON ${String(orderId ?? '').trim()}`);
+  const accountName = encodeURIComponent(ACCOUNT_NAME);
+  const amountQuery = safeAmount > 0 ? `amount=${safeAmount}&` : '';
+  return `https://img.vietqr.io/image/${BANK_ID}-${ACCOUNT_NO}-compact2.png?${amountQuery}addInfo=${addInfo}&accountName=${accountName}`;
 };
 
 export const buildFallbackQrUrl = (orderId, amount) => {
   const safeAmount = toIntAmount(amount);
-  return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=ORDER_${orderId}_AMOUNT_${safeAmount}`;
+  const payload = buildVietQrPayload({
+    bankId: BANK_ID,
+    accountNo: ACCOUNT_NO,
+    amount: safeAmount,
+    addInfo: `THANH TOAN DON ${String(orderId ?? '').trim()}`
+  });
+  return generateQrSvgDataUri(payload);
 };
 
 const formatCountdown = (totalSeconds) => {
@@ -91,18 +102,12 @@ const copyBtnStyle = (copied) => ({
 const testBtnBase = {
   width: '100%', borderRadius: '10px', padding: '0.75rem 1rem',
   fontSize: '0.875rem', fontWeight: 800, display: 'flex', alignItems: 'center',
-  justifyContent: 'center', gap: '0.5rem', transition: 'all 0.15s'
+  justifyContent: 'center', gap: '0.5rem',
+  transition: 'background-color 150ms ease, border-color 150ms ease, opacity 150ms ease, transform 150ms ease'
 };
 
 const Spinner = ({ color = '#ffffff' }) => (
-  <span
-    aria-hidden="true"
-    style={{
-      width: '16px', height: '16px', borderRadius: '50%', display: 'inline-block',
-      border: `2.5px solid ${color}`, borderTopColor: 'transparent',
-      animation: 'qrPaySpin 0.8s linear infinite'
-    }}
-  />
+  <Icon name="loader" size={16} spin color={color} />
 );
 
 const QrPaymentModal = ({
@@ -117,22 +122,29 @@ const QrPaymentModal = ({
   // phase: idle | confirming | cancelling | success | failed
   const [phase, setPhase] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  const [qrSrc, setQrSrc] = useState('');
+  const orderId = order?.id;
+  const rawSubtotal = Number(order?.subtotalAmount ?? 0);
+  const voucherDiscount = Math.max(0, Number(order?.discountAmount ?? 0));
+  const shippingFee = Math.max(0, Number(order?.shippingFee ?? 0));
+  const rawTotal = Number(order?.totalAmount ?? 0);
+  const computedAfterDiscount = Math.max(0, rawSubtotal - voucherDiscount) + shippingFee;
+  // Đảm bảo số tiền cần thanh toán luôn là số tiền ĐÃ TRỪ giảm giá (Flash Sale + Voucher) và cộng phí ship
+  const payableAmount =
+    rawSubtotal > 0 && voucherDiscount > 0
+      ? Math.max(0, Math.min(rawTotal > 0 ? rawTotal : computedAfterDiscount, computedAfterDiscount))
+      : rawTotal > 0
+        ? rawTotal
+        : computedAfterDiscount;
+  const amount = payableAmount;
+
+  const [qrSrc, setQrSrc] = useState(() => (orderId ? buildVietQrUrl(orderId, amount) : ''));
+  const [qrMode, setQrMode] = useState('remote'); // 'remote' | 'offline'
+  const [qrLoading, setQrLoading] = useState(true);
   const [qrBroken, setQrBroken] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(holdMinutes * 60);
   const [copiedKey, setCopiedKey] = useState('');
   const timersRef = useRef([]);
-
-  const orderId = order?.id;
-  const rawSubtotal = Number(order?.subtotalAmount ?? 0);
-  const voucherDiscount = Math.max(0, Number(order?.discountAmount ?? 0));
-  const rawTotal = Number(order?.totalAmount ?? 0);
-  // Đảm bảo số tiền cần thanh toán luôn là số tiền ĐÃ TRỪ giảm giá (Flash Sale + Voucher)
-  const payableAmount =
-    rawSubtotal > 0 && voucherDiscount > 0
-      ? Math.max(0, Math.min(rawTotal > 0 ? rawTotal : rawSubtotal - voucherDiscount, rawSubtotal - voucherDiscount))
-      : rawTotal;
-  const amount = payableAmount;
+  const qrTimeoutRef = useRef(null);
   const transferContent = `THANH TOAN DON #${orderId}`;
   const busy = phase === 'confirming' || phase === 'cancelling';
   const finished = phase === 'success' || phase === 'failed';
@@ -143,17 +155,46 @@ const QrPaymentModal = ({
     return t;
   }, []);
 
+  const clearQrTimeout = useCallback(() => {
+    if (qrTimeoutRef.current) {
+      clearTimeout(qrTimeoutRef.current);
+      qrTimeoutRef.current = null;
+    }
+  }, []);
+
+  const activateOfflineQr = useCallback(() => {
+    clearQrTimeout();
+    if (!orderId) return;
+    try {
+      const offlineUri = buildFallbackQrUrl(orderId, amount);
+      setQrSrc(offlineUri);
+      setQrMode('offline');
+      setQrBroken(false);
+    } catch {
+      setQrBroken(true);
+    } finally {
+      setQrLoading(false);
+    }
+  }, [clearQrTimeout, orderId, amount]);
+
   // Reset trạng thái mỗi lần mở modal cho một đơn hàng
   useEffect(() => {
+    clearQrTimeout();
     if (!isOpen || !orderId) return undefined;
     setPhase('idle');
     setErrorMsg('');
     setQrBroken(false);
+    setQrMode('remote');
+    setQrLoading(true);
     setCopiedKey('');
     setQrSrc(buildVietQrUrl(orderId, amount));
     setSecondsLeft(holdMinutes * 60);
-    return undefined;
-  }, [isOpen, orderId, amount, holdMinutes]);
+    // Tự động chuyển sang mã EMVCo VietQR nội bộ nếu CDN VietQR phản hồi chậm (> 4.5s)
+    qrTimeoutRef.current = setTimeout(() => {
+      activateOfflineQr();
+    }, 4500);
+    return () => clearQrTimeout();
+  }, [isOpen, orderId, amount, holdMinutes, clearQrTimeout, activateOfflineQr]);
 
   // Đồng hồ đếm ngược thời gian giữ đơn
   useEffect(() => {
@@ -180,13 +221,32 @@ const QrPaymentModal = ({
 
   if (!isOpen || !order) return null;
 
+  const handleQrLoad = () => {
+    clearQrTimeout();
+    setQrLoading(false);
+    setQrBroken(false);
+  };
+
   const handleQrError = () => {
-    const fallback = buildFallbackQrUrl(orderId, amount);
-    if (qrSrc !== fallback) {
-      setQrSrc(fallback);
+    clearQrTimeout();
+    if (qrMode !== 'offline') {
+      activateOfflineQr();
     } else {
+      setQrLoading(false);
       setQrBroken(true);
     }
+  };
+
+  const handleRetryQr = () => {
+    if (!orderId) return;
+    clearQrTimeout();
+    setQrBroken(false);
+    setQrMode('remote');
+    setQrLoading(true);
+    setQrSrc(`${buildVietQrUrl(orderId, amount)}&_t=${Date.now()}`);
+    qrTimeoutRef.current = setTimeout(() => {
+      activateOfflineQr();
+    }, 4500);
   };
 
   const handleCopy = async (key, text) => {
@@ -240,29 +300,28 @@ const QrPaymentModal = ({
 
   return (
     <div
+      className="shopmart-dialog-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby="qr-payment-title"
       style={{
         position: 'fixed', inset: 0, zIndex: 1100,
-        backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(3px)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '1rem', overflowY: 'auto'
       }}
     >
       <style>{`
-        @keyframes qrPaySpin { to { transform: rotate(360deg); } }
         @keyframes qrPayPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
         @keyframes qrPayScan { 0% { top: 6%; } 50% { top: 88%; } 100% { top: 6%; } }
-        @keyframes qrPayPop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
-        @keyframes qrPayFadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes qrPayPop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
       `}</style>
 
       <div
+        className="shopmart-dialog-box"
         style={{
-          position: 'relative', width: '100%', maxWidth: '460px', maxHeight: 'calc(100vh - 2rem)',
-          overflowY: 'auto', backgroundColor: '#ffffff', borderRadius: '18px',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.3)', animation: 'qrPayFadeIn 0.25s ease-out'
+          position: 'relative', width: '100%', maxWidth: '460px', maxHeight: 'calc(100dvh - 2rem)',
+          overflowY: 'auto', backgroundColor: '#ffffff', borderRadius: '18px'
         }}
       >
         {/* ── Header ── */}
@@ -272,10 +331,11 @@ const QrPaymentModal = ({
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem'
         }}>
           <div style={{ minWidth: 0 }}>
-            <h2 id="qr-payment-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
-              📱 Quét mã QR để thanh toán
+            <h2 id="qr-payment-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <Icon name="qr" size={18} />
+              <span>Quét mã QR để thanh toán</span>
             </h2>
-            <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', opacity: 0.85 }}>
+            <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', opacity: 0.88 }}>
               Đơn hàng <strong>#{orderId}</strong> · Hỗ trợ mọi ứng dụng ngân hàng (VietQR / Napas 247)
             </p>
           </div>
@@ -287,10 +347,11 @@ const QrPaymentModal = ({
             style={{
               width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
               border: '1px solid rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.12)',
-              color: '#ffffff', fontSize: '1.1rem', cursor: busy || finished ? 'not-allowed' : 'pointer'
+              color: '#ffffff', cursor: busy || finished ? 'not-allowed' : 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
             }}
           >
-            ×
+            <Icon name="x" size={16} />
           </button>
         </div>
 
@@ -302,11 +363,17 @@ const QrPaymentModal = ({
             border: `1px solid ${expired ? '#fecaca' : urgent ? '#fed7aa' : '#e2e8f0'}`,
             borderRadius: '10px', padding: '0.6rem 0.85rem', marginBottom: '1rem'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
               {phase === 'success' ? (
-                <span style={{ color: '#16a34a' }}>✓ Đã nhận được thanh toán</span>
+                <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Icon name="success" size={15} />
+                  <span>Đã nhận được thanh toán</span>
+                </span>
               ) : phase === 'failed' ? (
-                <span style={{ color: '#dc2626' }}>✕ Giao dịch không thành công</span>
+                <span style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Icon name="error" size={15} />
+                  <span>Giao dịch không thành công</span>
+                </span>
               ) : (
                 <>
                   <span style={{
@@ -318,7 +385,8 @@ const QrPaymentModal = ({
               )}
             </div>
             <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span>⏱ Giữ đơn:</span>
+              <Icon name="clock" size={14} />
+              <span>Giữ đơn:</span>
               <span style={{
                 fontFamily: 'monospace', fontWeight: 800, fontSize: '1rem',
                 color: expired ? '#dc2626' : urgent ? '#ea580c' : '#0f172a'
@@ -331,9 +399,11 @@ const QrPaymentModal = ({
           {expired && !finished && (
             <div style={{
               fontSize: '0.78rem', color: '#b91c1c', backgroundColor: '#fef2f2', border: '1px solid #fecaca',
-              borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '1rem'
+              borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '1rem',
+              display: 'flex', alignItems: 'flex-start', gap: '0.4rem'
             }}>
-              ⚠ Đã hết thời gian giữ đơn khuyến nghị. Ở chế độ Demo/Test bạn vẫn có thể xác nhận kết quả giao dịch bên dưới.
+              <Icon name="warning" size={15} color="#dc2626" style={{ marginTop: '1px' }} />
+              <span>Đã hết thời gian giữ đơn khuyến nghị. Ở chế độ Demo/Test bạn vẫn có thể xác nhận kết quả giao dịch bên dưới.</span>
             </div>
           )}
 
@@ -345,22 +415,58 @@ const QrPaymentModal = ({
               boxShadow: '0 6px 20px rgba(37, 99, 235, 0.12)', overflow: 'hidden',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              {qrBroken ? (
+              {qrBroken || !qrSrc ? (
                 <div style={{ textAlign: 'center', padding: '1rem', color: '#64748b', fontSize: '0.8rem' }}>
-                  <div style={{ fontSize: '2.25rem', marginBottom: '0.35rem' }}>🔌</div>
+                  <div style={{ color: '#94a3b8', marginBottom: '0.45rem', display: 'flex', justifyContent: 'center' }}>
+                    <Icon name="qr" size={34} />
+                  </div>
                   Không tải được ảnh mã QR.<br />Vui lòng chuyển khoản theo thông tin bên dưới.
+                  <div style={{ marginTop: '0.6rem' }}>
+                    <button
+                      type="button"
+                      onClick={handleRetryQr}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        padding: '0.35rem 0.7rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
+                        background: '#ffffff', color: '#0f172a', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
+                      }}
+                    >
+                      <Icon name="refresh" size={13} /> Thử tải lại QR
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <img
-                  key={qrSrc}
-                  src={qrSrc}
-                  alt={`Mã VietQR thanh toán đơn hàng #${orderId}`}
-                  onError={handleQrError}
-                  style={{
-                    width: '100%', height: '100%', objectFit: 'contain',
-                    filter: finished ? 'blur(2px) grayscale(0.6)' : 'none', transition: 'filter 0.2s'
-                  }}
-                />
+                <>
+                  <img
+                    key={qrSrc}
+                    src={qrSrc}
+                    alt={`Mã VietQR thanh toán đơn hàng #${orderId}`}
+                    onLoad={handleQrLoad}
+                    onError={handleQrError}
+                    style={{
+                      width: '100%', height: '100%', objectFit: 'contain',
+                      filter: finished ? 'blur(2px) grayscale(0.6)' : 'none', transition: 'filter 0.2s'
+                    }}
+                  />
+                  {qrLoading && !finished && (
+                    <div style={{
+                      position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)',
+                      backgroundColor: 'rgba(15, 23, 42, 0.78)', color: '#ffffff', fontSize: '0.68rem',
+                      fontWeight: 600, padding: '0.18rem 0.55rem', borderRadius: '999px', whiteSpace: 'nowrap'
+                    }}>
+                      Đang tạo mã QR...
+                    </div>
+                  )}
+                  {!qrLoading && qrMode === 'offline' && !finished && (
+                    <div style={{
+                      position: 'absolute', bottom: '6px', left: '50%', transform: 'translateX(-50%)',
+                      backgroundColor: 'rgba(22, 163, 74, 0.9)', color: '#ffffff', fontSize: '0.65rem',
+                      fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '999px', whiteSpace: 'nowrap'
+                    }}>
+                      VietQR Offline (EMVCo)
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Vạch quét động */}
@@ -377,16 +483,16 @@ const QrPaymentModal = ({
                 <div style={{
                   position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                  backgroundColor: 'rgba(255,255,255,0.82)'
+                  backgroundColor: 'rgba(255,255,255,0.85)'
                 }}>
                   <div style={{
-                    width: '72px', height: '72px', borderRadius: '50%', fontSize: '2.4rem', fontWeight: 900,
+                    width: '72px', height: '72px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff',
                     backgroundColor: phase === 'success' ? '#16a34a' : '#dc2626',
                     boxShadow: `0 8px 24px ${phase === 'success' ? 'rgba(22,163,74,0.4)' : 'rgba(220,38,38,0.4)'}`,
-                    animation: 'qrPayPop 0.45s ease-out'
+                    animation: 'qrPayPop 0.4s ease-out'
                   }}>
-                    {phase === 'success' ? '✓' : '✕'}
+                    <Icon name={phase === 'success' ? 'check' : 'x'} size={34} strokeWidth={2.5} />
                   </div>
                   <strong style={{ color: phase === 'success' ? '#166534' : '#991b1b', fontSize: '0.95rem' }}>
                     {phase === 'success' ? 'Thanh toán thành công!' : 'Thanh toán thất bại'}
@@ -409,8 +515,9 @@ const QrPaymentModal = ({
               <span style={infoLabelStyle}>Số tài khoản</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ ...infoValueStyle, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{ACCOUNT_NO}</span>
-                <button type="button" style={copyBtnStyle(copiedKey === 'account')} onClick={() => handleCopy('account', ACCOUNT_NO)}>
-                  {copiedKey === 'account' ? '✓ Đã chép' : 'Sao chép'}
+                <button type="button" style={{ ...copyBtnStyle(copiedKey === 'account'), display: 'inline-flex', alignItems: 'center', gap: '3px' }} onClick={() => handleCopy('account', ACCOUNT_NO)}>
+                  <Icon name={copiedKey === 'account' ? 'check' : 'copy'} size={12} />
+                  <span>{copiedKey === 'account' ? 'Đã chép' : 'Sao chép'}</span>
                 </button>
               </span>
             </div>
@@ -428,8 +535,9 @@ const QrPaymentModal = ({
               <span style={infoLabelStyle}>Nội dung CK</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
                 <span style={{ ...infoValueStyle, fontFamily: 'monospace', color: '#1d4ed8' }}>{transferContent}</span>
-                <button type="button" style={copyBtnStyle(copiedKey === 'content')} onClick={() => handleCopy('content', transferContent)}>
-                  {copiedKey === 'content' ? '✓ Đã chép' : 'Sao chép'}
+                <button type="button" style={{ ...copyBtnStyle(copiedKey === 'content'), display: 'inline-flex', alignItems: 'center', gap: '3px' }} onClick={() => handleCopy('content', transferContent)}>
+                  <Icon name={copiedKey === 'content' ? 'check' : 'copy'} size={12} />
+                  <span>{copiedKey === 'content' ? 'Đã chép' : 'Sao chép'}</span>
                 </button>
               </span>
             </div>
@@ -458,9 +566,11 @@ const QrPaymentModal = ({
           {errorMsg && (
             <div role="alert" style={{
               backgroundColor: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412',
-              borderRadius: '10px', padding: '0.6rem 0.85rem', fontSize: '0.8rem', marginBottom: '1rem'
+              borderRadius: '10px', padding: '0.6rem 0.85rem', fontSize: '0.8rem', marginBottom: '1rem',
+              display: 'flex', alignItems: 'center', gap: '0.45rem'
             }}>
-              ⚠ {errorMsg}
+              <Icon name="warning" size={15} color="#ea580c" />
+              <span>{errorMsg}</span>
             </div>
           )}
 
@@ -470,7 +580,10 @@ const QrPaymentModal = ({
             borderRadius: '12px', padding: '0.85rem'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.3rem', flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: '0.88rem', color: '#5b21b6' }}>🧪 Bảng điều khiển Demo / Test Thanh Toán</strong>
+              <strong style={{ fontSize: '0.88rem', color: '#5b21b6', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Icon name="sparkles" size={15} color="#7c3aed" />
+                <span>Bảng điều khiển Demo / Test Thanh Toán</span>
+              </strong>
               <span style={{
                 fontSize: '0.65rem', fontWeight: 800, color: '#7c3aed', backgroundColor: '#ede9fe',
                 padding: '0.12rem 0.45rem', borderRadius: '9999px', letterSpacing: '0.05em'
@@ -494,7 +607,7 @@ const QrPaymentModal = ({
                   cursor: busy || finished ? 'not-allowed' : 'pointer'
                 }}
               >
-                {phase === 'confirming' ? <Spinner /> : <span>🟢</span>}
+                {phase === 'confirming' ? <Spinner /> : <Icon name="success" size={16} />}
                 <span>{phase === 'confirming' ? 'Đang xác nhận giao dịch...' : 'Xác nhận đã chuyển khoản (Test Thành Công)'}</span>
               </button>
 
@@ -510,7 +623,7 @@ const QrPaymentModal = ({
                   opacity: busy && phase !== 'cancelling' ? 0.6 : 1
                 }}
               >
-                {phase === 'cancelling' ? <Spinner color="#dc2626" /> : <span>🔴</span>}
+                {phase === 'cancelling' ? <Spinner color="#dc2626" /> : <Icon name="error" size={16} />}
                 <span>{phase === 'cancelling' ? 'Đang hủy giao dịch...' : 'Giả lập Lỗi / Hủy thanh toán (Test Saga Rollback)'}</span>
               </button>
 
@@ -525,7 +638,7 @@ const QrPaymentModal = ({
                   opacity: busy ? 0.6 : 1
                 }}
               >
-                <span>⚪</span>
+                <Icon name="clock" size={15} />
                 <span>Thanh toán sau</span>
               </button>
             </div>

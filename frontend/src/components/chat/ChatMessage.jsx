@@ -1,5 +1,6 @@
 import { formatCurrency } from '../../utils/formatCurrency';
 import ProductSuggestionCard from './ProductSuggestionCard';
+import Icon from '../common/Icons';
 
 const INLINE_TOKEN_REGEX = /(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\n]+\*)/g;
 
@@ -150,8 +151,11 @@ const ChatMessage = ({ message, onSelectProduct, onNavigateOrder }) => {
             fontSize: '0.8rem'
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#1e40af' }}>
-            <span>🧾 Đơn hàng #{message.referencedOrder.id}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, color: '#1e40af' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Icon name="clipboard" size={14} />
+              <span>Đơn hàng #{message.referencedOrder.id}</span>
+            </span>
             <span>{message.referencedOrder.status}</span>
           </div>
           <div style={{ color: '#334155', marginTop: '0.25rem' }}>

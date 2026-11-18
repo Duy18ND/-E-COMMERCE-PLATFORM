@@ -1,3 +1,5 @@
+import Icon from '../common/Icons';
+
 /**
  * ChatHeader.jsx — Thanh tiêu đề của cửa sổ Trợ lý Mua sắm AI ShopMart
  */
@@ -20,7 +22,7 @@ const ChatHeader = ({
         flexShrink: 0
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
         <div
           style={{
             width: '36px',
@@ -30,31 +32,23 @@ const ChatHeader = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '1.25rem'
+            flexShrink: 0
           }}
         >
-          🤖
+          <Icon name="bot" size={20} color="#ffffff" />
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2 }}>
             Trợ lý Mua sắm AI
           </div>
-          <div style={{ fontSize: '0.73rem', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span
-              style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                backgroundColor: '#4ade80',
-                display: 'inline-block'
-              }}
-            />
-            ShopMart Smart Assistant
+          <div style={{ fontSize: '0.73rem', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Icon name="active" size={8} color="#4ade80" />
+            <span>ShopMart Smart Assistant</span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
         <button
           type="button"
           onClick={() => setActiveTab(activeTab === 'history' ? 'chat' : 'history')}
@@ -67,10 +61,14 @@ const ChatHeader = ({
             padding: '0.35rem 0.6rem',
             fontSize: '0.75rem',
             fontWeight: 600,
-            cursor: 'pointer'
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem'
           }}
         >
-          🕘 Lịch sử ({conversationsCount})
+          <Icon name="history" size={13} />
+          <span>Lịch sử ({conversationsCount})</span>
         </button>
 
         <button
@@ -85,10 +83,14 @@ const ChatHeader = ({
             padding: '0.35rem 0.6rem',
             fontSize: '0.75rem',
             fontWeight: 600,
-            cursor: 'pointer'
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem'
           }}
         >
-          + Mới
+          <Icon name="plus" size={13} />
+          <span>Mới</span>
         </button>
 
         <button
@@ -99,13 +101,15 @@ const ChatHeader = ({
             background: 'transparent',
             border: 'none',
             color: '#ffffff',
-            fontSize: '1.15rem',
             cursor: 'pointer',
-            padding: '0.2rem 0.4rem',
-            lineHeight: 1
+            padding: '0.3rem',
+            borderRadius: '8px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
         >
-          ✕
+          <Icon name="x" size={17} />
         </button>
       </div>
     </div>
@@ -113,4 +117,3 @@ const ChatHeader = ({
 };
 
 export default ChatHeader;
-

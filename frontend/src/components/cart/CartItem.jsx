@@ -1,6 +1,7 @@
 import { formatCurrency } from '../../utils/formatCurrency';
 import useCart from '../../hooks/useCart';
 import useNotification from '../../hooks/useNotification';
+import Icon from '../common/Icons';
 
 const CartItem = ({ item }) => {
   const { updateQuantity, removeFromCart } = useCart();
@@ -100,7 +101,9 @@ const CartItem = ({ item }) => {
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
-            <span style={{ fontSize: '1.75rem' }}>📦</span>
+            <span style={{ color: '#94a3b8', display: 'inline-flex' }}>
+              <Icon name="package" size={26} />
+            </span>
           )}
         </div>
 
@@ -164,7 +167,7 @@ const CartItem = ({ item }) => {
           {/* Stock Notice / Guarantee tag */}
           {item.stockNotice && (
             <div style={{ fontSize: '0.75rem', color: isSale ? '#ea580c' : '#64748b', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span>{isSale ? '🔥' : '🛡️'}</span>
+              <Icon name={isSale ? 'flame' : 'shield-check'} size={13} color={isSale ? '#ea580c' : '#2563eb'} />
               <span>{item.stockNotice}</span>
             </div>
           )}
@@ -193,11 +196,13 @@ const CartItem = ({ item }) => {
               border: 'none',
               background: '#f8fafc',
               cursor: 'pointer',
-              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               color: '#334155'
             }}
           >
-            -
+            <Icon name="minus" size={14} />
           </button>
           <span
             aria-label="Số lượng hiện tại"
@@ -214,11 +219,13 @@ const CartItem = ({ item }) => {
               border: 'none',
               background: '#f8fafc',
               cursor: 'pointer',
-              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               color: '#334155'
             }}
           >
-            +
+            <Icon name="plus" size={14} />
           </button>
         </div>
 
@@ -238,10 +245,12 @@ const CartItem = ({ item }) => {
             border: 'none',
             color: '#94a3b8',
             cursor: 'pointer',
-            padding: '0.4rem',
-            fontSize: '1.1rem',
-            borderRadius: '6px',
-            transition: 'all 0.15s ease'
+            padding: '0.45rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '8px',
+            transition: 'color 150ms ease, background-color 150ms ease'
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = '#ef4444';
@@ -253,7 +262,7 @@ const CartItem = ({ item }) => {
           }}
           title="Xóa khỏi giỏ hàng"
         >
-          🗑️
+          <Icon name="trash" size={17} />
         </button>
       </div>
     </div>

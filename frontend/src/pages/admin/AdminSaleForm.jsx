@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import saleService from '../../services/saleService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import useNotification from '../../hooks/useNotification';
+import Icon from '../../components/common/Icons';
 
 const SAMPLE_BANNERS = [
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=80',
@@ -267,7 +268,7 @@ const AdminSaleForm = () => {
       <div style={{ marginBottom: '1.25rem' }}>
         <div style={{ fontSize: '0.825rem', color: '#64748b', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <Link to="/admin/sales" style={{ color: '#2563eb', fontWeight: 600 }}>Quản lý Sale</Link>
-          <span>›</span>
+          <Icon name="chevron-right" size={14} />
           <span>{isEditing ? 'Chỉnh sửa chương trình' : 'Tạo chương trình mới'}</span>
         </div>
 
@@ -280,18 +281,22 @@ const AdminSaleForm = () => {
               style={{
                 backgroundColor: '#fee2e2',
                 color: '#dc2626',
-                padding: '2px 8px',
+                padding: '3px 9px',
                 borderRadius: '6px',
                 fontSize: '0.725rem',
                 fontWeight: 800,
-                border: '1px solid #fecaca'
+                border: '1px solid #fecaca',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}
             >
-              ● LIVE SESSION
+              <Icon name="dot" size={8} color="#dc2626" />
+              <span>LIVE SESSION</span>
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => notify.info('Nhật ký cấu hình: Phiên tạo bởi Quản trị viên lúc 09:00.')}
@@ -302,10 +307,14 @@ const AdminSaleForm = () => {
                 padding: '0.5rem 0.85rem',
                 fontSize: '0.825rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}
             >
-              ⏱️ Nhật ký cấu hình
+              <Icon name="clock" size={15} color="#475569" />
+              <span>Nhật ký cấu hình</span>
             </button>
             <button
               type="button"
@@ -317,10 +326,14 @@ const AdminSaleForm = () => {
                 padding: '0.5rem 0.85rem',
                 fontSize: '0.825rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}
             >
-              ❓ Hướng dẫn định giá
+              <Icon name="info" size={15} color="#2563eb" />
+              <span>Hướng dẫn định giá</span>
             </button>
           </div>
         </div>
@@ -421,7 +434,9 @@ const AdminSaleForm = () => {
                     setFormData((prev) => ({ ...prev, bannerUrl: next }));
                   }}
                 >
-                  <span style={{ fontSize: '1.5rem', display: 'block', marginBottom: '4px' }}>☁️</span>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '9999px', backgroundColor: '#eff6ff', color: '#2563eb', marginBottom: '6px' }}>
+                    <Icon name="upload" size={20} />
+                  </div>
                   <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#2563eb' }}>
                     Kéo thả hoặc Bấm đổi banner mẫu
                   </div>
@@ -490,8 +505,9 @@ const AdminSaleForm = () => {
             {/* Start and End Times */}
             <div className="form-grid-2" style={{ marginBottom: '1.25rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
-                  🕒 Thời điểm bắt đầu
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
+                  <Icon name="clock" size={14} color="#2563eb" />
+                  <span>Thời điểm bắt đầu</span>
                 </label>
                 <input
                   type="datetime-local"
@@ -509,8 +525,9 @@ const AdminSaleForm = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
-                  🚩 Thời điểm kết thúc
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
+                  <Icon name="calendar" size={14} color="#dc2626" />
+                  <span>Thời điểm kết thúc</span>
                 </label>
                 <input
                   type="datetime-local"
@@ -531,8 +548,9 @@ const AdminSaleForm = () => {
             {/* Giới hạn mua & Trạng thái công bố */}
             <div className="form-grid-2" style={{ alignItems: 'center' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
-                  👥 Giới hạn mua / khách hàng
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
+                  <Icon name="users" size={14} color="#2563eb" />
+                  <span>Giới hạn mua / khách hàng</span>
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <input
@@ -573,10 +591,14 @@ const AdminSaleForm = () => {
                         border: formData.status === st ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
                         backgroundColor: formData.status === st ? '#eff6ff' : '#ffffff',
                         color: formData.status === st ? '#1d4ed8' : '#64748b',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem'
                       }}
                     >
-                      ● {st}
+                      <Icon name="dot" size={8} color={st === 'ACTIVE' ? '#16a34a' : st === 'UPCOMING' ? '#ea580c' : '#94a3b8'} />
+                      <span>{st}</span>
                     </button>
                   ))}
                 </div>
@@ -866,7 +888,7 @@ const AdminSaleForm = () => {
                 boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)'
               }}
             >
-              <span>🚀</span>
+              <Icon name="flash" size={16} />
               <span>Kích hoạt & Lưu chương trình</span>
             </button>
           </div>
@@ -879,8 +901,8 @@ const AdminSaleForm = () => {
         <div style={{ position: 'sticky', top: '85px' }}>
           {/* Preview Header & Device Selector */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.925rem', fontWeight: 800, color: '#0f172a' }}>
-              <span>👁️</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.925rem', fontWeight: 800, color: '#0f172a' }}>
+              <Icon name="eye" size={17} color="#2563eb" />
               <span>Xem trước hiển thị Khách Hàng</span>
             </div>
 
@@ -959,7 +981,10 @@ const AdminSaleForm = () => {
                 <span>09:41</span>
                 {/* Dynamic Island / Notch */}
                 <div style={{ width: '80px', height: '14px', backgroundColor: '#0f172a', borderRadius: '9999px' }} />
-                <span>📶 🔋</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#475569' }}>
+                  <Icon name="device" size={12} />
+                  <span>5G</span>
+                </span>
               </div>
 
               {/* App Bar */}
@@ -974,12 +999,12 @@ const AdminSaleForm = () => {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>
-                  <span>←</span>
+                  <Icon name="arrow-left" size={14} color="#0f172a" />
                   <span>ShopMart Deals</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#64748b', fontSize: '0.85rem' }}>
-                  <span>🔗</span>
-                  <span>🛍️</span>
+                  <Icon name="link" size={14} color="#64748b" />
+                  <Icon name="cart" size={14} color="#64748b" />
                 </div>
               </div>
 
@@ -992,7 +1017,10 @@ const AdminSaleForm = () => {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', fontWeight: 700, opacity: 0.9, textTransform: 'uppercase', marginBottom: '4px' }}>
-                  <span>⚡ GIỜ VÀNG GIÁ SỐC</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Icon name="flash" size={12} />
+                    <span>GIỜ VÀNG GIÁ SỐC</span>
+                  </span>
                   <span>Chỉ 12 giờ duy nhất</span>
                 </div>
 
@@ -1083,7 +1111,7 @@ const AdminSaleForm = () => {
                           gap: '3px'
                         }}
                       >
-                        <span>⚡</span>
+                        <Icon name="flash" size={14} />
                         <span>Mua ngay giá Sale</span>
                       </button>
                     </div>
@@ -1106,7 +1134,9 @@ const AdminSaleForm = () => {
               gap: '0.75rem'
             }}
           >
-            <span style={{ fontSize: '1.25rem', color: '#2563eb' }}>💡</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', marginTop: '2px', flexShrink: 0 }}>
+              <Icon name="info-circle" size={18} color="#2563eb" />
+            </span>
             <div>
               <div style={{ fontSize: '0.825rem', fontWeight: 800, color: '#1e40af', marginBottom: '2px' }}>
                 Mẹo tăng tỷ lệ chốt đơn (Conversion Rate)

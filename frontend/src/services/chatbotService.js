@@ -1,8 +1,19 @@
 import api from './api';
 import productService from './productService';
 import orderService from './orderService';
+import voucherService from './voucherService';
+import { INITIAL_VOUCHERS } from '../mock/mockVouchers';
 import { formatCurrency } from '../utils/formatCurrency';
 import { isAuthenticated } from '../utils/auth';
+import {
+  extractMaxPriceFromText,
+  extractMinPriceFromText,
+  extractCleanSearchKeyword,
+  extractOrderIdFromQuestion,
+  extractComparisonTerms
+} from '../utils/chatbotHelpers';
+
+export { extractMaxPriceFromText, extractMinPriceFromText, extractCleanSearchKeyword };
 
 const GUEST_SESSION_STORAGE_KEY = 'shopmart_guest_chat_session';
 const LOCAL_CONVERSATIONS_KEY = 'shopmart_chat_conversations_fallback';
@@ -65,65 +76,28 @@ const saveLocalConversations = (conversations) => {
   }
 };
 
-const CHAT_STOP_WORDS = new Set([
-  'tôi', 'mình', 'muốn', 'cần', 'tìm', 'mua', 'gợi', 'ý', 'tư', 'vấn',
-  'cho', 'hỏi', 'xem', 'kiểm', 'tra', 'tồn', 'kho', 'còn', 'hàng',
-  'so', 'sánh', 'dưới', 'trên', 'khoảng', 'giá', 'sản', 'phẩm',
-  'triệu', 'tr', 'nghìn', 'k'
-]);
+const normalizeProductCard = (p) => ({
+  ...p,
+  image: p.imageUrl || p.image,
+  productUrl: `/products/${p.id}`
+});
 
-const parsePositiveFloat = (rawToken) => {
-  const num = Number.parseFloat(String(rawToken || '').replace(',', '.'));
-  return Number.isFinite(num) && num > 0 ? num : null;
-};
-
-const extractMaxPriceFromText = (lowerText) => {
-  const tokens = String(lowerText || '')
-    .replaceAll(/[?!;:#]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-  for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i];
-    if (token.endsWith('triệu') || token.endsWith('tr')) {
-      const unitLen = token.endsWith('triệu') ? 5 : 2;
-      const val = parsePositiveFloat(token.slice(0, token.length - unitLen));
-      if (val !== null) return Math.round(val * 1_000_000);
-    }
-    if ((token === 'triệu' || token === 'tr') && i > 0) {
-      const val = parsePositiveFloat(tokens[i - 1]);
-      if (val !== null) return Math.round(val * 1_000_000);
-    }
-  }
-  return undefined;
-};
-
-const extractCleanSearchKeyword = (cleanMsg) =>
-  String(cleanMsg || '')
-    .replaceAll(/[?!.,;:#]/g, ' ')
-    .split(/\s+/)
-    .filter((token) => {
-      if (!token) return false;
-      const lowerToken = token.toLowerCase();
-      if (CHAT_STOP_WORDS.has(lowerToken)) return false;
-      const firstCode = lowerToken.charCodeAt(0);
-      if (firstCode >= 48 && firstCode <= 57) return false;
-      return true;
-    })
-    .join(' ')
-    .trim();
+const getScopeKey = () => (isAuthenticated() ? 'auth-user' : getOrCreateGuestSessionId());
 
 /**
- * Fallback xử lý thông minh qua productService / orderService thực tế khi microservice chatbot-service (8085)
- * tạm thời chưa khởi chạy trong môi trường phát triển cục bộ.
+ * Fallback xử lý thông minh qua productService / orderService / voucherService thực tế
+ * khi microservice chatbot-service (8085) chưa khởi chạy trong môi trường phát triển cục bộ.
  */
-const buildRealServiceFallbackReply = async ({ conversationId, question }) => {
+export const buildRealServiceFallbackReply = async ({ conversationId, question }) => {
   const cleanMsg = String(question ?? '').trim();
   const lower = cleanMsg.toLowerCase();
+  const scopeKey = getScopeKey();
   const conversations = getLocalConversations();
   let conv = conversations.find((c) => c.id === conversationId);
   if (!conv) {
     conv = {
       id: conversationId || `conv-${Date.now()}`,
+      scopeKey,
       title: cleanMsg.slice(0, 55),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -144,68 +118,236 @@ const buildRealServiceFallbackReply = async ({ conversationId, question }) => {
   let referencedOrder = null;
   const toolsUsed = [];
 
-  if (lower.includes('vận chuyển') || lower.includes('giao hàng') || lower.includes('freeship')) {
+  if (
+    /^(?:xin\s+chào|chào(?:\s+bạn|\s+shop|\s+ad)?|hello|hi|hey)\b[!.,\s]*$/i.test(cleanMsg) ||
+    lower.includes('bạn là ai') ||
+    lower.includes('giúp được gì')
+  ) {
+    toolsUsed.push('assistantIntro');
+    answer =
+      'Xin chào! Mình là **Trợ lý Mua sắm AI của ShopMart**.\n' +
+      'Mình có thể hỗ trợ bạn:\n' +
+      '- **Tìm & gợi ý sản phẩm** theo tên hoặc ngân sách (VD: *Gợi ý laptop dưới 30 triệu*, *iPhone 15*)\n' +
+      '- **So sánh sản phẩm** & **kiểm tra tồn kho** thực tế\n' +
+      '- **Xem mã giảm giá**, **chính sách giao hàng / bảo hành** và **tra cứu đơn hàng** của bạn.';
+  } else if (lower.includes('vận chuyển') || lower.includes('giao hàng') || lower.includes('freeship') || lower.includes('phí ship')) {
     toolsUsed.push('getShippingPolicy');
     answer =
-      '🚚 **Chính sách vận chuyển ShopMart:**\n' +
-      '- **Miễn phí vận chuyển (Freeship)** cho đơn hàng tiêu chuẩn toàn quốc.\n' +
+      '**Chính sách vận chuyển ShopMart:**\n' +
+      '- **Miễn phí vận chuyển (Freeship)** cho đơn hàng từ 500.000đ hoặc đơn tiêu chuẩn toàn quốc.\n' +
       '- **Thời gian giao hàng:** Nội thành Hà Nội & TP.HCM từ **1 - 2 ngày**, các tỉnh thành khác **2 - 4 ngày làm việc**.';
   } else if (lower.includes('đổi trả') || lower.includes('bảo hành')) {
     toolsUsed.push('getReturnPolicy', 'getWarrantyPolicy');
     answer =
-      '🛡️ **Chính sách Bảo hành & Đổi trả ShopMart:**\n' +
+      '**Chính sách Bảo hành & Đổi trả ShopMart:**\n' +
       '- **1 đổi 1 trong 30 ngày đầu** nếu có lỗi phần cứng từ nhà sản xuất.\n' +
       '- **Bảo hành chính hãng 12 - 24 tháng** tại trung tâm ủy quyền toàn quốc.';
-  } else if (lower.includes('thanh toán') || lower.includes('cod') || lower.includes('vnpay')) {
+  } else if (lower.includes('thanh toán') || lower.includes('cod') || lower.includes('vnpay') || lower.includes('vietqr') || lower.includes('mã qr')) {
     toolsUsed.push('getPaymentPolicy');
     answer =
-      '💳 **Phương thức thanh toán tại ShopMart:**\n' +
-      '- Hỗ trợ **Thanh toán khi nhận hàng (COD)** và **Chuyển khoản QR / VNPay** xác nhận tự động.';
+      '**Phương thức thanh toán tại ShopMart:**\n' +
+      '- Hỗ trợ **Thanh toán khi nhận hàng (COD)** và **Chuyển khoản VietQR (Online)** xác nhận nhanh ngay trong ứng dụng.';
+  } else if (lower.includes('voucher') || lower.includes('mã giảm') || lower.includes('khuyến mãi') || lower.includes('ưu đãi')) {
+    toolsUsed.push('getPublicVouchers');
+    let vouchers = [];
+    try {
+      vouchers = await voucherService.getPublicVouchers();
+    } catch {
+      vouchers = INITIAL_VOUCHERS.filter((v) => v.status === 'ACTIVE');
+    }
+    const activeVouchers = Array.isArray(vouchers) ? vouchers.slice(0, 4) : [];
+    if (activeVouchers.length > 0) {
+      const lines = activeVouchers.map((v) => {
+        const discountText =
+          v.discountType === 'PERCENT'
+            ? `Giảm ${v.discountValue}%`
+            : `Giảm ${formatCurrency(v.discountValue)}`;
+        const minOrder = v.minOrderValue ?? v.minOrderAmount ?? 0;
+        const minText = minOrder > 0 ? `đơn từ ${formatCurrency(minOrder)}` : 'mọi đơn hàng';
+        return `- Mã \`${v.code}\`: **${discountText}** cho ${minText}`;
+      });
+      answer = `**Mã giảm giá đang áp dụng tại ShopMart:**\n\n${lines.join('\n')}\n\nBạn có thể lưu thêm mã tại trang **Kho Voucher** trước khi thanh toán nhé!`;
+    } else {
+      answer = 'Hiện chưa có mã giảm giá công khai nào khả dụng. Bạn vui lòng kiểm tra lại tại mục **Kho Voucher** nhé!';
+    }
   } else if (lower.includes('đơn hàng') || lower.includes('tra cứu đơn') || lower.includes('kiểm tra đơn') || /#\d+/.test(lower)) {
     if (!isAuthenticated()) {
-      answer = '🔒 Để bảo mật thông tin cá nhân, vui lòng **đăng nhập tài khoản** trước khi tra cứu trạng thái đơn hàng của bạn.';
+      answer = 'Để bảo mật thông tin cá nhân, vui lòng **đăng nhập tài khoản** trước khi tra cứu trạng thái đơn hàng của bạn.';
     } else {
       try {
         toolsUsed.push('getMyOrders');
-        const myOrders = await orderService.getMyOrders();
-        const list = Array.isArray(myOrders) ? myOrders : myOrders?.content || [];
-        if (list.length === 0) {
-          answer = 'Hiện tại tài khoản của bạn chưa có đơn hàng nào trên hệ thống ShopMart.';
+        const requestedOrderId = extractOrderIdFromQuestion(cleanMsg);
+
+        if (requestedOrderId) {
+          let foundOrder = null;
+          try {
+            foundOrder = await orderService.getOrderById(requestedOrderId);
+          } catch {
+            const myOrders = await orderService.getMyOrders();
+            const list = Array.isArray(myOrders) ? myOrders : myOrders?.content || [];
+            foundOrder = list.find((o) => Number(o.id) === requestedOrderId) || null;
+          }
+
+          if (foundOrder) {
+            referencedOrder = foundOrder;
+            answer = `Đơn hàng **#${referencedOrder.id}** của bạn hiện ở trạng thái **${referencedOrder.status}** — Tổng thanh toán: **${formatCurrency(referencedOrder.totalAmount)}**.`;
+          } else {
+            answer = `Không tìm thấy đơn hàng **#${requestedOrderId}** trong tài khoản của bạn. Bạn vui lòng kiểm tra lại mã đơn tại mục **Đơn mua** nhé.`;
+          }
         } else {
-          referencedOrder = list[0];
-          answer =
-            `🧾 Bạn có **${list.length} đơn hàng**. Đơn gần nhất **#${referencedOrder.id}** đang ở trạng thái **${referencedOrder.status}** — Tổng tiền: **${formatCurrency(referencedOrder.totalAmount)}**.`;
+          const myOrders = await orderService.getMyOrders();
+          const list = Array.isArray(myOrders) ? myOrders : myOrders?.content || [];
+          if (list.length === 0) {
+            answer = 'Hiện tại tài khoản của bạn chưa có đơn hàng nào trên hệ thống ShopMart.';
+          } else {
+            referencedOrder = list[0];
+            answer = `Bạn hiện có **${list.length} đơn hàng**. Đơn gần nhất **#${referencedOrder.id}** đang ở trạng thái **${referencedOrder.status}** — Tổng tiền: **${formatCurrency(referencedOrder.totalAmount)}**.`;
+          }
         }
       } catch {
         answer = 'Dịch vụ tra cứu đơn hàng tạm thời bận. Bạn có thể xem trực tiếp tại mục **Đơn mua** trên thanh menu.';
       }
     }
+  } else if (lower.includes('so sánh')) {
+    try {
+      toolsUsed.push('compareProducts');
+      const parts = extractComparisonTerms(cleanMsg);
+
+      const responses = await Promise.all(
+        parts.map((term) =>
+          productService.getCatalog({
+            keyword: term || undefined,
+            page: 0,
+            size: 2,
+            allowMockFallback: true
+          })
+        )
+      );
+
+      const mergedMap = new Map();
+      responses.forEach((res) => {
+        const items = res?.content || (Array.isArray(res) ? res : []);
+        items.forEach((item) => {
+          if (item?.id !== undefined && !mergedMap.has(item.id)) {
+            mergedMap.set(item.id, normalizeProductCard(item));
+          }
+        });
+      });
+
+      products = Array.from(mergedMap.values()).slice(0, 4);
+      if (products.length > 0) {
+        const lines = products.map((p) => {
+          const rating = p.averageRating ? ` • Đánh giá ${Number(p.averageRating).toFixed(1)}/5` : '';
+          const stockText = (p.stockQuantity ?? 0) > 0 ? `Còn ${p.stockQuantity} SP` : 'Hết hàng';
+          return `- **${p.name}**: **${formatCurrency(p.price)}** (${stockText}${rating})`;
+        });
+        answer = `**So sánh nhanh ${products.length} sản phẩm trên ShopMart:**\n\n${lines.join('\n')}\n\nBạn có thể nhấn vào từng thẻ bên dưới để xem thông số chi tiết nhé.`;
+      } else {
+        answer = 'Chưa tìm thấy đủ sản phẩm khớp với tên bạn cần so sánh. Bạn vui lòng nêu rõ tên 2 mẫu sản phẩm nhé!';
+      }
+    } catch {
+      answer = 'Xin lỗi, dịch vụ so sánh sản phẩm tạm thời gián đoạn. Vui lòng thử lại sau giây lát.';
+    }
+  } else if (lower.includes('tồn kho') || lower.includes('còn hàng') || lower.includes('còn không') || lower.includes('số lượng')) {
+    try {
+      toolsUsed.push('checkStock');
+      const kw = extractCleanSearchKeyword(cleanMsg);
+      const res = await productService.getCatalog({
+        keyword: kw.length >= 2 ? kw : undefined,
+        page: 0,
+        size: 4,
+        allowMockFallback: true
+      });
+      const items = res?.content || (Array.isArray(res) ? res : []);
+      products = items.slice(0, 4).map(normalizeProductCard);
+
+      if (products.length === 1 && typeof productService.checkStock === 'function') {
+        try {
+          const stockInfo = await productService.checkStock(products[0].id, 1);
+          if (stockInfo && stockInfo.stockQuantity !== undefined) {
+            products[0] = { ...products[0], stockQuantity: stockInfo.stockQuantity };
+          }
+        } catch {
+          // Giữ số tồn kho từ catalog nếu endpoint check-stock chưa sẵn sàng
+        }
+      }
+
+      if (products.length > 0) {
+        const lines = products.map((p) => {
+          const qty = p.stockQuantity ?? 0;
+          return `- **${p.name}** (${formatCurrency(p.price)}): ${qty > 0 ? `**Còn ${qty} sản phẩm** sẵn sàng giao` : '**Tạm hết hàng**'}`;
+        });
+        answer = `**Kết quả kiểm tra tồn kho:**\n\n${lines.join('\n')}`;
+      } else {
+        answer = 'Không tìm thấy sản phẩm khớp để kiểm tra tồn kho. Bạn vui lòng nhập tên cụ thể hơn nhé!';
+      }
+    } catch {
+      answer = 'Xin lỗi, dịch vụ kiểm tra tồn kho đang tạm thời gián đoạn. Vui lòng thử lại sau giây lát.';
+    }
   } else {
     try {
       toolsUsed.push('searchProducts');
       const maxPrice = extractMaxPriceFromText(lower);
+      const minPrice = extractMinPriceFromText(lower);
       const kw = extractCleanSearchKeyword(cleanMsg);
+      const sort = lower.includes('rẻ nhất')
+        ? 'price,asc'
+        : lower.includes('đắt nhất') || lower.includes('cao cấp')
+          ? 'price,desc'
+          : undefined;
 
-      const res = await productService.getProducts({
-        search: kw.length >= 2 ? kw : undefined,
+      let res = await productService.getCatalog({
+        keyword: kw.length >= 2 ? kw : undefined,
+        minPrice,
         maxPrice,
+        inStock: true,
+        sort,
         page: 0,
-        size: 4
+        size: 4,
+        allowMockFallback: true
       });
-      const items = res?.content || (Array.isArray(res) ? res : []);
-      products = items.slice(0, 4).map((p) => ({
-        ...p,
-        image: p.imageUrl || p.image,
-        productUrl: `/products/${p.id}`
-      }));
+      let items = res?.content || (Array.isArray(res) ? res : []);
+
+      // Mở rộng sang sản phẩm tạm hết hàng nếu lọc còn hàng chưa có kết quả
+      if (items.length === 0 && kw.length >= 2) {
+        res = await productService.getCatalog({
+          keyword: kw,
+          minPrice,
+          maxPrice,
+          sort,
+          page: 0,
+          size: 4,
+          allowMockFallback: true
+        });
+        items = res?.content || (Array.isArray(res) ? res : []);
+      }
+
+      // Thử lại với từ khóa chính đầu tiên nếu cụm từ khóa dài không khớp hoàn toàn
+      if (items.length === 0 && kw.includes(' ')) {
+        const firstToken = kw.split(/\s+/)[0];
+        if (firstToken.length >= 2) {
+          res = await productService.getCatalog({
+            keyword: firstToken,
+            minPrice,
+            maxPrice,
+            sort,
+            page: 0,
+            size: 4,
+            allowMockFallback: true
+          });
+          items = res?.content || (Array.isArray(res) ? res : []);
+        }
+      }
+
+      products = items.slice(0, 4).map(normalizeProductCard);
 
       if (products.length > 0) {
         const lines = products.map(
           (p) => `- **${p.name}** — Giá: **${formatCurrency(p.price)}** (${(p.stockQuantity ?? 0) > 0 ? `Còn ${p.stockQuantity} SP` : 'Hết hàng'})`
         );
-        answer = `🛍️ Mình tìm thấy **${products.length} sản phẩm chính hãng** phù hợp trên ShopMart:\n\n${lines.join('\n')}\n\nBạn có thể nhấn vào thẻ sản phẩm bên dưới để xem chi tiết nhé!`;
+        answer = `Mình tìm thấy **${products.length} sản phẩm chính hãng** phù hợp trên ShopMart:\n\n${lines.join('\n')}\n\nBạn có thể nhấn vào thẻ sản phẩm bên dưới để xem chi tiết nhé!`;
       } else {
-        answer = 'Hiện chưa tìm thấy sản phẩm khớp hoàn toàn với từ khóa của bạn. Bạn thử tìm theo tên danh mục như *Laptop, Điện thoại, Tai nghe, Màn hình* nhé!';
+        answer = 'Hiện chưa tìm thấy sản phẩm khớp hoàn toàn với tiêu chí của bạn. Bạn thử mở rộng ngân sách hoặc tìm theo danh mục như *Laptop, Điện thoại, Tai nghe, Màn hình* nhé!';
       }
     } catch {
       answer = 'Xin lỗi, dịch vụ tra cứu sản phẩm đang tạm thời gián đoạn. Vui lòng thử lại sau giây lát.';
@@ -250,11 +392,13 @@ const chatbotService = {
     }
 
     const guestSessionId = getOrCreateGuestSessionId();
+    const isLocalFallbackConv =
+      typeof conversationId === 'string' && conversationId.startsWith('conv-');
     try {
       const response = await api.post(
         '/chatbot/chat',
         {
-          conversationId: conversationId || null,
+          conversationId: isLocalFallbackConv ? null : conversationId || null,
           question: cleanQuestion,
           message: cleanQuestion
         },
@@ -320,6 +464,7 @@ const chatbotService = {
    */
   getConversations: async () => {
     const guestSessionId = getOrCreateGuestSessionId();
+    const scopeKey = getScopeKey();
     try {
       const response = await api.get('/chatbot/conversations', {
         headers: {
@@ -329,13 +474,15 @@ const chatbotService = {
       const list = response?.data || response;
       return Array.isArray(list) ? list : [];
     } catch {
-      return getLocalConversations().map((c) => ({
-        id: c.id,
-        title: c.title,
-        lastMessagePreview: c.messages?.[c.messages.length - 1]?.content || c.title,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt
-      }));
+      return getLocalConversations()
+        .filter((c) => !c.scopeKey || c.scopeKey === scopeKey)
+        .map((c) => ({
+          id: c.id,
+          title: c.title,
+          lastMessagePreview: c.messages?.[c.messages.length - 1]?.content || c.title,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt
+        }));
     }
   },
 
@@ -344,6 +491,9 @@ const chatbotService = {
    */
   getConversationMessages: async (conversationId) => {
     if (!conversationId) return null;
+    if (String(conversationId).startsWith('conv-')) {
+      return getLocalConversations().find((c) => c.id === conversationId) || null;
+    }
     const guestSessionId = getOrCreateGuestSessionId();
     try {
       const response = await api.get(`/chatbot/conversations/${encodeURIComponent(conversationId)}`, {
@@ -363,15 +513,17 @@ const chatbotService = {
    */
   deleteConversation: async (conversationId) => {
     if (!conversationId) return;
-    const guestSessionId = getOrCreateGuestSessionId();
-    try {
-      await api.delete(`/chatbot/conversations/${encodeURIComponent(conversationId)}`, {
-        headers: {
-          'X-Guest-Session-Id': guestSessionId
-        }
-      });
-    } catch {
-      // Remove from local fallback storage as well
+    if (!String(conversationId).startsWith('conv-')) {
+      const guestSessionId = getOrCreateGuestSessionId();
+      try {
+        await api.delete(`/chatbot/conversations/${encodeURIComponent(conversationId)}`, {
+          headers: {
+            'X-Guest-Session-Id': guestSessionId
+          }
+        });
+      } catch {
+        // Remove from local fallback storage as well
+      }
     }
     const remaining = getLocalConversations().filter((c) => c.id !== conversationId);
     saveLocalConversations(remaining);

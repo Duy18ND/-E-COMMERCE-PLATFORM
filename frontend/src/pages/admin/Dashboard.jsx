@@ -6,6 +6,7 @@ import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Button from '../../components/common/Button';
 import OrderStatus from '../../components/order/OrderStatus';
+import Icon from '../../components/common/Icons';
 
 const STATUS_META = [
   {
@@ -237,7 +238,7 @@ const Dashboard = () => {
       title: 'Tổng doanh thu',
       value: formatCurrency(totalRevenue),
       sub: 'Đơn PAID, CONFIRMED, PROCESSING, SHIPPING, DELIVERED',
-      icon: '💰',
+      icon: 'wallet',
       color: '#2563eb',
       bg: '#eff6ff'
     },
@@ -245,7 +246,7 @@ const Dashboard = () => {
       title: 'Tổng đơn hàng',
       value: totalOrders.toLocaleString('vi-VN'),
       sub: 'Toàn bộ đơn hàng ghi nhận trên hệ thống',
-      icon: '📦',
+      icon: 'package',
       color: '#0f172a',
       bg: '#f1f5f9'
     },
@@ -253,7 +254,7 @@ const Dashboard = () => {
       title: 'Đơn giao thành công',
       value: completedOrders.toLocaleString('vi-VN'),
       sub: `Trạng thái DELIVERED (${totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : '0.0'}%)`,
-      icon: '✅',
+      icon: 'check-circle',
       color: '#16a34a',
       bg: '#dcfce7'
     },
@@ -261,7 +262,7 @@ const Dashboard = () => {
       title: 'Đơn đang xử lý',
       value: processingOrders.toLocaleString('vi-VN'),
       sub: 'PAID • CONFIRMED • PROCESSING • SHIPPING',
-      icon: '🚚',
+      icon: 'shipping',
       color: '#0284c7',
       bg: '#e0f2fe'
     },
@@ -269,7 +270,7 @@ const Dashboard = () => {
       title: 'Đơn chờ xử lý',
       value: pendingOrders.toLocaleString('vi-VN'),
       sub: `Trạng thái PENDING (${totalOrders > 0 ? ((pendingOrders / totalOrders) * 100).toFixed(1) : '0.0'}%)`,
-      icon: '⏳',
+      icon: 'pending',
       color: '#d97706',
       bg: '#fef3c7'
     },
@@ -277,7 +278,7 @@ const Dashboard = () => {
       title: 'Đơn đã hủy',
       value: cancelledOrders.toLocaleString('vi-VN'),
       sub: `Trạng thái CANCELLED (${totalOrders > 0 ? ((cancelledOrders / totalOrders) * 100).toFixed(1) : '0.0'}%)`,
-      icon: '❌',
+      icon: 'x-circle',
       color: '#dc2626',
       bg: '#fee2e2'
     },
@@ -285,7 +286,7 @@ const Dashboard = () => {
       title: 'Tổng khách hàng',
       value: totalUsers.toLocaleString('vi-VN'),
       sub: 'Tài khoản khách hàng đã đăng ký',
-      icon: '👥',
+      icon: 'users',
       color: '#7c3aed',
       bg: '#ede9fe'
     },
@@ -293,7 +294,7 @@ const Dashboard = () => {
       title: 'Sản phẩm sắp hết hàng',
       value: lowStockProductsCount.toLocaleString('vi-VN'),
       sub: 'Cảnh báo tồn kho thấp từ Product Service',
-      icon: '⚠️',
+      icon: 'warning',
       color: lowStockProductsCount > 0 ? '#ea580c' : '#64748b',
       bg: lowStockProductsCount > 0 ? '#ffedd5' : '#f1f5f9'
     }
@@ -486,7 +487,7 @@ const Dashboard = () => {
             gap: '0.4rem'
           }}
         >
-          <span>🔄</span>
+          <Icon name="refresh" size={15} spin={loading} />
           <span>{loading ? 'Đang đồng bộ...' : 'Làm mới số liệu'}</span>
         </button>
       </div>
@@ -506,8 +507,9 @@ const Dashboard = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginRight: '0.25rem' }}>
-            📅 Kỳ thống kê:
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginRight: '0.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+            <Icon name="calendar" size={15} color="#2563eb" />
+            <span>Kỳ thống kê:</span>
           </span>
           {[
             { id: 'ALL', label: 'Tất cả thời gian' },
@@ -586,10 +588,14 @@ const Dashboard = () => {
                 fontSize: '0.8rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                padding: '0 0.25rem'
+                padding: '0 0.25rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem'
               }}
             >
-              ✕ Xóa lọc ngày
+              <Icon name="x" size={14} />
+              <span>Xóa lọc ngày</span>
             </button>
           )}
         </div>
@@ -618,15 +624,17 @@ const Dashboard = () => {
             color: '#64748b'
           }}
         >
-          <div style={{ fontSize: '2.75rem', marginBottom: '0.5rem' }}>⚠️</div>
+          <div style={{ width: '60px', height: '60px', borderRadius: '9999px', backgroundColor: '#fef2f2', color: '#dc2626', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+            <Icon name="warning" size={28} />
+          </div>
           <h3 style={{ margin: '0 0 0.4rem', color: '#0f172a', fontWeight: 700 }}>
             Không thể tải dữ liệu Dashboard
           </h3>
           <p style={{ fontSize: '0.88rem', color: '#dc2626', margin: '0 0 1.25rem' }}>
             {error}
           </p>
-          <Button variant="primary" size="sm" onClick={fetchDashboardData}>
-            🔄 Thử lại ngay
+          <Button variant="primary" size="sm" icon="refresh" onClick={fetchDashboardData}>
+            Thử lại ngay
           </Button>
         </div>
       ) : (
@@ -644,7 +652,7 @@ const Dashboard = () => {
             {kpiCards.map((card) => (
               <div
                 key={card.title}
-                className="card"
+                className="card ui-kpi-card"
                 style={{
                   padding: '1.15rem 1.2rem',
                   display: 'flex',
@@ -665,11 +673,10 @@ const Dashboard = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '1.45rem',
                     flexShrink: 0
                   }}
                 >
-                  {card.icon}
+                  <Icon name={card.icon} size={22} />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
@@ -682,7 +689,8 @@ const Dashboard = () => {
                       color: card.color,
                       lineHeight: 1.25,
                       marginTop: '2px',
-                      wordBreak: 'break-word'
+                      wordBreak: 'break-word',
+                      fontVariantNumeric: 'tabular-nums'
                     }}
                   >
                     {card.value}
@@ -718,8 +726,9 @@ const Dashboard = () => {
                 }}
               >
                 <div>
-                  <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                    📈 Biểu đồ Doanh thu & Cơ cấu Ghi nhận
+                  <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Icon name="trend" size={18} color="#2563eb" />
+                    <span>Biểu đồ Doanh thu & Cơ cấu Ghi nhận</span>
                   </h2>
                   <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
                     Dữ liệu thật từ GET /api/v1/admin/statistics (chỉ tính đơn đã thanh toán & hợp lệ)
@@ -839,7 +848,9 @@ const Dashboard = () => {
                     color: '#64748b'
                   }}
                 >
-                  <div style={{ fontSize: '1.75rem', marginBottom: '0.35rem' }}>📊</div>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '9999px', backgroundColor: '#eff6ff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                    <Icon name="chart" size={22} />
+                  </div>
                   <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
                     Chưa có dữ liệu doanh thu theo từng ngày trong kỳ lọc này
                   </div>
@@ -945,8 +956,9 @@ const Dashboard = () => {
             {/* 4B. BIỂU ĐỒ PHÂN BỔ ĐƠN HÀNG THEO TRẠNG THÁI (DONUT + LEGEND 9 TRẠNG THÁI) */}
             <div className="card" style={{ borderRadius: '14px', padding: '1.25rem', minWidth: 0 }}>
               <div style={{ marginBottom: '1rem' }}>
-                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                  🎯 Biểu đồ Phân bổ Đơn hàng theo Trạng thái
+                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <Icon name="dashboard" size={18} color="#2563eb" />
+                  <span>Biểu đồ Phân bổ Đơn hàng theo Trạng thái</span>
                 </h2>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
                   Số liệu, chú thích màu sắc và tỷ lệ phần trăm của toàn bộ 9 trạng thái từ Backend
@@ -964,7 +976,9 @@ const Dashboard = () => {
                     color: '#64748b'
                   }}
                 >
-                  <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>📭</div>
+                  <div style={{ width: '52px', height: '52px', borderRadius: '9999px', backgroundColor: '#e2e8f0', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                    <Icon name="empty-box" size={24} />
+                  </div>
                   <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>
                     Chưa có đơn hàng nào trong khoảng thời gian này
                   </div>
@@ -1141,8 +1155,9 @@ const Dashboard = () => {
             {/* 5A. BẢNG THỐNG KÊ ĐƠN HÀNG THEO 9 TRẠNG THÁI BACKEND */}
             <div className="card" style={{ borderRadius: '14px', padding: 0, overflow: 'hidden', minWidth: 0 }}>
               <div style={{ padding: '1.15rem 1.25rem', borderBottom: '1px solid #e2e8f0' }}>
-                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                  📋 Bảng Thống kê Đơn hàng theo Trạng thái (ordersByStatus)
+                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <Icon name="clipboard" size={18} color="#2563eb" />
+                  <span>Bảng Thống kê Đơn hàng theo Trạng thái (ordersByStatus)</span>
                 </h2>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
                   Đối chiếu chính xác 9 trạng thái chuẩn của Backend OrderStatus
@@ -1191,10 +1206,14 @@ const Dashboard = () => {
                                 backgroundColor: '#dcfce7',
                                 padding: '0.18rem 0.5rem',
                                 borderRadius: '9999px',
-                                whiteSpace: 'nowrap'
+                                whiteSpace: 'nowrap',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
                               }}
                             >
-                              ✓ Tính doanh thu
+                              <Icon name="check" size={12} strokeWidth={2.5} />
+                              <span>Tính doanh thu</span>
                             </span>
                           ) : (
                             <span
@@ -1216,7 +1235,8 @@ const Dashboard = () => {
                           style={{
                             textAlign: 'right',
                             fontWeight: 800,
-                            color: row.count > 0 ? '#0f172a' : '#94a3b8'
+                            color: row.count > 0 ? '#0f172a' : '#94a3b8',
+                            fontVariantNumeric: 'tabular-nums'
                           }}
                         >
                           {row.count.toLocaleString('vi-VN')}
@@ -1226,7 +1246,8 @@ const Dashboard = () => {
                             textAlign: 'right',
                             fontSize: '0.84rem',
                             fontWeight: 700,
-                            color: row.color
+                            color: row.color,
+                            fontVariantNumeric: 'tabular-nums'
                           }}
                         >
                           {row.percentage}%
@@ -1238,10 +1259,15 @@ const Dashboard = () => {
                               fontSize: '0.78rem',
                               fontWeight: 600,
                               color: '#2563eb',
-                              whiteSpace: 'nowrap'
+                              whiteSpace: 'nowrap',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                              textDecoration: 'none'
                             }}
                           >
-                            Xem đơn →
+                            <span>Xem đơn</span>
+                            <Icon name="arrow-right" size={13} />
                           </Link>
                         </td>
                       </tr>
@@ -1255,8 +1281,9 @@ const Dashboard = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
               {/* Tổng quan vận hành */}
               <div className="card" style={{ borderRadius: '14px', padding: '1.25rem' }}>
-                <h2 style={{ margin: '0 0 0.85rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                  ⚡ Tổng quan Hoạt động Hệ thống
+                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <Icon name="flash" size={18} color="#2563eb" />
+                  <span>Tổng quan Hoạt động Hệ thống</span>
                 </h2>
 
                 <div
@@ -1342,10 +1369,15 @@ const Dashboard = () => {
                       color: '#2563eb',
                       borderRadius: '8px',
                       fontSize: '0.82rem',
-                      fontWeight: 700
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      textDecoration: 'none'
                     }}
                   >
-                    📑 Quản lý đơn hàng ({pendingOrders} chờ duyệt)
+                    <Icon name="clipboard" size={14} />
+                    <span>Quản lý đơn hàng ({pendingOrders} chờ duyệt)</span>
                   </Link>
                   <Link
                     to="/admin/users"
@@ -1355,10 +1387,15 @@ const Dashboard = () => {
                       color: '#6d28d9',
                       borderRadius: '8px',
                       fontSize: '0.82rem',
-                      fontWeight: 700
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      textDecoration: 'none'
                     }}
                   >
-                    👥 Quản lý khách hàng ({totalUsers})
+                    <Icon name="users" size={14} />
+                    <span>Quản lý khách hàng ({totalUsers})</span>
                   </Link>
                   <Link
                     to="/admin/inventory"
@@ -1368,10 +1405,15 @@ const Dashboard = () => {
                       color: '#dc2626',
                       borderRadius: '8px',
                       fontSize: '0.82rem',
-                      fontWeight: 700
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      textDecoration: 'none'
                     }}
                   >
-                    ⚠️ Kiểm tra tồn kho ({lowStockProductsCount} cảnh báo)
+                    <Icon name="warning" size={14} />
+                    <span>Kiểm tra tồn kho ({lowStockProductsCount} cảnh báo)</span>
                   </Link>
                   <Link
                     to="/admin/products/new"
@@ -1381,10 +1423,15 @@ const Dashboard = () => {
                       color: '#166534',
                       borderRadius: '8px',
                       fontSize: '0.82rem',
-                      fontWeight: 700
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      textDecoration: 'none'
                     }}
                   >
-                    ➕ Thêm sản phẩm mới
+                    <Icon name="box-plus" size={14} />
+                    <span>Thêm sản phẩm mới</span>
                   </Link>
                 </div>
               </div>
@@ -1399,14 +1446,16 @@ const Dashboard = () => {
                     marginBottom: '0.85rem'
                   }}
                 >
-                  <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
-                    🕒 Đơn hàng mới nhất từ hệ thống
+                  <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Icon name="clock" size={16} color="#2563eb" />
+                    <span>Đơn hàng mới nhất từ hệ thống</span>
                   </h3>
                   <Link
                     to="/admin/orders"
-                    style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}
+                    style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', textDecoration: 'none' }}
                   >
-                    Xem tất cả →
+                    <span>Xem tất cả</span>
+                    <Icon name="arrow-right" size={13} />
                   </Link>
                 </div>
 

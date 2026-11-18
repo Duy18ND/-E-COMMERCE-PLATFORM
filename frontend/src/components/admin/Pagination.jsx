@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import Icon from '../common/Icons';
 
 /**
  * Reusable Admin Pagination Component
@@ -186,7 +187,8 @@ const Pagination = ({
           }}
           title="Trang trước"
         >
-          <span>←</span> Trước
+          <Icon name="chevron-left" size={14} />
+          <span>Trước</span>
         </button>
 
         {/* Desktop: Danh sách các nút số trang */}
@@ -291,7 +293,8 @@ const Pagination = ({
           }}
           title="Trang sau"
         >
-          Sau <span>→</span>
+          <span>Sau</span>
+          <Icon name="chevron-right" size={14} />
         </button>
       </div>
     </div>

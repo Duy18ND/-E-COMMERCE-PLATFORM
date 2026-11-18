@@ -83,6 +83,8 @@ public class ChatServiceImpl implements ChatService {
     private static final Pattern ORDER_ID_PATTERN = Pattern.compile("(?i)(?:đơn\\s{1,3}(?:hàng\\s{0,3})?(?:số\\s{0,3}|mã\\s{0,3}|#\\s{0,3})?|#)(\\d{1,10})");
     private static final Pattern PRODUCT_ID_PATTERN = Pattern.compile("(?i)(?:sản\\s{1,3}phẩm\\s{0,3}(?:số\\s{0,3}|mã\\s{0,3}|id\\s{0,3}|#\\s{0,3})?|sp\\s{0,3}#?)(\\d{1,10})");
     private static final Pattern MILLION_PRICE_PATTERN = Pattern.compile("(?i)(\\d{1,4}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b)");
+    private static final Pattern SEARCH_PRICE_UNIT_PATTERN = Pattern.compile("(?iuU)(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b|nghìn|k\\b|đồng|vnđ|vnd)");
+    private static final Pattern SEARCH_STOPWORDS_PATTERN = Pattern.compile("(?iuU)\\b(?:tôi|mình|muốn|cần|tìm|kiếm|mua|gợi ý|tư vấn|cho|hỏi|xem|kiểm tra|tồn kho|còn hàng|không|shop|ơi|sản phẩm|so sánh|giúp|với|dưới|trên|từ|khoảng|tầm|tối đa|giá|rẻ nhất|tốt nhất|chính hãng|có|nào)\\b");
 
     @Override
     @Transactional
@@ -549,7 +551,7 @@ public class ChatServiceImpl implements ChatService {
         StringBuilder sb = new StringBuilder("🎟️ **Danh sách Mã giảm giá (Voucher) đang có hiệu lực trên ShopMart:**\n\n");
         for (VoucherDto v : vouchers.stream().limit(5).toList()) {
             sb.append("- Mã **`").append(v.getCode()).append("`**: ");
-            if ("PERCENTAGE".equalsIgnoreCase(v.getDiscountType())) {
+            if ("PERCENTAGE".equalsIgnoreCase(v.getDiscountType()) || "PERCENT".equalsIgnoreCase(v.getDiscountType())) {
                 sb.append("Giảm **").append(v.getDiscountValue().stripTrailingZeros().toPlainString()).append("%**");
                 if (v.getMaxDiscountAmount() != null) {
                     sb.append(" (tối đa ").append(formatVnd(v.getMaxDiscountAmount())).append(")");
@@ -589,7 +591,10 @@ public class ChatServiceImpl implements ChatService {
                 6
         );
 
-        // Broaden search if strict keyword yielded empty but category/brand token exists
+        // Include out-of-stock matches if in-stock filter returns empty, then broaden multi-word keywords
+        if (products.isEmpty() && StringUtils.hasText(keyword)) {
+            products = productTools.searchProducts(keyword, null, minPrice, maxPrice, null, sort, 6);
+        }
         if (products.isEmpty() && StringUtils.hasText(keyword) && keyword.contains(" ")) {
             String firstToken = keyword.split("\\s+")[0];
             products = productTools.searchProducts(firstToken, null, minPrice, maxPrice, null, sort, 6);
@@ -860,9 +865,8 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private String cleanSearchKeyword(String raw) {
-        String cleaned = raw
-                .replaceAll("(?i)(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b|nghìn|k\\b|đồng|vnđ|vnd)", " ")
-                .replaceAll("(?i)\\b(tôi|mình|muốn|cần|tìm|kiếm|mua|gợi ý|tư vấn|cho|hỏi|xem|kiểm tra|tồn kho|còn hàng|không|shop|ơi|sản phẩm|so sánh|giúp|với|dưới|trên|khoảng|tầm|tối đa|giá|rẻ nhất|tốt nhất|chính hãng|có|nào)\\b", " ")
+        String normalized = SEARCH_PRICE_UNIT_PATTERN.matcher(raw).replaceAll(" ");
+        String cleaned = SEARCH_STOPWORDS_PATTERN.matcher(normalized).replaceAll(" ")
                 .replaceAll("[?!.,;:\"'()\\[\\]#]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();

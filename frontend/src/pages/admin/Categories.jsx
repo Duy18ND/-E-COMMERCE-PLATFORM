@@ -6,6 +6,7 @@ import Input from '../../components/common/Input';
 import Modal from '../../components/common/Modal';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/admin/Pagination';
+import Icon from '../../components/common/Icons';
 
 const Categories = () => {
   const { showToast } = useToast();
@@ -445,10 +446,12 @@ const Categories = () => {
               gap: '0.4rem'
             }}
           >
-            <span>🔄</span> {loading ? 'Đang tải...' : 'Làm mới dữ liệu'}
+            <Icon name="refresh" size={16} spin={loading} />
+            <span>{loading ? 'Đang tải...' : 'Làm mới dữ liệu'}</span>
           </Button>
           <Button
             variant="primary"
+            icon="plus"
             onClick={handleOpenAddModal}
             style={{
               padding: '0.65rem 1.35rem',
@@ -459,7 +462,7 @@ const Categories = () => {
               gap: '0.5rem'
             }}
           >
-            <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> Thêm danh mục
+            Thêm danh mục
           </Button>
         </div>
       </div>
@@ -473,6 +476,7 @@ const Categories = () => {
 
       {/* 2. THỐNG KÊ (STATS CARDS) */}
       <div
+        className="ui-stagger"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -482,7 +486,7 @@ const Categories = () => {
       >
         {/* Thẻ 1: Tổng danh mục */}
         <div
-          className="card"
+          className="card ui-kpi-card"
           style={{
             padding: '1.25rem',
             backgroundColor: '#ffffff',
@@ -503,11 +507,10 @@ const Categories = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.5rem',
               flexShrink: 0
             }}
           >
-            🏷️
+            <Icon name="tag" size={22} />
           </div>
           <div>
             <span style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: 600 }}>Tổng danh mục</span>
@@ -519,7 +522,7 @@ const Categories = () => {
 
         {/* Thẻ 2: Đang hoạt động */}
         <div
-          className="card"
+          className="card ui-kpi-card"
           style={{
             padding: '1.25rem',
             backgroundColor: '#ffffff',
@@ -541,11 +544,10 @@ const Categories = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.4rem',
               flexShrink: 0
             }}
           >
-            ✓
+            <Icon name="check-circle" size={22} />
           </div>
           <div>
             <span style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: 600 }}>Đang hoạt động</span>
@@ -557,7 +559,7 @@ const Categories = () => {
 
         {/* Thẻ 3: Đang ẩn */}
         <div
-          className="card"
+          className="card ui-kpi-card"
           style={{
             padding: '1.25rem',
             backgroundColor: '#ffffff',
@@ -579,11 +581,10 @@ const Categories = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.4rem',
               flexShrink: 0
             }}
           >
-            👁️‍🗨️
+            <Icon name="eye-off" size={22} />
           </div>
           <div>
             <span style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: 600 }}>Đang ẩn</span>
@@ -595,7 +596,7 @@ const Categories = () => {
 
         {/* Thẻ 4: Tổng số sản phẩm */}
         <div
-          className="card"
+          className="card ui-kpi-card"
           style={{
             padding: '1.25rem',
             backgroundColor: '#ffffff',
@@ -617,11 +618,10 @@ const Categories = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.4rem',
               flexShrink: 0
             }}
           >
-            📦
+            <Icon name="package" size={22} />
           </div>
           <div>
             <span style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: 600 }}>Tổng sản phẩm</span>
@@ -654,10 +654,11 @@ const Categories = () => {
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: '#94a3b8',
-                fontSize: '0.95rem'
+                display: 'inline-flex',
+                pointerEvents: 'none'
               }}
             >
-              🔍
+              <Icon name="search" size={16} />
             </span>
             <input
               type="text"
@@ -687,14 +688,15 @@ const Categories = () => {
                   background: 'none',
                   border: 'none',
                   color: '#94a3b8',
-                  fontSize: '1rem',
                   cursor: 'pointer',
                   padding: '2px 6px',
-                  borderRadius: '50%'
+                  borderRadius: '50%',
+                  display: 'inline-flex',
+                  alignItems: 'center'
                 }}
                 title="Xóa tìm kiếm"
               >
-                ✕
+                <Icon name="close" size={14} />
               </button>
             )}
           </div>
@@ -714,8 +716,8 @@ const Categories = () => {
             }}
           >
             <option value="ALL">Tất cả trạng thái</option>
-            <option value="ACTIVE">🟢 Đang hoạt động</option>
-            <option value="INACTIVE">⚪ Đang ẩn</option>
+            <option value="ACTIVE">Đang hoạt động</option>
+            <option value="INACTIVE">Đang ẩn</option>
           </select>
 
           {/* Filter Số lượng sản phẩm */}
@@ -792,7 +794,8 @@ const Categories = () => {
                 gap: '0.35rem'
               }}
             >
-              <span>🔄</span> Đặt lại bộ lọc
+              <Icon name="refresh" size={14} />
+              <span>Đặt lại bộ lọc</span>
             </button>
           )}
         </div>
@@ -817,12 +820,11 @@ const Categories = () => {
             {[1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
+                className="ui-skeleton"
                 style={{
                   height: '52px',
-                  backgroundColor: '#f1f5f9',
                   borderRadius: '8px',
-                  marginBottom: '0.65rem',
-                  animation: 'pulse 1.5s infinite ease-in-out'
+                  marginBottom: '0.65rem'
                 }}
               />
             ))}
@@ -833,43 +835,49 @@ const Categories = () => {
             data-testid="categories-error-state"
             style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#dc2626' }}
           >
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+            <div style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#fef2f2', color: '#dc2626', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="warning" size={28} />
+            </div>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#991b1b', margin: '0 0 0.5rem' }}>
               Không thể tải danh sách danh mục từ máy chủ
             </h3>
             <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 1.25rem' }}>
               {error}
             </p>
-            <Button variant="primary" onClick={loadCategories}>
-              🔄 Thử lại kết nối
+            <Button variant="primary" icon="refresh" onClick={loadCategories}>
+              Thử lại kết nối
             </Button>
           </div>
         ) : categories.length === 0 ? (
           /* EMPTY STATE 1: CHƯA CÓ DANH MỤC NÀO */
           <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>📁</div>
+            <div style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: '#eff6ff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+              <Icon name="layers" size={30} />
+            </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem' }}>
               Chưa có danh mục nào
             </h3>
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
               Bắt đầu tạo danh mục đầu tiên để tổ chức và phân loại các sản phẩm trong gian hàng.
             </p>
-            <Button variant="primary" onClick={handleOpenAddModal}>
-              + Thêm danh mục mới
+            <Button variant="primary" icon="plus" onClick={handleOpenAddModal}>
+              Thêm danh mục mới
             </Button>
           </div>
         ) : filteredCategories.length === 0 ? (
           /* EMPTY STATE 2: TÌM KIẾM / LỌC KHÔNG CÓ KẾT QUẢ */
           <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🏷️</div>
+            <div style={{ width: '60px', height: '60px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
+              <Icon name="tag" size={28} />
+            </div>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem' }}>
               Không tìm thấy danh mục phù hợp
             </h3>
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
               Thử thay đổi từ khóa tìm kiếm hoặc các tiêu chí bộ lọc.
             </p>
-            <Button variant="secondary" size="sm" onClick={handleResetFilter}>
-              🔄 Xóa bộ lọc & Hiển thị tất cả
+            <Button variant="secondary" size="sm" icon="refresh" onClick={handleResetFilter}>
+              Xóa bộ lọc &amp; Hiển thị tất cả
             </Button>
           </div>
         ) : (
@@ -987,7 +995,8 @@ const Categories = () => {
                               fontWeight: 700
                             }}
                           >
-                            <span style={{ fontSize: '0.55rem' }}>●</span> Đang hoạt động
+                              <Icon name="dot" size={8} color="#16a34a" />
+                              <span>Đang hoạt động</span>
                           </span>
                         ) : (
                           <span
@@ -1003,7 +1012,8 @@ const Categories = () => {
                               fontWeight: 600
                             }}
                           >
-                            <span style={{ fontSize: '0.55rem' }}>○</span> Đang ẩn
+                            <Icon name="inactive" size={12} />
+                            <span>Đang ẩn</span>
                           </span>
                         )}
                       </td>
@@ -1138,12 +1148,14 @@ const Categories = () => {
                           {cat.id}
                         </span>
                         {cat.status === 'ACTIVE' ? (
-                          <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 700 }}>
-                            ● Đang hoạt động
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#16a34a', fontWeight: 700 }}>
+                            <Icon name="dot" size={10} color="#16a34a" />
+                            <span>Đang hoạt động</span>
                           </span>
                         ) : (
-                          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
-                            ○ Đang ẩn
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+                            <Icon name="pause-circle" size={12} color="#64748b" />
+                            <span>Đang ẩn</span>
                           </span>
                         )}
                       </div>
@@ -1289,8 +1301,9 @@ const Categories = () => {
                   />
                 </div>
                 {categoryImageFile && (
-                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
-                    📎 {categoryImageFile.name}
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="image" size={14} color="#2563eb" />
+                    <span>{categoryImageFile.name}</span>
                   </p>
                 )}
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1305,10 +1318,14 @@ const Categories = () => {
                       fontSize: '0.825rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      color: '#334155'
+                      color: '#334155',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
                     }}
                   >
-                    🔄 Thay ảnh
+                    <Icon name="refresh" size={14} />
+                    <span>Thay ảnh</span>
                   </button>
                   <button
                     type="button"
@@ -1321,10 +1338,14 @@ const Categories = () => {
                       fontSize: '0.825rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      color: '#dc2626'
+                      color: '#dc2626',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
                     }}
                   >
-                    🗑 Xóa
+                    <Icon name="trash" size={14} />
+                    <span>Xóa</span>
                   </button>
                 </div>
               </div>
@@ -1345,13 +1366,13 @@ const Categories = () => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.4rem',
-                  color: '#94a3b8',
+                  color: '#64748b',
                   fontSize: '0.875rem',
                   fontWeight: 500,
                   transition: 'border-color 0.15s'
                 }}
               >
-                <span style={{ fontSize: '1.75rem' }}>🖼️</span>
+                <Icon name="image" size={26} color="#2563eb" />
                 <span>+ Chọn ảnh từ máy tính</span>
                 <span style={{ fontSize: '0.75rem', color: '#b0bec5' }}>JPG, PNG, WEBP – Tối đa 5MB</span>
               </button>
@@ -1418,7 +1439,10 @@ const Categories = () => {
                   checked={formData.status === 'ACTIVE'}
                   onChange={() => setFormData({ ...formData, status: 'ACTIVE' })}
                 />
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>🟢 Đang hoạt động</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#16a34a', fontWeight: 600 }}>
+                  <Icon name="dot" size={10} color="#16a34a" />
+                  <span>Đang hoạt động</span>
+                </span>
               </label>
 
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', fontSize: '0.9rem' }}>
@@ -1429,7 +1453,10 @@ const Categories = () => {
                   checked={formData.status === 'INACTIVE'}
                   onChange={() => setFormData({ ...formData, status: 'INACTIVE' })}
                 />
-                <span style={{ color: '#64748b', fontWeight: 600 }}>⚪ Đang ẩn</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#64748b', fontWeight: 600 }}>
+                  <Icon name="pause-circle" size={14} color="#64748b" />
+                  <span>Đang ẩn</span>
+                </span>
               </label>
             </div>
           </div>
@@ -1507,8 +1534,10 @@ const Categories = () => {
                   />
                 </div>
                 {categoryImageFile ? (
-                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
-                    📎 {categoryImageFile.name} <span style={{ color: '#16a34a', fontWeight: 600 }}>(Ảnh mới)</span>
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <Icon name="link" size={13} color="#64748b" />
+                    <span>{categoryImageFile.name}</span>
+                    <span style={{ color: '#16a34a', fontWeight: 600 }}>(Ảnh mới)</span>
                   </p>
                 ) : (
                   <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>Ảnh hiện tại</p>
@@ -1525,10 +1554,14 @@ const Categories = () => {
                       fontSize: '0.825rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      color: '#334155'
+                      color: '#334155',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
                     }}
                   >
-                    🔄 Thay ảnh
+                    <Icon name="refresh" size={14} />
+                    <span>Thay ảnh</span>
                   </button>
                   <button
                     type="button"
@@ -1541,10 +1574,14 @@ const Categories = () => {
                       fontSize: '0.825rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      color: '#dc2626'
+                      color: '#dc2626',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
                     }}
                   >
-                    🗑 Xóa
+                    <Icon name="trash" size={14} />
+                    <span>Xóa</span>
                   </button>
                 </div>
               </div>
@@ -1570,7 +1607,7 @@ const Categories = () => {
                   fontWeight: 500
                 }}
               >
-                <span style={{ fontSize: '1.75rem' }}>🖼️</span>
+                <Icon name="image" size={26} color="#94a3b8" />
                 <span>+ Chọn ảnh từ máy tính</span>
                 <span style={{ fontSize: '0.75rem', color: '#b0bec5' }}>JPG, PNG, WEBP – Tối đa 5MB</span>
               </button>
@@ -1637,7 +1674,10 @@ const Categories = () => {
                   checked={formData.status === 'ACTIVE'}
                   onChange={() => setFormData({ ...formData, status: 'ACTIVE' })}
                 />
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>🟢 Đang hoạt động</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#16a34a', fontWeight: 600 }}>
+                  <Icon name="dot" size={10} color="#16a34a" />
+                  <span>Đang hoạt động</span>
+                </span>
               </label>
 
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', fontSize: '0.9rem' }}>
@@ -1648,7 +1688,10 @@ const Categories = () => {
                   checked={formData.status === 'INACTIVE'}
                   onChange={() => setFormData({ ...formData, status: 'INACTIVE' })}
                 />
-                <span style={{ color: '#64748b', fontWeight: 600 }}>⚪ Đang ẩn</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#64748b', fontWeight: 600 }}>
+                  <Icon name="pause-circle" size={14} color="#64748b" />
+                  <span>Đang ẩn</span>
+                </span>
               </label>
             </div>
           </div>
@@ -1708,9 +1751,15 @@ const Categories = () => {
                 </span>
 
                 {selectedCategory.status === 'ACTIVE' ? (
-                  <span className="badge badge-success">🟢 Đang hoạt động</span>
+                  <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="dot" size={10} color="#16a34a" />
+                    <span>Đang hoạt động</span>
+                  </span>
                 ) : (
-                  <span className="badge badge-secondary">⚪ Đang ẩn</span>
+                  <span className="badge badge-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="pause-circle" size={12} color="#64748b" />
+                    <span>Đang ẩn</span>
+                  </span>
                 )}
               </div>
 
@@ -1758,7 +1807,10 @@ const Categories = () => {
                   handleOpenEditModal(selectedCategory);
                 }}
               >
-                ✏️ Chỉnh sửa
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Icon name="edit" size={14} />
+                  <span>Chỉnh sửa</span>
+                </span>
               </Button>
               <Button variant="primary" size="sm" onClick={() => setIsDetailModalOpen(false)}>
                 Đóng
@@ -1797,7 +1849,7 @@ const Categories = () => {
                   gap: '0.65rem'
                 }}
               >
-                <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>⚠️</span>
+                <Icon name="warning" size={20} color="#dc2626" style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div>
                   <div style={{ fontWeight: 700, color: '#dc2626', fontSize: '0.875rem' }}>
                     Cảnh báo bảo vệ dữ liệu sản phẩm

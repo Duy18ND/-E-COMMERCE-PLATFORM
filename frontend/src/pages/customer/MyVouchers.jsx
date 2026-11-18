@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import voucherService, { getVoucherStatus } from '../../services/voucherService';
+import Icon from '../../components/common/Icons';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtMoney = (n) => Number(n).toLocaleString('vi-VN') + 'đ';
@@ -19,9 +20,9 @@ const daysLeft = (endDate) => {
 };
 
 const TABS = [
-  { key: 'USABLE', label: '✅ Có thể sử dụng' },
-  { key: 'EXPIRING', label: '⏰ Sắp hết hạn' },
-  { key: 'EXPIRED', label: '🚫 Đã hết hạn / Hết lượt' },
+  { key: 'USABLE', label: 'Có thể sử dụng', icon: 'check-circle' },
+  { key: 'EXPIRING', label: 'Sắp hết hạn', icon: 'clock' },
+  { key: 'EXPIRED', label: 'Đã hết hạn / Hết lượt', icon: 'ban' },
 ];
 
 // ─── Single saved voucher card ────────────────────────────────────────────────
@@ -36,12 +37,12 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
   const bgColor = isUsable ? '#eff6ff' : '#f8fafc';
 
   const statusLabel = {
-    ACTIVE: { text: '✅ Có thể sử dụng', color: '#16a34a', bg: '#dcfce7' },
-    UPCOMING: { text: '🕐 Sắp diễn ra', color: '#d97706', bg: '#fef3c7' },
-    EXPIRED: { text: '⏰ Đã hết hạn', color: '#dc2626', bg: '#fef2f2' },
-    SOLD_OUT: { text: '🚫 Đã hết lượt', color: '#7c3aed', bg: '#ede9fe' },
-    INACTIVE: { text: '🔒 Tạm dừng', color: '#64748b', bg: '#f1f5f9' },
-  }[status] || { text: status, color: '#64748b', bg: '#f1f5f9' };
+    ACTIVE: { text: 'Có thể sử dụng', icon: 'check-circle', color: '#16a34a', bg: '#dcfce7' },
+    UPCOMING: { text: 'Sắp diễn ra', icon: 'clock', color: '#d97706', bg: '#fef3c7' },
+    EXPIRED: { text: 'Đã hết hạn', icon: 'clock', color: '#dc2626', bg: '#fef2f2' },
+    SOLD_OUT: { text: 'Đã hết lượt', icon: 'ban', color: '#7c3aed', bg: '#ede9fe' },
+    INACTIVE: { text: 'Tạm dừng', icon: 'lock', color: '#64748b', bg: '#f1f5f9' },
+  }[status] || { text: status, icon: 'info', color: '#64748b', bg: '#f1f5f9' };
 
   return (
     <div style={{
@@ -74,10 +75,12 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
               {voucher.code}
             </span>
             <span style={{
-              fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem',
-              borderRadius: '9999px', backgroundColor: statusLabel.bg, color: statusLabel.color
+              fontSize: '0.7rem', fontWeight: 700, padding: '0.18rem 0.55rem',
+              borderRadius: '9999px', backgroundColor: statusLabel.bg, color: statusLabel.color,
+              display: 'inline-flex', alignItems: 'center', gap: '0.25rem'
             }}>
-              {statusLabel.text}
+              <Icon name={statusLabel.icon} size={12} />
+              <span>{statusLabel.text}</span>
             </span>
           </div>
 
@@ -92,19 +95,28 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
             )}
           </div>
 
-          <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+          <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {voucher.minOrderValue > 0 && (
-              <span>📦 Đơn tối thiểu <strong>{fmtMoney(voucher.minOrderValue)}</strong></span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Icon name="package" size={14} />
+                <span>Đơn tối thiểu <strong>{fmtMoney(voucher.minOrderValue)}</strong></span>
+              </span>
             )}
-            <span>
-              🗓️ HSD: <strong>{fmtDate(voucher.endDate)}</strong>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+              <Icon name="calendar" size={14} />
+              <span>HSD: <strong>{fmtDate(voucher.endDate)}</strong></span>
               {isUsable && days <= 7 && days > 0 && (
-                <span style={{ marginLeft: '0.4rem', color: '#dc2626', fontWeight: 700 }}>
+                <span style={{ marginLeft: '0.2rem', color: '#dc2626', fontWeight: 700 }}>
                   • Còn {days} ngày!
                 </span>
               )}
             </span>
-            {isUsable && <span>🎟️ Còn lại: <strong>{remaining}</strong> lượt</span>}
+            {isUsable && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Icon name="ticket" size={14} />
+                <span>Còn lại: <strong>{remaining}</strong> lượt</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -113,15 +125,17 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
           {isUsable && (
             <Link
               to="/checkout"
+              className="ui-hover-lift"
               style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem',
                 padding: '0.55rem 1.1rem', borderRadius: '8px', border: 'none',
                 backgroundColor: '#dc2626', color: '#ffffff',
                 fontWeight: 700, fontSize: '0.825rem', textDecoration: 'none',
                 cursor: 'pointer', whiteSpace: 'nowrap'
               }}
             >
-              Sử dụng ngay →
+              <span>Sử dụng ngay</span>
+              <Icon name="arrow-right" size={14} />
             </Link>
           )}
           <button
@@ -129,10 +143,12 @@ const SavedVoucherCard = ({ voucher, onUnsave }) => {
             style={{
               padding: '0.4rem 0.85rem', borderRadius: '6px',
               border: '1px solid #fca5a5', backgroundColor: '#fef2f2',
-              color: '#dc2626', fontSize: '0.775rem', fontWeight: 600, cursor: 'pointer'
+              color: '#dc2626', fontSize: '0.775rem', fontWeight: 600, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: '0.3rem'
             }}
           >
-            Bỏ lưu
+            <Icon name="trash" size={13} />
+            <span>Bỏ lưu</span>
           </button>
         </div>
       </div>
@@ -216,17 +232,21 @@ const MyVouchers = () => {
   }, [mySavedVouchers, tab]);
 
   return (
-    <div className="container page-container" style={{ paddingBottom: '4rem' }}>
+    <div className="container page-container ui-page-enter" style={{ paddingBottom: '4rem' }}>
       {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="page-title" style={{ marginBottom: '0.3rem' }}>🎒 Mã giảm giá của tôi</h1>
+          <h1 className="page-title" style={{ marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="voucher" size={26} color="#2563eb" />
+            <span>Mã giảm giá của tôi</span>
+          </h1>
           <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>
             Các voucher bạn đã lưu — chọn khi thanh toán để được giảm giá.
           </p>
         </div>
         <Link
           to="/vouchers"
+          className="ui-hover-lift"
           style={{
             padding: '0.6rem 1.25rem', borderRadius: '10px', border: '1px solid #e2e8f0',
             backgroundColor: '#ffffff', color: '#334155', fontWeight: 600,
@@ -234,47 +254,56 @@ const MyVouchers = () => {
             alignItems: 'center', gap: '0.4rem'
           }}
         >
-          🎫 Lưu thêm mã
+          <Icon name="plus" size={15} />
+          <span>Lưu thêm mã</span>
         </Link>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '5rem', color: '#94a3b8' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
-          Đang tải mã giảm giá của bạn...
+        <div style={{ textAlign: 'center', padding: '5rem', color: '#64748b', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+          <Icon name="loader" size={28} color="#2563eb" spin />
+          <span>Đang tải mã giảm giá của bạn...</span>
         </div>
       ) : error ? (
         <div style={{ textAlign: 'center', padding: '4rem 1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '14px' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⚠️</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#fee2e2', color: '#dc2626', marginBottom: '0.85rem' }}>
+            <Icon name="warning" size={28} />
+          </div>
           <h3 style={{ color: '#991b1b', fontWeight: 700, marginBottom: '0.5rem' }}>Không thể tải mã giảm giá của bạn</h3>
           <p style={{ color: '#b91c1c', fontSize: '0.875rem', marginBottom: '1.25rem' }}>{error}</p>
           <button
             onClick={loadMyVouchers}
             style={{
               padding: '0.6rem 1.5rem', borderRadius: '8px', border: 'none',
-              backgroundColor: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer'
+              backgroundColor: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: '0.4rem'
             }}
           >
-            🔄 Thử lại kết nối
+            <Icon name="refresh" size={16} />
+            <span>Thử lại kết nối</span>
           </button>
         </div>
       ) : mySavedVouchers.length === 0 ? (
         /* Empty state */
         <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-          <div style={{ fontSize: '4rem', marginBottom: '0.75rem' }}>🎒</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '68px', height: '68px', borderRadius: '9999px', backgroundColor: '#eff6ff', color: '#2563eb', marginBottom: '0.85rem' }}>
+            <Icon name="voucher" size={32} />
+          </div>
           <h3 style={{ color: '#0f172a', fontWeight: 700, marginBottom: '0.5rem' }}>Bạn chưa lưu mã giảm giá nào</h3>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
             Truy cập trang <strong>Mã giảm giá</strong> để tìm và lưu voucher phù hợp nhé!
           </p>
           <Link
             to="/vouchers"
+            className="ui-hover-lift"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
               padding: '0.75rem 2rem', borderRadius: '10px', backgroundColor: '#dc2626',
               color: '#fff', fontWeight: 700, textDecoration: 'none', fontSize: '0.95rem'
             }}
           >
-            🎫 Khám phá mã giảm giá
+            <Icon name="voucher" size={18} />
+            <span>Khám phá mã giảm giá</span>
           </Link>
         </div>
       ) : (
@@ -292,13 +321,16 @@ const MyVouchers = () => {
                   color: tab === t.key ? '#dc2626' : '#64748b',
                   fontWeight: tab === t.key ? 700 : 500,
                   fontSize: '0.85rem', cursor: 'pointer',
-                  marginBottom: '-1px', transition: 'all 0.15s'
+                  marginBottom: '-1px',
+                  transition: 'color 0.15s ease, border-color 0.15s ease',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem'
                 }}
               >
-                {t.label}
+                <Icon name={t.icon} size={15} />
+                <span>{t.label}</span>
                 {tabCounts[t.key] > 0 && (
                   <span style={{
-                    marginLeft: '0.4rem', backgroundColor: tab === t.key ? '#dc2626' : '#e2e8f0',
+                    marginLeft: '0.25rem', backgroundColor: tab === t.key ? '#dc2626' : '#e2e8f0',
                     color: tab === t.key ? '#fff' : '#64748b',
                     borderRadius: '9999px', padding: '0.05rem 0.45rem',
                     fontSize: '0.725rem', fontWeight: 700
@@ -312,12 +344,14 @@ const MyVouchers = () => {
 
           {/* ── List ── */}
           {displayed.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📭</div>
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748b' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#64748b', marginBottom: '0.65rem' }}>
+                <Icon name="empty-box" size={26} />
+              </div>
               <p style={{ fontWeight: 600 }}>Không có mã nào trong mục này.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div className="ui-stagger" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {displayed.map((v) => (
                 <SavedVoucherCard key={v.id} voucher={v} onUnsave={handleUnsave} />
               ))}
@@ -328,6 +362,7 @@ const MyVouchers = () => {
           <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
             <Link
               to="/checkout"
+              className="ui-hover-lift"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                 padding: '0.75rem 2rem', borderRadius: '10px',
@@ -335,7 +370,8 @@ const MyVouchers = () => {
                 fontWeight: 700, textDecoration: 'none', fontSize: '0.95rem'
               }}
             >
-              🛒 Đến trang thanh toán
+              <Icon name="cart" size={18} />
+              <span>Đến trang thanh toán</span>
             </Link>
           </div>
         </>

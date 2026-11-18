@@ -46,6 +46,7 @@ globalThis.Event = class Event {
   }
 };
 
+const { default: api } = await import('../src/services/api.js');
 const { default: voucherService, getVoucherStatus, calcDiscount, parseLocalDateBoundary } =
   await import('../src/services/voucherService.js');
 const { INITIAL_VOUCHERS } = await import('../src/mock/mockVouchers.js');
@@ -240,95 +241,106 @@ test('TC-336-04: Áp dụng mã giảm giá FIXED và PERCENT có trần maxDisc
 });
 
 test('TC-336-05: Checkout bắt lỗi validation chặt chẽ khi nhập mã voucher rỗng, sai mã, hết hạn, hết lượt hoặc đơn chưa đủ điều kiện tối thiểu', async () => {
-  // Test validate input voucherService.applyCode
-  await assert.rejects(
-    async () => voucherService.applyCode('', 300000),
-    /Mã giảm giá không được để trống/
-  );
+  const originalAdapter = api.defaults.adapter;
+  api.defaults.adapter = async () => {
+    const offlineErr = new Error('Offline unit test isolation');
+    offlineErr.code = 'ECONNREFUSED';
+    throw offlineErr;
+  };
 
-  await assert.rejects(
-    async () => voucherService.applyCode('   ', 300000),
-    /Mã giảm giá không được để trống/
-  );
+  try {
+    // Test validate input voucherService.applyCode
+    await assert.rejects(
+      async () => voucherService.applyCode('', 300000),
+      /Mã giảm giá không được để trống/
+    );
 
-  await assert.rejects(
-    async () => voucherService.applyCode('MAKHONGTONTAI', 300000),
-    /Mã giảm giá không tồn tại hoặc không hợp lệ/
-  );
+    await assert.rejects(
+      async () => voucherService.applyCode('   ', 300000),
+      /Mã giảm giá không được để trống/
+    );
 
-  await assert.rejects(
-    async () => voucherService.applyCode('CODE', 0),
-    /Tổng tiền đơn hàng phải lớn hơn 0đ/
-  );
+    await assert.rejects(
+      async () => voucherService.applyCode('MAKHONGTONTAI', 300000),
+      /Mã giảm giá không tồn tại hoặc không hợp lệ/
+    );
 
-  await assert.rejects(
-    async () => voucherService.applyCode('CODE', null),
-    /Tổng tiền đơn hàng không được để trống/
-  );
+    await assert.rejects(
+      async () => voucherService.applyCode('CODE', 0),
+      /Tổng tiền đơn hàng phải lớn hơn 0đ/
+    );
 
-  // Đưa mock voucher vào localStorage để test logic fallback
-  const mockList = [
-    {
-      id: 881,
-      code: 'MINORDER500K',
-      discountType: 'FIXED',
-      discountValue: 50000,
-      minOrderValue: 500000,
-      quantity: 100,
-      usedQuantity: 0,
-      startDate: '2026-11-01',
-      endDate: '2026-11-30',
-      status: 'ACTIVE'
-    },
-    {
-      id: 882,
-      code: 'EXPIREDCODE',
-      discountType: 'FIXED',
-      discountValue: 30000,
-      minOrderValue: 0,
-      quantity: 100,
-      usedQuantity: 0,
-      startDate: '2026-10-01',
-      endDate: '2026-10-15',
-      status: 'ACTIVE'
-    },
-    {
-      id: 883,
-      code: 'SOLDOUTCODE',
-      discountType: 'FIXED',
-      discountValue: 30000,
-      minOrderValue: 0,
-      quantity: 5,
-      usedQuantity: 5,
-      startDate: '2026-11-01',
-      endDate: '2026-11-30',
-      status: 'ACTIVE'
-    }
-  ];
-  storageMap.set('app_vouchers', JSON.stringify(mockList));
+    await assert.rejects(
+      async () => voucherService.applyCode('CODE', null),
+      /Tổng tiền đơn hàng không được để trống/
+    );
 
-  // Kiểm tra thông báo đơn chưa đủ điều kiện tối thiểu
-  await assert.rejects(
-    async () => voucherService.applyCode('MINORDER500K', 400000),
-    /Đơn hàng tối thiểu 500\.000/
-  );
+    // Đưa mock voucher vào localStorage để test logic fallback
+    const mockList = [
+      {
+        id: 881,
+        code: 'MINORDER500K',
+        discountType: 'FIXED',
+        discountValue: 50000,
+        minOrderValue: 500000,
+        quantity: 100,
+        usedQuantity: 0,
+        startDate: '2026-11-01',
+        endDate: '2026-11-30',
+        status: 'ACTIVE'
+      },
+      {
+        id: 882,
+        code: 'EXPIREDCODE',
+        discountType: 'FIXED',
+        discountValue: 30000,
+        minOrderValue: 0,
+        quantity: 100,
+        usedQuantity: 0,
+        startDate: '2026-10-01',
+        endDate: '2026-10-15',
+        status: 'ACTIVE'
+      },
+      {
+        id: 883,
+        code: 'SOLDOUTCODE',
+        discountType: 'FIXED',
+        discountValue: 30000,
+        minOrderValue: 0,
+        quantity: 5,
+        usedQuantity: 5,
+        startDate: '2026-11-01',
+        endDate: '2026-11-30',
+        status: 'ACTIVE'
+      }
+    ];
+    storageMap.set('app_vouchers', JSON.stringify(mockList));
 
-  // Kiểm tra mã hết hạn
-  await assert.rejects(
-    async () => voucherService.applyCode('EXPIREDCODE', 600000),
-    /Mã giảm giá đã hết hạn/
-  );
+    // Kiểm tra thông báo đơn chưa đủ điều kiện tối thiểu
+    await assert.rejects(
+      async () => voucherService.applyCode('MINORDER500K', 400000),
+      /Đơn hàng tối thiểu 500\.000/
+    );
 
-  // Kiểm tra mã hết lượt
-  await assert.rejects(
-    async () => voucherService.applyCode('SOLDOUTCODE', 600000),
-    /Mã giảm giá đã hết lượt sử dụng/
-  );
+    // Kiểm tra mã hết hạn
+    await assert.rejects(
+      async () => voucherService.applyCode('EXPIREDCODE', 600000),
+      /Mã giảm giá đã hết hạn/
+    );
 
-  // Áp dụng thành công khi đủ điều kiện
-  const res = await voucherService.applyCode('MINORDER500K', 600000);
-  assert.strictEqual(res.voucher.code, 'MINORDER500K');
-  assert.strictEqual(res.discountAmount, 50000);
+    // Kiểm tra mã hết lượt
+    await assert.rejects(
+      async () => voucherService.applyCode('SOLDOUTCODE', 600000),
+      /Mã giảm giá đã hết lượt sử dụng/
+    );
+
+    // Áp dụng thành công khi đủ điều kiện
+    const res = await voucherService.applyCode('MINORDER500K', 600000);
+    assert.strictEqual(res.voucher.code, 'MINORDER500K');
+    assert.strictEqual(res.discountAmount, 50000);
+  } finally {
+    api.defaults.adapter = originalAdapter;
+  }
 });
 
 test('TC-336-06: Modal VoucherPickerModal hiển thị danh sách mã đã lưu, phân định rõ ràng điều kiện áp dụng và cho phép gỡ bỏ voucher khi cần', async () => {

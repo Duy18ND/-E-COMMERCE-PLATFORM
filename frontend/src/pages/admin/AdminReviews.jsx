@@ -17,6 +17,7 @@ import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
+import Icon from '../../components/common/Icons';
 import Pagination from '../../components/admin/Pagination';
 
 const DEFAULT_PRODUCT_THUMB =
@@ -25,21 +26,21 @@ const DEFAULT_PRODUCT_THUMB =
 const MODERATION_STATUS_CONFIG = {
   [REVIEW_MODERATION_STATUS.PENDING]: {
     label: 'Chờ duyệt',
-    icon: '⏳',
+    icon: 'clock',
     bg: '#fef3c7',
     color: '#b45309',
     border: '#fde68a'
   },
   [REVIEW_MODERATION_STATUS.APPROVED]: {
     label: 'Đã duyệt',
-    icon: '✓',
+    icon: 'check',
     bg: '#dcfce7',
     color: '#166534',
     border: '#bbf7d0'
   },
   [REVIEW_MODERATION_STATUS.HIDDEN]: {
     label: 'Đã ẩn',
-    icon: '🙈',
+    icon: 'eye-off',
     bg: '#fee2e2',
     color: '#b91c1c',
     border: '#fecaca'
@@ -61,15 +62,19 @@ const fmtDateTime = (str) => {
 
 const renderStarIcons = (rating = 0, size = '0.95rem') => {
   const safe = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
+  const iconSize = typeof size === 'number' ? size : Math.round((parseFloat(String(size)) || 0.95) * 16);
   return (
     <span
       aria-label={`${safe} sao`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: '1px', fontSize: size, lineHeight: 1 }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', lineHeight: 1 }}
     >
       {[1, 2, 3, 4, 5].map((star) => (
-        <span key={star} style={{ color: star <= safe ? '#f59e0b' : '#cbd5e1' }}>
-          ★
-        </span>
+        <Icon
+          key={star}
+          name="star-filled"
+          size={iconSize}
+          color={star <= safe ? '#f59e0b' : '#cbd5e1'}
+        />
       ))}
     </span>
   );
@@ -98,7 +103,7 @@ const ReviewStatusBadge = ({ status }) => {
         whiteSpace: 'nowrap'
       }}
     >
-      <span>{cfg.icon}</span>
+      <Icon name={cfg.icon} size={13} />
       <span>{cfg.label}</span>
     </span>
   );
@@ -538,7 +543,7 @@ const AdminReviews = () => {
               gap: '0.5rem'
             }}
           >
-            <span>⭐</span>
+            <Icon name="star-filled" size={22} color="#f59e0b" />
             <span>Quản lý &amp; Kiểm duyệt Đánh giá Sản phẩm</span>
           </h1>
           <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
@@ -565,7 +570,7 @@ const AdminReviews = () => {
             gap: '0.4rem'
           }}
         >
-          <span>🔄</span>
+          <Icon name="refresh" size={14} spin={loading} />
           <span>{loading ? 'Đang tải...' : 'Làm mới dữ liệu'}</span>
         </button>
       </div>
@@ -579,9 +584,10 @@ const AdminReviews = () => {
       {/* 2. DASHBOARD THỐNG KÊ ĐÁNH GIÁ (DỮ LIỆU THỰC TẾ TỪ API) */}
       <div
         data-testid="admin-reviews-kpi-grid"
+        className="ui-stagger"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(195px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(195px, 100%), 1fr))',
           gap: '1rem',
           marginBottom: '1.5rem'
         }}
@@ -594,7 +600,7 @@ const AdminReviews = () => {
             sub: 'Toàn bộ đánh giá từ hệ thống',
             color: '#2563eb',
             bg: '#eff6ff',
-            icon: '💬'
+            icon: 'message'
           },
           {
             testId: 'admin-reviews-kpi-pending',
@@ -603,7 +609,7 @@ const AdminReviews = () => {
             sub: 'Hàng đợi kiểm duyệt trước',
             color: '#d97706',
             bg: '#fef3c7',
-            icon: '⏳'
+            icon: 'clock'
           },
           {
             testId: 'admin-reviews-kpi-approved',
@@ -612,7 +618,7 @@ const AdminReviews = () => {
             sub: 'Đang hiển thị công khai',
             color: '#16a34a',
             bg: '#dcfce7',
-            icon: '✅'
+            icon: 'check-circle'
           },
           {
             testId: 'admin-reviews-kpi-hidden',
@@ -621,7 +627,7 @@ const AdminReviews = () => {
             sub: 'Vi phạm / Đã bị ẩn công khai',
             color: '#dc2626',
             bg: '#fef2f2',
-            icon: '🙈'
+            icon: 'eye-off'
           },
           {
             testId: 'admin-reviews-kpi-avg',
@@ -630,13 +636,13 @@ const AdminReviews = () => {
             sub: `Tính trên ${stats.totalReviews} lượt`,
             color: '#f59e0b',
             bg: '#fffbeb',
-            icon: '⭐'
+            icon: 'star-filled'
           }
         ].map((card) => (
           <div
             key={card.testId}
             data-testid={card.testId}
-            className="card"
+            className="card ui-kpi-card"
             style={{
               padding: '1.05rem',
               display: 'flex',
@@ -657,11 +663,10 @@ const AdminReviews = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.3rem',
                 flexShrink: 0
               }}
             >
-              {card.icon}
+              <Icon name={card.icon} size={22} color={card.color} />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
@@ -672,7 +677,8 @@ const AdminReviews = () => {
                   fontSize: '1.4rem',
                   fontWeight: 800,
                   color: card.color,
-                  lineHeight: 1.2
+                  lineHeight: 1.2,
+                  fontVariantNumeric: 'tabular-nums'
                 }}
               >
                 {card.value}
@@ -707,50 +713,80 @@ const AdminReviews = () => {
           }}
         >
           {/* Tìm kiếm theo tên / mã sản phẩm */}
-          <input
-            type="text"
-            data-testid="admin-reviews-search-product"
-            aria-label="Tìm kiếm theo tên sản phẩm"
-            value={productQuery}
-            onChange={(e) => {
-              setProductQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="🔍 Tìm theo tên hoặc ID sản phẩm..."
-            style={{
-              width: '100%',
-              padding: '0.52rem 0.75rem',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              fontSize: '0.84rem',
-              outline: 'none',
-              backgroundColor: '#ffffff',
-              boxSizing: 'border-box'
-            }}
-          />
+          <div style={{ position: 'relative' }}>
+            <span
+              style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#94a3b8',
+                display: 'inline-flex',
+                pointerEvents: 'none'
+              }}
+            >
+              <Icon name="search" size={14} />
+            </span>
+            <input
+              type="text"
+              data-testid="admin-reviews-search-product"
+              aria-label="Tìm kiếm theo tên sản phẩm"
+              value={productQuery}
+              onChange={(e) => {
+                setProductQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Tìm theo tên hoặc ID sản phẩm..."
+              style={{
+                width: '100%',
+                padding: '0.52rem 0.75rem 0.52rem 2.05rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.84rem',
+                outline: 'none',
+                backgroundColor: '#ffffff',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
 
           {/* Tìm kiếm theo tên / mã khách hàng */}
-          <input
-            type="text"
-            data-testid="admin-reviews-search-customer"
-            aria-label="Tìm kiếm theo tên khách hàng"
-            value={customerQuery}
-            onChange={(e) => {
-              setCustomerQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="👤 Tìm theo tên hoặc ID khách hàng..."
-            style={{
-              width: '100%',
-              padding: '0.52rem 0.75rem',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              fontSize: '0.84rem',
-              outline: 'none',
-              backgroundColor: '#ffffff',
-              boxSizing: 'border-box'
-            }}
-          />
+          <div style={{ position: 'relative' }}>
+            <span
+              style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#94a3b8',
+                display: 'inline-flex',
+                pointerEvents: 'none'
+              }}
+            >
+              <Icon name="user" size={14} />
+            </span>
+            <input
+              type="text"
+              data-testid="admin-reviews-search-customer"
+              aria-label="Tìm kiếm theo tên khách hàng"
+              value={customerQuery}
+              onChange={(e) => {
+                setCustomerQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Tìm theo tên hoặc ID khách hàng..."
+              style={{
+                width: '100%',
+                padding: '0.52rem 0.75rem 0.52rem 2.05rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.84rem',
+                outline: 'none',
+                backgroundColor: '#ffffff',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
 
           {/* Lọc theo số sao */}
           <select
@@ -771,12 +807,12 @@ const AdminReviews = () => {
               outline: 'none'
             }}
           >
-            <option value={0}>Số sao: Tất cả (1–5 ★)</option>
-            <option value={5}>5 Sao ★★★★★</option>
-            <option value={4}>4 Sao ★★★★</option>
-            <option value={3}>3 Sao ★★★</option>
-            <option value={2}>2 Sao ★★</option>
-            <option value={1}>1 Sao ★</option>
+            <option value={0}>Số sao: Tất cả (1–5 sao)</option>
+            <option value={5}>5 Sao (Tuyệt vời)</option>
+            <option value={4}>4 Sao (Hài lòng)</option>
+            <option value={3}>3 Sao (Bình thường)</option>
+            <option value={2}>2 Sao (Chưa hài lòng)</option>
+            <option value={1}>1 Sao (Kém)</option>
           </select>
 
           {/* Lọc theo trạng thái kiểm duyệt */}
@@ -799,9 +835,9 @@ const AdminReviews = () => {
             }}
           >
             <option value="ALL">Trạng thái: Tất cả</option>
-            <option value={REVIEW_MODERATION_STATUS.PENDING}>⏳ Chờ duyệt (PENDING)</option>
-            <option value={REVIEW_MODERATION_STATUS.APPROVED}>✓ Đã duyệt (APPROVED)</option>
-            <option value={REVIEW_MODERATION_STATUS.HIDDEN}>🙈 Đã ẩn (HIDDEN)</option>
+            <option value={REVIEW_MODERATION_STATUS.PENDING}>Chờ duyệt (PENDING)</option>
+            <option value={REVIEW_MODERATION_STATUS.APPROVED}>Đã duyệt (APPROVED)</option>
+            <option value={REVIEW_MODERATION_STATUS.HIDDEN}>Đã ẩn (HIDDEN)</option>
           </select>
 
           {/* Sắp xếp mới nhất / cũ nhất */}
@@ -843,8 +879,9 @@ const AdminReviews = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>
-              📅 Khoảng thời gian:
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Icon name="calendar" size={14} color="#64748b" />
+              <span>Khoảng thời gian:</span>
             </span>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
               <label htmlFor="review-filter-start" style={{ fontSize: '0.78rem', color: '#64748b' }}>
@@ -895,8 +932,9 @@ const AdminReviews = () => {
             </div>
 
             {dateRangeInvalid && (
-              <span style={{ fontSize: '0.78rem', color: '#dc2626', fontWeight: 600 }}>
-                ⚠️ Ngày bắt đầu không được lớn hơn ngày kết thúc.
+              <span style={{ fontSize: '0.78rem', color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name="warning" size={14} color="#dc2626" />
+                <span>Ngày bắt đầu không được lớn hơn ngày kết thúc.</span>
               </span>
             )}
           </div>
@@ -917,10 +955,14 @@ const AdminReviews = () => {
                   fontWeight: 700,
                   cursor: 'pointer',
                   padding: 0,
-                  fontSize: '0.82rem'
+                  fontSize: '0.82rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem'
                 }}
               >
-                🔄 Đặt lại bộ lọc
+                <Icon name="refresh" size={13} />
+                <span>Đặt lại bộ lọc</span>
               </button>
             )}
           </div>
@@ -938,7 +980,9 @@ const AdminReviews = () => {
             data-testid="admin-reviews-empty"
             style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}
           >
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⭐</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#fffbeb', color: '#f59e0b', marginBottom: '0.75rem' }}>
+              <Icon name="star-filled" size={28} color="#f59e0b" />
+            </div>
             <h3 style={{ margin: '0 0 0.45rem', color: '#0f172a', fontSize: '1.08rem', fontWeight: 700 }}>
               {hasActiveFilter
                 ? 'Không tìm thấy đánh giá nào khớp với bộ lọc'
@@ -1117,10 +1161,14 @@ const AdminReviews = () => {
                                 color: '#334155',
                                 fontSize: '0.76rem',
                                 fontWeight: 600,
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem'
                               }}
                             >
-                              👁️ Chi tiết
+                              <Icon name="eye" size={13} />
+                              <span>Chi tiết</span>
                             </button>
 
                             {isPending && (
@@ -1137,10 +1185,14 @@ const AdminReviews = () => {
                                   color: '#166534',
                                   fontSize: '0.76rem',
                                   fontWeight: 700,
-                                  cursor: submittingModeration ? 'not-allowed' : 'pointer'
+                                  cursor: submittingModeration ? 'not-allowed' : 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
                                 }}
                               >
-                                ✓ Duyệt
+                                <Icon name="check" size={13} />
+                                <span>Duyệt</span>
                               </button>
                             )}
 
@@ -1158,10 +1210,14 @@ const AdminReviews = () => {
                                   color: '#dc2626',
                                   fontSize: '0.76rem',
                                   fontWeight: 700,
-                                  cursor: submittingModeration ? 'not-allowed' : 'pointer'
+                                  cursor: submittingModeration ? 'not-allowed' : 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
                                 }}
                               >
-                                🙈 Ẩn
+                                <Icon name="eye-off" size={13} />
+                                <span>Ẩn</span>
                               </button>
                             ) : (
                               <button
@@ -1177,10 +1233,14 @@ const AdminReviews = () => {
                                   color: '#15803d',
                                   fontSize: '0.76rem',
                                   fontWeight: 700,
-                                  cursor: submittingModeration ? 'not-allowed' : 'pointer'
+                                  cursor: submittingModeration ? 'not-allowed' : 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
                                 }}
                               >
-                                🔄 Hiện lại
+                                <Icon name="refresh" size={13} />
+                                <span>Hiện lại</span>
                               </button>
                             )}
                           </div>
@@ -1228,7 +1288,10 @@ const AdminReviews = () => {
                   disabled={submittingModeration}
                   onClick={() => openModerationModal(detailReview, 'HIDE')}
                 >
-                  🙈 Ẩn đánh giá này
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="eye-off" size={14} />
+                    <span>Ẩn đánh giá này</span>
+                  </span>
                 </Button>
               ) : (
                 <Button
@@ -1237,7 +1300,10 @@ const AdminReviews = () => {
                   disabled={submittingModeration}
                   onClick={() => openModerationModal(detailReview, 'RESTORE')}
                 >
-                  🔄 Hiện lại đánh giá
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="refresh" size={14} />
+                    <span>Hiện lại đánh giá</span>
+                  </span>
                 </Button>
               )}
             </>
@@ -1321,8 +1387,9 @@ const AdminReviews = () => {
               </div>
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Đơn hàng xác thực</div>
-                <div style={{ fontWeight: 600, color: '#166534' }}>
-                  ✓ Đơn #{detailReview.orderId || '—'}
+                <div style={{ fontWeight: 600, color: '#166534', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Icon name="check-circle" size={13} color="#166534" />
+                  <span>Đơn #{detailReview.orderId || '—'}</span>
                 </div>
               </div>
             </div>
@@ -1365,10 +1432,16 @@ const AdminReviews = () => {
                     border: '1px solid #fecaca',
                     color: '#991b1b',
                     fontSize: '0.82rem',
-                    fontWeight: 600
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.45rem'
                   }}
                 >
-                  🙈 <strong>Lý do đã ẩn:</strong> {detailReview.hiddenReason}
+                  <Icon name="eye-off" size={15} color="#b91c1c" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong>Lý do đã ẩn:</strong> {detailReview.hiddenReason}
+                  </div>
                 </div>
               )}
           </div>
@@ -1517,8 +1590,9 @@ const AdminReviews = () => {
                   </div>
                 )}
 
-                <p style={{ margin: '0.4rem 0 0', fontSize: '0.78rem', color: '#b91c1c' }}>
-                  ⚠️ Sau khi ẩn, đánh giá này sẽ lập tức không xuất hiện trên trang Chi tiết sản phẩm của khách hàng.
+                <p style={{ margin: '0.45rem 0 0', fontSize: '0.78rem', color: '#b91c1c', display: 'inline-flex', alignItems: 'flex-start', gap: '0.35rem' }}>
+                  <Icon name="warning" size={14} color="#b91c1c" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <span>Sau khi ẩn, đánh giá này sẽ lập tức không xuất hiện trên trang Chi tiết sản phẩm của khách hàng.</span>
                 </p>
               </div>
             ) : moderationModal.mode === 'RESTORE' ? (
@@ -1543,10 +1617,14 @@ const AdminReviews = () => {
                   border: '1px solid #fecaca',
                   color: '#b91c1c',
                   fontSize: '0.82rem',
-                  fontWeight: 600
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
                 }}
               >
-                ❌ {moderationModal.formError}
+                <Icon name="x-circle" size={15} color="#b91c1c" />
+                <span>{moderationModal.formError}</span>
               </div>
             )}
           </form>

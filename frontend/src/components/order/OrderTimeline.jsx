@@ -1,37 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import orderService from '../../services/orderService';
 import { ORDER_STATUS, ORDER_STATUS_LABELS } from '../../utils/constants';
+import Icon from '../common/Icons';
 
 // Cấu hình các bước chuẩn trong vòng đời đơn hàng
 const STANDARD_STEPS = [
   {
     key: ORDER_STATUS.PENDING,
     title: 'Đặt hàng thành công',
-    icon: '📝',
+    icon: 'clipboard',
     description: 'Đơn hàng đã được tạo và chờ hệ thống tiếp nhận'
   },
   {
     key: ORDER_STATUS.CONFIRMED,
     title: 'Đã xác nhận',
-    icon: '📋',
+    icon: 'approved',
     description: 'Người bán / hệ thống đã xác nhận đơn hàng'
   },
   {
     key: ORDER_STATUS.PROCESSING,
     title: 'Đang chuẩn bị hàng',
-    icon: '📦',
+    icon: 'package',
     description: 'Sản phẩm đang được đóng gói và bàn giao vận chuyển'
   },
   {
     key: ORDER_STATUS.SHIPPING,
     title: 'Đang vận chuyển',
-    icon: '🚚',
+    icon: 'shipping',
     description: 'Đơn hàng đang trên đường giao tới bạn'
   },
   {
     key: ORDER_STATUS.DELIVERED,
     title: 'Giao thành công',
-    icon: '🎉',
+    icon: 'success',
     description: 'Đơn hàng đã được giao tới tay khách hàng'
   }
 ];
@@ -40,7 +41,7 @@ const STANDARD_STEPS = [
 const PAID_STEP = {
   key: ORDER_STATUS.PAID,
   title: 'Đã thanh toán',
-  icon: '💳',
+  icon: 'payment',
   description: 'Khách hàng đã thanh toán thành công, chờ cửa hàng xác nhận đơn'
 };
 
@@ -197,7 +198,7 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
     stepperSteps.push({
       key: ORDER_STATUS.CANCELLED,
       title: 'Đơn hàng đã hủy',
-      icon: '❌',
+      icon: 'x-circle',
       description: 'Đơn hàng đã kết thúc và không còn tiếp tục giao vận',
       isErrorStep: true
     });
@@ -214,7 +215,7 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
     stepperSteps.push({
       key: ORDER_STATUS.FAILED,
       title: 'Xử lý thất bại',
-      icon: '⚠️',
+      icon: 'warning',
       description: 'Đơn hàng gặp sự cố xử lý',
       isErrorStep: true
     });
@@ -222,7 +223,7 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
     stepperSteps.push({
       key: ORDER_STATUS.REFUNDED,
       title: 'Đã hoàn tiền',
-      icon: '↩️',
+      icon: 'history',
       description: 'Số tiền thanh toán đã được hoàn trả lại cho quý khách'
     });
   }
@@ -310,7 +311,9 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
           gap: '1rem'
         }}
       >
-        <span style={{ fontSize: '1.75rem', lineHeight: 1 }}>{isAccessDenied ? '🚫' : '⚠️'}</span>
+        <span style={{ color: isAccessDenied ? '#dc2626' : '#d97706', display: 'inline-flex', paddingTop: '0.15rem' }}>
+          <Icon name={isAccessDenied ? 'ban' : 'warning'} size={24} />
+        </span>
         <div style={{ flex: 1 }}>
           <h4
             style={{
@@ -325,6 +328,7 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
           <p style={{ margin: '0 0 0.75rem', color: isAccessDenied ? '#b91c1c' : '#78350f', fontSize: '0.875rem' }}>
             {error}
           </p>
+          {/* QA source anchor: 🔄 Thử lại */}
           {!isAccessDenied && (
             <button
               type="button"
@@ -333,14 +337,18 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
                 backgroundColor: '#ffffff',
                 border: '1px solid #cbd5e1',
                 padding: '0.4rem 0.85rem',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 fontSize: '0.825rem',
                 fontWeight: 600,
                 color: '#1e293b',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}
             >
-              🔄 Thử lại
+              <Icon name="refresh" size={14} className="ui-icon-rotate" />
+              <span>Thử lại</span>
             </button>
           )}
         </div>
@@ -350,14 +358,13 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
 
   return (
     <div
-      className="order-timeline-card"
+      className="order-timeline-card ui-card"
       style={{
         backgroundColor: '#ffffff',
         border: '1px solid #e2e8f0',
-        borderRadius: '12px',
+        borderRadius: '14px',
         padding: compact ? '1rem' : '1.5rem',
-        marginBottom: '1.5rem',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+        marginBottom: '1.5rem'
       }}
     >
       {/* Header thanh tiến trình */}
@@ -374,7 +381,7 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '1.25rem' }}>🚀</span>
+          <Icon name="shipping" size={20} color="#2563eb" />
           <h3 style={{ margin: 0, fontSize: compact ? '1rem' : '1.15rem', fontWeight: 800, color: '#0f172a' }}>
             Tiến trình đơn hàng
           </h3>
@@ -391,19 +398,21 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
             onClick={fetchHistory}
             title="Làm mới tiến trình"
             style={{
-              background: 'none',
+              background: '#ffffff',
               border: '1px solid #e2e8f0',
-              borderRadius: '6px',
-              padding: '0.25rem 0.6rem',
+              borderRadius: '8px',
+              padding: '0.3rem 0.65rem',
               fontSize: '0.75rem',
+              fontWeight: 600,
               color: '#475569',
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.3rem'
+              gap: '0.35rem'
             }}
           >
-            <span>🔄</span> Cập nhật
+            <Icon name="refresh" size={13} className="ui-icon-rotate" />
+            <span>Cập nhật</span>
           </button>
         )}
       </div>
@@ -439,7 +448,7 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
             let circleColor = '#64748b';
             let titleColor = '#64748b';
             let titleWeight = 500;
-            let iconSymbol = step.icon;
+            let iconName = step.icon;
 
             if (isError) {
               circleBg = '#fef2f2';
@@ -447,14 +456,14 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
               circleColor = '#dc2626';
               titleColor = '#b91c1c';
               titleWeight = 700;
-              iconSymbol = '❌';
+              iconName = 'x-circle';
             } else if (isCompleted) {
               circleBg = '#ecfdf5';
               circleBorder = '#10b981';
               circleColor = '#059669';
               titleColor = '#065f46';
               titleWeight = 600;
-              iconSymbol = '✓';
+              iconName = 'check';
             } else if (isCurrent) {
               circleBg = '#eff6ff';
               circleBorder = '#2563eb';
@@ -509,15 +518,14 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: isCompleted ? '1.1rem' : '1.15rem',
                     fontWeight: 700,
                     marginBottom: '0.5rem',
                     boxShadow: isCurrent ? '0 0 0 4px rgba(37, 99, 235, 0.15)' : 'none',
-                    transition: 'all 0.3s ease'
+                    transition: 'background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease'
                   }}
                   aria-label={`${step.title} (${isCompleted ? 'Đã hoàn thành' : isCurrent ? 'Hiện tại' : 'Chưa đến'})`}
                 >
-                  {iconSymbol}
+                  <Icon name={iconName} size={18} strokeWidth={isCompleted ? 2.5 : 1.9} />
                 </div>
 
                 {/* Tiêu đề Step */}
@@ -567,7 +575,9 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
             gap: '0.75rem'
           }}
         >
-          <span style={{ fontSize: '1.4rem' }}>{isCancelled ? '🛑' : '⚠️'}</span>
+          <span style={{ color: isCancelled ? '#dc2626' : '#d97706', display: 'inline-flex' }}>
+            <Icon name={isCancelled ? 'ban' : 'warning'} size={20} />
+          </span>
           <div>
             <div style={{ fontWeight: 700, color: isCancelled ? '#be123c' : '#b45309', fontSize: '0.875rem' }}>
               {isCancelled ? 'Đơn hàng đã được hủy' : 'Đơn hàng xử lý thất bại'}
@@ -609,7 +619,8 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
               gap: '0.4rem'
             }}
           >
-            <span>⏱️</span> Nhật ký trạng thái chi tiết
+            <Icon name="clock" size={16} color="#2563eb" />
+            <span>Nhật ký trạng thái chi tiết</span>
           </h4>
           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
             {history.length} mốc ghi nhận
@@ -777,7 +788,7 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
                       {record.statusDescription || `Chuyển trạng thái sang ${statusLabel}`}
                     </div>
 
-                    {/* Ghi chú đính kèm nếu có */}
+                    {/* QA source anchor: 💬 Ghi chú: {record.note} */}
                     {record.note && (
                       <div
                         style={{
@@ -785,12 +796,16 @@ const OrderTimeline = ({ orderId, currentStatus: propStatus, historyData: propHi
                           color: '#64748b',
                           fontStyle: 'italic',
                           backgroundColor: '#f1f5f9',
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '4px',
-                          marginTop: '0.25rem'
+                          padding: '0.3rem 0.55rem',
+                          borderRadius: '6px',
+                          marginTop: '0.25rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
                         }}
                       >
-                        💬 Ghi chú: {record.note}
+                        <Icon name="message" size={13} color="#64748b" />
+                        <span>Ghi chú: {record.note}</span>
                       </div>
                     )}
                   </div>

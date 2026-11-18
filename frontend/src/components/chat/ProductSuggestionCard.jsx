@@ -1,4 +1,5 @@
 import { formatCurrency } from '../../utils/formatCurrency';
+import Icon from '../common/Icons';
 
 /**
  * ProductSuggestionCard.jsx — Thẻ gợi ý sản phẩm thực tế trong khung chat
@@ -72,8 +73,9 @@ const ProductSuggestionCard = ({ product, onSelectProduct }) => {
           {formatCurrency(effectivePrice)}
         </div>
       </div>
-      <span style={{ color: '#2563eb', fontSize: '0.78rem', fontWeight: 600 }}>
-        Xem →
+      <span style={{ color: '#2563eb', fontSize: '0.78rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+        <span>Xem</span>
+        <Icon name="arrow-right" size={13} className="ui-icon-nudge-right" />
       </span>
     </div>
   );

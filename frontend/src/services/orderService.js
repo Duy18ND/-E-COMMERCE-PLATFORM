@@ -483,13 +483,14 @@ export const orderService = {
     const rawCouponCode = couponCode || voucherCode || null;
     const normalizedVoucherCode =
       typeof rawCouponCode === 'string' && rawCouponCode.trim() ? rawCouponCode.trim().toUpperCase() : null;
+    const normalizedReceiverPhone = String(receiverPhone || '').replaceAll(/[\s.-]/g, '').trim();
     const isOnlinePay = paymentMethod === 'MOCK_ONLINE';
 
     try {
       const apiOrder = await api.post('/orders/checkout', {
-        receiverName,
-        receiverPhone,
-        shippingAddress,
+        receiverName: String(receiverName || '').trim(),
+        receiverPhone: normalizedReceiverPhone,
+        shippingAddress: String(shippingAddress || '').trim(),
         note: note || '',
         paymentMethod,
         voucherCode: normalizedVoucherCode

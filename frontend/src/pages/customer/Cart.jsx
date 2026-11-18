@@ -8,6 +8,7 @@ import CartSummary from '../../components/cart/CartSummary';
 import EmptyState from '../../components/common/EmptyState';
 import Button from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
+import Icon from '../../components/common/Icons';
 import FlashCountdown from '../../components/sale/FlashCountdown';
 import { formatCurrency } from '../../utils/formatCurrency';
 
@@ -35,9 +36,23 @@ const Cart = () => {
 
   if (isAdmin) {
     return (
-      <div className="container page-container">
+      <div className="container page-container ui-page-enter">
         <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', maxWidth: '600px', margin: '2rem auto' }}>
-          <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '1rem' }}>🛡️</span>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '9999px',
+              backgroundColor: '#fef2f2',
+              color: '#dc2626',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '1rem'
+            }}
+          >
+            <Icon name="shield-check" size={32} />
+          </div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.5rem' }}>
             Khu vực mua sắm dành cho Khách hàng
           </h2>
@@ -46,6 +61,7 @@ const Cart = () => {
           </p>
           <Link
             to="/admin/sales"
+            className="ui-hover-lift"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -61,7 +77,7 @@ const Cart = () => {
             }}
           >
             <span>Về Quản lý Sale (Admin)</span>
-            <span>&rarr;</span>
+            <Icon name="arrow-right" size={16} />
           </Link>
         </div>
       </div>
@@ -77,7 +93,7 @@ const Cart = () => {
   }
 
   return (
-    <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', paddingBottom: '3rem' }}>
+    <div className="ui-page-enter" style={{ backgroundColor: '#f8fafc', minHeight: '100vh', paddingBottom: '3rem' }}>
       {/* 1. TOP FLASH SALE RESERVATION ALERT BAR (THEO ĐÚNG ẢNH MẪU 3) */}
       {hasFlashSaleItems && (
         <div
@@ -101,7 +117,7 @@ const Cart = () => {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span>⚡</span>
+              <Icon name="flash" size={16} color="#fde047" />
               <span>
                 <strong>Cảnh báo giữ chỗ:</strong> Suất giá Flash Sale đặc biệt được bảo lưu trong giỏ hàng:
               </span>
@@ -136,10 +152,10 @@ const Cart = () => {
               fontSize: '0.75rem',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: '5px'
             }}
           >
-            <span>✓</span>
+            <Icon name="shield-check" size={14} color="#2563eb" />
             <span>Cam kết hàng chính hãng 100% • Đổi trả 30 ngày</span>
           </div>
         </div>
@@ -149,13 +165,28 @@ const Cart = () => {
       <div className="container" style={{ paddingTop: '1.5rem' }}>
         {cartItems.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-            <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>🛒</span>
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '9999px',
+                backgroundColor: '#eff6ff',
+                color: '#2563eb',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '0.85rem'
+              }}
+            >
+              <Icon name="cart" size={30} />
+            </div>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>Giỏ hàng đang trống</h2>
             <p style={{ color: '#64748b', margin: '0.5rem 0 1.5rem' }}>
               Bạn chưa có sản phẩm nào trong giỏ. Hãy săn ngay các deal Flash Sale giá sốc!
             </p>
             <Link
               to="/flash-sale"
+              className="ui-hover-lift"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -168,7 +199,7 @@ const Cart = () => {
                 textDecoration: 'none'
               }}
             >
-              <span>⚡</span>
+              <Icon name="flash" size={16} />
               <span>Săn deal Flash Sale ngay</span>
             </Link>
           </div>
@@ -191,7 +222,7 @@ const Cart = () => {
             >
               <div>
                 <h1 style={{ fontSize: 'clamp(1.15rem, 2vw, 1.4rem)', fontWeight: 900, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>🛒</span>
+                  <Icon name="cart" size={22} color="#2563eb" />
                   <span>Giỏ hàng của bạn ({totalItems} món)</span>
                 </h1>
                 <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 0' }}>
@@ -237,7 +268,7 @@ const Cart = () => {
                   ))}
 
                   <div style={{ padding: '0.85rem 1.25rem', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button variant="outline" size="sm" onClick={handleClearCart}>
+                    <Button variant="outline" size="sm" icon="trash" onClick={handleClearCart}>
                       Xóa toàn bộ giỏ hàng
                     </Button>
                   </div>
@@ -266,40 +297,42 @@ const Cart = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '1.1rem',
                       flexShrink: 0
                     }}
                   >
-                    ⏱️
+                    <Icon name="clock" size={18} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#991b1b', marginBottom: '0.2rem' }}>
                       Chính sách giữ giá chớp nhoáng
                     </div>
-                    <p style={{ fontSize: '0.8rem', color: '#b91c1c', margin: 0, lineHeight: 1.5 }}>
-                      ⚡ <strong>Giá Flash Sale được giữ chỗ trong giỏ hàng trong vòng 15 phút.</strong> Vui lòng thanh toán sớm để không bỏ lỡ ưu đãi! Khi đồng hồ đếm ngược kết thúc, sản phẩm sẽ tự động cập nhật về giá niêm yết ban đầu.
+                    <p style={{ fontSize: '0.8rem', color: '#b91c1c', margin: 0, lineHeight: 1.5, display: 'flex', alignItems: 'flex-start', gap: '0.35rem' }}>
+                      <Icon name="flash" size={15} color="#dc2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <span>
+                        <strong>Giá Flash Sale được giữ chỗ trong giỏ hàng trong vòng 15 phút.</strong> Vui lòng thanh toán sớm để không bỏ lỡ ưu đãi! Khi đồng hồ đếm ngược kết thúc, sản phẩm sẽ tự động cập nhật về giá niêm yết ban đầu.
+                      </span>
                     </p>
                   </div>
                 </div>
 
                 {/* Trust guarantee row below items */}
-                <div className="trust-grid" style={{ marginTop: '1.25rem' }}>
-                  <div className="card" style={{ padding: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.2rem' }}>🚚</span>
+                <div className="trust-grid ui-stagger" style={{ marginTop: '1.25rem' }}>
+                  <div className="card" style={{ padding: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <Icon name="truck" size={20} color="#2563eb" style={{ flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Giao nhanh 2h</div>
                       <div style={{ fontSize: '0.675rem', color: '#64748b' }}>Miễn phí cho đơn từ 500k</div>
                     </div>
                   </div>
-                  <div className="card" style={{ padding: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.2rem' }}>🛡️</span>
+                  <div className="card" style={{ padding: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <Icon name="shield-check" size={20} color="#16a34a" style={{ flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Cam kết chính hãng</div>
                       <div style={{ fontSize: '0.675rem', color: '#64748b' }}>Hoàn 200% nếu phát hiện giả</div>
                     </div>
                   </div>
-                  <div className="card" style={{ padding: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.2rem' }}>🔄</span>
+                  <div className="card" style={{ padding: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <Icon name="refresh" size={20} color="#ea580c" style={{ flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Đổi mới 30 ngày</div>
                       <div style={{ fontSize: '0.675rem', color: '#64748b' }}>Lỗi 1 đổi 1 tận nơi</div>

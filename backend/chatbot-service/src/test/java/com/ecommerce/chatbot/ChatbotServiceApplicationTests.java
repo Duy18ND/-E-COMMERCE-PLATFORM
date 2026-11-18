@@ -6,6 +6,7 @@ import com.ecommerce.chatbot.client.dto.OrderDto;
 import com.ecommerce.chatbot.client.dto.PagedData;
 import com.ecommerce.chatbot.client.dto.ProductDto;
 import com.ecommerce.chatbot.client.dto.ProductStockDto;
+import com.ecommerce.chatbot.client.dto.VoucherDto;
 import com.ecommerce.chatbot.dto.request.ChatMessageRequest;
 import com.ecommerce.chatbot.dto.response.ApiResponse;
 import com.ecommerce.chatbot.dto.response.ChatMessageResponse;
@@ -13,6 +14,7 @@ import com.ecommerce.chatbot.dto.response.ConversationDetailResponse;
 import com.ecommerce.chatbot.dto.response.ConversationSummaryResponse;
 import com.ecommerce.chatbot.exception.AccessDeniedException;
 import com.ecommerce.chatbot.service.ChatService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,9 @@ class ChatbotServiceApplicationTests {
 
     @Autowired
     private ChatService chatService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockBean
     private ProductClient productClient;
@@ -195,6 +200,127 @@ class ChatbotServiceApplicationTests {
 
         // Owner can delete conversation
         assertDoesNotThrow(() -> chatService.deleteConversation(created.getId(), 25L, null));
+    }
+
+    @Test
+    void deserializesOrderServiceDtosAndFormatsPercentVoucherCorrectly() throws Exception {
+        String voucherJson = """
+                {
+                  "id": 3,
+                  "code": "SALE10",
+                  "name": "Siêu sale công nghệ 10%",
+                  "discountType": "PERCENT",
+                  "discountValue": 10.00,
+                  "maxDiscount": 100000.00,
+                  "minOrderValue": 300000.00,
+                  "quantity": 1000,
+                  "usedQuantity": 12,
+                  "startDate": "2026-01-01",
+                  "endDate": "2027-12-31",
+                  "status": "ACTIVE"
+                }
+                """;
+        VoucherDto parsedVoucher = objectMapper.readValue(voucherJson, VoucherDto.class);
+        assertEquals("2026-01-01", parsedVoucher.getStartDate());
+        assertEquals("2027-12-31", parsedVoucher.getEndDate());
+        assertEquals(0, new BigDecimal("100000.00").compareTo(parsedVoucher.getMaxDiscountAmount()));
+        assertEquals(1000, parsedVoucher.getUsageLimit());
+        assertEquals(12, parsedVoucher.getUsedCount());
+
+        when(orderClient.getActiveVouchers(10L)).thenReturn(ApiResponse.success("OK", List.of(parsedVoucher)));
+        ChatMessageResponse promoRes = chatService.sendMessage(
+                ChatMessageRequest.builder().question("Hiện có mã giảm giá hay voucher nào không?").build(),
+                10L, "ROLE_USER", null
+        );
+        assertTrue(promoRes.getToolsUsed().contains("getActiveVouchers"));
+        assertTrue(promoRes.getAnswer().contains("Giảm **10%**"));
+        assertTrue(promoRes.getAnswer().contains("100.000"));
+
+        String orderJson = """
+                {
+                  "id": 202,
+                  "userId": 10,
+                  "receiverName": "Trần Văn B",
+                  "receiverPhone": "0987654321",
+                  "shippingAddress": "456 Nguyễn Trãi, Hà Nội",
+                  "totalAmount": 3700000,
+                  "status": "CONFIRMED",
+                  "paymentMethod": "COD",
+                  "items": [
+                    {
+                      "id": 1,
+                      "productId": 5,
+                      "productName": "Bàn phím cơ không dây",
+                      "quantity": 2,
+                      "priceAtPurchase": 1850000,
+                      "subTotal": 3700000
+                    }
+                  ],
+                  "statusHistories": [
+                    {
+                      "id": 11,
+                      "orderId": 202,
+                      "previousStatus": "PENDING",
+                      "status": "CONFIRMED",
+                      "updatedBy": "admin@shopmart.com",
+                      "note": "Đã xác nhận",
+                      "createdAt": "2026-11-18T10:15:30"
+                    }
+                  ]
+                }
+                """;
+        OrderDto parsedOrder = objectMapper.readValue(orderJson, OrderDto.class);
+        assertNotNull(parsedOrder.getItems());
+        assertEquals(1, parsedOrder.getItems().size());
+        assertEquals(0, new BigDecimal("1850000").compareTo(parsedOrder.getItems().get(0).getUnitPrice()));
+        assertEquals(0, new BigDecimal("3700000").compareTo(parsedOrder.getItems().get(0).getSubtotal()));
+        assertNotNull(parsedOrder.getStatusHistories());
+        assertNotNull(parsedOrder.getStatusHistories().get(0).getUpdatedAt());
+
+        when(orderClient.getOrderById(202L, 10L, "ROLE_USER")).thenReturn(ApiResponse.success("OK", parsedOrder));
+        ChatMessageResponse orderRes = chatService.sendMessage(
+                ChatMessageRequest.builder().question("Kiểm tra đơn hàng #202").build(),
+                10L, "ROLE_USER", null
+        );
+        assertTrue(orderRes.getAnswer().contains("3.700.000 ₫"));
+        assertFalse(orderRes.getAnswer().contains("(Liên hệ)"));
+    }
+
+    @Test
+    void stripsVietnameseAccentedStopwordsWithUnicodeBoundariesWhenSearchingProducts() {
+        PagedData<ProductDto> macbookPage = PagedData.<ProductDto>builder()
+                .content(List.of(macbookAir))
+                .totalElements(1)
+                .totalPages(1)
+                .build();
+        when(productClient.getProducts(
+                eq("laptop"),
+                isNull(),
+                isNull(),
+                eq(new BigDecimal("30000000")),
+                eq(true),
+                anyInt(),
+                anyInt(),
+                any()
+        )).thenReturn(ApiResponse.success("OK", macbookPage));
+
+        ChatMessageResponse response = chatService.sendMessage(
+                ChatMessageRequest.builder().question("Gợi ý laptop dưới 30 triệu").build(),
+                null, null, "guest-unicode-regex"
+        );
+
+        assertNotNull(response);
+        assertTrue(response.getAnswer().contains("MacBook Air"));
+        org.mockito.Mockito.verify(productClient).getProducts(
+                eq("laptop"),
+                isNull(),
+                isNull(),
+                eq(new BigDecimal("30000000")),
+                eq(true),
+                anyInt(),
+                anyInt(),
+                any()
+        );
     }
 }
 

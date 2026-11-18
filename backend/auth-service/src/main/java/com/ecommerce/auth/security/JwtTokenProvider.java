@@ -142,28 +142,37 @@ public class JwtTokenProvider {
      * Check whether token is present in Redis blacklist
      */
     public boolean isTokenBlacklisted(String token) {
-        if (token == null || token.isBlank()) {
+        if (token == null || token.isBlank() || redisTemplate == null) {
             return false;
         }
-        return Boolean.TRUE.equals(redisTemplate.hasKey(TOKEN_BLACKLIST_PREFIX + token));
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(TOKEN_BLACKLIST_PREFIX + token));
+        } catch (Exception ex) {
+            log.warn("Failed to check Redis JWT blacklist (falling back to non-blacklisted): {}", ex.getMessage());
+            return false;
+        }
     }
 
     /**
      * Blacklist token in Redis with TTL equal to remaining expiration time
      */
     public void blacklistToken(String token) {
-        if (token == null || token.isBlank()) {
+        if (token == null || token.isBlank() || redisTemplate == null) {
             return;
         }
         long remainingTtl = getRemainingExpirationMs(token);
         if (remainingTtl > 0) {
-            redisTemplate.opsForValue().set(
-                    TOKEN_BLACKLIST_PREFIX + token,
-                    "blacklisted",
-                    remainingTtl,
-                    TimeUnit.MILLISECONDS
-            );
-            log.info("Token blacklisted in Redis for {} ms", remainingTtl);
+            try {
+                redisTemplate.opsForValue().set(
+                        TOKEN_BLACKLIST_PREFIX + token,
+                        "blacklisted",
+                        remainingTtl,
+                        TimeUnit.MILLISECONDS
+                );
+                log.info("Token blacklisted in Redis for {} ms", remainingTtl);
+            } catch (Exception ex) {
+                log.warn("Failed to store blacklisted token in Redis: {}", ex.getMessage());
+            }
         }
     }
 

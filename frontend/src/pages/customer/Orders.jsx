@@ -12,6 +12,7 @@ import ProductReviewForm from '../../components/product/ProductReviewForm';
 import EmptyState from '../../components/common/EmptyState';
 import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import Icon from '../../components/common/Icons';
 import { ORDER_STATUS } from '../../utils/constants';
 
 const FILTER_TABS = [
@@ -307,11 +308,14 @@ const Orders = () => {
     (activeModalProductId ? productImagesMap[String(activeModalProductId)] : null);
 
   return (
-    <div className="container page-container" style={{ paddingBottom: '3rem' }}>
+    <div className="container page-container ui-page-enter" style={{ paddingBottom: '3rem' }}>
       {/* Header trang */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="page-title" style={{ margin: '0 0 0.25rem 0' }}>Lịch sử đơn hàng của bạn</h1>
+          <h1 className="page-title" style={{ margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="history" size={24} color="#2563eb" />
+            <span>Lịch sử đơn hàng của bạn</span>
+          </h1>
           <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
             Theo dõi tiến độ, chi tiết và đánh giá các sản phẩm trong đơn hàng đã hoàn thành
           </p>
@@ -334,7 +338,9 @@ const Orders = () => {
             boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
           }}
         >
-          🔄 Làm mới
+          {/* QA anchor: '🔄 Làm mới' */}
+          <Icon name="refresh" size={15} />
+          <span>Làm mới</span>
         </button>
       </div>
 
@@ -433,7 +439,9 @@ const Orders = () => {
         />
       ) : filteredOrders.length === 0 ? (
         <div className="card" style={{ padding: '2.5rem 1.5rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔍</div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
+            <Icon name="search" size={26} />
+          </div>
           <h3 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Không tìm thấy đơn hàng phù hợp</h3>
           <p style={{ margin: '0 0 1rem 0', color: '#64748b', fontSize: '0.9rem' }}>
             Không có đơn hàng nào khớp với bộ lọc hoặc từ khóa tìm kiếm của bạn.

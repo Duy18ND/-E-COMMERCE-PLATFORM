@@ -73,4 +73,20 @@ class JwtTokenProviderTest {
 
         assertThat(jwtTokenProvider.validateToken(token)).isFalse();
     }
+
+    @Test
+    void shouldAllowValidTokenWhenRedisBlacklistCheckFails() {
+        UserPrincipal userPrincipal = UserPrincipal.builder()
+                .id(3L)
+                .email("resilient@ecommerce.com")
+                .authorities(List.of(new SimpleGrantedAuthority("ROLE_USER")))
+                .build();
+
+        String token = jwtTokenProvider.generateAccessToken(userPrincipal);
+
+        when(redisTemplate.hasKey(JwtTokenProvider.TOKEN_BLACKLIST_PREFIX + token))
+                .thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("Unable to connect to Redis"));
+
+        assertThat(jwtTokenProvider.validateToken(token)).isTrue();
+    }
 }

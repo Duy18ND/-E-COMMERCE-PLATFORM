@@ -4,6 +4,7 @@ import useAuth from '../../hooks/useAuth';
 import Modal from '../common/Modal';
 import Input from '../common/Input';
 import Button from '../common/Button';
+import Icon from '../common/Icons';
 
 const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
   const { user, logout, updateUser } = useAuth();
@@ -96,21 +97,15 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               aria-label="Mở menu quản trị"
               aria-expanded={isMobileDrawerOpen}
             >
-              {isMobileDrawerOpen ? '✕' : '☰'}
+              {isMobileDrawerOpen ? <Icon name="x" size={19} /> : <Icon name="menu" size={19} />}
             </button>
 
             <Link to="/admin" className="header-logo">
               <div className="header-logo-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M6 7V6C6 4.34315 7.34315 3 9 3H15C16.6569 3 18 4.34315 18 6V7M4 7H20L19 21H5L4 7Z"
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="header-logo-star">⭐</span>
+                <Icon name="store" size={19} color="#ffffff" />
+                <span className="header-logo-star" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="sparkles" size={10} color="#facc15" />
+                </span>
               </div>
               <div className="admin-logo-titles">
                 <span className="header-logo-text">ShopMart</span>
@@ -126,7 +121,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               end
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">📊</span>
+              <span className="admin-link-icon"><Icon name="dashboard" size={15} /></span>
               <span>Dashboard</span>
             </NavLink>
 
@@ -134,7 +129,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/products"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">📦</span>
+              <span className="admin-link-icon"><Icon name="package" size={15} /></span>
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Sản phẩm
               </span>
@@ -144,7 +139,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/categories"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">🏷️</span>
+              <span className="admin-link-icon"><Icon name="tag" size={15} /></span>
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Danh mục
               </span>
@@ -154,7 +149,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/orders"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">📑</span>
+              <span className="admin-link-icon"><Icon name="clipboard" size={15} /></span>
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Đơn hàng
               </span>
@@ -164,7 +159,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/inventory"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">🏭</span>
+              <span className="admin-link-icon"><Icon name="layers" size={15} /></span>
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Tồn kho
               </span>
@@ -174,7 +169,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/sales"
               className={({ isActive }) => `admin-header-link sale ${isActive ? 'active' : ''}`}
             >
-              <span>⚡</span>
+              <Icon name="flash" size={15} />
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Sale
               </span>
@@ -184,7 +179,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/vouchers"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">🎫</span>
+              <span className="admin-link-icon"><Icon name="ticket" size={15} /></span>
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Voucher
               </span>
@@ -194,7 +189,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/reviews"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">⭐</span>
+              <span className="admin-link-icon"><Icon name="star" size={15} /></span>
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Đánh giá
               </span>
@@ -204,7 +199,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               to="/admin/users"
               className={({ isActive }) => `admin-header-link ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-link-icon">👥</span>
+              <span className="admin-link-icon"><Icon name="users" size={15} /></span>
               <span>
                 <span className="admin-nav-prefix">Quản lý </span>Tài khoản
               </span>
@@ -226,7 +221,9 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
                   {user?.fullName || user?.username || 'System Admin'}
                 </span>
               </div>
-              <span className="header-account-caret">{isDropdownOpen ? '▲' : '▼'}</span>
+              <span className="header-account-caret">
+                <Icon name={isDropdownOpen ? 'chevron-up' : 'chevron-down'} size={14} />
+              </span>
             </button>
 
             {isDropdownOpen && (
@@ -250,7 +247,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
                     onClick={handleOpenEdit}
                     className="header-dropdown-btn edit"
                   >
-                    <span>✏️</span>
+                    <Icon name="edit" size={15} />
                     <span>Sửa thông tin cá nhân</span>
                   </button>
 
@@ -259,7 +256,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
                     onClick={() => setIsDropdownOpen(false)}
                     className="header-dropdown-link"
                   >
-                    <span>🏪</span>
+                    <Icon name="store" size={15} />
                     <span>Xem giao diện Cửa hàng</span>
                   </Link>
 
@@ -270,7 +267,7 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
                     onClick={handleLogout}
                     className="header-dropdown-btn logout"
                   >
-                    <span>🚪</span>
+                    <Icon name="logout" size={15} />
                     <span>Đăng xuất</span>
                   </button>
                 </div>
@@ -296,10 +293,14 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
               fontSize: '0.875rem',
               fontWeight: 600,
               marginBottom: '1rem',
-              textAlign: 'center'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem'
             }}
           >
-            ✓ {successToast}
+            <Icon name="success" size={16} />
+            <span>{successToast}</span>
           </div>
         )}
 
@@ -384,17 +385,21 @@ const AdminHeader = ({ onToggleMobileDrawer, isMobileDrawerOpen }) => {
                 borderRadius: '9999px',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              🚪 Đăng xuất
+              <Icon name="logout" size={15} />
+              <span>Đăng xuất</span>
             </button>
 
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" icon={<Icon name="save" size={15} />}>
                 Lưu thay đổi
               </Button>
             </div>

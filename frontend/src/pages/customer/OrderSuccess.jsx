@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
+import Icon from '../../components/common/Icons';
 
 const OrderSuccess = () => {
   const location = useLocation();
@@ -33,7 +34,7 @@ const OrderSuccess = () => {
   const paidAmount = order?.totalAmount ?? location.state?.amountPaid ?? 0;
 
   return (
-    <div className="container page-container" style={{ textAlign: 'center', maxWidth: '680px', paddingBottom: '4rem' }}>
+    <div className="container page-container ui-page-enter" style={{ textAlign: 'center', maxWidth: '680px', paddingBottom: '4rem' }}>
       <div
         className="card"
         style={{
@@ -53,12 +54,11 @@ const OrderSuccess = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '2.5rem',
             margin: '0 auto 1.25rem',
             boxShadow: '0 8px 20px rgba(22, 163, 74, 0.2)'
           }}
         >
-          ✓
+          <Icon name="success" size={34} strokeWidth={2.2} />
         </div>
 
         {/* Tiêu đề */}
@@ -111,7 +111,7 @@ const OrderSuccess = () => {
                 {isOnlinePayment ? 'Phương thức thanh toán:' : 'Phương thức:'}
               </span>
               <div style={{ fontWeight: 700, color: isOnlinePayment ? '#1e40af' : '#0f172a', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <span>{isOnlinePayment ? '💳' : '💵'}</span>
+                <Icon name={isOnlinePayment ? 'card' : 'wallet'} size={16} color={isOnlinePayment ? '#1e40af' : '#475569'} />
                 <span>{paymentMethodLabel}</span>
               </div>
             </div>
@@ -132,7 +132,8 @@ const OrderSuccess = () => {
                     backgroundColor: '#dcfce7',
                     color: '#16a34a'
                   }}>
-                    ● PAID (Đã thanh toán)
+                    <Icon name="check-circle" size={13} />
+                    <span>PAID (Đã thanh toán)</span>
                   </span>
                 ) : (
                   <span style={{
@@ -146,7 +147,8 @@ const OrderSuccess = () => {
                     backgroundColor: '#fef3c7',
                     color: '#d97706'
                   }}>
-                    ● PENDING (Chờ xác nhận)
+                    <Icon name="pending" size={13} />
+                    <span>PENDING (Chờ xác nhận)</span>
                   </span>
                 )}
               </div>
@@ -189,6 +191,7 @@ const OrderSuccess = () => {
           <Link to={`/orders/${orderId}`} style={{ textDecoration: 'none' }}>
             <button
               title="Xem chi tiết đơn hàng"
+              className="ui-hover-lift"
               style={{
                 backgroundColor: '#2563eb',
                 color: '#ffffff',
@@ -201,17 +204,17 @@ const OrderSuccess = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.4rem',
-                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
-                transition: 'all 0.15s'
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
               }}
             >
-              <span>📑</span>
+              <Icon name="eye" size={16} />
               <span>Xem đơn hàng</span>
             </button>
           </Link>
 
           <Link to="/products" style={{ textDecoration: 'none' }}>
             <button
+              className="ui-hover-lift"
               style={{
                 backgroundColor: '#16a34a',
                 color: '#ffffff',
@@ -224,11 +227,10 @@ const OrderSuccess = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.4rem',
-                boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)',
-                transition: 'all 0.15s'
+                boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)'
               }}
             >
-              <span>🛍️</span>
+              <Icon name="store" size={16} />
               <span>Tiếp tục mua sắm</span>
             </button>
           </Link>
@@ -243,10 +245,14 @@ const OrderSuccess = () => {
                 padding: '0.75rem 1.25rem',
                 fontWeight: 600,
                 fontSize: '0.9rem',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              Lịch sử đơn hàng
+              <Icon name="history" size={15} />
+              <span>Lịch sử đơn hàng</span>
             </button>
           </Link>
 
@@ -260,10 +266,14 @@ const OrderSuccess = () => {
                 padding: '0.75rem 1.25rem',
                 fontWeight: 700,
                 fontSize: '0.9rem',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              ⚡ Tiếp tục săn Flash Sale
+              <Icon name="flash" size={15} />
+              <span>Tiếp tục săn Flash Sale</span>
             </button>
           </Link>
         </div>
