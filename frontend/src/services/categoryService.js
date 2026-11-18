@@ -5,6 +5,37 @@ import { fixUtf8Mojibake } from './voucherService';
 
 const STORAGE_KEY = 'shopmart_admin_categories';
 
+export const CANONICAL_CATEGORIES_BY_ID = {
+  1: {
+    id: 1,
+    name: 'Điện thoại & Tablet',
+    description: 'iPhone, Galaxy, iPad thế hệ mới chính hãng phân phối',
+    imageUrl: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80'
+  },
+  2: {
+    id: 2,
+    name: 'Laptop & Workstation',
+    description: 'MacBook, Dell XPS, ThinkPad phục vụ học tập, đồ họa, lập trình',
+    imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80'
+  },
+  3: {
+    id: 3,
+    name: 'Phụ Kiện & Âm Thanh',
+    description: 'Tai nghe hi-res, bàn phím cơ, chuột không dây và củ sạc nhanh',
+    imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80'
+  },
+  4: {
+    id: 4,
+    name: 'Nhà Thông Minh & Gia Dụng',
+    description: 'Robot hút bụi, máy lọc không khí và đèn thông minh tiện nghi',
+    imageUrl: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=400&q=80'
+  }
+};
+
+const isCorruptedCategoryText = (str) =>
+  typeof str === 'string' &&
+  (/áº|á»|Ä‘|Äi|Æ°|Æ¡|Ã |Ã¡|Ã¢|Ã£|Ãª|Ã´|Ã¹|Ãº|Ã‚|\uFFFD/.test(str) || fixUtf8Mojibake(str) !== str);
+
 /**
  * Bản đồ ánh xạ danh mục chuẩn giữa slug/ID trên URL và các biến thể tên danh mục
  * giữa Frontend (Home, Products, Mock) và Backend (DataInitializer.java)
@@ -76,8 +107,12 @@ export const normalizeCategory = (cat, index = 0) => {
     );
   }
 
-  const rawName = fixUtf8Mojibake((cat.name || '').trim());
   const rawId = String(cat.id ?? index + 1).trim();
+  const canonicalSeed = CANONICAL_CATEGORIES_BY_ID[Number(rawId)];
+  let rawName = fixUtf8Mojibake((cat.name || '').trim());
+  if (canonicalSeed && (isCorruptedCategoryText(cat.name) || isCorruptedCategoryText(rawName))) {
+    rawName = canonicalSeed.name;
+  }
 
   // Tìm preset giao diện tương ứng trong INITIAL_CATEGORIES
   const matchedPreset = INITIAL_CATEGORIES.find(
@@ -89,7 +124,10 @@ export const normalizeCategory = (cat, index = 0) => {
   const preset = matchedPreset || INITIAL_CATEGORIES[index % INITIAL_CATEGORIES.length];
 
   const image = cat.imageUrl || cat.image || preset.image;
-  const description = fixUtf8Mojibake(cat.description || cat.desc || preset.description);
+  let description = fixUtf8Mojibake(cat.description || cat.desc || preset.description);
+  if (canonicalSeed && (isCorruptedCategoryText(cat.description) || isCorruptedCategoryText(description))) {
+    description = canonicalSeed.description;
+  }
   const parsedCount = Number(cat.productCount ?? 0);
   const productCount = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
 

@@ -1,8 +1,23 @@
 import api from './api';
 import { INITIAL_PRODUCTS } from './mockData';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
-import { CATEGORY_ALIAS_MAP, matchesCategoryFilter } from './categoryService';
+import { CATEGORY_ALIAS_MAP, CANONICAL_CATEGORIES_BY_ID, matchesCategoryFilter } from './categoryService';
 import { fixUtf8Mojibake } from './voucherService';
+
+const repairMojibakeCategoriesInBackend = async () => {
+  const seeds = Object.values(CANONICAL_CATEGORIES_BY_ID || {});
+  for (const seed of seeds) {
+    try {
+      await api.put(`/products/categories/${seed.id}`, {
+        name: seed.name,
+        description: seed.description,
+        imageUrl: seed.imageUrl
+      });
+    } catch {
+      // Bỏ qua nếu danh mục đã đúng hoặc ID không tồn tại
+    }
+  }
+};
 
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
@@ -655,7 +670,18 @@ export const productService = {
     };
 
     try {
-      const created = await api.post('/products', payload);
+      let created;
+      try {
+        created = await api.post('/products', payload);
+      } catch (firstErr) {
+        const msg = String(firstErr?.response?.data?.message || firstErr?.message || '');
+        if ((firstErr?.status === 404 || firstErr?.response?.status === 404) && msg.includes('Danh mục')) {
+          await repairMojibakeCategoriesInBackend();
+          created = await api.post('/products', payload);
+        } else {
+          throw firstErr;
+        }
+      }
       const normalized = normalizeProduct(created);
       localProducts = [normalized, ...localProducts.filter((p) => String(p.id) !== String(normalized.id))];
       return normalized;
@@ -695,7 +721,18 @@ export const productService = {
     };
 
     try {
-      const updated = await api.put(`/products/${id}`, payload);
+      let updated;
+      try {
+        updated = await api.put(`/products/${id}`, payload);
+      } catch (firstErr) {
+        const msg = String(firstErr?.response?.data?.message || firstErr?.message || '');
+        if ((firstErr?.status === 404 || firstErr?.response?.status === 404) && msg.includes('Danh mục')) {
+          await repairMojibakeCategoriesInBackend();
+          updated = await api.put(`/products/${id}`, payload);
+        } else {
+          throw firstErr;
+        }
+      }
       const normalized = normalizeProduct(updated);
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;

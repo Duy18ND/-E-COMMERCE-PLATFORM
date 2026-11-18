@@ -172,11 +172,49 @@ public class DataInitializer implements CommandLineRunner {
                 return false;
         }
 
+        private static final List<Category> DEFAULT_CATEGORIES = List.of(
+                        Category.builder()
+                                        .id(1L)
+                                        .name("Điện thoại & Tablet")
+                                        .description("iPhone, Galaxy, iPad thế hệ mới chính hãng phân phối")
+                                        .imageUrl("https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80")
+                                        .build(),
+                        Category.builder()
+                                        .id(2L)
+                                        .name("Laptop & Workstation")
+                                        .description("MacBook, Dell XPS, ThinkPad phục vụ học tập, đồ họa, lập trình")
+                                        .imageUrl("https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80")
+                                        .build(),
+                        Category.builder()
+                                        .id(3L)
+                                        .name("Phụ Kiện & Âm Thanh")
+                                        .description("Tai nghe hi-res, bàn phím cơ, chuột không dây và củ sạc nhanh")
+                                        .imageUrl("https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80")
+                                        .build(),
+                        Category.builder()
+                                        .id(4L)
+                                        .name("Nhà Thông Minh & Gia Dụng")
+                                        .description("Robot hút bụi, máy lọc không khí và đèn thông minh tiện nghi")
+                                        .imageUrl("https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=400&q=80")
+                                        .build());
+
         private boolean repairMojibakeCategories() {
                 int repaired = 0;
                 for (Category cat : categoryRepository.findAll()) {
+                        Category canonical = DEFAULT_CATEGORIES.stream()
+                                        .filter(c -> Objects.equals(c.getId(), cat.getId()))
+                                        .findFirst()
+                                        .orElse(null);
                         String fixedName = repairMysqlLatin1Mojibake(cat.getName());
                         String fixedDesc = repairMysqlLatin1Mojibake(cat.getDescription());
+                        if (canonical != null) {
+                                if (isMojibake(cat.getName()) || isMojibake(fixedName)) {
+                                        fixedName = canonical.getName();
+                                }
+                                if (isMojibake(cat.getDescription()) || isMojibake(fixedDesc)) {
+                                        fixedDesc = canonical.getDescription();
+                                }
+                        }
                         boolean dirty = false;
                         if (!Objects.equals(fixedName, cat.getName()) && !categoryRepository.existsByName(fixedName)) {
                                 cat.setName(fixedName);
@@ -205,6 +243,15 @@ public class DataInitializer implements CommandLineRunner {
                         String fixedName = repairMysqlLatin1Mojibake(product.getName());
                         String fixedCategory = repairMysqlLatin1Mojibake(product.getCategory());
                         String fixedDesc = repairMysqlLatin1Mojibake(product.getDescription());
+                        if (isMojibake(product.getCategory()) || isMojibake(fixedCategory)) {
+                                if (String.valueOf(product.getCategory()).contains("Tablet")) {
+                                        fixedCategory = "Điện thoại & Tablet";
+                                } else if (String.valueOf(product.getCategory()).contains("Thanh")) {
+                                        fixedCategory = "Phụ Kiện & Âm Thanh";
+                                } else if (String.valueOf(product.getCategory()).contains("Minh")) {
+                                        fixedCategory = "Nhà Thông Minh & Gia Dụng";
+                                }
+                        }
                         boolean dirty = false;
                         if (!Objects.equals(fixedName, product.getName())) {
                                 product.setName(fixedName);
@@ -229,6 +276,24 @@ public class DataInitializer implements CommandLineRunner {
                         log.info("Products already exist, skipping seeding.");
                 }
                 return repaired > 0;
+        }
+
+        static boolean isMojibake(String value) {
+                if (value == null || value.isEmpty()) {
+                        return false;
+                }
+                String repaired = repairMysqlLatin1Mojibake(value);
+                if (!repaired.equals(value)) {
+                        return true;
+                }
+                return value.indexOf('\uFFFD') >= 0
+                                || value.contains("áº")
+                                || value.contains("á»")
+                                || value.contains("Ä‘")
+                                || value.contains("Äi")
+                                || value.contains("Æ°")
+                                || value.contains("Æ¡")
+                                || value.contains("Ã‚");
         }
 
         static String repairMysqlLatin1Mojibake(String value) {
