@@ -685,3 +685,319 @@ img { height: auto; }
     box-shadow: 0 22px 44px -12px rgba(30, 58, 138, 0.16), 0 4px 12px rgba(15, 23, 42, 0.05);
   }
 }
+
+/* =========================================================
+   USER HEADER & CATEGORY NAVBAR — PRO VIP GLASSMORPHISM
+   ========================================================= */
+.site-header.user-header {
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 10px 30px -14px rgba(15, 23, 42, 0.08);
+}
+
+.user-header-accent-bar {
+  height: 2.5px;
+  width: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #4f46e5 38%, #7c3aed 72%, #e11d48 100%);
+}
+
+.user-header .header-inner {
+  padding-top: 0.72rem;
+  padding-bottom: 0.72rem;
+}
+
+.user-header .header-logo {
+  gap: 0.6rem;
+  transition: transform 180ms var(--ease-out);
+}
+
+.user-header .header-logo:hover {
+  transform: translateY(-1px);
+}
+
+.user-header .header-logo-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 55%, #7c3aed 100%);
+  box-shadow:
+    0 8px 18px -4px rgba(37, 99, 235, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.user-header .header-logo-text {
+  background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 60%, #6d28d9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #2563eb;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+}
+
+.header-logo-sub {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #64748b;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.user-header .header-search-form {
+  background: rgba(241, 245, 249, 0.88);
+  border: 1.5px solid rgba(203, 213, 225, 0.8);
+  padding: 3.5px 4.5px 3.5px 12px;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: all 200ms var(--ease-out);
+}
+
+.user-header .header-search-form:focus-within {
+  background: #ffffff;
+  border-color: #3b82f6;
+  box-shadow:
+    0 0 0 4px rgba(59, 130, 246, 0.14),
+    0 10px 22px -8px rgba(37, 99, 235, 0.14);
+}
+
+.header-search-lead-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  margin-right: 0.45rem;
+  flex-shrink: 0;
+}
+
+.user-header .header-search-form:focus-within .header-search-lead-icon {
+  color: #2563eb;
+}
+
+.user-header .header-search-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  padding: 6.5px 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px -2px rgba(37, 99, 235, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+
+.user-header .header-search-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.55);
+}
+
+.user-header .header-nav-links {
+  gap: clamp(0.22rem, 0.55vw, 0.5rem);
+}
+
+.user-header .header-nav-item {
+  padding: 0.4rem 0.72rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  color: #334155;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms var(--ease-out);
+}
+
+.user-header .header-nav-item:hover {
+  background-color: rgba(241, 245, 249, 0.9);
+  color: #1d4ed8;
+}
+
+.user-header .header-nav-item.active {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.11) 0%, rgba(79, 70, 229, 0.11) 100%);
+  color: #1d4ed8;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.user-header .header-flash-pill {
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+  border: 1px solid #fecdd3;
+  color: #e11d48 !important;
+  font-weight: 800 !important;
+  padding: 0.36rem 0.78rem;
+  box-shadow: 0 2px 10px -2px rgba(225, 29, 72, 0.16);
+}
+
+.user-header .header-flash-pill:hover,
+.user-header .header-flash-pill.active {
+  background: linear-gradient(135deg, #e11d48 0%, #ea580c 100%) !important;
+  border-color: transparent;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px -3px rgba(225, 29, 72, 0.42);
+  transform: translateY(-1px);
+}
+
+.user-header .header-category-menu {
+  background: rgba(255, 255, 255, 0.97);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 20px 42px -10px rgba(15, 23, 42, 0.16);
+  padding: 0.5rem;
+}
+
+.user-header .header-category-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.58rem 0.8rem;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms var(--ease-out);
+}
+
+.user-header .header-category-menu-item:hover {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  transform: translateX(2px);
+}
+
+.user-header .header-cart {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: all 180ms var(--ease-out);
+}
+
+.user-header .header-cart:hover {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -6px rgba(37, 99, 235, 0.25);
+}
+
+.user-header .header-cart-badge {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  box-shadow: 0 0 0 2px #ffffff, 0 3px 8px rgba(37, 99, 235, 0.4);
+}
+
+.user-header .header-account-trigger {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1.5px solid #e2e8f0;
+  padding: 3.5px 10px 3.5px 4px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: all 180ms var(--ease-out);
+}
+
+.user-header .header-account-trigger:hover {
+  border-color: #93c5fd;
+  background: #ffffff;
+  box-shadow: 0 8px 20px -8px rgba(37, 99, 235, 0.2);
+  transform: translateY(-1px);
+}
+
+.header-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.header-avatar-online {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #10b981;
+  border: 1.5px solid #ffffff;
+}
+
+.user-header .header-account-role {
+  color: #2563eb;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* Sub-Header Category Navbar */
+.category-navbar {
+  background: linear-gradient(90deg, rgba(248, 250, 252, 0.95) 0%, rgba(239, 246, 255, 0.75) 50%, rgba(248, 250, 252, 0.95) 100%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  padding: 0.5rem 0;
+}
+
+.category-navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.category-navbar-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+}
+
+.category-nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  font-size: 0.81rem;
+  font-weight: 600;
+  color: #475569;
+  padding: 0.32rem 0.85rem;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+  transition: all 180ms var(--ease-out);
+}
+
+.category-nav-pill:hover {
+  color: #1d4ed8;
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  transform: translateY(-1px);
+}
+
+.category-nav-pill.active {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  color: #ffffff;
+  border-color: transparent;
+  font-weight: 700;
+  box-shadow: 0 4px 12px -2px rgba(37, 99, 235, 0.38);
+}
+
+.category-navbar-perks {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.category-perk-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.category-perk-dot {
+  color: #cbd5e1;
+}
+
+@media (max-width: 1150px) {
+  .category-navbar-perks,
+  .header-logo-sub,
+  .header-search-lead-icon {
+    display: none;
+  }
+}
