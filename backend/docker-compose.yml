@@ -357,7 +357,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-${AI_API_KEY:-}}
-      GEMINI_MODEL: ${GEMINI_MODEL:-${AI_MODEL:-gemini-2.0-flash}}
+      GEMINI_MODEL: ${GEMINI_MODEL:-${AI_MODEL:-gemini-3.1-flash-lite}}
       AI_BASE_URL: ${AI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
@@ -36,18 +37,55 @@ const fmtDate  = (str) => {
  * Chỉ cho chọn những mã đủ điều kiện (ACTIVE + đủ đơn tối thiểu + còn lượt).
  */
 const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, appliedVoucherId, onSelect }) => {
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  return (
+  const modalNode = (
     <div
       className="shopmart-dialog-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Chọn mã giảm giá"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1050,
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+        overflowY: 'auto'
+      }}
       onClick={onClose}
     >
       <div
         className="shopmart-dialog-box"
         style={{
-          maxWidth: '520px', maxHeight: '85vh', padding: 0,
-          overflow: 'hidden', display: 'flex', flexDirection: 'column'
+          width: '100%',
+          maxWidth: '520px',
+          maxHeight: '85dvh',
+          padding: 0,
+          backgroundColor: '#ffffff',
+          borderRadius: '18px',
+          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -233,6 +271,7 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
         {/* Footer */}
         <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid #f1f5f9', textAlign: 'right' }}>
           <button
+            type="button"
             onClick={onClose}
             style={{
               padding: '0.6rem 1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0',
@@ -246,6 +285,11 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalNode, document.body);
+  }
+  return modalNode;
 };
 
 // Pure address mapping helpers (exported for verification)

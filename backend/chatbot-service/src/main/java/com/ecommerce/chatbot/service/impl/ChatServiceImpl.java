@@ -59,7 +59,7 @@ public class ChatServiceImpl implements ChatService {
     @Value("${ai.provider.api-key:}")
     private String aiApiKey;
 
-    @Value("${ai.provider.model:gemini-2.0-flash}")
+    @Value("${ai.provider.model:gemini-3.1-flash-lite}")
     private String aiModel;
 
     @Value("${ai.provider.temperature:0.2}")
