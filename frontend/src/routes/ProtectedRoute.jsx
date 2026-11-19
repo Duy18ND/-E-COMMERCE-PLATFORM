@@ -1,16 +1,13 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
+import Loading from '../components/common/Loading';
 
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const { isAuthenticated, isAdmin, roles, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="container page-container" style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748b' }}>
-        Đang tải phiên xác thực...
-      </div>
-    );
+    return <Loading message="Đang tải phiên xác thực..." />;
   }
 
   if (!isAuthenticated) {

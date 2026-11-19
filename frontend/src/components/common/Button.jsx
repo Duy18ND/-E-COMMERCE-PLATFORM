@@ -1,3 +1,5 @@
+import Icon from './Icons';
+
 const Button = ({
   children,
   type = 'button',
@@ -5,6 +7,8 @@ const Button = ({
   size = 'md',
   pill = true,
   disabled = false,
+  loading = false,
+  icon = null,
   onClick,
   className = '',
   style = {},
@@ -64,6 +68,15 @@ const Button = ({
 
   const colorStyles = getColors();
 
+  const isDisabled = disabled || loading;
+  const iconSize = size === 'sm' ? 14 : size === 'lg' ? 18 : 16;
+  const renderedIcon =
+    typeof icon === 'string' && icon.trim() ? (
+      <Icon name={icon.trim()} size={iconSize} spin={icon.trim() === 'loader'} />
+    ) : (
+      icon
+    );
+
   const baseStyles = {
     padding: getPadding(),
     fontSize: getFontSize(),
@@ -72,14 +85,15 @@ const Button = ({
     backgroundColor: colorStyles.bg,
     color: colorStyles.text,
     boxShadow: colorStyles.shadow,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
+    cursor: isDisabled ? 'not-allowed' : 'pointer',
+    opacity: isDisabled ? 0.65 : 1,
     fontWeight: 600,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '0.45rem',
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    transition:
+      'transform 150ms cubic-bezier(0.23, 1, 0.32, 1), background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease',
     textDecoration: 'none',
     ...style
   };
@@ -87,12 +101,12 @@ const Button = ({
   return (
     <button
       type={type}
-      disabled={disabled}
+      disabled={isDisabled}
       onClick={onClick}
       style={baseStyles}
       className={className}
       onMouseEnter={(e) => {
-        if (!disabled) {
+        if (!isDisabled) {
           e.currentTarget.style.transform = 'translateY(-1px)';
           if (variant === 'primary') {
             e.currentTarget.style.backgroundColor = '#1e40af';
@@ -100,7 +114,7 @@ const Button = ({
         }
       }}
       onMouseLeave={(e) => {
-        if (!disabled) {
+        if (!isDisabled) {
           e.currentTarget.style.transform = 'translateY(0)';
           if (variant === 'primary') {
             e.currentTarget.style.backgroundColor = '#1d4ed8';
@@ -109,6 +123,7 @@ const Button = ({
       }}
       {...props}
     >
+      {loading ? <Icon name="loader" size={15} spin /> : renderedIcon}
       {children}
     </button>
   );

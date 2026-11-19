@@ -77,25 +77,60 @@ test('ECOM-130 (ECOM-237 & ECOM-240): Kiểm thử Admin Quản lý Danh mục (
     'product-service/src/main/java/com/ecommerce/product/dto/request/CategoryRequest.java'
   );
 
-  // 1. Kiểm tra kết nối API Backend trong categoryService.js (BUG-S1-04)
+  // 1. Kiểm tra kết nối API Backend và xử lý lỗi HTTP trong categoryService.js (BUG-S1-04)
   assert.match(categoryServiceCode, /api\.post\('\/products\/categories'/, 'categoryService.create phải gọi POST /products/categories');
   assert.match(categoryServiceCode, /api\.put\(`\/products\/categories\/\$\{id\}`/, 'categoryService.update phải gọi PUT /products/categories/{id}');
   assert.match(categoryServiceCode, /api\.delete\(`\/products\/categories\/\$\{id\}`/, 'categoryService.delete phải gọi DELETE /products/categories/{id}');
   assert.match(categoryServiceCode, /api\.get\('\/products\/categories\/search'/, 'categoryService.search phải gọi GET /products/categories/search');
   assert.match(categoryServiceCode, /api\.get\(`\/products\/categories\/\$\{numId\}`\)/, 'categoryService.getById phải gọi GET /products/categories/{id}');
+  assert.match(categoryServiceCode, /getAllForAdmin:\s*async/, 'categoryService phải có hàm getAllForAdmin');
+  assert.match(categoryServiceCode, /rethrowIfBackendError\(err,\s*categoryData/, 'categoryService.create/update phải kiểm tra và ném lỗi HTTP từ Backend');
+  assert.match(categoryServiceCode, /rethrowIfBackendError\(err,\s*options,\s*'Không thể xóa danh mục\.'\)/, 'categoryService.delete phải kiểm tra và ném lỗi HTTP từ Backend');
 
-  // 2. Kiểm tra giao diện Admin Categories có validate không để trống và chống trùng tên
+  // 2. Kiểm tra giao diện Admin Categories có validate không để trống, chống trùng tên và tách biệt Loading / Error / Empty state
   assert.match(adminCategoriesCode, /Tên danh mục không được để trống/, 'Admin Categories phải kiểm tra tên danh mục rỗng');
   assert.match(adminCategoriesCode, /đã tồn tại trong hệ thống/, 'Admin Categories phải kiểm tra trùng tên danh mục');
+  assert.match(adminCategoriesCode, /categoryService\.getAllForAdmin\(\{\s*rejectOnError:\s*true\s*\}\)/, 'Admin Categories phải gọi categoryService.getAllForAdmin({ rejectOnError: true })');
   assert.match(adminCategoriesCode, /categoryService\.create\(formData\)/, 'Admin Categories phải gọi categoryService.create khi thêm mới');
   assert.match(adminCategoriesCode, /categoryService\.update\(selectedCategory\.id,\s*formData\)/, 'Admin Categories phải gọi categoryService.update khi sửa');
   assert.match(adminCategoriesCode, /categoryService\.delete\(selectedCategory\.id\)/, 'Admin Categories phải gọi categoryService.delete khi xóa');
+  assert.match(adminCategoriesCode, /data-testid="categories-error-state"/, 'Admin Categories phải có trạng thái Error riêng biệt với Empty state');
+  assert.match(adminCategoriesCode, /Không thể tải danh sách danh mục từ máy chủ/, 'Admin Categories phải hiển thị thông báo lỗi rõ ràng khi API thất bại');
 
   // 3. Kiểm tra Backend DTO & Phân quyền Admin Category
   assert.match(categoryRequestJava, /@NotBlank\(message = "Tên danh mục không được để trống"\)/, 'Backend CategoryRequest phải validate @NotBlank');
   assert.match(productControllerJava, /@PostMapping\("\/categories"\)[\s\S]*?requireAdminRole\(roles\);/, 'POST /categories phải yêu cầu ROLE_ADMIN');
   assert.match(productControllerJava, /@PutMapping\("\/categories\/\{id\}"\)[\s\S]*?requireAdminRole\(roles\);/, 'PUT /categories/{id} phải yêu cầu ROLE_ADMIN');
   assert.match(productControllerJava, /@DeleteMapping\("\/categories\/\{id\}"\)[\s\S]*?requireAdminRole\(roles\);/, 'DELETE /categories/{id} phải yêu cầu ROLE_ADMIN');
+});
+
+test('ECOM-109 & ECOM-201: Kiểm thử Code Splitting (React.lazy) và Suspense Fallback tránh màn hình trắng khi chuyển trang', () => {
+  const appRoutesCode = readSrc('routes/AppRoutes.jsx');
+  const userLayoutCode = readSrc('layouts/UserLayout.jsx');
+  const adminLayoutCode = readSrc('layouts/AdminLayout.jsx');
+
+  // Kiểm tra các trang được lazy load qua React.lazy()
+  const lazyPages = [
+    'Home', 'Products', 'ProductDetail', 'FlashSale', 'Cart', 'Checkout',
+    'OrderSuccess', 'Orders', 'OrderDetail', 'OrderTracking', 'Vouchers', 'MyVouchers',
+    'Login', 'Register',
+    'AdminDashboard', 'AdminProducts', 'AdminProductForm', 'AdminCategories',
+    'AdminOrders', 'AdminInventory', 'AdminSales', 'AdminSaleForm', 'AdminVouchers', 'AdminUsers', 'AdminReviews'
+  ];
+  for (const pageVar of lazyPages) {
+    assert.match(appRoutesCode, new RegExp(`const\\s+${pageVar}\\s*=\\s*React\\.lazy\\(`), `${pageVar} phải được tải qua React.lazy()`);
+  }
+
+  // Các thành phần khung và bảo vệ route cần thiết ngay lập tức được import trực tiếp
+  assert.match(appRoutesCode, /import UserLayout from '\.\.\/layouts\/UserLayout'/, 'UserLayout phải được import trực tiếp');
+  assert.match(appRoutesCode, /import AdminLayout from '\.\.\/layouts\/AdminLayout'/, 'AdminLayout phải được import trực tiếp');
+  assert.match(appRoutesCode, /import ProtectedRoute from '\.\/ProtectedRoute'/, 'ProtectedRoute phải được import trực tiếp');
+  assert.match(appRoutesCode, /import AdminRoute from '\.\/AdminRoute'/, 'AdminRoute phải được import trực tiếp');
+
+  // Suspense fallback tại AppRoutes, UserLayout và AdminLayout
+  assert.match(appRoutesCode, /<Suspense fallback=\{<Loading/, 'AppRoutes phải bọc Routes trong Suspense với Loading fallback');
+  assert.match(userLayoutCode, /<Suspense fallback=\{<Loading/, 'UserLayout phải bọc Outlet trong Suspense để giữ Header/Navbar khi chuyển trang');
+  assert.match(adminLayoutCode, /<Suspense fallback=\{<Loading/, 'AdminLayout phải bọc nội dung trang trong Suspense để giữ Sidebar/Header khi chuyển trang');
 });
 
 test('ECOM-133 (ECOM-246 & ECOM-249): Kiểm thử Admin Quản lý Sản phẩm & Tồn kho (CRUD, Validate giá > 0 & tồn kho >= 0)', () => {
@@ -183,4 +218,68 @@ test('ECOM-146 (ECOM-147 → ECOM-150): Kiểm thử cấu hình Docker Multi-st
   assert.match(nginxConf, /proxy_pass http:\/\/frontend_upstream;/, 'Nginx phải reverse proxy / sang frontend:80');
   assert.match(frontendDockerfile, /FROM node:20-alpine AS builder[\s\S]*?FROM nginx:1\.27-alpine/, 'Frontend Dockerfile phải là multi-stage build');
   assert.match(backendDockerignore, /gradle\.properties/, 'backend/.dockerignore phải loại trừ gradle.properties chứa đường dẫn cục bộ');
+});
+
+test('AI SHOPPING ASSISTANT: Kiểm thử tích hợp Chatbot Service (Gemini), API Gateway, MySQL chatbot_db và bộ component ChatbotWidget (Frontend)', () => {
+  const settingsGradle = readBackend('settings.gradle');
+  const gatewayYaml = readBackend('api-gateway/src/main/resources/application.yml');
+  const initSql = readBackend('docker/mysql/init.sql');
+  const composeYml = readBackend('docker-compose.yml');
+  const chatbotAppYml = readBackend('chatbot-service/src/main/resources/application.yml');
+  const chatControllerJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/controller/ChatController.java');
+  const chatServiceJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/service/impl/ChatServiceImpl.java');
+  const productToolsJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/tool/ProductShoppingTools.java');
+  const orderToolsJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/tool/CustomerOrderTools.java');
+  const supportToolsJava = readBackend('chatbot-service/src/main/java/com/ecommerce/chatbot/tool/CustomerSupportTools.java');
+  const chatbotServiceFe = readSrc('services/chatbotService.js');
+  const useChatbotFe = readSrc('hooks/useChatbot.js');
+  const chatbotWidgetFe = readSrc('components/chat/ChatbotWidget.jsx');
+  const chatWindowFe = readSrc('components/chat/ChatWindow.jsx');
+  const chatHeaderFe = readSrc('components/chat/ChatHeader.jsx');
+  const chatMessageFe = readSrc('components/chat/ChatMessage.jsx');
+  const chatInputFe = readSrc('components/chat/ChatInput.jsx');
+  const typingIndicatorFe = readSrc('components/chat/TypingIndicator.jsx');
+  const productCardFe = readSrc('components/chat/ProductSuggestionCard.jsx');
+  const sidebarFe = readSrc('components/chat/ConversationSidebar.jsx');
+  const userLayoutFe = readSrc('layouts/UserLayout.jsx');
+
+  // 1. Kiểm tra đăng ký module chatbot-service, database chatbot_db, Gemini env và route API Gateway
+  assert.match(settingsGradle, /include 'chatbot-service'/, 'settings.gradle phải khai báo module chatbot-service');
+  assert.match(initSql, /CREATE DATABASE IF NOT EXISTS chatbot_db/, 'init.sql phải khởi tạo database chatbot_db');
+  assert.match(initSql, /CREATE TABLE IF NOT EXISTS chat_conversations/, 'init.sql phải tạo bảng chat_conversations');
+  assert.match(initSql, /CREATE TABLE IF NOT EXISTS chat_messages/, 'init.sql phải tạo bảng chat_messages');
+  assert.match(gatewayYaml, /id: chatbot-service[\s\S]*?Path=\/api\/v1\/chatbot\/\*\*/, 'API Gateway phải định tuyến /api/v1/chatbot/** và /api/chatbot/** sang lb://chatbot-service');
+  assert.match(composeYml, /chatbot-service:[\s\S]*?GEMINI_API_KEY:/, 'docker-compose.yml phải có cấu hình container chatbot-service với GEMINI_API_KEY');
+  assert.match(chatbotAppYml, /GEMINI_API_KEY/, 'application.yml của chatbot-service phải sử dụng biến môi trường GEMINI_API_KEY');
+  assert.match(chatbotAppYml, /max-messages:\s*\$\{AI_MEMORY_MAX_MESSAGES:20\}/, 'Chat memory phải giới hạn cửa sổ mặc định 20 tin nhắn');
+
+  // 2. Kiểm tra đầy đủ REST endpoints và 10 AI Tools (Product, Order, Customer Support Policies)
+  assert.match(chatControllerJava, /@PostMapping\(\{"\/chat",\s*"\/messages"\}\)/, 'ChatController phải hỗ trợ POST /chat và /messages');
+  assert.match(chatControllerJava, /@PostMapping\("\/conversations"\)/, 'ChatController phải hỗ trợ POST /conversations');
+  assert.match(chatControllerJava, /@GetMapping\("\/conversations"\)/, 'ChatController phải hỗ trợ GET /conversations');
+  assert.match(chatControllerJava, /@DeleteMapping\("\/conversations\/\{conversationId\}"\)/, 'ChatController phải hỗ trợ DELETE /conversations/{id}');
+  assert.match(productToolsJava, /searchProducts\(/, 'ProductShoppingTools phải có tool searchProducts');
+  assert.match(productToolsJava, /getProductDetail\(/, 'ProductShoppingTools phải có tool getProductDetail');
+  assert.match(productToolsJava, /compareProducts\(/, 'ProductShoppingTools phải có tool compareProducts');
+  assert.match(productToolsJava, /getProductStock\(/, 'ProductShoppingTools phải có tool getProductStock');
+  assert.match(orderToolsJava, /getMyOrders\(/, 'CustomerOrderTools phải có tool getMyOrders');
+  assert.match(orderToolsJava, /getOrderStatus\(/, 'CustomerOrderTools phải có tool getOrderStatus chống IDOR');
+  assert.match(supportToolsJava, /getShippingPolicy\(/, 'CustomerSupportTools phải có tool getShippingPolicy');
+  assert.match(supportToolsJava, /getPaymentPolicy\(/, 'CustomerSupportTools phải có tool getPaymentPolicy');
+  assert.match(supportToolsJava, /getReturnPolicy\(/, 'CustomerSupportTools phải có tool getReturnPolicy');
+  assert.match(supportToolsJava, /getWarrantyPolicy\(/, 'CustomerSupportTools phải có tool getWarrantyPolicy');
+  assert.match(chatServiceJava, /PROMPT_INJECTION_PATTERN/, 'ChatServiceImpl phải có bảo vệ chống Prompt Injection');
+
+  // 3. Kiểm tra tích hợp bộ Component Frontend (ChatbotWidget, ChatWindow, ChatHeader, ChatMessage, ChatInput, TypingIndicator, ProductSuggestionCard, ConversationSidebar, useChatbot, chatbotService)
+  assert.match(chatbotServiceFe, /api\.post\(\s*'\/chatbot\/chat'/, 'chatbotService.js phải gọi POST /chatbot/chat');
+  assert.match(useChatbotFe, /export const useChatbot/, 'useChatbot.js phải cung cấp custom hook quản lý trạng thái hội thoại');
+  assert.match(chatbotWidgetFe, /data-testid="ai-shopping-assistant-widget"/, 'ChatbotWidget.jsx phải render widget trợ lý AI');
+  assert.match(chatWindowFe, /ChatHeader/, 'ChatWindow.jsx phải kết hợp ChatHeader, ChatMessage, ChatInput, TypingIndicator, ConversationSidebar');
+  assert.match(chatHeaderFe, /Trợ lý Mua sắm AI/, 'ChatHeader.jsx phải hiển thị tiêu đề Trợ lý Mua sắm AI');
+  assert.match(chatMessageFe, /ProductSuggestionCard/, 'ChatMessage.jsx phải hiển thị thẻ sản phẩm gợi ý ProductSuggestionCard');
+  assert.match(chatInputFe, /maxLength=\{1000\}/, 'ChatInput.jsx phải giới hạn độ dài tin nhắn 1000 ký tự');
+  assert.match(typingIndicatorFe, /data-testid="ai-typing-indicator"/, 'TypingIndicator.jsx phải hiển thị trạng thái AI đang phản hồi');
+  assert.match(productCardFe, /formatCurrency/, 'ProductSuggestionCard.jsx phải hiển thị giá thực tế sản phẩm');
+  assert.match(sidebarFe, /Các cuộc hội thoại đã lưu/, 'ConversationSidebar.jsx phải hiển thị lịch sử hội thoại');
+  assert.match(userLayoutFe, /<ChatbotWidget \/>/, 'UserLayout.jsx phải nhúng <ChatbotWidget /> cho khách hàng');
 });

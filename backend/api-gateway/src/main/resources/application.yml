@@ -70,7 +70,7 @@ spring:
           uri: lb://product-service
           predicates:
             - Path=/api/v1/products/admin,/api/v1/products/admin/**,/api/v1/products/categories/search,/api/v1/products/low-stock/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**,/api/v1/admin/reviews,/api/v1/admin/reviews/**
-            - Method=GET
+            - Method=GET,OPTIONS
           filters:
             - StripPrefix=0
             - AuthenticationFilter
@@ -84,7 +84,7 @@ spring:
           uri: lb://product-service
           predicates:
             - Path=/api/v1/products/*/reviews/me
-            - Method=GET
+            - Method=GET,OPTIONS
           filters:
             - StripPrefix=0
             - AuthenticationFilter
@@ -97,8 +97,8 @@ spring:
         - id: product-service-public
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/**,/api/v1/flash-sales,/api/v1/flash-sales/**
-            - Method=GET
+            - Path=/api/v1/products/**,/api/v1/products,/api/v1/flash-sales/**,/api/v1/flash-sales
+            - Method=GET,OPTIONS
           filters:
             - StripPrefix=0
             - name: CircuitBreaker
@@ -110,8 +110,8 @@ spring:
         - id: product-service-mutation
           uri: lb://product-service
           predicates:
-            - Path=/api/v1/products/**,/api/v1/admin/flash-sales/**,/api/v1/flash-sales/**,/api/v1/admin/reviews/**
-            - Method=POST,PUT,DELETE,PATCH
+            - Path=/api/v1/products,/api/v1/products/**,/api/v1/admin/flash-sales,/api/v1/admin/flash-sales/**,/api/v1/flash-sales,/api/v1/flash-sales/**,/api/v1/admin/reviews,/api/v1/admin/reviews/**
+            - Method=POST,PUT,DELETE,PATCH,OPTIONS
           filters:
             - StripPrefix=0
             - AuthenticationFilter
@@ -144,7 +144,7 @@ spring:
           uri: lb://order-service
           predicates:
             - Path=/api/v1/vouchers/active,/api/v1/vouchers
-            - Method=GET
+            - Method=GET,OPTIONS
           filters:
             - StripPrefix=0
             - name: AuthenticationFilter
@@ -187,9 +187,31 @@ spring:
                 name: payment-cb
                 fallbackUri: forward:/fallback/payment
 
+        # ── 7. Chatbot Service (AI Shopping Assistant) ─────────────────
+        - id: chatbot-service
+          uri: lb://chatbot-service
+          predicates:
+            - Path=/api/v1/chatbot/**,/api/v1/chatbot,/api/chatbot/**,/api/chatbot,/api/v1/chat/**,/api/v1/chat
+          filters:
+            - StripPrefix=0
+            - name: AuthenticationFilter
+              args:
+                optional: true
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: chatbot-cb
+                fallbackUri: forward:/fallback/chatbot
+
       # ── CORS Global Configuration ────────────────────────────────────
       # CORS Global Configuration
       globalcors:
+        add-to-simple-url-handler-mapping: true
         cors-configurations:
           '[/**]':
             allowed-origins:
@@ -197,7 +219,9 @@ spring:
               - "http://127.0.0.1"
               - "http://localhost:80"
               - "http://localhost:3000"
+              - "http://127.0.0.1:3000"
               - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
               - "http://localhost:8080"
             allowed-methods:
               - GET
@@ -244,6 +268,8 @@ resilience4j:
         base-config: default
       payment-cb:
         base-config: default
+      chatbot-cb:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -257,6 +283,8 @@ resilience4j:
         base-config: default
       payment-cb:
         base-config: default
+      chatbot-cb:
+        timeout-duration: 30s
 
 # ─── Actuator ────────────────────────────────────────────────
 management:

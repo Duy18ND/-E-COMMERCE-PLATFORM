@@ -7,6 +7,7 @@ import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import Pagination from '../../components/common/Pagination';
 import Button from '../../components/common/Button';
+import Icon from '../../components/common/Icons';
 import productService from '../../services/productService';
 import categoryService from '../../services/categoryService';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
@@ -71,13 +72,13 @@ const Products = () => {
     categoryService
       .getPublicCategories()
       .then((catData) => {
-        if (active && Array.isArray(catData) && catData.length > 0) {
+        if (active && Array.isArray(catData)) {
           setCategories(catData);
         }
       })
       .catch(() => {
         if (active) {
-          setCategories(INITIAL_CATEGORIES);
+          setCategories([]);
         }
       });
 
@@ -266,7 +267,7 @@ const Products = () => {
   );
 
   return (
-    <div className="container page-container">
+    <div className="container page-container ui-page-enter">
       <div
         style={{
           display: 'flex',
@@ -278,8 +279,9 @@ const Products = () => {
         }}
       >
         <div>
-          <h1 className="page-title">
-            {activeCategoryObj ? activeCategoryObj.name : 'Danh sách sản phẩm'}
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="package" size={24} color="#2563eb" />
+            <span>{activeCategoryObj ? activeCategoryObj.name : 'Danh sách sản phẩm'}</span>
           </h1>
           <p className="page-subtitle">
             {activeCategoryObj
@@ -319,8 +321,9 @@ const Products = () => {
             marginBottom: '1.25rem'
           }}
         >
-          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>
-            Đang lọc theo:
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+            <Icon name="filter" size={14} />
+            <span>Đang lọc theo:</span>
           </span>
           {searchTerm && (
             <span
@@ -348,10 +351,12 @@ const Products = () => {
                   color: '#1d4ed8',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  padding: 0
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center'
                 }}
               >
-                &times;
+                <Icon name="x" size={13} />
               </button>
             </span>
           )}
@@ -381,10 +386,12 @@ const Products = () => {
                   color: '#0369a1',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  padding: 0
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center'
                 }}
               >
-                &times;
+                <Icon name="x" size={13} />
               </button>
             </span>
           )}
@@ -416,10 +423,12 @@ const Products = () => {
                   color: '#a16207',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  padding: 0
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center'
                 }}
               >
-                &times;
+                <Icon name="x" size={13} />
               </button>
             </span>
           )}
@@ -449,10 +458,12 @@ const Products = () => {
                   color: '#15803d',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  padding: 0
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center'
                 }}
               >
-                &times;
+                <Icon name="x" size={13} />
               </button>
             </span>
           )}

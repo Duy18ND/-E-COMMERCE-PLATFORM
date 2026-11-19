@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import productService from '../../services/productService';
-import categoryService from '../../services/categoryService';
+import categoryService, { readFileAsCompressedDataUrl } from '../../services/categoryService';
 import useToast from '../../hooks/useToast';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import Icon from '../../components/common/Icons';
 
 // ─── Image upload constants ───────────────────────────────────────────────────
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -125,7 +126,7 @@ const ProductForm = () => {
   };
 
   // ─── Image handlers ───────────────────────────────────────────────────────
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -143,23 +144,20 @@ const ProductForm = () => {
       return;
     }
 
-    // Revoke previous blob URL
-    if (imagePreview && imagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview);
+    try {
+      const dataUrl = await readFileAsCompressedDataUrl(file);
+      setImageFile(file);
+      setImagePreview(dataUrl);
+      setImageError('');
+      setFormData((prev) => ({ ...prev, imageUrl: dataUrl }));
+    } catch {
+      setImageError('Không thể đọc file ảnh đã chọn.');
+      showInlineToast('Không thể đọc file ảnh đã chọn.');
     }
-
-    const blobUrl = URL.createObjectURL(file);
-    setImageFile(file);
-    setImagePreview(blobUrl);
-    setImageError('');
-    setFormData((prev) => ({ ...prev, imageUrl: blobUrl }));
     e.target.value = '';
   };
 
   const handleImageRemove = () => {
-    if (imagePreview && imagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview);
-    }
     setImageFile(null);
     setImagePreview('');
     setImageError('');
@@ -249,10 +247,14 @@ const ProductForm = () => {
             border: '1px solid #fecaca',
             color: '#dc2626',
             fontSize: '0.875rem',
-            fontWeight: 500
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.45rem'
           }}
         >
-          ⚠️ {toastMsg}
+          <Icon name="warning" size={16} color="#dc2626" />
+          <span>{toastMsg}</span>
         </div>
       )}
 
@@ -372,8 +374,9 @@ const ProductForm = () => {
                 </div>
 
                 {imageFile ? (
-                  <p style={{ margin: '0 0 0.65rem', fontSize: '0.8rem', color: '#64748b' }}>
-                    📎 {imageFile.name}{' '}
+                  <p style={{ margin: '0 0 0.65rem', fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="image" size={14} color="#2563eb" />
+                    <span>{imageFile.name}</span>{' '}
                     <span style={{ color: '#16a34a', fontWeight: 600 }}>(Ảnh mới)</span>
                   </p>
                 ) : (
@@ -394,10 +397,14 @@ const ProductForm = () => {
                       fontSize: '0.825rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      color: '#334155'
+                      color: '#334155',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
                     }}
                   >
-                    🔄 Thay ảnh
+                    <Icon name="refresh" size={14} />
+                    <span>Thay ảnh</span>
                   </button>
                   <button
                     type="button"
@@ -410,10 +417,14 @@ const ProductForm = () => {
                       fontSize: '0.825rem',
                       fontWeight: 600,
                       cursor: 'pointer',
-                      color: '#dc2626'
+                      color: '#dc2626',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
                     }}
                   >
-                    🗑 Xóa ảnh
+                    <Icon name="trash" size={14} />
+                    <span>Xóa ảnh</span>
                   </button>
                 </div>
               </div>
@@ -424,7 +435,7 @@ const ProductForm = () => {
                 onClick={() => fileInputRef.current?.click()}
                 style={uploadZoneStyle}
               >
-                <span style={{ fontSize: '2rem' }}>🖼️</span>
+                <Icon name="image" size={28} color="#2563eb" />
                 <span>+ Chọn ảnh từ máy tính</span>
                 <span style={{ fontSize: '0.75rem', color: '#b0bec5' }}>
                   JPG, PNG, WEBP – Tối đa {MAX_IMAGE_SIZE_MB}MB

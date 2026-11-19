@@ -1,17 +1,22 @@
+import { createPortal } from 'react-dom';
 import Button from './Button';
 
 const Modal = ({ isOpen, onClose, title, children, footer }) => {
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
+      className="shopmart-dialog-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={typeof title === 'string' ? title : undefined}
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -21,12 +26,15 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
       onClick={onClose}
     >
       <div
+        className="shopmart-dialog-box"
         style={{
           backgroundColor: '#ffffff',
-          borderRadius: '0.5rem',
+          borderRadius: '18px',
           maxWidth: '500px',
           width: '100%',
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          maxHeight: 'calc(100dvh - 2rem)',
+          display: 'flex',
+          flexDirection: 'column',
           overflow: 'hidden'
         }}
         onClick={(e) => e.stopPropagation()}
@@ -36,17 +44,28 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '0.75rem',
             padding: '1rem 1.25rem',
-            borderBottom: '1px solid #e2e8f0'
+            borderBottom: '1px solid #e3e8ef'
           }}
         >
-          <h3 style={{ margin: 0, fontSize: '1.25rem' }}>{title}</h3>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0b1220' }}>{title}</h3>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Đóng"
             style={{
-              background: 'none',
+              width: '32px',
+              height: '32px',
+              flexShrink: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#f1f5f9',
               border: 'none',
-              fontSize: '1.5rem',
+              borderRadius: '50%',
+              fontSize: '1.25rem',
+              lineHeight: 1,
               cursor: 'pointer',
               color: '#64748b'
             }}
@@ -54,14 +73,16 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
             &times;
           </button>
         </div>
-        <div style={{ padding: '1.25rem' }}>{children}</div>
+        <div style={{ padding: '1.25rem', overflowY: 'auto', minHeight: 0 }}>{children}</div>
         {footer && (
           <div
             style={{
               padding: '0.75rem 1.25rem',
-              borderTop: '1px solid #e2e8f0',
+              borderTop: '1px solid #e3e8ef',
+              backgroundColor: '#f8fafc',
               display: 'flex',
               justifyContent: 'flex-end',
+              flexWrap: 'wrap',
               gap: '0.5rem'
             }}
           >
@@ -71,6 +92,11 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 };
 
 export default Modal;

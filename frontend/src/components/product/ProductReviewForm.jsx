@@ -5,6 +5,7 @@ import reviewService, {
   validateReviewInput
 } from '../../services/reviewService';
 import useNotification from '../../hooks/useNotification';
+import Icon from '../common/Icons';
 
 const QUICK_REVIEW_SUGGESTIONS = [
   'Sản phẩm chính hãng, đóng gói rất cẩn thận.',
@@ -13,6 +14,9 @@ const QUICK_REVIEW_SUGGESTIONS = [
   'Đáng đồng tiền bát gạo, sẽ tiếp tục ủng hộ shop!'
 ];
 
+const EMPTY_PRODUCT = {};
+const EMPTY_ELIGIBLE_ORDERS = [];
+
 /**
  * Form đánh giá sao và nội dung nhận xét sau khi mua hàng.
  * Tích hợp trực tiếp với API Backend:
@@ -20,10 +24,10 @@ const QUICK_REVIEW_SUGGESTIONS = [
  * - PUT /api/v1/products/{productId}/reviews/{reviewId} (cập nhật đánh giá đã gửi)
  */
 const ProductReviewForm = ({
-  product = {},
+  product = EMPTY_PRODUCT,
   orderId = null,
   orderInfo = null,
-  eligibleOrders = [],
+  eligibleOrders = EMPTY_ELIGIBLE_ORDERS,
   initialReview = null,
   onSuccess,
   onCancel,
@@ -40,16 +44,24 @@ const ProductReviewForm = ({
     product?.image ||
     'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=300&q=80';
 
+  const initialReviewId = initialReview?.id ?? null;
+  const initialReviewOrderId = initialReview?.orderId ?? null;
+  const initialReviewRating = initialReview?.rating ? Number(initialReview.rating) : 0;
+  const initialReviewComment = initialReview?.comment || '';
+  const orderInfoId = orderInfo?.id ?? null;
+  const firstEligibleOrderId =
+    Array.isArray(eligibleOrders) && eligibleOrders.length > 0 ? eligibleOrders[0]?.id ?? '' : '';
+
   const defaultSelectedOrderId =
-    initialReview?.orderId ??
+    initialReviewOrderId ??
     orderId ??
-    orderInfo?.id ??
-    (eligibleOrders.length > 0 ? eligibleOrders[0].id : '');
+    orderInfoId ??
+    firstEligibleOrderId;
 
   const [selectedOrderId, setSelectedOrderId] = useState(defaultSelectedOrderId || '');
-  const [rating, setRating] = useState(initialReview?.rating ? Number(initialReview.rating) : 0);
+  const [rating, setRating] = useState(initialReviewRating);
   const [hoverRating, setHoverRating] = useState(0);
-  const [comment, setComment] = useState(initialReview?.comment || '');
+  const [comment, setComment] = useState(initialReviewComment);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
@@ -57,17 +69,26 @@ const ProductReviewForm = ({
 
   useEffect(() => {
     setSelectedOrderId(
-      initialReview?.orderId ??
+      initialReviewOrderId ??
       orderId ??
-      orderInfo?.id ??
-      (eligibleOrders.length > 0 ? eligibleOrders[0].id : '')
+      orderInfoId ??
+      firstEligibleOrderId
     );
-    setRating(initialReview?.rating ? Number(initialReview.rating) : 0);
-    setComment(initialReview?.comment || '');
+    setRating(initialReviewRating);
+    setComment(initialReviewComment);
     setFieldErrors({});
     setSubmitError('');
     setSubmitSuccess('');
-  }, [initialReview, orderId, orderInfo, eligibleOrders]);
+  }, [
+    resolvedProductId,
+    initialReviewId,
+    initialReviewOrderId,
+    initialReviewRating,
+    initialReviewComment,
+    orderId,
+    orderInfoId,
+    firstEligibleOrderId
+  ]);
 
   const activeStarValue = hoverRating || rating;
   const currentCharCount = comment.length;
@@ -232,7 +253,7 @@ const ProductReviewForm = ({
               gap: '0.45rem'
             }}
           >
-            <span>⭐</span>
+            <Icon name="star-filled" size={18} color="#f59e0b" />
             <span>{isEditMode ? 'Chỉnh sửa đánh giá của bạn' : 'Viết đánh giá sản phẩm sau mua'}</span>
           </h3>
           <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: '#64748b' }}>
@@ -254,7 +275,7 @@ const ProductReviewForm = ({
             border: '1px solid #86efac'
           }}
         >
-          <span>✓</span>
+          <Icon name="check" size={13} strokeWidth={2.4} />
           <span>Đã mua hàng xác thực</span>
         </span>
       </div>
@@ -425,13 +446,18 @@ const ProductReviewForm = ({
                     cursor: submitting ? 'not-allowed' : 'pointer',
                     fontSize: '2rem',
                     lineHeight: 1,
-                    color: isSelected ? '#f59e0b' : '#cbd5e1',
-                    transform: hoverRating === star ? 'scale(1.18)' : 'scale(1)',
-                    transition: 'transform 0.15s ease, color 0.15s ease',
-                    textShadow: isSelected ? '0 2px 6px rgba(245, 158, 11, 0.35)' : 'none'
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: hoverRating === star ? 'scale(1.16)' : 'scale(1)',
+                    transition: 'transform 0.15s ease'
                   }}
                 >
-                  ★
+                  <Icon
+                    name={isSelected ? 'star-filled' : 'star'}
+                    size={28}
+                    color={isSelected ? '#f59e0b' : '#cbd5e1'}
+                  />
                 </button>
               );
             })}
@@ -469,9 +495,18 @@ const ProductReviewForm = ({
           <div
             role="alert"
             data-testid="rating-error"
-            style={{ marginTop: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: '#dc2626' }}
+            style={{
+              marginTop: '0.4rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
           >
-            ⚠️ {fieldErrors.rating}
+            <Icon name="warning" size={14} color="#dc2626" />
+            <span>{fieldErrors.rating}</span>
           </div>
         )}
       </div>
@@ -535,9 +570,18 @@ const ProductReviewForm = ({
           <div
             role="alert"
             data-testid="comment-error"
-            style={{ marginTop: '0.35rem', fontSize: '0.8rem', fontWeight: 600, color: '#dc2626' }}
+            style={{
+              marginTop: '0.35rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
           >
-            ⚠️ {fieldErrors.comment}
+            <Icon name="warning" size={14} color="#dc2626" />
+            <span>{fieldErrors.comment}</span>
           </div>
         )}
 
@@ -566,7 +610,7 @@ const ProductReviewForm = ({
                 fontSize: '0.74rem',
                 color: '#334155',
                 cursor: submitting ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s'
+                transition: 'background-color 0.15s ease, border-color 0.15s ease'
               }}
             >
               + {item}
@@ -588,10 +632,14 @@ const ProductReviewForm = ({
             color: '#b91c1c',
             fontSize: '0.85rem',
             fontWeight: 600,
-            marginBottom: '1rem'
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.45rem'
           }}
         >
-          ❌ {submitError}
+          <Icon name="error" size={16} color="#dc2626" />
+          <span>{submitError}</span>
         </div>
       )}
 
@@ -607,10 +655,14 @@ const ProductReviewForm = ({
             color: '#166534',
             fontSize: '0.85rem',
             fontWeight: 600,
-            marginBottom: '1rem'
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.45rem'
           }}
         >
-          ✅ {submitSuccess}
+          <Icon name="success" size={16} color="#16a34a" />
+          <span>{submitSuccess}</span>
         </div>
       )}
 
@@ -640,10 +692,14 @@ const ProductReviewForm = ({
               color: '#475569',
               fontWeight: 700,
               fontSize: '0.875rem',
-              cursor: submitting ? 'not-allowed' : 'pointer'
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem'
             }}
           >
-            Hủy đánh giá
+            <Icon name="cancel" size={15} />
+            <span>Hủy đánh giá</span>
           </button>
         )}
 
@@ -666,7 +722,7 @@ const ProductReviewForm = ({
             boxShadow: submitting ? 'none' : '0 4px 12px rgba(37, 99, 235, 0.25)'
           }}
         >
-          <span>{submitting ? '⏳' : '⭐'}</span>
+          <Icon name={submitting ? 'loader' : 'star-filled'} size={15} spin={submitting} />
           <span>
             {submitting
               ? 'Đang gửi đánh giá...'

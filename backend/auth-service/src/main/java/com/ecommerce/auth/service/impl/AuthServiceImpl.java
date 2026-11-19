@@ -158,14 +158,18 @@ public class AuthServiceImpl implements AuthService {
         }
 
         long remainingTtl = jwtTokenProvider.getRemainingExpirationMs(token);
-        if (remainingTtl > 0) {
-            redisTemplate.opsForValue().set(
-                    JwtTokenProvider.TOKEN_BLACKLIST_PREFIX + token,
-                    "blacklisted",
-                    remainingTtl,
-                    TimeUnit.MILLISECONDS
-            );
-            log.info("Token has been blacklisted in Redis for {} ms", remainingTtl);
+        if (remainingTtl > 0 && redisTemplate != null) {
+            try {
+                redisTemplate.opsForValue().set(
+                        JwtTokenProvider.TOKEN_BLACKLIST_PREFIX + token,
+                        "blacklisted",
+                        remainingTtl,
+                        TimeUnit.MILLISECONDS
+                );
+                log.info("Token has been blacklisted in Redis for {} ms", remainingTtl);
+            } catch (Exception ex) {
+                log.warn("Failed to store logout token in Redis blacklist: {}", ex.getMessage());
+            }
         }
     }
 }

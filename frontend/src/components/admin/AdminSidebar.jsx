@@ -1,4 +1,5 @@
 import { NavLink, Link } from 'react-router-dom';
+import Icon from '../common/Icons';
 
 const AdminSidebar = ({
   isOpen = false,
@@ -7,15 +8,15 @@ const AdminSidebar = ({
   onToggleCollapse
 }) => {
   const menuItems = [
-    { icon: '📊', text: 'Tổng quan', path: '/admin', end: true },
-    { icon: '📦', text: 'Quản lý sản phẩm', path: '/admin/products' },
-    { icon: '🏷️', text: 'Quản lý danh mục', path: '/admin/categories' },
-    { icon: '📑', text: 'Quản lý đơn hàng', path: '/admin/orders' },
-    { icon: '🏭', text: 'Quản lý tồn kho', path: '/admin/inventory' },
-    { icon: '⚡', text: 'Quản lý Sale / Khuyến mãi', path: '/admin/sales' },
-    { icon: '🎫', text: 'Quản lý mã giảm giá', path: '/admin/vouchers' },
-    { icon: '⭐', text: 'Quản lý đánh giá', path: '/admin/reviews' },
-    { icon: '👥', text: 'Quản lý Tài khoản', path: '/admin/users' }
+    { icon: 'dashboard', text: 'Tổng quan', path: '/admin', end: true },
+    { icon: 'package', text: 'Quản lý sản phẩm', path: '/admin/products' },
+    { icon: 'tag', text: 'Quản lý danh mục', path: '/admin/categories' },
+    { icon: 'clipboard', text: 'Quản lý đơn hàng', path: '/admin/orders' },
+    { icon: 'layers', text: 'Quản lý tồn kho', path: '/admin/inventory' },
+    { icon: 'flash', text: 'Quản lý Sale / Khuyến mãi', path: '/admin/sales' },
+    { icon: 'ticket', text: 'Quản lý mã giảm giá', path: '/admin/vouchers' },
+    { icon: 'star', text: 'Quản lý đánh giá', path: '/admin/reviews' },
+    { icon: 'users', text: 'Quản lý Tài khoản', path: '/admin/users' }
   ];
 
   return (
@@ -48,7 +49,7 @@ const AdminSidebar = ({
                 title={isCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
                 aria-label="Thu gọn hoặc mở rộng sidebar"
               >
-                {isCollapsed ? '»' : '«'}
+                <Icon name={isCollapsed ? 'chevron-right' : 'chevron-left'} size={15} />
               </button>
             )}
 
@@ -59,7 +60,7 @@ const AdminSidebar = ({
                 onClick={onClose}
                 aria-label="Đóng menu"
               >
-                ✕
+                <Icon name="x" size={16} />
               </button>
             )}
           </div>
@@ -76,7 +77,9 @@ const AdminSidebar = ({
                 title={item.text}
                 className={({ isActive }) => `admin-sidebar-link ${isActive ? 'active' : ''}`}
               >
-                <span className="admin-sidebar-icon">{item.icon}</span>
+                <span className="admin-sidebar-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name={item.icon} size={17} />
+                </span>
                 <span className="admin-sidebar-label">{item.text}</span>
               </NavLink>
             ))}
@@ -86,11 +89,14 @@ const AdminSidebar = ({
         <div className="admin-sidebar-footer">
           {/* Active Campaign Mini Card */}
           <div className="admin-sidebar-campaign-card">
-            <div className="admin-sidebar-campaign-icon">⚡</div>
+            <div className="admin-sidebar-campaign-icon" style={{ color: '#f87171', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="flash" size={16} />
+            </div>
             <div className="admin-sidebar-campaign-text">
               <div style={{ fontSize: '0.725rem', color: '#94a3b8' }}>Chiến dịch Sale</div>
-              <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#f87171' }}>
-                ● Đang hoạt động
+              <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#4ade80', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Icon name="active" size={9} color="#4ade80" />
+                <span>Đang hoạt động</span>
               </div>
             </div>
           </div>
@@ -104,7 +110,9 @@ const AdminSidebar = ({
               className="admin-sidebar-store-link"
               title="Về trang cửa hàng"
             >
-              <span className="admin-sidebar-icon">⬅️</span>
+              <span className="admin-sidebar-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="arrow-left" size={16} />
+              </span>
               <span className="admin-sidebar-label">Về trang cửa hàng</span>
             </Link>
           </div>

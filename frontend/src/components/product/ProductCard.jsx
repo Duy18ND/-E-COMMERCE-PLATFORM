@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatCurrency';
 import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
+import Icon from '../common/Icons';
 
 const DEFAULT_FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
@@ -52,20 +53,7 @@ const ProductCard = ({ product }) => {
         justifyContent: 'space-between',
         height: '100%',
         minWidth: 0,
-        transition: 'all 0.25s ease',
         position: 'relative'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = isSale
-          ? '0 14px 28px -4px rgba(220, 38, 38, 0.15)'
-          : '0 14px 28px -4px rgba(37, 99, 235, 0.12)';
-        e.currentTarget.style.borderColor = isSale ? '#fca5a5' : '#dbeafe';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.04)';
-        e.currentTarget.style.borderColor = isSale ? '#fed7aa' : '#f1f5f9';
       }}
     >
       <div style={{ minWidth: 0 }}>
@@ -93,14 +81,13 @@ const ProductCard = ({ product }) => {
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
-                transition: 'transform 0.3s ease'
+                objectFit: 'cover'
               }}
-              onMouseEnter={(e) => (e.target.style.transform = 'scale(1.05)')}
-              onMouseLeave={(e) => (e.target.style.transform = 'scale(1)')}
             />
           ) : (
-            <span style={{ fontSize: '3rem', color: '#cbd5e1' }}>📦</span>
+            <span style={{ color: '#cbd5e1', display: 'inline-flex' }}>
+              <Icon name="package" size={38} />
+            </span>
           )}
 
           {/* Sale or Brand Badge */}
@@ -116,11 +103,15 @@ const ProductCard = ({ product }) => {
                 borderRadius: '6px',
                 fontSize: '0.7rem',
                 fontWeight: 800,
-                boxShadow: '0 2px 6px rgba(220, 38, 38, 0.4)',
-                zIndex: 2
+                boxShadow: '0 2px 6px rgba(220, 38, 38, 0.35)',
+                zIndex: 2,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px'
               }}
             >
-              ⚡ -{discountPercent}%
+              <Icon name="flash" size={11} />
+              <span>-{discountPercent}%</span>
             </span>
           ) : (
             <span
@@ -128,16 +119,20 @@ const ProductCard = ({ product }) => {
                 position: 'absolute',
                 top: '8px',
                 left: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                backgroundColor: 'rgba(255, 255, 255, 0.92)',
                 backdropFilter: 'blur(4px)',
                 padding: '2px 7px',
                 borderRadius: '9999px',
                 fontSize: '0.68rem',
                 fontWeight: 700,
-                color: '#1d4ed8'
+                color: '#1d4ed8',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px'
               }}
             >
-              Chính hãng
+              <Icon name="shield-check" size={11} />
+              <span>Chính hãng</span>
             </span>
           )}
 
@@ -274,11 +269,11 @@ const ProductCard = ({ product }) => {
             fontSize: 'clamp(0.75rem, 1.5vw, 0.85rem)',
             fontWeight: 700,
             cursor: isAdmin || isOutOfStock ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s',
+            transition: 'background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px',
+            gap: '5px',
             whiteSpace: 'nowrap'
           }}
           onMouseEnter={(e) => {
@@ -295,18 +290,30 @@ const ProductCard = ({ product }) => {
           }}
         >
           {isAdmin ? (
-            'Khóa giỏ'
+            <>
+              <Icon name="lock" size={13} />
+              <span>Khóa giỏ</span>
+            </>
           ) : isOutOfStock ? (
-            'Hết hàng'
+            <>
+              <Icon name="out-of-stock" size={14} />
+              <span>Hết hàng</span>
+            </>
           ) : isAdded ? (
             <>
-              <span>✓</span>
+              <Icon name="check" size={14} strokeWidth={2.5} />
               <span>Đã thêm</span>
             </>
           ) : isSale ? (
-            '+ Săn Sale'
+            <>
+              <Icon name="flash" size={13} />
+              <span>Săn Sale</span>
+            </>
           ) : (
-            '+ Thêm giỏ'
+            <>
+              <Icon name="cart-plus" size={15} />
+              <span>Thêm giỏ</span>
+            </>
           )}
         </button>
 
@@ -320,14 +327,16 @@ const ProductCard = ({ product }) => {
             color: '#475569',
             fontSize: 'clamp(0.75rem, 1.5vw, 0.85rem)',
             fontWeight: 600,
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
+            gap: '4px',
             textDecoration: 'none',
             flexShrink: 0
           }}
         >
-          Xem
+          <Icon name="eye" size={14} />
+          <span>Xem</span>
         </Link>
       </div>
     </div>

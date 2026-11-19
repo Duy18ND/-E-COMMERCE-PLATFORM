@@ -9,6 +9,7 @@ import Loading from '../../components/common/Loading';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import OrderStatus from '../../components/order/OrderStatus';
 import Pagination from '../../components/admin/Pagination';
+import Icon from '../../components/common/Icons';
 
 const FALLBACK_AVATAR =
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80';
@@ -48,7 +49,7 @@ const UserStatusBadge = ({ status }) => {
         whiteSpace: 'nowrap'
       }}
     >
-      <span>{isLocked ? '🔒' : '●'}</span>
+      <Icon name={isLocked ? 'lock' : 'dot'} size={isLocked ? 12 : 8} />
       <span>{isLocked ? 'Đã khóa' : 'Đang hoạt động'}</span>
     </span>
   );
@@ -74,7 +75,7 @@ const UserRoleBadge = ({ role }) => {
         whiteSpace: 'nowrap'
       }}
     >
-      <span>{isAdmin ? '🛡️' : '👤'}</span>
+      <Icon name={isAdmin ? 'shield-check' : 'user'} size={13} />
       <span>{isAdmin ? 'ADMIN' : 'KHÁCH HÀNG'}</span>
     </span>
   );
@@ -441,7 +442,7 @@ const AdminUsers = () => {
             gap: '0.4rem'
           }}
         >
-          <span>🔄</span>
+          <Icon name="refresh" size={15} spin={loading} />
           <span>{loading ? 'Đang tải...' : 'Làm mới dữ liệu'}</span>
         </button>
       </div>
@@ -454,7 +455,7 @@ const AdminUsers = () => {
 
       {/* 2. THỐNG KÊ TỔNG QUAN KHÁCH HÀNG */}
       <div
-        className="admin-users-kpi-grid"
+        className="admin-users-kpi-grid ui-stagger"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(210px, 100%), 1fr))',
@@ -469,7 +470,7 @@ const AdminUsers = () => {
             sub: `Tổng tài khoản hệ thống: ${stats.totalAll}`,
             color: '#2563eb',
             bg: '#eff6ff',
-            icon: '👥'
+            icon: 'users'
           },
           {
             label: 'Đang hoạt động',
@@ -477,7 +478,7 @@ const AdminUsers = () => {
             sub: 'Tài khoản trạng thái ACTIVE',
             color: '#16a34a',
             bg: '#dcfce7',
-            icon: '✅'
+            icon: 'check-circle'
           },
           {
             label: 'Đã khóa',
@@ -485,7 +486,7 @@ const AdminUsers = () => {
             sub: 'Tài khoản bị khóa tạm thời',
             color: '#dc2626',
             bg: '#fef2f2',
-            icon: '🔒'
+            icon: 'lock'
           },
           {
             label: 'Tổng Quản trị viên',
@@ -493,12 +494,12 @@ const AdminUsers = () => {
             sub: 'Tài khoản quyền ADMIN',
             color: '#7c3aed',
             bg: '#ede9fe',
-            icon: '🛡️'
+            icon: 'shield-check'
           }
         ].map((item) => (
           <div
             key={item.label}
-            className="card"
+            className="card ui-kpi-card"
             style={{
               padding: '1.1rem',
               display: 'flex',
@@ -511,37 +512,25 @@ const AdminUsers = () => {
           >
             <div
               style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '10px',
+                width: '44px',
+                height: '44px',
+                borderRadius: '11px',
                 backgroundColor: item.bg,
                 color: item.color,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.35rem',
                 flexShrink: 0
               }}
             >
-              {item.icon}
+              <Icon name={item.icon} size={20} />
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                {item.label}
-              </div>
-              <div
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 800,
-                  color: item.color,
-                  lineHeight: 1.2
-                }}
-              >
+              <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>{item.label}</div>
+              <div style={{ fontSize: '1.45rem', fontWeight: 800, color: item.color, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>
                 {item.value}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
-                {item.sub}
-              </div>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{item.sub}</div>
             </div>
           </div>
         ))}
@@ -571,10 +560,12 @@ const AdminUsers = () => {
               left: '10px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#94a3b8'
+              color: '#94a3b8',
+              display: 'inline-flex',
+              pointerEvents: 'none'
             }}
           >
-            🔍
+            <Icon name="search" size={15} />
           </span>
           <input
             type="text"
@@ -616,8 +607,8 @@ const AdminUsers = () => {
           }}
         >
           <option value="ALL">Vai trò: Tất cả</option>
-          <option value="USER">👤 Khách hàng (USER)</option>
-          <option value="ADMIN">🛡️ Quản trị viên (ADMIN)</option>
+          <option value="USER">Khách hàng (USER)</option>
+          <option value="ADMIN">Quản trị viên (ADMIN)</option>
         </select>
 
         {/* Bộ lọc Trạng thái: Tất cả / Đang hoạt động / Đã khóa */}
@@ -639,8 +630,8 @@ const AdminUsers = () => {
           }}
         >
           <option value="ALL">Trạng thái: Tất cả</option>
-          <option value="ACTIVE">🟢 Đang hoạt động (ACTIVE)</option>
-          <option value="LOCKED">🔒 Đã khóa (LOCKED)</option>
+          <option value="ACTIVE">Đang hoạt động (ACTIVE)</option>
+          <option value="LOCKED">Đã khóa (LOCKED)</option>
         </select>
 
         {/* Sắp xếp */}
@@ -713,7 +704,9 @@ const AdminUsers = () => {
           </div>
         ) : error && users.length === 0 ? (
           <div style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '2.75rem', marginBottom: '0.5rem' }}>⚠️</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#fef2f2', color: '#dc2626', marginBottom: '0.65rem' }}>
+              <Icon name="warning" size={28} />
+            </div>
             <h3 style={{ margin: '0 0 0.35rem', color: '#0f172a', fontWeight: 700 }}>
               Không thể tải danh sách khách hàng
             </h3>
@@ -721,12 +714,17 @@ const AdminUsers = () => {
               {error}
             </p>
             <Button variant="primary" size="sm" onClick={loadUsers}>
-              🔄 Thử lại ngay
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Icon name="refresh" size={14} />
+                <span>Thử lại ngay</span>
+              </span>
             </Button>
           </div>
         ) : filteredUsers.length === 0 ? (
           <div style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '2.75rem', marginBottom: '0.5rem' }}>👥</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#f1f5f9', color: '#64748b', marginBottom: '0.65rem' }}>
+              <Icon name="users" size={28} />
+            </div>
             <h3 style={{ margin: '0 0 0.35rem', color: '#0f172a', fontWeight: 700 }}>
               Không tìm thấy khách hàng phù hợp
             </h3>
@@ -870,8 +868,9 @@ const AdminUsers = () => {
                         {/* Số điện thoại */}
                         <td style={{ whiteSpace: 'nowrap', fontSize: '0.875rem' }}>
                           {hasPhone ? (
-                            <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                              📞 {u.phone}
+                            <span style={{ fontWeight: 600, color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <Icon name="phone" size={13} color="#64748b" />
+                              <span>{u.phone}</span>
                             </span>
                           ) : (
                             <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>
@@ -905,10 +904,14 @@ const AdminUsers = () => {
                                 fontSize: '0.78rem',
                                 fontWeight: 600,
                                 cursor: 'pointer',
-                                whiteSpace: 'nowrap'
+                                whiteSpace: 'nowrap',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem'
                               }}
                             >
-                              👁️ Xem chi tiết
+                              <Icon name="eye" size={14} />
+                              <span>Xem chi tiết</span>
                             </button>
 
                             {isAdminRole ? (
@@ -925,10 +928,14 @@ const AdminUsers = () => {
                                   padding: '0.3rem 0.55rem',
                                   borderRadius: '6px',
                                   fontWeight: 600,
-                                  whiteSpace: 'nowrap'
+                                  whiteSpace: 'nowrap',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem'
                                 }}
                               >
-                                🛡️ Bảo vệ Admin
+                                <Icon name="shield-check" size={13} color="#64748b" />
+                                <span>Bảo vệ Admin</span>
                               </span>
                             ) : isLocked ? (
                               <button
@@ -944,10 +951,14 @@ const AdminUsers = () => {
                                   fontSize: '0.78rem',
                                   fontWeight: 700,
                                   cursor: actionLoading ? 'not-allowed' : 'pointer',
-                                  whiteSpace: 'nowrap'
+                                  whiteSpace: 'nowrap',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem'
                                 }}
                               >
-                                🔓 Mở khóa
+                                <Icon name="unlock" size={13} />
+                                <span>Mở khóa</span>
                               </button>
                             ) : (
                               <button
@@ -963,10 +974,14 @@ const AdminUsers = () => {
                                   fontSize: '0.78rem',
                                   fontWeight: 700,
                                   cursor: actionLoading ? 'not-allowed' : 'pointer',
-                                  whiteSpace: 'nowrap'
+                                  whiteSpace: 'nowrap',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem'
                                 }}
                               >
-                                🔒 Khóa tài khoản
+                                <Icon name="lock" size={13} />
+                                <span>Khóa tài khoản</span>
                               </button>
                             )}
                           </div>
@@ -1054,13 +1069,19 @@ const AdminUsers = () => {
                   padding: '0.85rem 1rem',
                   fontSize: '0.875rem',
                   color: '#991b1b',
-                  lineHeight: 1.55
+                  lineHeight: 1.55,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.6rem'
                 }}
               >
-                ⚠️ Bạn có chắc chắn muốn <strong>Khóa tài khoản</strong> này không?
-                <br />
-                Sau khi khóa, trạng thái tài khoản trên hệ thống sẽ chuyển sang{' '}
-                <strong>Đã khóa (BLOCKED)</strong>. Dữ liệu hồ sơ và lịch sử đơn hàng vẫn được bảo toàn.
+                <Icon name="warning" size={18} color="#dc2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  Bạn có chắc chắn muốn <strong>Khóa tài khoản</strong> này không?
+                  <br />
+                  Sau khi khóa, trạng thái tài khoản trên hệ thống sẽ chuyển sang{' '}
+                  <strong>Đã khóa (BLOCKED)</strong>. Dữ liệu hồ sơ và lịch sử đơn hàng vẫn được bảo toàn.
+                </div>
               </div>
             ) : (
               <div
@@ -1071,13 +1092,19 @@ const AdminUsers = () => {
                   padding: '0.85rem 1rem',
                   fontSize: '0.875rem',
                   color: '#166534',
-                  lineHeight: 1.55
+                  lineHeight: 1.55,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.6rem'
                 }}
               >
-                ✅ Bạn có chắc chắn muốn <strong>Mở khóa tài khoản</strong> này không?
-                <br />
-                Sau khi mở khóa, trạng thái tài khoản sẽ trở lại{' '}
-                <strong>Đang hoạt động (ACTIVE)</strong> để khách hàng tiếp tục mua sắm.
+                <Icon name="check-circle" size={18} color="#16a34a" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  Bạn có chắc chắn muốn <strong>Mở khóa tài khoản</strong> này không?
+                  <br />
+                  Sau khi mở khóa, trạng thái tài khoản sẽ trở lại{' '}
+                  <strong>Đang hoạt động (ACTIVE)</strong> để khách hàng tiếp tục mua sắm.
+                </div>
               </div>
             )}
 
@@ -1107,11 +1134,19 @@ const AdminUsers = () => {
                 disabled={actionLoading}
                 onClick={handleConfirmStatusChange}
               >
-                {actionLoading
-                  ? 'Đang xử lý...'
-                  : confirmState.nextStatus === 'LOCKED'
-                    ? '🔒 Xác nhận khóa'
-                    : '🔓 Xác nhận mở khóa'}
+                {actionLoading ? (
+                  'Đang xử lý...'
+                ) : confirmState.nextStatus === 'LOCKED' ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="lock" size={14} />
+                    <span>Xác nhận khóa</span>
+                  </span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Icon name="unlock" size={14} />
+                    <span>Xác nhận mở khóa</span>
+                  </span>
+                )}
               </Button>
             </div>
           </div>
@@ -1235,8 +1270,9 @@ const AdminUsers = () => {
                   border: '1px solid #e2e8f0'
                 }}
               >
-                <div style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>
-                  📍 Địa chỉ nhận hàng thực tế
+                <div style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Icon name="pin" size={13} color="#2563eb" />
+                  <span>Địa chỉ nhận hàng thực tế</span>
                 </div>
                 <div
                   style={{
@@ -1250,9 +1286,17 @@ const AdminUsers = () => {
                   {detailLoading ? 'Đang tải địa chỉ...' : detailUser.address || 'Chưa cập nhật'}
                 </div>
                 {detailUser.defaultAddress?.receiverName && (
-                  <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.2rem' }}>
-                    Người nhận: <strong>{detailUser.defaultAddress.receiverName}</strong>
-                    {detailUser.defaultAddress.phone ? ` • 📞 ${detailUser.defaultAddress.phone}` : ''}
+                  <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <span>
+                      Người nhận: <strong>{detailUser.defaultAddress.receiverName}</strong>
+                    </span>
+                    {detailUser.defaultAddress.phone ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <span>•</span>
+                        <Icon name="phone" size={12} color="#64748b" />
+                        <span>{detailUser.defaultAddress.phone}</span>
+                      </span>
+                    ) : null}
                   </div>
                 )}
 
@@ -1298,8 +1342,9 @@ const AdminUsers = () => {
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
-                    📦 Lịch sử mua hàng ({detailUser.orderCount ?? 0} đơn)
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Icon name="package" size={16} color="#2563eb" />
+                    <span>Lịch sử mua hàng ({detailUser.orderCount ?? 0} đơn)</span>
                   </div>
                   {!detailLoading && (detailUser.orderCount ?? 0) > 0 && (
                     <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
@@ -1363,12 +1408,13 @@ const AdminUsers = () => {
                           <OrderStatus status={ord.status} />
                         </div>
                         {ord.shippingAddress && (
-                          <div style={{ fontSize: '0.74rem', color: '#64748b', wordBreak: 'break-word' }}>
-                            📍 {ord.shippingAddress}
+                          <div style={{ fontSize: '0.74rem', color: '#64748b', wordBreak: 'break-word', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Icon name="pin" size={12} color="#64748b" />
+                            <span>{ord.shippingAddress}</span>
                           </div>
                         )}
                       </div>
-                      <strong style={{ color: '#dc2626', fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
+                      <strong style={{ color: '#dc2626', fontSize: '0.88rem', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                         {formatCurrency(ord.finalAmount ?? ord.totalAmount ?? 0)}
                       </strong>
                     </div>
@@ -1411,7 +1457,10 @@ const AdminUsers = () => {
                     disabled={actionLoading}
                     onClick={() => handleRequestToggleStatus(detailUser)}
                   >
-                    {detailUser.status === 'LOCKED' ? '🔓 Mở khóa tài khoản' : '🔒 Khóa tài khoản'}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Icon name={detailUser.status === 'LOCKED' ? 'unlock' : 'lock'} size={14} />
+                      <span>{detailUser.status === 'LOCKED' ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}</span>
+                    </span>
                   </Button>
                 )}
               </div>

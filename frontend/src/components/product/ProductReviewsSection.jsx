@@ -14,19 +14,28 @@ import reviewService, {
 import ProductReviewForm from './ProductReviewForm';
 import Loading from '../common/Loading';
 import ErrorMessage from '../common/ErrorMessage';
+import Icon from '../common/Icons';
 
 /**
  * Hiển thị dãy 5 ngôi sao hỗ trợ cả điểm lẻ thập phân (ví dụ: 4.5 sao) và điểm nguyên.
  */
 export const renderRatingStars = (ratingValue = 0, size = '1.05rem') => {
   const safeRating = Math.max(0, Math.min(5, Number(ratingValue) || 0));
+  const iconSize =
+    typeof size === 'number'
+      ? size
+      : String(size).includes('1.45')
+        ? 22
+        : String(size).includes('1.1')
+          ? 18
+          : 16;
   return (
     <span
       aria-label={`${safeRating} trên 5 sao`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '2px',
+        gap: '3px',
         fontSize: size,
         lineHeight: 1
       }}
@@ -36,29 +45,23 @@ export const renderRatingStars = (ratingValue = 0, size = '1.05rem') => {
         const fillPercent = Math.round(fillRatio * 100);
 
         if (fillPercent >= 95) {
-          return (
-            <span key={star} style={{ color: '#f59e0b' }}>
-              ★
-            </span>
-          );
+          return <Icon key={star} name="star-filled" size={iconSize} color="#f59e0b" />;
         }
         if (fillPercent <= 5) {
-          return (
-            <span key={star} style={{ color: '#cbd5e1' }}>
-              ★
-            </span>
-          );
+          return <Icon key={star} name="star-filled" size={iconSize} color="#cbd5e1" />;
         }
         return (
           <span
             key={star}
             style={{
               position: 'relative',
-              display: 'inline-block',
-              color: '#cbd5e1'
+              display: 'inline-flex',
+              width: `${iconSize}px`,
+              height: `${iconSize}px`,
+              lineHeight: 0
             }}
           >
-            ★
+            <Icon name="star-filled" size={iconSize} color="#cbd5e1" />
             <span
               style={{
                 position: 'absolute',
@@ -66,10 +69,10 @@ export const renderRatingStars = (ratingValue = 0, size = '1.05rem') => {
                 left: 0,
                 width: `${fillPercent}%`,
                 overflow: 'hidden',
-                color: '#f59e0b'
+                display: 'inline-flex'
               }}
             >
-              ★
+              <Icon name="star-filled" size={iconSize} color="#f59e0b" style={{ flexShrink: 0 }} />
             </span>
           </span>
         );
@@ -466,7 +469,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                 gap: '0.5rem'
               }}
             >
-              <span>⭐</span>
+              <Icon name="star-filled" size={20} color="#f59e0b" />
               <span>Xếp hạng &amp; Đánh giá của khách hàng</span>
             </h2>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#64748b' }}>
@@ -496,7 +499,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
               gap: '0.35rem'
             }}
           >
-            <span>🔄</span>
+            <Icon name="refresh" size={14} spin={loadingReviews} />
             <span>Làm mới đánh giá</span>
           </button>
         </div>
@@ -553,8 +556,19 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
             </div>
 
             {summary.totalReviews > 0 && (
-              <div style={{ fontSize: '0.78rem', color: '#16a34a', fontWeight: 600, marginTop: '0.25rem' }}>
-                ✓ 100% từ đơn hàng đã giao thành công
+              <div
+                style={{
+                  fontSize: '0.78rem',
+                  color: '#16a34a',
+                  fontWeight: 600,
+                  marginTop: '0.25rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem'
+                }}
+              >
+                <Icon name="shield-check" size={14} color="#16a34a" />
+                <span>100% từ đơn hàng đã giao thành công</span>
               </div>
             )}
           </div>
@@ -588,7 +602,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                     cursor: 'pointer',
                     width: '100%',
                     textAlign: 'left',
-                    transition: 'all 0.15s ease'
+                    transition: 'background-color 0.15s ease, border-color 0.15s ease'
                   }}
                 >
                   <span
@@ -603,7 +617,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                     }}
                   >
                     <span>{star} sao</span>
-                    <span style={{ color: '#f59e0b' }}>★</span>
+                    <Icon name="star-filled" size={12} color="#f59e0b" />
                   </span>
 
                   <div
@@ -659,10 +673,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                 border: '1px solid #e2e8f0',
                 fontSize: '0.85rem',
                 color: '#64748b',
-                textAlign: 'center'
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.45rem'
               }}
             >
-              ⏳ Đang kiểm tra quyền đánh giá sản phẩm của bạn...
+              <Icon name="loader" size={16} spin />
+              <span>Đang kiểm tra quyền đánh giá sản phẩm của bạn...</span>
             </div>
           ) : !isAuthenticated ? (
             /* Trường hợp 1: Người dùng chưa đăng nhập */
@@ -681,8 +699,9 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
               }}
             >
               <div>
-                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.925rem' }}>
-                  🔒 Bạn cần đăng nhập để gửi đánh giá sản phẩm
+                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.925rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Icon name="lock" size={16} color="#475569" />
+                  <span>Bạn cần đăng nhập để gửi đánh giá sản phẩm</span>
                 </div>
                 <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem' }}>
                   Chỉ khách hàng đã đăng nhập và mua sản phẩm trong đơn hàng hoàn tất mới có thể viết nhận xét.
@@ -711,10 +730,15 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                 backgroundColor: '#fffbeb',
                 border: '1px solid #fde68a',
                 color: '#92400e',
-                fontSize: '0.85rem'
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                flexWrap: 'wrap'
               }}
             >
-              🛡️ <strong>Tài khoản Quản trị viên:</strong> Chức năng gửi đánh giá sau mua chỉ dành cho tài khoản Khách hàng.
+              <Icon name="shield-check" size={16} color="#b45309" />
+              <span><strong>Tài khoản Quản trị viên:</strong> Chức năng gửi đánh giá sau mua chỉ dành cho tài khoản Khách hàng.</span>
             </div>
           ) : eligibility.reason === 'ALREADY_REVIEWED' && myReview ? (
             /* Trường hợp 5: Người dùng đã đánh giá trước đó */
@@ -750,12 +774,23 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                           fontWeight: 700,
                           fontSize: '0.75rem',
                           padding: '0.2rem 0.6rem',
-                          borderRadius: '9999px'
+                          borderRadius: '9999px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
                         }}
                       >
-                        {String(myReview.status || '').toUpperCase() === REVIEW_MODERATION_STATUS.HIDDEN
-                          ? '🙈 Đánh giá của bạn (Đã bị Admin ẩn)'
-                          : '✓ Đánh giá của bạn'}
+                        {String(myReview.status || '').toUpperCase() === REVIEW_MODERATION_STATUS.HIDDEN ? (
+                          <>
+                            <Icon name="eye-off" size={12} />
+                            <span>Đánh giá của bạn (Đã bị Admin ẩn)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="check" size={12} strokeWidth={2.5} />
+                            <span>Đánh giá của bạn</span>
+                          </>
+                        )}
                       </span>
                       <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>
                         Đơn hàng #{myReview.orderId}
@@ -780,10 +815,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                           color: '#2563eb',
                           fontWeight: 700,
                           fontSize: '0.8rem',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
                         }}
                       >
-                        ✏️ Chỉnh sửa đánh giá
+                        <Icon name="edit" size={14} />
+                        <span>Chỉnh sửa đánh giá</span>
                       </button>
                       <button
                         type="button"
@@ -798,10 +837,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                           color: '#dc2626',
                           fontWeight: 700,
                           fontSize: '0.8rem',
-                          cursor: deletingReview ? 'not-allowed' : 'pointer'
+                          cursor: deletingReview ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
                         }}
                       >
-                        {deletingReview ? 'Đang xóa...' : '🗑️ Xóa'}
+                        <Icon name={deletingReview ? 'loader' : 'trash'} size={14} spin={deletingReview} />
+                        <span>{deletingReview ? 'Đang xóa...' : 'Xóa'}</span>
                       </button>
                     </div>
                   </div>
@@ -827,11 +870,17 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                         border: '1px solid #fecaca',
                         color: '#b91c1c',
                         fontSize: '0.8rem',
-                        fontWeight: 600
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem'
                       }}
                     >
-                      ⚠️ Đánh giá này đã bị Quản trị viên ẩn khỏi trang công khai
-                      {myReview.hiddenReason ? ` (Lý do: ${myReview.hiddenReason})` : ''}.
+                      <Icon name="warning" size={15} color="#b91c1c" />
+                      <span>
+                        Đánh giá này đã bị Quản trị viên ẩn khỏi trang công khai
+                        {myReview.hiddenReason ? ` (Lý do: ${myReview.hiddenReason})` : ''}.
+                      </span>
                     </div>
                   )}
                 </>
@@ -864,8 +913,9 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 800, color: '#1e40af', fontSize: '0.95rem' }}>
-                      🎉 Bạn đã mua và nhận thành công sản phẩm này (Đơn hàng #{eligibility.defaultOrder?.id})
+                    <div style={{ fontWeight: 800, color: '#1e40af', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Icon name="sparkles" size={16} color="#2563eb" />
+                      <span>Bạn đã mua và nhận thành công sản phẩm này (Đơn hàng #{eligibility.defaultOrder?.id})</span>
                     </div>
                     <div style={{ fontSize: '0.82rem', color: '#3b82f6', marginTop: '0.2rem' }}>
                       Hãy chia sẻ đánh giá sao và cảm nhận thực tế của bạn về sản phẩm nhé!
@@ -884,10 +934,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                       fontWeight: 700,
                       fontSize: '0.875rem',
                       cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
                     }}
                   >
-                    ⭐ Viết đánh giá ngay
+                    <Icon name="star-filled" size={15} color="#fde047" />
+                    <span>Viết đánh giá ngay</span>
                   </button>
                 </div>
               ) : (
@@ -923,8 +977,9 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
               }}
             >
               <div>
-                <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.9rem' }}>
-                  ⏳ Đơn hàng #{eligibility.pendingOrder?.id} chứa sản phẩm này chưa hoàn tất giao hàng
+                <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Icon name="clock" size={16} color="#b45309" />
+                  <span>Đơn hàng #{eligibility.pendingOrder?.id} chứa sản phẩm này chưa hoàn tất giao hàng</span>
                 </div>
                 <div style={{ fontSize: '0.82rem', color: '#b45309', marginTop: '0.2rem' }}>
                   {eligibility.message}
@@ -965,8 +1020,9 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
               }}
             >
               <div>
-                <div style={{ fontWeight: 700, color: '#334155', fontSize: '0.9rem' }}>
-                  🛍️ Chỉ khách hàng đã mua sản phẩm mới có thể gửi đánh giá
+                <div style={{ fontWeight: 700, color: '#334155', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Icon name="store" size={16} color="#475569" />
+                  <span>Chỉ khách hàng đã mua sản phẩm mới có thể gửi đánh giá</span>
                 </div>
                 <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem' }}>
                   {eligibilityError ||
@@ -1055,7 +1111,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                   }}
                 >
                   <span>{star} Sao</span>
-                  <span style={{ color: '#f59e0b' }}>★</span>
+                  <Icon name="star-filled" size={13} color="#f59e0b" />
                   <span style={{ fontSize: '0.75rem', opacity: 0.85 }}>({count})</span>
                 </button>
               );
@@ -1117,10 +1173,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                   color: '#ffffff',
                   fontWeight: 700,
                   fontSize: '0.85rem',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
                 }}
               >
-                🔄 Thử lại tải đánh giá
+                <Icon name="refresh" size={15} />
+                <span>Thử lại tải đánh giá</span>
               </button>
             </div>
           </div>
@@ -1135,7 +1195,9 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
               border: '1px dashed #cbd5e1'
             }}
           >
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📝</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#e2e8f0', color: '#475569', marginBottom: '0.75rem' }}>
+              <Icon name="message" size={26} />
+            </div>
             <h4 style={{ margin: '0 0 0.35rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
               {starFilter > 0
                 ? `Chưa có đánh giá ${starFilter} sao nào cho sản phẩm này`
@@ -1179,7 +1241,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
 
               const reviewerName =
                 review.userFullName ||
-                (isOwnReview ? `${user?.fullName || 'Bạn'} (Bạn)` : review.reviewerName || 'Khách hàng đã mua hàng');
+                (isOwnReview ? `${user?.fullName || 'Bạn'} (Bạn)` : review.reviewerName || 'Khách hàng');
 
               const avatarUrl =
                 !failedAvatarIds[review.id] &&
@@ -1271,7 +1333,7 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                                 gap: '0.25rem'
                               }}
                             >
-                              <span>✓</span>
+                              <Icon name="check" size={11} strokeWidth={2.6} />
                               <span>
                                 Đã mua hàng{review.orderId ? ` (Đơn #${review.orderId})` : ''}
                               </span>
@@ -1371,10 +1433,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                   color: '#1d4ed8',
                   fontWeight: 700,
                   fontSize: '0.84rem',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
                 }}
               >
-                👇 Xem thêm đánh giá (Còn {filteredAndSortedReviews.length - displayedReviews.length} đánh giá)
+                <Icon name="chevron-down" size={16} />
+                <span>Xem thêm đánh giá (Còn {filteredAndSortedReviews.length - displayedReviews.length} đánh giá)</span>
               </button>
             )}
 
@@ -1393,10 +1459,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                     color: currentPage <= 1 ? '#94a3b8' : '#0f172a',
                     fontWeight: 600,
                     fontSize: '0.82rem',
-                    cursor: currentPage <= 1 ? 'not-allowed' : 'pointer'
+                    cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
                   }}
                 >
-                  ← Trang trước
+                  <Icon name="arrow-left" size={14} />
+                  <span>Trang trước</span>
                 </button>
 
                 {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => {
@@ -1436,10 +1506,14 @@ const ProductReviewsSection = ({ product, onSummaryChange }) => {
                     color: currentPage >= totalPages ? '#94a3b8' : '#0f172a',
                     fontWeight: 600,
                     fontSize: '0.82rem',
-                    cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer'
+                    cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
                   }}
                 >
-                  Trang sau →
+                  <span>Trang sau</span>
+                  <Icon name="arrow-right" size={14} />
                 </button>
               </div>
             )}

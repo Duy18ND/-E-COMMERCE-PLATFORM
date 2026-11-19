@@ -1,5 +1,10 @@
 import api from './api.js';
-import { getUser, setUser } from '../utils/auth.js';
+import { getUser, setUser, getToken } from '../utils/auth.js';
+
+const isMockUserSession = () => {
+  const token = String(getToken() || '');
+  return token.startsWith('mock-jwt-token-');
+};
 
 /**
  * Vietnamese phone number validation regex:
@@ -150,18 +155,19 @@ const userService = {
       const data = await api.get('/users/profile');
       return data;
     } catch (err) {
-      // Fallback: Nếu backend offline hoặc dùng mock
-      const savedUser = getUser();
-      if (savedUser) {
-        return {
-          id: savedUser.id || savedUser.userId,
-          email: savedUser.email || '',
-          fullName: savedUser.fullName || '',
-          phone: savedUser.phone || '',
-          avatarUrl: savedUser.avatarUrl || '',
-          roles: savedUser.roles || ['ROLE_USER'],
-          defaultAddress: savedUser.address ? { fullAddress: savedUser.address } : null
-        };
+      if (isMockUserSession()) {
+        const savedUser = getUser();
+        if (savedUser) {
+          return {
+            id: savedUser.id || savedUser.userId,
+            email: savedUser.email || '',
+            fullName: savedUser.fullName || '',
+            phone: savedUser.phone || '',
+            avatarUrl: savedUser.avatarUrl || '',
+            roles: savedUser.roles || ['ROLE_USER'],
+            defaultAddress: savedUser.address ? { fullAddress: savedUser.address } : null
+          };
+        }
       }
       throw err;
     }
@@ -206,17 +212,18 @@ const userService = {
       }
       return data;
     } catch (err) {
-      // Fallback update local session if backend unreachable
-      const savedUser = getUser();
-      if (savedUser) {
-        const updated = {
-          ...savedUser,
-          fullName: fullName || savedUser.fullName,
-          phone: phone || savedUser.phone,
-          avatarUrl: avatarUrl || savedUser.avatarUrl
-        };
-        setUser(updated);
-        return updated;
+      if (isMockUserSession()) {
+        const savedUser = getUser();
+        if (savedUser) {
+          const updated = {
+            ...savedUser,
+            fullName: fullName || savedUser.fullName,
+            phone: phone || savedUser.phone,
+            avatarUrl: avatarUrl || savedUser.avatarUrl
+          };
+          setUser(updated);
+          return updated;
+        }
       }
       throw err;
     }
@@ -226,11 +233,11 @@ const userService = {
    * Lấy danh sách địa chỉ nhận hàng (GET /api/v1/users/me/addresses)
    */
   getAddresses: async () => {
-    try {
-      return await api.get('/users/me/addresses');
-    } catch (err) {
+    if (isMockUserSession()) {
       return [];
     }
+    const data = await api.get('/users/me/addresses');
+    return Array.isArray(data) ? data : [];
   },
 
   /**

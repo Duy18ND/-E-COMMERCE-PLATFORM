@@ -1,6 +1,19 @@
 # ═══════════════════════════════════════════════════════════════
 #  API Gateway — Production Profile (prod)
 # ═══════════════════════════════════════════════════════════════
+spring:
+  data:
+    redis:
+      password: ${SPRING_DATA_REDIS_PASSWORD}
+
+jwt:
+  secret: ${JWT_SECRET}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+
 logging:
   level:
     root: WARN

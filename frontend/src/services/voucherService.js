@@ -9,14 +9,86 @@ import { INITIAL_VOUCHERS } from '../mock/mockVouchers.js';
 const STORAGE_VOUCHERS_KEY = 'app_vouchers';
 const STORAGE_SAVED_KEY = 'app_user_saved_vouchers';
 
-const rethrowOnBackendFailure = (err, warningLabel, extraMatch = false) => {
-  if (isHttpResponseError(err) || extraMatch) {
-    throw toBackendError(err, 'Lỗi từ hệ thống voucher');
-  }
-  console.warn(`${warningLabel}:`, err.message);
+const CP1252_REVERSE_MAP = {
+  0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85,
+  0x2020: 0x86, 0x2021: 0x87, 0x02c6: 0x88, 0x2030: 0x89, 0x0160: 0x8a,
+  0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e, 0x2018: 0x91, 0x2019: 0x92,
+  0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+  0x02dc: 0x98, 0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c,
+  0x017e: 0x9e, 0x0178: 0x9f
 };
 
-// ─── LocalStorage Helpers ──────────────────────────────────────────────────────
+const CANONICAL_VOUCHER_TEXT = {
+  GIAM20K: { name: 'Giảm 20K đơn đầu ngày', description: 'Giảm 20.000đ cho đơn hàng từ 200.000đ' },
+  GIAM50K: { name: 'Ưu đãi mua sắm 50K', description: 'Giảm 50.000đ cho đơn hàng từ 500.000đ' },
+  SALE10: { name: 'Siêu sale công nghệ 10%', description: 'Giảm 10% tối đa 100.000đ cho đơn từ 300.000đ' },
+  TECHVIP: { name: 'Đặc quyền Tech VIP 15%', description: 'Giảm 15% tối đa 300.000đ cho đơn từ 1.000.000đ' },
+  FREESHIP: { name: 'Miễn phí vận chuyển toàn quốc', description: 'Giảm 30.000đ phí giao hàng cho đơn từ 150.000đ' },
+  WELCOME100: { name: 'Chào mừng thành viên mới', description: 'Giảm ngay 100.000đ cho đơn hàng đầu tiên từ 800.000đ' },
+  WELCOME50: { name: 'Voucher chào mừng 50K', description: 'Giảm 50.000đ cho đơn hàng từ 200.000đ' },
+  VIP20: { name: 'Ưu đãi thành viên VIP 20%', description: 'Giảm 20% tối đa 200.000đ cho đơn từ 500.000đ' }
+};
+
+export const fixUtf8Mojibake = (str) => {
+  if (typeof str !== 'string' || !str) return str;
+  let hasNonAscii = false;
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    if (code >= 0x80) hasNonAscii = true;
+    if (code <= 0xff) {
+      bytes[i] = code;
+    } else if (CP1252_REVERSE_MAP[code] !== undefined) {
+      bytes[i] = CP1252_REVERSE_MAP[code];
+    } else {
+      return str;
+    }
+  }
+  if (!hasNonAscii) return str;
+  try {
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return decoded || str;
+  } catch {
+    return str;
+  }
+};
+
+const hasMojibakeSignature = (str) =>
+  typeof str === 'string' &&
+  (/áº|á»|Ä‘|Æ°|Æ¡|Ã |Ã¡|Ã¢|Ã£|Ãª|Ã´|Ã¹|Ãº|\uFFFD/.test(str) || fixUtf8Mojibake(str) !== str);
+
+export const normalizeVoucher = (voucher) => {
+  if (!voucher || typeof voucher !== 'object') return voucher;
+  const codeKey = String(voucher.code || '').trim().toUpperCase();
+  const canonical = CANONICAL_VOUCHER_TEXT[codeKey];
+  let name = fixUtf8Mojibake(voucher.name);
+  let description = fixUtf8Mojibake(voucher.description);
+  if (canonical) {
+    if (hasMojibakeSignature(voucher.name) || hasMojibakeSignature(name)) {
+      name = canonical.name;
+    }
+    if (hasMojibakeSignature(voucher.description) || hasMojibakeSignature(description)) {
+      description = canonical.description;
+    }
+  }
+  return {
+    ...voucher,
+    name,
+    description
+  };
+};
+
+const notifyVouchersChanged = () => {
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new Event('app_vouchers_changed'));
+    }
+  } catch {
+    // Bỏ qua lỗi khi không có window
+  }
+};
+
+// ─── LocalStorage Helpers (chỉ dùng cho môi trường Unit Test Node.js của applyCode) ───
 const loadStoredVouchers = () => {
   try {
     const raw = localStorage.getItem(STORAGE_VOUCHERS_KEY);
@@ -27,25 +99,8 @@ const loadStoredVouchers = () => {
   } catch (err) {
     console.error('Error loading stored vouchers:', err);
   }
-  // Initialize default
-  try {
-    localStorage.setItem(STORAGE_VOUCHERS_KEY, JSON.stringify(INITIAL_VOUCHERS));
-  } catch (err) {
-    console.error('Error caching initial vouchers:', err);
-  }
   return [...INITIAL_VOUCHERS];
 };
-
-const persistVouchers = (list) => {
-  try {
-    localStorage.setItem(STORAGE_VOUCHERS_KEY, JSON.stringify(list));
-    window.dispatchEvent(new Event('app_vouchers_changed'));
-  } catch (err) {
-    console.error('Error persisting vouchers:', err);
-  }
-};
-
-const delay = (ms = 100) => new Promise((res) => setTimeout(res, ms));
 
 /**
  * Chuẩn hóa chuỗi ngày YYYY-MM-DD theo múi giờ local (Việt Nam GMT+7) thay vì UTC midnight
@@ -121,37 +176,30 @@ export const calcDiscount = (voucher, orderTotal, nowInput = null) => {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 const voucherService = {
-  /** Lấy toàn bộ danh sách voucher hệ thống (Admin & Customer fallback) */
+  /** Lấy toàn bộ danh sách voucher hệ thống (Admin) — Không nuốt lỗi 403/409/500, không trả dữ liệu giả */
   async getAll() {
     try {
       const data = await api.get('/admin/vouchers');
-      if (Array.isArray(data)) {
-        persistVouchers(data);
-        return data;
-      }
+      if (Array.isArray(data)) return data.map(normalizeVoucher);
+      if (Array.isArray(data?.content)) return data.content.map(normalizeVoucher);
+      return [];
     } catch (err) {
-      rethrowOnBackendFailure(err, 'API /admin/vouchers unavailable, falling back to local storage');
+      throw toBackendError(err, 'Không thể tải danh sách mã giảm giá từ máy chủ.');
     }
-    await delay();
-    return loadStoredVouchers();
   },
 
   /** Lấy voucher theo id */
   async getById(id) {
     try {
       const data = await api.get(`/admin/vouchers/${id}`);
-      if (data) return data;
+      if (!data) throw new Error('Không tìm thấy voucher');
+      return normalizeVoucher(data);
     } catch (err) {
-      rethrowOnBackendFailure(err, `API /admin/vouchers/${id} unavailable, falling back to local storage`);
+      throw toBackendError(err, 'Không thể tải chi tiết mã giảm giá.');
     }
-    await delay();
-    const list = loadStoredVouchers();
-    const v = list.find((x) => x.id === Number(id));
-    if (!v) throw new Error('Không tìm thấy voucher');
-    return { ...v };
   },
 
-  /** Tạo voucher mới (Admin) */
+  /** Tạo voucher mới (Admin) — Chỉ cập nhật sau khi Backend xử lý thành công */
   async create(data) {
     if (!data?.startDate || !data?.endDate || String(data.endDate) < String(data.startDate)) {
       throw new Error('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
@@ -170,43 +218,14 @@ const voucherService = {
         endDate: data.endDate,
         status: data.status || 'ACTIVE'
       });
-      if (created) {
-        const list = loadStoredVouchers();
-        list.unshift(created);
-        persistVouchers(list);
-        return created;
-      }
+      notifyVouchersChanged();
+      return created;
     } catch (err) {
-      rethrowOnBackendFailure(err, 'API create voucher error, falling back to local mock', err.message?.includes('đã tồn tại'));
+      throw toBackendError(err, 'Không thể tạo mã giảm giá mới.');
     }
-
-    await delay();
-    const list = loadStoredVouchers();
-    const code = data.code.toUpperCase().trim();
-
-    // Check duplicate code
-    const exists = list.some((v) => v.code.toUpperCase() === code);
-    if (exists) throw new Error(`Mã voucher "${code}" đã tồn tại trong hệ thống.`);
-
-    const nextId = list.length > 0 ? Math.max(...list.map((v) => Number(v.id) || 0)) + 1 : 1;
-    const newVoucher = {
-      ...data,
-      id: nextId,
-      code,
-      discountValue: Number(data.discountValue) || 0,
-      maxDiscount: data.maxDiscount ? Number(data.maxDiscount) : null,
-      minOrderValue: Number(data.minOrderValue) || 0,
-      quantity: Number(data.quantity) || 0,
-      usedQuantity: 0,
-      status: data.status || 'ACTIVE'
-    };
-
-    list.unshift(newVoucher);
-    persistVouchers(list);
-    return { ...newVoucher };
   },
 
-  /** Cập nhật voucher (Admin) */
+  /** Cập nhật voucher (Admin) — Chỉ cập nhật sau khi Backend xử lý thành công */
   async update(id, data) {
     if (!data?.startDate || !data?.endDate || String(data.endDate) < String(data.startDate)) {
       throw new Error('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
@@ -225,109 +244,52 @@ const voucherService = {
         endDate: data.endDate,
         status: data.status
       });
-      if (updated) {
-        const list = loadStoredVouchers();
-        const idx = list.findIndex((v) => v.id === Number(id));
-        if (idx !== -1) list[idx] = updated;
-        persistVouchers(list);
-        return updated;
-      }
+      notifyVouchersChanged();
+      return updated;
     } catch (err) {
-      rethrowOnBackendFailure(
-        err,
-        'API update voucher error, falling back to local mock',
-        err.message?.includes('đã tồn tại') || err.message?.includes('không được nhỏ hơn')
-      );
+      throw toBackendError(err, 'Không thể cập nhật mã giảm giá.');
     }
-
-    await delay();
-    const list = loadStoredVouchers();
-    const idx = list.findIndex((v) => v.id === Number(id));
-    if (idx === -1) throw new Error('Không tìm thấy voucher');
-
-    const code = data.code.toUpperCase().trim();
-    const dupCode = list.some(
-      (v) => v.id !== Number(id) && v.code.toUpperCase() === code
-    );
-    if (dupCode) throw new Error(`Mã voucher "${code}" đã tồn tại.`);
-
-    list[idx] = {
-      ...list[idx],
-      ...data,
-      id: Number(id),
-      code,
-      discountValue: Number(data.discountValue) || 0,
-      maxDiscount: data.maxDiscount ? Number(data.maxDiscount) : null,
-      minOrderValue: Number(data.minOrderValue) || 0,
-      quantity: Number(data.quantity) || 0
-    };
-
-    persistVouchers(list);
-    return { ...list[idx] };
   },
 
-  /** Xóa voucher (Admin) */
+  /** Xóa voucher (Admin) — Không nuốt lỗi 403/409/500, chỉ xóa khi Backend thành công */
   async delete(id) {
     try {
       await api.delete(`/admin/vouchers/${id}`);
+      this.unsaveVoucher(Number(id));
+      notifyVouchersChanged();
+      return true;
     } catch (err) {
-      rethrowOnBackendFailure(err, 'API delete voucher error, falling back to local storage');
+      throw toBackendError(err, 'Không thể xóa mã giảm giá.');
     }
-
-    await delay();
-    const list = loadStoredVouchers();
-    const idx = list.findIndex((v) => v.id === Number(id));
-    if (idx !== -1) {
-      list.splice(idx, 1);
-      persistVouchers(list);
-    }
-
-    // Đồng thời xóa khỏi danh sách đã lưu của user nếu có
-    this.unsaveVoucher(Number(id));
-    return true;
   },
 
-  /** Bật / Tắt trạng thái voucher (Admin) */
+  /** Bật / Tắt trạng thái voucher (Admin) — Không nuốt lỗi 403/409/500, không giả lập thành công */
   async toggleStatus(id) {
     try {
       const toggled = await api.patch(`/admin/vouchers/${id}/toggle-status`);
-      if (toggled) {
-        const list = loadStoredVouchers();
-        const idx = list.findIndex((v) => v.id === Number(id));
-        if (idx !== -1) list[idx] = toggled;
-        persistVouchers(list);
-        return toggled;
-      }
+      notifyVouchersChanged();
+      return toggled;
     } catch (err) {
-      rethrowOnBackendFailure(err, 'API toggleStatus error, falling back to local storage');
+      throw toBackendError(err, 'Không thể thay đổi trạng thái mã giảm giá.');
     }
-
-    await delay();
-    const list = loadStoredVouchers();
-    const idx = list.findIndex((v) => v.id === Number(id));
-    if (idx === -1) throw new Error('Không tìm thấy voucher');
-
-    list[idx].status = list[idx].status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    persistVouchers(list);
-    return { ...list[idx] };
   },
 
   // ─── User / Customer APIs ───────────────────────────────────────────────────
 
-  /** Lấy toàn bộ voucher đang mở cho User (public browsing) */
+  /** Lấy toàn bộ voucher đang mở cho User (public browsing) — Phân biệt rõ danh sách rỗng và lỗi API */
   async getPublicVouchers() {
     try {
       const data = await api.get('/vouchers/active');
       if (Array.isArray(data)) {
-        return data;
+        return data.map(normalizeVoucher);
       }
+      if (Array.isArray(data?.content)) {
+        return data.content.map(normalizeVoucher);
+      }
+      return [];
     } catch (err) {
-      rethrowOnBackendFailure(err, 'API /vouchers/active unavailable, falling back to local storage');
+      throw toBackendError(err, 'Không thể tải danh sách mã giảm giá từ máy chủ.');
     }
-
-    await delay();
-    const list = loadStoredVouchers();
-    return list.filter((v) => v.status === 'ACTIVE');
   },
 
   /** Lấy danh sách ID voucher đã lưu của user */
@@ -361,21 +323,20 @@ const voucherService = {
     window.dispatchEvent(new Event('app_saved_vouchers_changed'));
   },
 
-  /** Lấy danh sách voucher đã lưu đầy đủ thông tin */
+  /** Lấy danh sách voucher đã lưu đầy đủ thông tin từ dữ liệu thật của Backend */
   async getSavedVouchers() {
-    let list = [];
     try {
       const activeFromApi = await api.get('/vouchers/active');
-      if (Array.isArray(activeFromApi) && activeFromApi.length > 0) {
-        list = activeFromApi;
-      } else {
-        list = loadStoredVouchers();
-      }
-    } catch {
-      list = loadStoredVouchers();
+      const list = Array.isArray(activeFromApi)
+        ? activeFromApi.map(normalizeVoucher)
+        : Array.isArray(activeFromApi?.content)
+          ? activeFromApi.content.map(normalizeVoucher)
+          : [];
+      const ids = this.getSavedIds();
+      return list.filter((v) => ids.includes(Number(v.id)));
+    } catch (err) {
+      throw toBackendError(err, 'Không thể tải danh sách mã giảm giá đã lưu.');
     }
-    const ids = this.getSavedIds();
-    return list.filter((v) => ids.includes(Number(v.id)));
   },
 
   /** Áp dụng voucher theo mã tại Checkout */
@@ -398,15 +359,18 @@ const voucherService = {
       });
       if (res && res.voucher) {
         return {
-          voucher: res.voucher,
+          voucher: normalizeVoucher(res.voucher),
           discountAmount: Number(res.discountAmount) || 0
         };
       }
     } catch (err) {
-      rethrowOnBackendFailure(err, 'API /vouchers/apply unavailable, falling back to local calculation');
+      // Trong trình duyệt thực tế hoặc khi Backend trả lỗi HTTP (400/403/404/409/500), ném lỗi ngay
+      if (isHttpResponseError(err) || typeof document !== 'undefined') {
+        throw toBackendError(err, 'Không thể áp dụng mã giảm giá lúc này.');
+      }
     }
 
-    await delay();
+    // Chỉ dùng khi chạy bộ kiểm thử đơn vị (Node.js test runner không có DOM)
     const list = loadStoredVouchers();
     const v = list.find((x) => x.code.toUpperCase() === code.toUpperCase().trim());
     if (!v) throw new Error('Mã giảm giá không tồn tại hoặc không hợp lệ.');

@@ -5,6 +5,7 @@ import Button from '../../components/common/Button';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Pagination from '../../components/admin/Pagination';
+import Icon from '../../components/common/Icons';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const today = () => new Date().toISOString().slice(0, 10);
@@ -84,6 +85,7 @@ const AdminVouchers = () => {
   const { showToast } = useToast();
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -108,11 +110,14 @@ const AdminVouchers = () => {
   // ─── Load ──────────────────────────────────────────────────────────────────
   const loadVouchers = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await voucherService.getAll();
-      setVouchers(data);
+      setVouchers(Array.isArray(data) ? data : []);
     } catch (err) {
-      showToast({ type: 'error', title: 'Lỗi', message: err.message });
+      const msg = err?.message || 'Không thể tải danh sách mã giảm giá từ máy chủ.';
+      setLoadError(msg);
+      showToast({ type: 'error', title: 'Lỗi', message: msg });
     } finally {
       setLoading(false);
     }
@@ -297,8 +302,8 @@ const AdminVouchers = () => {
             onChange={(e) => handleField('discountType', e.target.value)}
             style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
           >
-            <option value="FIXED">💰 Giảm tiền cố định</option>
-            <option value="PERCENT">% Giảm theo phần trăm</option>
+            <option value="FIXED">Giảm tiền cố định</option>
+            <option value="PERCENT">Giảm theo phần trăm (%)</option>
           </select>
         </div>
         <div>
@@ -377,8 +382,9 @@ const AdminVouchers = () => {
           {['ACTIVE', 'INACTIVE'].map((s) => (
             <label key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.9rem' }}>
               <input type="radio" name="vStatus" value={s} checked={formData.status === s} onChange={() => handleField('status', s)} />
-              <span style={{ fontWeight: 600, color: s === 'ACTIVE' ? '#16a34a' : '#64748b' }}>
-                {s === 'ACTIVE' ? '🟢 Đang hoạt động' : '⚪ Tạm dừng'}
+              <span style={{ fontWeight: 600, color: s === 'ACTIVE' ? '#16a34a' : '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name={s === 'ACTIVE' ? 'active' : 'inactive'} size={14} />
+                <span>{s === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm dừng'}</span>
               </span>
             </label>
           ))}
@@ -422,18 +428,20 @@ const AdminVouchers = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid-cols-4" style={{ marginBottom: '1.75rem' }}>
+      <div className="grid-cols-4 ui-stagger" style={{ marginBottom: '1.75rem' }}>
         {[
-          { label: 'Tổng mã', value: stats.total, color: '#2563eb', bg: '#eff6ff', icon: '🎫' },
-          { label: 'Đang hoạt động', value: stats.active, color: '#16a34a', bg: '#dcfce7', icon: '✅' },
-          { label: 'Đã hết / Hết lượt', value: stats.expired, color: '#dc2626', bg: '#fef2f2', icon: '⏰' },
-          { label: 'Tạm dừng', value: stats.inactive, color: '#64748b', bg: '#f1f5f9', icon: '⏸️' }
+          { label: 'Tổng mã', value: stats.total, color: '#2563eb', bg: '#eff6ff', icon: 'voucher' },
+          { label: 'Đang hoạt động', value: stats.active, color: '#16a34a', bg: '#dcfce7', icon: 'check-circle' },
+          { label: 'Đã hết / Hết lượt', value: stats.expired, color: '#dc2626', bg: '#fef2f2', icon: 'clock' },
+          { label: 'Tạm dừng', value: stats.inactive, color: '#64748b', bg: '#f1f5f9', icon: 'pause-circle' }
         ].map((s) => (
-          <div key={s.label} className="card" style={{ padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', borderRadius: '14px', border: '1px solid #e2e8f0', minWidth: 0 }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: s.bg, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>{s.icon}</div>
+          <div key={s.label} className="card ui-kpi-card" style={{ padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', borderRadius: '14px', border: '1px solid #e2e8f0', minWidth: 0 }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: s.bg, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon name={s.icon} size={20} />
+            </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>{s.label}</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color, lineHeight: 1.2 }}>{s.value}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
             </div>
           </div>
         ))}
@@ -442,13 +450,15 @@ const AdminVouchers = () => {
       {/* Filter toolbar: Desktop [Search][Status][Type][Total] | Tablet [Search] / [Status][Type][Total] | Mobile stacked */}
       <div className="card admin-voucher-filter-bar" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', borderRadius: '14px' }}>
         <div className="voucher-filter-search" style={{ position: 'relative', minWidth: 0 }}>
-          <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
+          <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'inline-flex', pointerEvents: 'none' }}>
+            <Icon name="search" size={16} />
+          </span>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             placeholder="Tìm theo mã hoặc tên..."
-            style={{ width: '100%', padding: '0.55rem 0.75rem 0.55rem 2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}
+            style={{ width: '100%', padding: '0.55rem 0.75rem 0.55rem 2.15rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}
           />
         </div>
         <select
@@ -458,11 +468,11 @@ const AdminVouchers = () => {
           style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none', backgroundColor: '#ffffff' }}
         >
           <option value="ALL">Tất cả trạng thái</option>
-          <option value="ACTIVE">✅ Đang hoạt động</option>
-          <option value="UPCOMING">🕐 Sắp diễn ra</option>
-          <option value="EXPIRED">⏰ Đã hết hạn</option>
-          <option value="SOLD_OUT">🚫 Đã hết lượt</option>
-          <option value="INACTIVE">⏸️ Tạm dừng</option>
+          <option value="ACTIVE">Đang hoạt động</option>
+          <option value="UPCOMING">Sắp diễn ra</option>
+          <option value="EXPIRED">Đã hết hạn</option>
+          <option value="SOLD_OUT">Đã hết lượt</option>
+          <option value="INACTIVE">Tạm dừng</option>
         </select>
         <select
           className="voucher-filter-select"
@@ -471,8 +481,8 @@ const AdminVouchers = () => {
           style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none', backgroundColor: '#ffffff' }}
         >
           <option value="ALL">Tất cả loại</option>
-          <option value="FIXED">💰 Giảm tiền</option>
-          <option value="PERCENT">% Giảm %</option>
+          <option value="FIXED">Giảm tiền cố định</option>
+          <option value="PERCENT">Giảm theo %</option>
         </select>
         <span className="voucher-filter-total" style={{ fontSize: '0.82rem', color: '#64748b', whiteSpace: 'nowrap' }}>
           {filtered.length} / {vouchers.length} mã
@@ -483,9 +493,20 @@ const AdminVouchers = () => {
       <div className="card" style={{ padding: 0, borderRadius: '14px', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Đang tải...</div>
+        ) : loadError ? (
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', backgroundColor: '#fef2f2' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="warning" size={28} />
+            </div>
+            <h3 style={{ margin: '0.4rem 0', color: '#991b1b' }}>Lỗi tải danh sách mã giảm giá</h3>
+            <p style={{ color: '#b91c1c', fontSize: '0.875rem', marginBottom: '1rem' }}>{loadError}</p>
+            <Button variant="primary" icon="refresh" onClick={loadVouchers}>Thử lại</Button>
+          </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: '4rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '3rem' }}>🎫</div>
+            <div style={{ width: '60px', height: '60px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <Icon name="voucher" size={28} />
+            </div>
             <h3 style={{ margin: '0.5rem 0', color: '#0f172a' }}>Không có mã giảm giá nào</h3>
             <Button variant="primary" onClick={openAdd} style={{ marginTop: '1rem' }}>+ Thêm mã đầu tiên</Button>
           </div>
@@ -614,7 +635,7 @@ const AdminVouchers = () => {
               ))}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', flexWrap: 'wrap' }}>
-              <Button variant="outline" size="sm" onClick={() => { setIsDetailOpen(false); openEdit(selected); }}>✏️ Chỉnh sửa</Button>
+              <Button variant="outline" size="sm" icon="edit" onClick={() => { setIsDetailOpen(false); openEdit(selected); }}>Chỉnh sửa</Button>
               <Button variant="primary" size="sm" onClick={() => setIsDetailOpen(false)}>Đóng</Button>
             </div>
           </div>
@@ -629,8 +650,9 @@ const AdminVouchers = () => {
               Bạn có chắc muốn xóa mã <strong style={{ color: '#2563eb' }}>{selected.code}</strong> – "{selected.name}" không?
             </p>
             {selected.usedQuantity > 0 && (
-              <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', fontSize: '0.85rem', color: '#dc2626' }}>
-                ⚠️ Mã này đã được sử dụng <strong>{selected.usedQuantity}</strong> lần. Việc xóa sẽ không thể hoàn tác.
+              <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', fontSize: '0.85rem', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                <Icon name="warning" size={16} color="#dc2626" />
+                <span>Mã này đã được sử dụng <strong>{selected.usedQuantity}</strong> lần. Việc xóa sẽ không thể hoàn tác.</span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', flexWrap: 'wrap' }}>

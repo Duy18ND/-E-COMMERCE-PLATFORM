@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Icon from './Icons';
 
 const Input = ({
   label,
@@ -108,7 +109,11 @@ const Input = ({
               transition: 'color 0.18s ease'
             }}
           >
-            {leftIcon}
+            {typeof leftIcon === 'string' && leftIcon.trim() ? (
+              <Icon name={leftIcon.trim()} size={18} />
+            ) : (
+              leftIcon
+            )}
           </span>
         )}
 
@@ -178,7 +183,7 @@ const Input = ({
             lineHeight: 1.35
           }}
         >
-          <span>⚠️</span>
+          <Icon name="warning" size={14} color="#dc2626" />
           <span>{error}</span>
         </span>
       )}

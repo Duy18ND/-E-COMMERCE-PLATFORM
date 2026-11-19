@@ -1,11 +1,18 @@
 package com.ecommerce.product.config;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Configuration;
 
 import com.ecommerce.product.entity.Category;
@@ -35,17 +42,25 @@ public class DataInitializer implements CommandLineRunner {
         @Autowired(required = false)
         private FlashSaleService flashSaleService;
 
+        @Autowired(required = false)
+        private CacheManager cacheManager;
+
         @Override
         public void run(String... args) {
-                seedCategories();
-                seedProducts();
+                boolean repairedCategories = seedOrRepairCategories();
+                boolean repairedProducts = seedOrRepairProducts();
+                if ((repairedCategories || repairedProducts) && cacheManager != null) {
+                        Cache productsCache = cacheManager.getCache(CacheConfig.PRODUCTS_CACHE);
+                        if (productsCache != null) {
+                                productsCache.clear();
+                        }
+                }
                 seedFlashSaleCampaign();
         }
 
-        private void seedCategories() {
+        private boolean seedOrRepairCategories() {
                 if (categoryRepository.count() > 0) {
-                        log.info("Categories already exist, skipping seeding.");
-                        return;
+                        return repairMojibakeCategories();
                 }
 
                 List<Category> categories = List.of(
@@ -76,12 +91,12 @@ public class DataInitializer implements CommandLineRunner {
 
                 categoryRepository.saveAll(categories);
                 log.info("Seeded {} sample categories successfully.", categories.size());
+                return false;
         }
 
-        private void seedProducts() {
+        private boolean seedOrRepairProducts() {
                 if (productRepository.count() > 0) {
-                        log.info("Products already exist, skipping seeding.");
-                        return;
+                        return repairMojibakeProducts();
                 }
 
                 List<Product> products = List.of(
@@ -154,6 +169,199 @@ public class DataInitializer implements CommandLineRunner {
 
                 productRepository.saveAll(products);
                 log.info("Seeded {} sample products successfully.", products.size());
+                return false;
+        }
+
+        private static final List<Category> DEFAULT_CATEGORIES = List.of(
+                        Category.builder()
+                                        .id(1L)
+                                        .name("Điện thoại & Tablet")
+                                        .description("iPhone, Galaxy, iPad thế hệ mới chính hãng phân phối")
+                                        .imageUrl("https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=400&q=80")
+                                        .build(),
+                        Category.builder()
+                                        .id(2L)
+                                        .name("Laptop & Workstation")
+                                        .description("MacBook, Dell XPS, ThinkPad phục vụ học tập, đồ họa, lập trình")
+                                        .imageUrl("https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80")
+                                        .build(),
+                        Category.builder()
+                                        .id(3L)
+                                        .name("Phụ Kiện & Âm Thanh")
+                                        .description("Tai nghe hi-res, bàn phím cơ, chuột không dây và củ sạc nhanh")
+                                        .imageUrl("https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80")
+                                        .build(),
+                        Category.builder()
+                                        .id(4L)
+                                        .name("Nhà Thông Minh & Gia Dụng")
+                                        .description("Robot hút bụi, máy lọc không khí và đèn thông minh tiện nghi")
+                                        .imageUrl("https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=400&q=80")
+                                        .build());
+
+        private boolean repairMojibakeCategories() {
+                int repaired = 0;
+                for (Category cat : categoryRepository.findAll()) {
+                        Category canonical = DEFAULT_CATEGORIES.stream()
+                                        .filter(c -> Objects.equals(c.getId(), cat.getId()))
+                                        .findFirst()
+                                        .orElse(null);
+                        String fixedName = repairMysqlLatin1Mojibake(cat.getName());
+                        String fixedDesc = repairMysqlLatin1Mojibake(cat.getDescription());
+                        if (canonical != null) {
+                                if (isMojibake(cat.getName()) || isMojibake(fixedName)) {
+                                        fixedName = canonical.getName();
+                                }
+                                if (isMojibake(cat.getDescription()) || isMojibake(fixedDesc)) {
+                                        fixedDesc = canonical.getDescription();
+                                }
+                        }
+                        boolean dirty = false;
+                        if (!Objects.equals(fixedName, cat.getName()) && !categoryRepository.existsByName(fixedName)) {
+                                cat.setName(fixedName);
+                                dirty = true;
+                        }
+                        if (!Objects.equals(fixedDesc, cat.getDescription())) {
+                                cat.setDescription(fixedDesc);
+                                dirty = true;
+                        }
+                        if (dirty) {
+                                categoryRepository.save(cat);
+                                repaired++;
+                        }
+                }
+                if (repaired > 0) {
+                        log.info("Repaired UTF-8 mojibake on {} category record(s) in product_db.", repaired);
+                } else {
+                        log.info("Categories already exist, skipping seeding.");
+                }
+                return repaired > 0;
+        }
+
+        private boolean repairMojibakeProducts() {
+                int repaired = 0;
+                for (Product product : productRepository.findAll()) {
+                        String fixedName = repairMysqlLatin1Mojibake(product.getName());
+                        String fixedCategory = repairMysqlLatin1Mojibake(product.getCategory());
+                        String fixedDesc = repairMysqlLatin1Mojibake(product.getDescription());
+                        if (isMojibake(product.getCategory()) || isMojibake(fixedCategory)) {
+                                if (String.valueOf(product.getCategory()).contains("Tablet")) {
+                                        fixedCategory = "Điện thoại & Tablet";
+                                } else if (String.valueOf(product.getCategory()).contains("Thanh")) {
+                                        fixedCategory = "Phụ Kiện & Âm Thanh";
+                                } else if (String.valueOf(product.getCategory()).contains("Minh")) {
+                                        fixedCategory = "Nhà Thông Minh & Gia Dụng";
+                                }
+                        }
+                        boolean dirty = false;
+                        if (!Objects.equals(fixedName, product.getName())) {
+                                product.setName(fixedName);
+                                dirty = true;
+                        }
+                        if (!Objects.equals(fixedCategory, product.getCategory())) {
+                                product.setCategory(fixedCategory);
+                                dirty = true;
+                        }
+                        if (!Objects.equals(fixedDesc, product.getDescription())) {
+                                product.setDescription(fixedDesc);
+                                dirty = true;
+                        }
+                        if (dirty) {
+                                productRepository.save(product);
+                                repaired++;
+                        }
+                }
+                if (repaired > 0) {
+                        log.info("Repaired UTF-8 mojibake on {} product record(s) in product_db.", repaired);
+                } else {
+                        log.info("Products already exist, skipping seeding.");
+                }
+                return repaired > 0;
+        }
+
+        static boolean isMojibake(String value) {
+                if (value == null || value.isEmpty()) {
+                        return false;
+                }
+                String repaired = repairMysqlLatin1Mojibake(value);
+                if (!repaired.equals(value)) {
+                        return true;
+                }
+                return value.indexOf('\uFFFD') >= 0
+                                || value.contains("áº")
+                                || value.contains("á»")
+                                || value.contains("Ä‘")
+                                || value.contains("Äi")
+                                || value.contains("Æ°")
+                                || value.contains("Æ¡")
+                                || value.contains("Ã‚");
+        }
+
+        static String repairMysqlLatin1Mojibake(String value) {
+                if (value == null || value.isEmpty()) {
+                        return value;
+                }
+                boolean hasNonAscii = false;
+                byte[] bytes = new byte[value.length()];
+                for (int i = 0; i < value.length(); i++) {
+                        char ch = value.charAt(i);
+                        if (ch >= 0x80) {
+                                hasNonAscii = true;
+                        }
+                        int mapped = toMysqlLatin1Byte(ch);
+                        if (mapped < 0) {
+                                return value;
+                        }
+                        bytes[i] = (byte) mapped;
+                }
+                if (!hasNonAscii) {
+                        return value;
+                }
+                try {
+                        String decoded = StandardCharsets.UTF_8.newDecoder()
+                                        .onMalformedInput(CodingErrorAction.REPORT)
+                                        .onUnmappableCharacter(CodingErrorAction.REPORT)
+                                        .decode(ByteBuffer.wrap(bytes))
+                                        .toString();
+                        return decoded.equals(value) ? value : decoded;
+                } catch (CharacterCodingException ex) {
+                        return value;
+                }
+        }
+
+        private static int toMysqlLatin1Byte(char ch) {
+                if (ch <= 0xFF) {
+                        return ch;
+                }
+                return switch (ch) {
+                        case '\u20AC' -> 0x80;
+                        case '\u201A' -> 0x82;
+                        case '\u0192' -> 0x83;
+                        case '\u201E' -> 0x84;
+                        case '\u2026' -> 0x85;
+                        case '\u2020' -> 0x86;
+                        case '\u2021' -> 0x87;
+                        case '\u02C6' -> 0x88;
+                        case '\u2030' -> 0x89;
+                        case '\u0160' -> 0x8A;
+                        case '\u2039' -> 0x8B;
+                        case '\u0152' -> 0x8C;
+                        case '\u017D' -> 0x8E;
+                        case '\u2018' -> 0x91;
+                        case '\u2019' -> 0x92;
+                        case '\u201C' -> 0x93;
+                        case '\u201D' -> 0x94;
+                        case '\u2022' -> 0x95;
+                        case '\u2013' -> 0x96;
+                        case '\u2014' -> 0x97;
+                        case '\u02DC' -> 0x98;
+                        case '\u2122' -> 0x99;
+                        case '\u0161' -> 0x9A;
+                        case '\u203A' -> 0x9B;
+                        case '\u0153' -> 0x9C;
+                        case '\u017E' -> 0x9E;
+                        case '\u0178' -> 0x9F;
+                        default -> -1;
+                };
         }
 
         private void seedFlashSaleCampaign() {

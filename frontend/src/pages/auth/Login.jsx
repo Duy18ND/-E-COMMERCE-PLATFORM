@@ -5,6 +5,7 @@ import useNotification from '../../hooks/useNotification';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import Icon from '../../components/common/Icons';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -64,18 +65,10 @@ const Login = () => {
     }
   };
 
-  const handleQuickFill = (email, password) => {
-    setFormData({ email, password });
-    setFieldErrors({});
-    setError('');
-    setSuccess('');
-    setInfoNotice('');
-  };
-
   const handleForgotPassword = () => {
     setError('');
     setInfoNotice(
-      'Vui lòng liên hệ Hotline 1900 8888 hoặc sử dụng tài khoản kiểm thử bên dưới để truy cập nhanh.'
+      'Vui lòng liên hệ Hotline 1900 8888 để được hỗ trợ khôi phục mật khẩu.'
     );
   };
 
@@ -137,23 +130,17 @@ const Login = () => {
   };
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen ui-page-enter">
       {/* 1. AUTH TOP HEADER */}
       <header className="auth-topbar">
         <div className="container auth-topbar-inner">
           <div className="auth-topbar-left">
             <Link to="/" className="header-logo">
               <div className="header-logo-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M6 7V6C6 4.34315 7.34315 3 9 3H15C16.6569 3 18 4.34315 18 6V7M4 7H20L19 21H5L4 7Z"
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="header-logo-star">⭐</span>
+                <Icon name="store" size={20} color="#ffffff" />
+                <span className="header-logo-star">
+                  <Icon name="sparkles" size={11} color="#fde047" />
+                </span>
               </div>
               <span className="header-logo-text">ShopMart</span>
             </Link>
@@ -283,42 +270,18 @@ const Login = () => {
                   </p>
                 </div>
 
-                {/* Khung điền nhanh tài khoản kiểm thử USER / ADMIN */}
-                <div className="auth-demo-box">
-                  <div className="auth-demo-label">
-                    <span>🧪 Tài khoản dùng thử nhanh:</span>
-                    <span className="auth-demo-pass">MK: 123456</span>
-                  </div>
-                  <div className="auth-demo-actions">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickFill('user@test.com', '123456')}
-                      className="auth-demo-chip user"
-                    >
-                      👤 Khách hàng (user@test.com)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickFill('admin@test.com', '123456')}
-                      className="auth-demo-chip admin"
-                    >
-                      🛡️ Quản trị (admin@test.com)
-                    </button>
-                  </div>
-                </div>
-
                 {error && <ErrorMessage message={error} onClose={() => setError('')} />}
 
                 {infoNotice && (
                   <div className="auth-info-banner" role="status">
-                    <span>ℹ️</span>
+                    <Icon name="info" size={16} />
                     <span>{infoNotice}</span>
                   </div>
                 )}
 
                 {success && (
                   <div className="auth-success-banner" role="status">
-                    <span>✓</span>
+                    <Icon name="success" size={16} />
                     <span>{success}</span>
                   </div>
                 )}
@@ -332,7 +295,7 @@ const Login = () => {
                     value={formData.email}
                     onChange={handleChange}
                     error={fieldErrors.email}
-                    placeholder="user@test.com hoặc admin@test.com"
+                    placeholder="example@gmail.com"
                     leftIcon={
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />

@@ -1,17 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import useCart from '../../hooks/useCart';
 import useNotification from '../../hooks/useNotification';
+import { USE_MOCK_AUTH } from '../../services/authService';
+import userService from '../../services/userService';
+import { getToken } from '../../utils/auth';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
 import voucherService, { getVoucherStatus, calcDiscount, parseLocalDateBoundary } from '../../services/voucherService';
-import { PAYMENT_METHOD, PAYMENT_METHOD_LABELS } from '../../utils/constants';
+import {
+  PAYMENT_METHOD,
+  PAYMENT_METHOD_LABELS,
+  ONLINE_PAYMENT_PROVIDERS,
+  ONLINE_PAYMENT_METHODS_LIST
+} from '../../utils/constants';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import CartSummary from '../../components/cart/CartSummary';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import QrPaymentModal from '../../components/order/QrPaymentModal';
+import Icon from '../../components/common/Icons';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtMoney = (n) => Number(n).toLocaleString('vi-VN') + 'đ';
@@ -31,20 +40,14 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
 
   return (
     <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        backgroundColor: 'rgba(0,0,0,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '1rem'
-      }}
+      className="shopmart-dialog-overlay"
       onClick={onClose}
     >
       <div
+        className="shopmart-dialog-box"
         style={{
-          backgroundColor: '#ffffff', borderRadius: '16px',
-          width: '100%', maxWidth: '520px', maxHeight: '85vh',
-          overflow: 'hidden', display: 'flex', flexDirection: 'column',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.25)'
+          maxWidth: '520px', maxHeight: '85vh', padding: 0,
+          overflow: 'hidden', display: 'flex', flexDirection: 'column'
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -54,30 +57,37 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem'
         }}>
           <div>
-            <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>
-              🎫 Chọn mã giảm giá
+            <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <Icon name="voucher" size={18} color="#dc2626" />
+              <span>Chọn mã giảm giá</span>
             </h3>
             <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
               Đơn hàng: <strong>{fmtMoney(orderTotal)}</strong>
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Đóng"
             style={{
               width: '32px', height: '32px', borderRadius: '50%',
               border: '1px solid #e2e8f0', backgroundColor: '#f8fafc',
-              cursor: 'pointer', fontSize: '1rem', color: '#64748b',
+              cursor: 'pointer', color: '#64748b',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0
             }}
-          >×</button>
+          >
+            <Icon name="close" size={16} />
+          </button>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem' }}>
           {savedVouchers.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎒</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: '#eff6ff', color: '#2563eb', marginBottom: '0.65rem' }}>
+                <Icon name="voucher" size={26} />
+              </div>
               <p style={{ fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
                 Bạn chưa lưu mã giảm giá nào
               </p>
@@ -88,12 +98,13 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
                 to="/vouchers"
                 onClick={onClose}
                 style={{
-                  display: 'inline-block', padding: '0.55rem 1.25rem',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem',
                   borderRadius: '8px', backgroundColor: '#dc2626',
                   color: '#fff', fontWeight: 700, textDecoration: 'none', fontSize: '0.875rem'
                 }}
               >
-                🎫 Đến kho mã giảm giá
+                <Icon name="voucher" size={15} />
+                <span>Đến kho mã giảm giá</span>
               </Link>
             </div>
           ) : (
@@ -166,15 +177,17 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
 
                         {/* Disabled reason */}
                         {disabledReason && (
-                          <div style={{ marginTop: '0.35rem', fontSize: '0.775rem', color: '#dc2626', fontWeight: 600 }}>
-                            ⚠ {disabledReason}
+                          <div style={{ marginTop: '0.35rem', fontSize: '0.775rem', color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Icon name="warning" size={14} color="#dc2626" />
+                            <span>{disabledReason}</span>
                           </div>
                         )}
 
                         {/* Savings preview */}
                         {canApply && discount > 0 && (
-                          <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: '#16a34a', fontWeight: 700 }}>
-                            → Bạn tiết kiệm được {fmtMoney(discount)}
+                          <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Icon name="check-circle" size={14} color="#16a34a" />
+                            <span>Bạn tiết kiệm được {fmtMoney(discount)}</span>
                           </div>
                         )}
                       </div>
@@ -235,21 +248,93 @@ const VoucherPickerModal = ({ isOpen, onClose, savedVouchers, orderTotal, applie
   );
 };
 
+// Pure address mapping helpers (exported for verification)
+
+const normalizeTextSegment = (val) =>
+  String(val || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+/**
+ * Ghép phần địa chỉ chi tiết từ AddressResponse (addressLine, ward, district),
+ * loại bỏ trùng lặp nếu segment cuối trùng với city.
+ */
+export const buildStreetAddressFromDto = (addr) => {
+  if (!addr || typeof addr !== 'object') return '';
+  const cityNorm = normalizeTextSegment(addr.city);
+  const rawParts = [addr.addressLine, addr.ward, addr.district]
+    .map((part) => (part ? String(part).trim() : ''))
+    .filter(Boolean);
+
+  const uniqueParts = [];
+  for (const part of rawParts) {
+    const partNorm = normalizeTextSegment(part);
+    if (cityNorm && partNorm === cityNorm) continue;
+    if (!uniqueParts.some((existing) => normalizeTextSegment(existing) === partNorm)) {
+      uniqueParts.push(part);
+    }
+  }
+  return uniqueParts.join(', ');
+};
+
+/**
+ * Ghép streetAddress và city thành shippingAddress gửi Backend, không ghép tỉnh/thành phố 2 lần.
+ */
+export const composeFullShippingAddress = (streetAddress, city) => {
+  let cleanStreet = String(streetAddress || '').trim();
+  while (cleanStreet.endsWith(',')) {
+    cleanStreet = cleanStreet.slice(0, -1).trimEnd();
+  }
+  const cleanCity = String(city || '').trim();
+  if (!cleanCity) return cleanStreet;
+  if (!cleanStreet) return cleanCity;
+
+  const streetNorm = normalizeTextSegment(cleanStreet);
+  const cityNorm = normalizeTextSegment(cleanCity);
+  const streetSegments = cleanStreet.split(',').map((s) => normalizeTextSegment(s)).filter(Boolean);
+  const lastSegment = streetSegments[streetSegments.length - 1] || '';
+
+  if (
+    streetNorm === cityNorm ||
+    lastSegment === cityNorm ||
+    streetNorm.endsWith(`, ${cityNorm}`)
+  ) {
+    return cleanStreet;
+  }
+  return `${cleanStreet}, ${cleanCity}`;
+};
+
+/**
+ * Ánh xạ dữ liệu nhận hàng từ AddressResponse + Profile thực tế của Backend (không dùng dữ liệu giả).
+ */
+export const mapAddressToCheckoutFields = (addr, profile = null, fallbackUser = null) => ({
+  receiverName: addr?.receiverName || profile?.fullName || fallbackUser?.fullName || '',
+  receiverPhone: addr?.phone || profile?.phone || fallbackUser?.phone || '',
+  streetAddress: addr ? buildStreetAddressFromDto(addr) : '',
+  city: addr?.city ? String(addr.city).trim() : ''
+});
+
 // ─── Main Checkout ─────────────────────────────────────────────────────────────
 const Checkout = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isMockAuth } = useAuth();
   const { cartItems, totalItems, totalPrice, totalOriginalPrice, totalDiscount, refreshCart, addToCart } = useCart();
   const { notify } = useNotification();
 
   const [formData, setFormData] = useState({
-    receiverName:   user?.fullName || 'Nguyễn Văn A',
-    receiverPhone:  user?.phone    || '0912 345 678',
-    streetAddress:  user?.address  || '123 Đường Cầu Giấy, Phường Dịch Vọng',
-    city:           'Hà Nội',
-    note:           'Giao trong giờ hành chính, gọi trước khi giao 15 phút',
+    receiverName:   '',
+    receiverPhone:  '',
+    streetAddress:  '',
+    city:           '',
+    note:           '',
     paymentMethod:  PAYMENT_METHOD.COD
   });
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [addressLoading, setAddressLoading] = useState(false);
+  const userEditedRef = useRef(false);
+  const [selectedOnlineMethod, setSelectedOnlineMethod] = useState(ONLINE_PAYMENT_PROVIDERS.MOMO);
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -260,17 +345,84 @@ const Checkout = () => {
 
   // ── QR payment state (đơn thanh toán trực tuyến chờ quét mã VietQR) ───────
   const [qrOrder, setQrOrder] = useState(null);
-  // Pre-fill user info
+
+  // Tải hồ sơ & sổ địa chỉ thực tế từ Backend API khi mở trang Checkout
   useEffect(() => {
-    if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        receiverName:  user.fullName || prev.receiverName,
-        receiverPhone: user.phone    || prev.receiverPhone,
-        streetAddress: user.address  || prev.streetAddress
-      }));
+    let isMounted = true;
+    const token = getToken();
+    const isMockSession = Boolean(
+      USE_MOCK_AUTH || isMockAuth || (typeof token === 'string' && token.startsWith('mock-'))
+    );
+
+    if (isMockSession) {
+      setSavedAddresses([]);
+      setSelectedAddressId('');
+      if (user && !userEditedRef.current) {
+        setFormData((prev) => ({
+          ...prev,
+          receiverName:  user?.fullName || prev.receiverName,
+          receiverPhone: user?.phone    || prev.receiverPhone,
+          streetAddress: user?.address  || prev.streetAddress
+        }));
+      }
+      return undefined;
     }
-  }, [user]);
+
+    const loadCheckoutRecipientData = async () => {
+      setAddressLoading(true);
+      try {
+        const [profileRes, addressesRes] = await Promise.allSettled([
+          userService.getProfile(),
+          userService.getAddresses()
+        ]);
+
+        if (!isMounted) return;
+
+        const profile = profileRes.status === 'fulfilled' ? profileRes.value : null;
+        const apiAddresses =
+          addressesRes.status === 'fulfilled' && Array.isArray(addressesRes.value)
+            ? addressesRes.value
+            : [];
+        const profileAddresses = Array.isArray(profile?.addresses) ? profile.addresses : [];
+        const addressList = apiAddresses.length > 0 ? apiAddresses : profileAddresses;
+
+        setSavedAddresses(addressList);
+
+        const defaultAddr =
+          profile?.defaultAddress ||
+          addressList.find((addr) => Boolean(addr?.isDefault)) ||
+          addressList[0] ||
+          null;
+
+        if (defaultAddr?.id != null) {
+          setSelectedAddressId(String(defaultAddr.id));
+        } else {
+          setSelectedAddressId(addressList.length > 0 ? 'CUSTOM' : '');
+        }
+
+        if (!userEditedRef.current) {
+          const mapped = mapAddressToCheckoutFields(defaultAddr, profile, user);
+          setFormData((prev) => ({
+            ...prev,
+            receiverName:  mapped.receiverName,
+            receiverPhone: mapped.receiverPhone,
+            streetAddress: mapped.streetAddress,
+            city:          mapped.city,
+            note:          prev.note || ''
+          }));
+        }
+      } finally {
+        if (isMounted) {
+          setAddressLoading(false);
+        }
+      }
+    };
+
+    void loadCheckoutRecipientData();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.userId, user?.fullName, user?.phone, user?.address, isMockAuth]);
 
   // Load user's saved vouchers on mount and on storage events
   useEffect(() => {
@@ -282,7 +434,7 @@ const Checkout = () => {
         setSavedVouchers([]);
       }
     };
-    loadSaved();
+    void loadSaved();
 
     window.addEventListener('app_saved_vouchers_changed', loadSaved);
     window.addEventListener('app_vouchers_changed', loadSaved);
@@ -297,13 +449,45 @@ const Checkout = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'receiverName' || name === 'receiverPhone' || name === 'streetAddress' || name === 'city') {
+      userEditedRef.current = true;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleSelectSavedAddress = (e) => {
+    const nextId = e.target.value;
+    setSelectedAddressId(nextId);
+    userEditedRef.current = true;
+
+    if (!nextId || nextId === 'CUSTOM') {
+      setFormData((prev) => ({
+        ...prev,
+        streetAddress: '',
+        city: ''
+      }));
+      return;
+    }
+
+    const picked = savedAddresses.find((addr) => String(addr.id) === String(nextId));
+    if (picked) {
+      const mapped = mapAddressToCheckoutFields(picked, null, user);
+      setFormData((prev) => ({
+        ...prev,
+        receiverName: mapped.receiverName,
+        receiverPhone: mapped.receiverPhone,
+        streetAddress: mapped.streetAddress,
+        city: mapped.city
+      }));
+    }
+  };
+
   const handleFillTestData = () => {
+    if (!import.meta.env.DEV) return;
+    userEditedRef.current = true;
     setFormData({
       receiverName:  'Nguyễn Văn A',
-      receiverPhone: '0912 345 678',
+      receiverPhone: '0912345678',
       streetAddress: '123 Đường Cầu Giấy, Phường Dịch Vọng',
       city:          'Hà Nội',
       note:          'Đơn hàng thử nghiệm Flash Sale ShopMart',
@@ -318,13 +502,24 @@ const Checkout = () => {
       setPickerOpen(false);
       return;
     }
-    const discountAmount = calcDiscount(v, totalPrice);
-    if (discountAmount <= 0 || totalPrice <= 0 || totalPrice < Number(v.minOrderValue || 0)) {
+    const currentSubtotal = Number(totalPrice) || 0;
+    const currentShippingFee = 0;
+    const currentDiscount = calcDiscount(v, currentSubtotal);
+    if (currentDiscount <= 0 || currentSubtotal <= 0 || currentSubtotal < Number(v.minOrderValue || 0)) {
       setAppliedVoucher(null);
       setPickerOpen(false);
       return;
     }
-    setAppliedVoucher({ voucher: v, discountAmount });
+    const currentTotal = Math.max(0, currentSubtotal - currentDiscount) + currentShippingFee;
+
+    setAppliedVoucher({
+      voucher: v,
+      couponCode: v.code,
+      subtotal: currentSubtotal,
+      discountAmount: currentDiscount,
+      shippingFee: currentShippingFee,
+      totalAmount: currentTotal
+    });
     setPickerOpen(false);
   };
 
@@ -343,10 +538,34 @@ const Checkout = () => {
         setAppliedVoucher(null);
         return;
       }
-      const newDiscount = calcDiscount(v, totalPrice);
-      setAppliedVoucher((prev) => prev ? { ...prev, discountAmount: newDiscount } : null);
+      const currentSubtotal = Number(totalPrice) || 0;
+      const currentShippingFee = Number(appliedVoucher.shippingFee ?? 0);
+      const newDiscount = calcDiscount(v, currentSubtotal);
+      const newTotal = Math.max(0, currentSubtotal - newDiscount) + currentShippingFee;
+      setAppliedVoucher((prev) =>
+        prev
+          ? {
+              ...prev,
+              couponCode: v.code,
+              subtotal: currentSubtotal,
+              discountAmount: newDiscount,
+              shippingFee: currentShippingFee,
+              totalAmount: newTotal
+            }
+          : null
+      );
     }
   }, [totalPrice]);
+
+  // Derived totals (Công thức: totalAmount = subtotal - discountAmount + shippingFee)
+  const subtotal         = Number(totalPrice) || 0;
+  const shippingFee      = Number(appliedVoucher?.shippingFee ?? 0);
+  const couponCode       = appliedVoucher?.couponCode ?? appliedVoucher?.voucher?.code ?? null;
+  const voucherDiscount  = Number(appliedVoucher?.discountAmount ?? 0);
+  const discountAmount   = appliedVoucher ? voucherDiscount : 0;
+  const finalTotal       = Math.max(0, totalPrice - voucherDiscount);
+  const totalAmount      = finalTotal + shippingFee;
+  const savedVoucherCount = savedVouchers.length;
 
   const handleAddSampleItem = () => {
     addToCart(
@@ -363,6 +582,11 @@ const Checkout = () => {
     );
   };
 
+  const selectedProvider =
+    ONLINE_PAYMENT_METHODS_LIST.find((m) => m.id === selectedOnlineMethod) ||
+    ONLINE_PAYMENT_METHODS_LIST[0];
+  const isOnlineMethod = formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -376,25 +600,32 @@ const Checkout = () => {
       return;
     }
 
-    const fullShippingAddress = formData.city
-      ? `${formData.streetAddress.trim()}, ${formData.city.trim()}`
-      : formData.streetAddress.trim();
+    const fullShippingAddress = composeFullShippingAddress(
+      formData.streetAddress,
+      formData.city
+    );
 
     setLoading(true);
     try {
-      // Tạo đơn hàng – kèm đầy đủ thông tin tạm tính (đã áp giá Flash Sale) và giảm giá Voucher
+      // Tạo đơn hàng – kèm đầy đủ thông tin tạm tính (đã áp giá Flash Sale), giảm giá Voucher và thông tin thanh toán
       const createdOrder = await orderService.checkout({
-        receiverName:          formData.receiverName.trim(),
-        receiverPhone:         formData.receiverPhone.trim(),
-        shippingAddress:       fullShippingAddress,
-        note:                  formData.note ? formData.note.trim() : '',
-        paymentMethod:         formData.paymentMethod,
-        subtotalAmount:        totalPrice,
-        originalAmount:        totalOriginalPrice > totalPrice ? totalOriginalPrice : totalPrice,
-        productDiscountAmount: totalDiscount,
-        voucherId:             appliedVoucher?.voucher?.id     ?? null,
-        voucherCode:           appliedVoucher?.voucher?.code   ?? null,
-        discountAmount:        voucherDiscount,
+        receiverName:               formData.receiverName.trim(),
+        receiverPhone:              formData.receiverPhone.trim(),
+        shippingAddress:            fullShippingAddress,
+        note:                       formData.note ? formData.note.trim() : '',
+        paymentMethod:              formData.paymentMethod,
+        onlinePaymentProvider:      isOnlineMethod ? selectedOnlineMethod : null,
+        onlinePaymentProviderLabel: isOnlineMethod ? selectedProvider.title || selectedProvider.name : null,
+        couponCode,
+        voucherId:                  appliedVoucher?.voucher?.id ?? null,
+        voucherCode:                couponCode ?? null,
+        subtotal,
+        subtotalAmount:             totalPrice,
+        originalAmount:             totalOriginalPrice > totalPrice ? totalOriginalPrice : totalPrice,
+        productDiscountAmount:      totalDiscount,
+        discountAmount:             voucherDiscount,
+        shippingFee,
+        totalAmount,
         finalTotal
       });
 
@@ -439,7 +670,16 @@ const Checkout = () => {
       }
 
       notify.success(`Đặt hàng thành công! Đơn hàng #${normalizedCreatedOrder?.id || ''} đã được ghi nhận.`);
-      navigate('/order-success', { state: { orderId: normalizedCreatedOrder?.id, order: normalizedCreatedOrder } });
+      navigate('/order-success', {
+        state: {
+          orderId: normalizedCreatedOrder?.id,
+          order: normalizedCreatedOrder,
+          isOnlinePayment: isOnlineMethod,
+          onlineProvider: selectedProvider,
+          onlineMethod: selectedProvider.title || selectedProvider.name,
+          amountPaid: resolvedPayableTotal
+        }
+      });
     } catch (err) {
       const errMsg = err.message || 'Đặt hàng không thành công. Vui lòng kiểm tra lại thông tin giỏ hàng!';
       setError(errMsg);
@@ -473,33 +713,33 @@ const Checkout = () => {
     setQrOrder(null);
     navigate(`/orders/${orderId}`);
   };
-
-  // Derived totals
-  const voucherDiscount  = appliedVoucher?.discountAmount ?? 0;
-  const finalTotal       = Math.max(0, totalPrice - voucherDiscount);
-  const savedVoucherCount = savedVouchers.length;
-
   return (
-    <div className="container page-container" style={{ paddingBottom: '3rem' }}>
+    <div className="container page-container ui-page-enter" style={{ paddingBottom: '3rem' }}>
       {/* ── Page header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         <div>
-          <h1 className="page-title" style={{ margin: 0 }}>Thanh toán &amp; Xác nhận Đơn hàng</h1>
+          <h1 className="page-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="card" size={24} color="#2563eb" />
+            <span>Thanh toán &amp; Xác nhận Đơn hàng</span>
+          </h1>
           <p style={{ margin: '0.25rem 0 0', color: '#64748b', fontSize: '0.875rem' }}>
             Kiểm tra thông tin giao hàng và xác nhận đơn hàng của bạn
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleFillTestData}
-          style={{
-            backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px',
-            padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700,
-            color: '#2563eb', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem'
-          }}
-        >
-          <span>⚡</span><span>Điền nhanh thông tin test</span>
-        </button>
+        {import.meta.env.DEV && (
+          <button
+            type="button"
+            onClick={handleFillTestData}
+            style={{
+              backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px',
+              padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700,
+              color: '#2563eb', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem'
+            }}
+          >
+            <Icon name="flash" size={14} />
+            <span>Điền nhanh thông tin test</span>
+          </button>
+        )}
       </div>
 
       {error && <ErrorMessage message={error} onClose={() => setError('')} />}
@@ -516,7 +756,9 @@ const Checkout = () => {
 
       {qrOrder ? (
         <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
-          <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>📱</span>
+          <div style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: '#eff6ff', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
+            <Icon name="qr" size={30} />
+          </div>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
             Đơn hàng #{qrOrder.id} đang chờ thanh toán
           </h3>
@@ -526,7 +768,9 @@ const Checkout = () => {
         </div>
       ) : cartItems.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
-          <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>🛒</span>
+          <div style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
+            <Icon name="cart" size={30} />
+          </div>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>Giỏ hàng của bạn đang trống</h3>
           <p style={{ color: '#64748b', fontSize: '0.875rem', margin: '0.5rem 0 1.5rem' }}>
             Bạn cần có ít nhất 1 sản phẩm trong giỏ để thực hiện xác nhận đơn hàng.
@@ -534,13 +778,15 @@ const Checkout = () => {
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <button
               onClick={handleAddSampleItem}
+              className="ui-hover-lift"
               style={{
                 backgroundColor: '#dc2626', color: '#ffffff', border: 'none',
                 borderRadius: '8px', padding: '0.65rem 1.25rem', fontSize: '0.875rem',
-                fontWeight: 700, cursor: 'pointer'
+                fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem'
               }}
             >
-              ⚡ Thêm sản phẩm mẫu Flash Sale để test ngay
+              <Icon name="flash" size={16} />
+              <span>Thêm sản phẩm mẫu Flash Sale để test ngay</span>
             </button>
             <Link to="/flash-sale" style={{ textDecoration: 'none' }}>
               <Button variant="outline">Quay lại săn Flash Sale</Button>
@@ -566,52 +812,255 @@ const Checkout = () => {
 
                 {/* Section 1: Shipping info */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>📍</span><span>1. Thông tin người nhận hàng</span>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Icon name="tracking" size={18} color="#2563eb" />
+                    <span>1. Thông tin người nhận hàng</span>
                   </h2>
                   <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 700, backgroundColor: '#dcfce7', padding: '2px 8px', borderRadius: '4px' }}>
                     Sẵn sàng đặt hàng
                   </span>
                 </div>
 
-                <Input label="Họ và tên người nhận" name="receiverName" required value={formData.receiverName} onChange={handleChange} placeholder="Nguyễn Văn A" />
-                <Input label="Số điện thoại nhận hàng" name="receiverPhone" type="tel" required value={formData.receiverPhone} onChange={handleChange} placeholder="0912345678" />
-                <Input label="Địa chỉ chi tiết (Số nhà, tên đường, phường/xã)" name="streetAddress" required value={formData.streetAddress} onChange={handleChange} placeholder="Số nhà 123, đường Cầu Giấy, phường Dịch Vọng" />
-                <Input label="Tỉnh / Thành phố" name="city" value={formData.city} onChange={handleChange} placeholder="Hà Nội, TP.HCM..." />
-                <Input label="Ghi chú đơn hàng (Tùy chọn)" name="note" value={formData.note} onChange={handleChange} placeholder="Giao trong giờ hành chính, gọi trước khi giao..." />
+                {addressLoading ? (
+                  <div style={{ fontSize: '0.825rem', color: '#64748b', marginBottom: '0.85rem' }}>
+                    Đang tải thông tin người nhận từ hồ sơ của bạn...
+                  </div>
+                ) : savedAddresses.length > 0 && (
+                  <div style={{
+                    marginBottom: '1rem',
+                    padding: '0.8rem 0.95rem',
+                    borderRadius: '10px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <label
+                      htmlFor="saved-address-select"
+                      style={{
+                        display: 'block',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        color: '#334155',
+                        marginBottom: '0.4rem'
+                      }}
+                    >
+                      Chọn từ sổ địa chỉ ({savedAddresses.length} địa chỉ đã lưu)
+                    </label>
+                    <select
+                      id="saved-address-select"
+                      name="savedAddressId"
+                      value={selectedAddressId}
+                      onChange={handleSelectSavedAddress}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#ffffff',
+                        color: '#0f172a',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      {savedAddresses.map((addr) => {
+                        const labelParts = [
+                          addr.receiverName,
+                          addr.phone,
+                          composeFullShippingAddress(buildStreetAddressFromDto(addr), addr.city)
+                        ].filter(Boolean);
+                        return (
+                          <option key={addr.id} value={String(addr.id)}>
+                            {addr.isDefault ? '[Mặc định] ' : ''}
+                            {labelParts.join(' - ')}
+                          </option>
+                        );
+                      })}
+                      <option value="CUSTOM">Nhập địa chỉ nhận hàng khác</option>
+                    </select>
+                  </div>
+                )}
+
+                <Input label="Họ và tên người nhận" name="receiverName" required value={formData.receiverName} onChange={handleChange} placeholder="Nhập họ và tên người nhận" />
+                <Input label="Số điện thoại nhận hàng" name="receiverPhone" type="tel" required value={formData.receiverPhone} onChange={handleChange} placeholder="Nhập số điện thoại nhận hàng (VD: 0912345678)" />
+                <Input label="Địa chỉ chi tiết (Số nhà, tên đường, phường/xã, quận/huyện)" name="streetAddress" required value={formData.streetAddress} onChange={handleChange} placeholder="Nhập số nhà, tên đường, phường/xã, quận/huyện" />
+                <Input label="Tỉnh / Thành phố" name="city" value={formData.city} onChange={handleChange} placeholder="Nhập tỉnh / thành phố" />
+                <Input label="Ghi chú đơn hàng (Tùy chọn)" name="note" value={formData.note} onChange={handleChange} placeholder="Nhập ghi chú giao hàng nếu cần (tùy chọn)" />
 
                 {/* Section 2: Payment method */}
                 <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9' }}>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.75rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>💳</span><span>2. Phương thức thanh toán</span>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.75rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Icon name="payment" size={18} color="#2563eb" />
+                    <span>2. Phương thức thanh toán</span>
                   </h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
-                      { value: PAYMENT_METHOD.COD,         icon: '💵', desc: 'Thanh toán bằng tiền mặt khi shipper giao tận nơi và đồng kiểm hàng' },
-                      { value: PAYMENT_METHOD.MOCK_ONLINE,  icon: '📱', desc: 'Quét mã VietQR chuyển khoản — Tự động duyệt trạng thái Đã Thanh Toán (PAID) ngay khi xác nhận giao dịch' }
-                    ].map((pm) => (
-                      <label key={pm.value} style={{
-                        display: 'flex', alignItems: 'center', gap: '0.75rem',
-                        padding: '0.75rem 1rem', borderRadius: '10px', cursor: 'pointer',
-                        border: formData.paymentMethod === pm.value ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
-                        backgroundColor: formData.paymentMethod === pm.value ? '#eff6ff' : '#ffffff'
-                      }}>
-                        <input type="radio" name="paymentMethod" value={pm.value} checked={formData.paymentMethod === pm.value} onChange={handleChange} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
-                            {pm.icon} {PAYMENT_METHOD_LABELS[pm.value]}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{pm.desc}</div>
-                        </div>
+                    {/* Lựa chọn 1: COD */}
+                    <label
+                      htmlFor="payment-method-cod"
+                      aria-label="Thanh toán khi nhận hàng (COD)"
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                        padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer',
+                        border: formData.paymentMethod === PAYMENT_METHOD.COD ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        backgroundColor: formData.paymentMethod === PAYMENT_METHOD.COD ? '#eff6ff' : '#ffffff',
+                        transition: 'border-color 0.15s ease, background-color 0.15s ease'
+                      }}
+                    >
+                      <input
+                        id="payment-method-cod"
+                        type="radio"
+                        name="paymentMethod"
+                        value={PAYMENT_METHOD.COD}
+                        checked={formData.paymentMethod === PAYMENT_METHOD.COD}
+                        onChange={handleChange}
+                        style={{ marginTop: '3px', accentColor: '#2563eb' }}
+                      />
+                      <span style={{ minWidth: 0, flex: 1, display: 'block' }}>
+                        <strong style={{ fontWeight: 700, fontSize: '0.925rem', color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <Icon name="wallet" size={16} color="#16a34a" />
+                          <span>{PAYMENT_METHOD_LABELS[PAYMENT_METHOD.COD]}</span>
+                        </strong>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
+                          Thanh toán bằng tiền mặt khi shipper giao tận nơi và đồng kiểm hàng
+                        </span>
+                      </span>
+                    </label>
+
+                    {/* Lựa chọn 2: Thanh toán trực tuyến */}
+                    <div style={{
+                      borderRadius: '10px',
+                      border: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                      backgroundColor: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '#f8faff' : '#ffffff',
+                      overflow: 'hidden',
+                      transition: 'border-color 0.15s ease, background-color 0.15s ease'
+                    }}>
+                      <label
+                        htmlFor="payment-method-online"
+                        aria-label="Thanh toán trực tuyến"
+                        style={{
+                          display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                          padding: '0.85rem 1rem', cursor: 'pointer',
+                          backgroundColor: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '#eff6ff' : 'transparent',
+                          borderBottom: formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE ? '1px solid #bfdbfe' : 'none'
+                        }}
+                      >
+                        <input
+                          id="payment-method-online"
+                          type="radio"
+                          name="paymentMethod"
+                          value={PAYMENT_METHOD.MOCK_ONLINE}
+                          checked={formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE}
+                          onChange={handleChange}
+                          style={{ marginTop: '3px', accentColor: '#2563eb' }}
+                        />
+                        <span style={{ minWidth: 0, flex: 1, display: 'block' }}>
+                          <strong style={{ fontWeight: 700, fontSize: '0.925rem', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.35rem' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <Icon name="card" size={16} color="#2563eb" />
+                              <span>{PAYMENT_METHOD_LABELS[PAYMENT_METHOD.MOCK_ONLINE]}</span>
+                            </span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563eb', backgroundColor: '#dbeafe', padding: '2px 8px', borderRadius: '4px' }}>
+                              Khuyên dùng
+                            </span>
+                          </strong>
+                          <span style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
+                            Hỗ trợ MoMo, ZaloPay, VietQR / Chuyển khoản ngân hàng và Thẻ quốc tế Visa/Mastercard — Tự động duyệt trạng thái Đã Thanh Toán (PAID)
+                          </span>
+                        </span>
                       </label>
-                    ))}
+
+                      {/* Danh sách 4 phương thức trực tuyến - Chỉ hiển thị khi chọn Thanh toán trực tuyến */}
+                      {formData.paymentMethod === PAYMENT_METHOD.MOCK_ONLINE && (
+                        <div style={{ padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                          <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <Icon name="qr" size={15} color="#2563eb" />
+                            <span>Chọn phương thức thanh toán trực tuyến:</span>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.6rem' }}>
+                            {ONLINE_PAYMENT_METHODS_LIST.map((method) => {
+                              const isSelected = selectedOnlineMethod === method.id;
+                              const methodIconName = String(method.id).includes('QR')
+                                ? 'qr'
+                                : String(method.id).includes('CARD') || String(method.id).includes('VISA')
+                                  ? 'card'
+                                  : 'wallet';
+                              return (
+                                <label
+                                  key={method.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.65rem',
+                                    padding: '0.75rem 0.85rem',
+                                    borderRadius: '8px',
+                                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                                    backgroundColor: isSelected ? '#ffffff' : '#f8fafc',
+                                    boxShadow: isSelected ? '0 2px 8px rgba(37, 99, 235, 0.15)' : 'none',
+                                    cursor: 'pointer',
+                                    transition: 'border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease'
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="onlinePaymentProvider"
+                                    value={method.id}
+                                    checked={isSelected}
+                                    onChange={() => setSelectedOnlineMethod(method.id)}
+                                    style={{ accentColor: '#2563eb' }}
+                                  />
+                                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: isSelected ? '#eff6ff' : '#f1f5f9', color: isSelected ? '#2563eb' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Icon name={methodIconName} size={17} />
+                                  </div>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.875rem', color: isSelected ? '#1e40af' : '#1e293b' }}>
+                                      {method.name}
+                                    </div>
+                                    <div style={{ fontSize: '0.725rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {method.title}
+                                    </div>
+                                  </div>
+                                  {isSelected && (
+                                    <Icon name="check" size={16} color="#2563eb" strokeWidth={2.5} />
+                                  )}
+                                </label>
+                              );
+                            })}
+                          </div>
+
+                          {/* Xác nhận thanh toán: Hiển thị phương thức đã chọn & Tổng tiền cần thanh toán */}
+                          <div style={{
+                            marginTop: '0.4rem',
+                            padding: '0.85rem 1rem',
+                            borderRadius: '8px',
+                            backgroundColor: '#ffffff',
+                            border: '1.5px dashed #93c5fd',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.45rem'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#64748b' }}>Phương thức đã chọn:</span>
+                              <span style={{ fontWeight: 700, color: '#1e40af', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <Icon name="card" size={15} color="#1e40af" />
+                                <span>{selectedProvider.title || selectedProvider.name}</span>
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.45rem' }}>
+                              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Tổng tiền cần thanh toán:</span>
+                              <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#dc2626' }}>
+                                {fmtMoney(totalAmount)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Section 3: Voucher */}
                 <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9' }}>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.75rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>🎫</span><span>3. Mã giảm giá</span>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.75rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Icon name="voucher" size={18} color="#dc2626" />
+                    <span>3. Mã giảm giá</span>
                   </h3>
 
                   {appliedVoucher ? (
@@ -630,7 +1079,10 @@ const Checkout = () => {
                           }}>
                             {appliedVoucher.voucher.code}
                           </span>
-                          <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 700 }}>✓ Đã áp dụng</span>
+                          <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <Icon name="check" size={13} strokeWidth={2.5} />
+                            <span>Đã áp dụng</span>
+                          </span>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>
                           Tiết kiệm <strong>{fmtMoney(appliedVoucher.discountAmount)}</strong> cho đơn hàng này
@@ -677,78 +1129,98 @@ const Checkout = () => {
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.backgroundColor = '#eff6ff'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#bfdbfe'; e.currentTarget.style.backgroundColor = '#f8fbff'; }}
                       >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          🎫
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Icon name="voucher" size={16} color="#dc2626" />
+                        <span>
                           {savedVoucherCount > 0
                             ? `Chọn mã giảm giá (${savedVoucherCount} mã đã lưu)`
                             : 'Chọn mã giảm giá'}
                         </span>
-                        <span>›</span>
-                      </button>
-                      <p style={{ margin: '0.4rem 0 0', fontSize: '0.775rem', color: '#94a3b8' }}>
-                        Chưa có mã?{' '}
-                        <Link to="/vouchers" style={{ color: '#2563eb', fontWeight: 600 }}>
-                          Xem kho mã giảm giá →
-                        </Link>
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Submit */}
-                <div style={{ marginTop: '1.75rem' }}>
-                  <button
-                    type="submit"
-                    disabled={loading || cartItems.length === 0}
-                    style={{
-                      width: '100%', backgroundColor: '#dc2626', color: '#ffffff',
-                      border: 'none', borderRadius: '10px', padding: '0.95rem',
-                      fontSize: '1rem', fontWeight: 800,
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      boxShadow: '0 4px 14px rgba(220, 38, 38, 0.4)',
-                      transition: 'all 0.2s',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
-                    }}
-                    onMouseEnter={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#b91c1c'; }}
-                    onMouseLeave={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#dc2626'; }}
-                  >
-                    <span>{loading ? '⏳' : '✓'}</span>
-                    <span>{loading ? 'Đang xác nhận đơn hàng...' : 'Xác nhận Đặt hàng'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Right column: Order Summary ── */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 0 }}>
-                <CartSummary
-                  totalItems={totalItems}
-                  totalPrice={totalPrice}
-                  totalOriginalPrice={totalOriginalPrice}
-                  totalDiscount={totalDiscount}
-                  showCheckoutButton={false}
-                />
-
-                {/* Voucher discount + final total */}
-                {appliedVoucher && (
-                  <div style={{
-                    backgroundColor: '#f0fdf4', border: '1px solid #86efac',
-                    borderRadius: '12px', padding: '1rem 1.1rem'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', fontSize: '0.9rem', color: '#166534', fontWeight: 700, marginBottom: '0.5rem' }}>
-                      <span>🎫 Voucher ({appliedVoucher.voucher.code})</span>
-                      <span>-{fmtMoney(appliedVoucher.discountAmount)}</span>
-                    </div>
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem',
-                      paddingTop: '0.6rem', borderTop: '1px solid #bbf7d0',
-                      fontSize: '1.1rem', fontWeight: 800, color: '#0f172a'
-                    }}>
-                      <span>Thành tiền</span>
-                      <span style={{ color: '#dc2626' }}>{fmtMoney(finalTotal)}</span>
-                    </div>
+                      </span>
+                      <Icon name="chevron-right" size={16} />
+                    </button>
+                    <p style={{ margin: '0.4rem 0 0', fontSize: '0.775rem', color: '#94a3b8' }}>
+                      Chưa có mã?{' '}
+                      <Link to="/vouchers" style={{ color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <span>Xem kho mã giảm giá</span>
+                        <Icon name="arrow-right" size={13} />
+                      </Link>
+                    </p>
                   </div>
                 )}
               </div>
+
+              {/* Submit */}
+              <div style={{ marginTop: '1.75rem' }}>
+                <button
+                  type="submit"
+                  disabled={loading || cartItems.length === 0}
+                  className={!loading && cartItems.length > 0 ? 'ui-hover-lift' : undefined}
+                  style={{
+                    width: '100%',
+                    backgroundColor: isOnlineMethod ? '#2563eb' : '#dc2626',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '0.95rem',
+                    fontSize: '1rem',
+                    fontWeight: 800,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    boxShadow: isOnlineMethod ? '0 4px 14px rgba(37, 99, 235, 0.35)' : '0 4px 14px rgba(220, 38, 38, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <Icon name={loading ? 'loader' : (isOnlineMethod ? 'lock' : 'check')} size={18} spin={loading} />
+                  <span>
+                    {loading
+                      ? (isOnlineMethod ? 'Đang xử lý thanh toán...' : 'Đang xác nhận đơn hàng...')
+                      : (isOnlineMethod ? 'Xác nhận thanh toán' : 'Xác nhận Đặt hàng')}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* ── Right column: Order Summary ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 0 }}>
+              <CartSummary
+                totalItems={totalItems}
+                totalPrice={totalPrice}
+                totalOriginalPrice={totalOriginalPrice}
+                totalDiscount={totalDiscount}
+                couponCode={couponCode}
+                couponDiscount={discountAmount}
+                shippingFee={shippingFee}
+                finalTotal={totalAmount}
+                showCheckoutButton={false}
+              />
+
+              {/* Voucher discount + final total */}
+              {appliedVoucher && (
+                <div style={{
+                  backgroundColor: '#f0fdf4', border: '1px solid #86efac',
+                  borderRadius: '12px', padding: '1rem 1.1rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', fontSize: '0.9rem', color: '#166534', fontWeight: 700, marginBottom: '0.5rem' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Icon name="voucher" size={16} color="#16a34a" />
+                      <span>Voucher ({appliedVoucher.voucher.code})</span>
+                    </span>
+                    <span>-{fmtMoney(appliedVoucher.discountAmount)}</span>
+                  </div>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem',
+                    paddingTop: '0.6rem', borderTop: '1px solid #bbf7d0',
+                    fontSize: '1.1rem', fontWeight: 800, color: '#0f172a'
+                  }}>
+                    <span>Thành tiền</span>
+                    <span style={{ color: '#dc2626' }}>{fmtMoney(finalTotal)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
             </div>
           </form>
         </>

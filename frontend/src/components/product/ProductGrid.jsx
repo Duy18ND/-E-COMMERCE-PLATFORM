@@ -27,9 +27,11 @@ const ProductGrid = ({
   }
 
   return (
-    <div className="product-grid">
-      {productList.map((product) => (
-        <ProductCard key={product.id} product={product} />
+    <div className="product-grid ui-stagger">
+      {productList.map((product, idx) => (
+        <div key={product.id} style={{ '--i': idx, minWidth: 0, height: '100%' }}>
+          <ProductCard product={product} />
+        </div>
       ))}
     </div>
   );

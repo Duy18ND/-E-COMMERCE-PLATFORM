@@ -6,6 +6,7 @@ import {
 } from '../../services/reviewService';
 import OrderStatus from './OrderStatus';
 import Button from '../common/Button';
+import Icon from '../common/Icons';
 
 const DEFAULT_PRODUCT_THUMB =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=200&q=80';
@@ -72,11 +73,15 @@ const OrderItem = ({
                   fontWeight: 700,
                   color: '#16a34a',
                   backgroundColor: '#dcfce7',
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '6px'
+                  padding: '0.18rem 0.55rem',
+                  borderRadius: '6px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem'
                 }}
               >
-                🎫 {couponCode ? `${couponCode}: ` : ''}-{formatCurrency(discountAmount)}
+                <Icon name="ticket" size={13} />
+                <span>{couponCode ? `${couponCode}: ` : ''}-{formatCurrency(discountAmount)}</span>
               </span>
             )}
           </div>
@@ -227,9 +232,15 @@ const OrderItem = ({
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                          <span style={{ color: '#f59e0b', fontWeight: 800, letterSpacing: '1px' }}>
-                            {'★'.repeat(Number(existingReview.rating) || 5)}
-                            {'☆'.repeat(Math.max(0, 5 - (Number(existingReview.rating) || 5)))}
+                          <span style={{ color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: '1px' }}>
+                            {[1, 2, 3, 4, 5].map((starIdx) => (
+                              <Icon
+                                key={starIdx}
+                                name={starIdx <= (Number(existingReview.rating) || 5) ? 'star-filled' : 'star'}
+                                size={13}
+                                color={starIdx <= (Number(existingReview.rating) || 5) ? '#f59e0b' : '#cbd5e1'}
+                              />
+                            ))}
                           </span>
                           <span style={{ fontWeight: 700 }}>({existingReview.rating}/5 sao)</span>
                         </div>
@@ -256,18 +267,23 @@ const OrderItem = ({
                           padding: '0.35rem 0.75rem',
                           borderRadius: '8px',
                           backgroundColor: '#f1f5f9',
-                          border: '1px solid #e2e8f0'
+                          border: '1px solid #e2e8f0',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
                         }}
                       >
-                        ⏳ Đang kiểm tra trạng thái đánh giá...
+                        <Icon name="loader" size={13} spin />
+                        <span>Đang kiểm tra trạng thái đánh giá...</span>
                       </span>
                     ) : itemEligibility.isError ? (
                       <div
                         data-testid={`order-history-review-error-${productId}`}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}
                       >
-                        <span style={{ fontSize: '0.76rem', color: '#dc2626', fontWeight: 600 }}>
-                          ⚠️ Chưa xác minh được trạng thái đánh giá
+                        <span style={{ fontSize: '0.76rem', color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <Icon name="warning" size={13} />
+                          <span>Chưa xác minh được trạng thái đánh giá</span>
                         </span>
                         {typeof onRetryCheckReviews === 'function' && (
                           <button
@@ -281,10 +297,14 @@ const OrderItem = ({
                               color: '#b91c1c',
                               fontSize: '0.75rem',
                               fontWeight: 700,
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem'
                             }}
                           >
-                            Thử lại
+                            <Icon name="refresh" size={12} />
+                            <span>Thử lại</span>
                           </button>
                         )}
                       </div>
@@ -304,7 +324,7 @@ const OrderItem = ({
                           fontWeight: 700
                         }}
                       >
-                        <span>✓</span>
+                        <Icon name="check" size={13} strokeWidth={2.5} />
                         <span>Đã đánh giá</span>
                       </span>
                     ) : itemEligibility.canShowReviewButton ? (
@@ -329,7 +349,7 @@ const OrderItem = ({
                           boxShadow: '0 1px 2px rgba(245, 158, 11, 0.12)'
                         }}
                       >
-                        <span>⭐</span>
+                        <Icon name="star-filled" size={14} color="#f59e0b" />
                         <span>Đánh giá sản phẩm</span>
                       </button>
                     ) : null}

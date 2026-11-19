@@ -1,7 +1,29 @@
-import api, { isHttpResponseError } from './api';
+import api from './api';
 import { INITIAL_PRODUCTS } from './mockData';
 import { INITIAL_FLASH_PRODUCTS } from '../mock/mockSales';
-import { CATEGORY_ALIAS_MAP, matchesCategoryFilter } from './categoryService';
+import {
+  CATEGORY_ALIAS_MAP,
+  CANONICAL_CATEGORIES_BY_ID,
+  encodeImageUrlForBackend,
+  matchesCategoryFilter,
+  resolveStoredImageUrl
+} from './categoryService';
+import { fixUtf8Mojibake } from './voucherService';
+
+const repairMojibakeCategoriesInBackend = async () => {
+  const seeds = Object.values(CANONICAL_CATEGORIES_BY_ID || {});
+  for (const seed of seeds) {
+    try {
+      await api.put(`/products/categories/${seed.id}`, {
+        name: seed.name,
+        description: seed.description,
+        imageUrl: seed.imageUrl
+      });
+    } catch {
+      // Bỏ qua nếu danh mục đã đúng hoặc ID không tồn tại
+    }
+  }
+};
 
 const DEFAULT_PRODUCT_IMAGE =
   'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80';
@@ -42,10 +64,11 @@ export const resolveCategorySlug = (categoryValue, explicitCategoryId = '') => {
 export const normalizeProduct = (product) => {
   if (!product || typeof product !== 'object') return null;
 
-  const categoryName =
+  const categoryName = fixUtf8Mojibake(
     typeof product.category === 'object'
       ? product.category?.name || 'Chưa phân loại'
-      : product.category || 'Chưa phân loại';
+      : product.category || 'Chưa phân loại'
+  );
 
   const stockValue = Number(product.stockQuantity ?? product.stock ?? 0);
   const priceValue = Number(product.price ?? 0);
@@ -60,7 +83,7 @@ export const normalizeProduct = (product) => {
   return {
     ...product,
     id: product.id,
-    name: product.name || 'Sản phẩm ShopMart',
+    name: fixUtf8Mojibake(product.name) || 'Sản phẩm ShopMart',
     category: categoryName,
     categoryId: resolveCategorySlug(categoryName, product.categoryId),
     price: priceValue,
@@ -76,9 +99,9 @@ export const normalizeProduct = (product) => {
       : {}),
     stock: stockValue,
     stockQuantity: stockValue,
-    imageUrl: product.imageUrl || product.image || DEFAULT_PRODUCT_IMAGE,
+    imageUrl: resolveStoredImageUrl(product.imageUrl || product.image, DEFAULT_PRODUCT_IMAGE),
     description:
-      product.description ||
+      fixUtf8Mojibake(product.description) ||
       'Sản phẩm công nghệ chính hãng phân phối tại hệ thống ShopMart E-Commerce.'
   };
 };
@@ -362,18 +385,11 @@ const syncLocalProduct = (id, rawProduct) => {
   return normalized;
 };
 
-const applyStockMutation = async (id, requestFn, buildOfflineProduct) => {
+const applyStockMutation = async (id, requestFn) => {
   try {
     return syncLocalProduct(id, await requestFn());
   } catch (err) {
-    if (isHttpResponseError(err)) {
-      throw err;
-    }
-    const existing = localProducts.find((p) => String(p.id) === String(id));
-    if (!existing) {
-      throw new Error(err.response?.data?.message || err.message || 'Không tìm thấy sản phẩm');
-    }
-    return syncLocalProduct(id, buildOfflineProduct(existing));
+    throw new Error(err?.response?.data?.message || err?.message || 'Không thể cập nhật tồn kho sản phẩm.');
   }
 };
 
@@ -415,20 +431,15 @@ export const productService = {
 
       return extracted;
     } catch (err) {
-      const strictApiMode =
-        params?.rejectOnError === true ||
-        params?.allowMockFallback === false ||
-        (typeof import.meta !== 'undefined' &&
-          import.meta.env &&
-          import.meta.env.VITE_STRICT_API === 'true');
-
-      if (strictApiMode) {
+      if (params?.allowMockFallback !== true) {
         throw new Error(
-          err?.message || 'Máy chủ sản phẩm hiện không phản hồi. Vui lòng thử lại sau!'
+          err?.response?.data?.message ||
+            err?.message ||
+            'Máy chủ sản phẩm hiện không phản hồi. Vui lòng thử lại sau!'
         );
       }
 
-      // Chế độ dự phòng cục bộ khi chạy Frontend độc lập (opt-in demo mode)
+      // Chế độ dự phòng cục bộ khi được bật tường minh (allowMockFallback: true)
       const filtered = filterAndSortProducts(localProducts, {
         category,
         keyword,
@@ -504,8 +515,12 @@ export const productService = {
       });
       return list;
     } catch (err) {
-      if (params?.rejectOnError || params?.allowMockFallback === false) {
-        throw err;
+      if (params?.allowMockFallback !== true) {
+        throw new Error(
+          err?.response?.data?.message ||
+            err?.message ||
+            'Không thể tải danh sách sản phẩm từ máy chủ.'
+        );
       }
       const filtered = filterAndSortProducts(localProducts, {
         category,
@@ -540,14 +555,8 @@ export const productService = {
     try {
       const data = await api.get(`/products/${id}`);
       return normalizeProduct(data);
-    } catch {
-      const found = localProducts.find(
-        (p) => String(p.id) === String(id) || (p.sku && String(p.sku) === String(id))
-      );
-      if (!found) {
-        throw new Error('Không tìm thấy sản phẩm!');
-      }
-      return normalizeProduct(found);
+    } catch (err) {
+      throw new Error(err?.response?.data?.message || err?.message || 'Không tìm thấy sản phẩm!');
     }
   },
 
@@ -634,10 +643,11 @@ export const productService = {
       const extracted = extractPagedProducts(response, params);
       return extracted.content;
     } catch (err) {
-      if (isHttpResponseError(err)) {
-        throw err;
-      }
-      return [...localProducts];
+      throw new Error(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Không thể tải danh sách sản phẩm quản trị từ máy chủ.'
+      );
     }
   },
 
@@ -662,26 +672,30 @@ export const productService = {
       price,
       stockQuantity,
       description: String(productData?.description ?? '').trim(),
-      imageUrl: String(productData?.imageUrl ?? productData?.image ?? '').trim() || DEFAULT_PRODUCT_IMAGE
+      imageUrl: encodeImageUrlForBackend(
+        productData?.imageUrl ?? productData?.image ?? '',
+        DEFAULT_PRODUCT_IMAGE
+      )
     };
 
     try {
-      const created = await api.post('/products', payload);
+      let created;
+      try {
+        created = await api.post('/products', payload);
+      } catch (firstErr) {
+        const msg = String(firstErr?.response?.data?.message || firstErr?.message || '');
+        if ((firstErr?.status === 404 || firstErr?.response?.status === 404) && msg.includes('Danh mục')) {
+          await repairMojibakeCategoriesInBackend();
+          created = await api.post('/products', payload);
+        } else {
+          throw firstErr;
+        }
+      }
       const normalized = normalizeProduct(created);
       localProducts = [normalized, ...localProducts.filter((p) => String(p.id) !== String(normalized.id))];
       return normalized;
     } catch (err) {
-      if (isHttpResponseError(err)) {
-        throw err;
-      }
-      const newProd = normalizeProduct({
-        id: Date.now(),
-        ...payload,
-        stock: stockQuantity,
-        status: 'ACTIVE'
-      });
-      localProducts.unshift(newProd);
-      return newProd;
+      throw new Error(err?.response?.data?.message || err?.message || 'Không thể thêm mới sản phẩm.');
     }
   },
 
@@ -709,44 +723,42 @@ export const productService = {
       price,
       stockQuantity,
       description: String(productData?.description ?? existing.description ?? '').trim(),
-      imageUrl:
-        String(productData?.imageUrl ?? productData?.image ?? existing.imageUrl ?? '').trim() ||
-        DEFAULT_PRODUCT_IMAGE,
+      imageUrl: encodeImageUrlForBackend(
+        productData?.imageUrl ?? productData?.image ?? existing.imageUrl ?? '',
+        DEFAULT_PRODUCT_IMAGE
+      ),
       status: productData?.status || existing.status || 'ACTIVE'
     };
 
     try {
-      const updated = await api.put(`/products/${id}`, payload);
+      let updated;
+      try {
+        updated = await api.put(`/products/${id}`, payload);
+      } catch (firstErr) {
+        const msg = String(firstErr?.response?.data?.message || firstErr?.message || '');
+        if ((firstErr?.status === 404 || firstErr?.response?.status === 404) && msg.includes('Danh mục')) {
+          await repairMojibakeCategoriesInBackend();
+          updated = await api.put(`/products/${id}`, payload);
+        } else {
+          throw firstErr;
+        }
+      }
       const normalized = normalizeProduct(updated);
       localProducts = localProducts.map((p) => (String(p.id) === String(id) ? normalized : p));
       return normalized;
     } catch (err) {
-      if (isHttpResponseError(err)) {
-        throw err;
-      }
-      let updatedItem = null;
-      localProducts = localProducts.map((p) => {
-        if (String(p.id) === String(id)) {
-          updatedItem = normalizeProduct({ ...p, ...payload, stock: stockQuantity });
-          return updatedItem;
-        }
-        return p;
-      });
-      return updatedItem || normalizeProduct({ id, ...payload, stock: stockQuantity });
+      throw new Error(err?.response?.data?.message || err?.message || 'Không thể cập nhật sản phẩm.');
     }
   },
 
   delete: async (id) => {
     try {
       await api.delete(`/products/${id}`);
+      localProducts = localProducts.filter((p) => String(p.id) !== String(id));
+      return { success: true, id };
     } catch (err) {
-      if (isHttpResponseError(err)) {
-        throw err;
-      }
-      // Fallback xóa mềm / xóa khỏi danh sách cục bộ khi offline
+      throw new Error(err?.response?.data?.message || err?.message || 'Không thể xóa sản phẩm.');
     }
-    localProducts = localProducts.filter((p) => String(p.id) !== String(id));
-    return { success: true, id };
   },
 
   /**
@@ -761,23 +773,11 @@ export const productService = {
       throw new Error('Số lượng nhập kho phải là số nguyên lớn hơn 0');
     }
 
-    return applyStockMutation(
-      id,
-      () =>
-        api.post(`/products/${id}/inbound`, {
-          quantity: qty,
-          note: String(note ?? '').trim()
-        }),
-      (existing) => {
-        const newStock = Math.max(0, Number(existing.stockQuantity ?? existing.stock ?? 0) + qty);
-        const updatedStatus = newStock > 0 && existing.status === 'OUT_OF_STOCK' ? 'ACTIVE' : existing.status;
-        return {
-          ...existing,
-          stock: newStock,
-          stockQuantity: newStock,
-          status: updatedStatus
-        };
-      }
+    return applyStockMutation(id, () =>
+      api.post(`/products/${id}/inbound`, {
+        quantity: qty,
+        note: String(note ?? '').trim()
+      })
     );
   },
 
@@ -797,27 +797,11 @@ export const productService = {
       throw new Error('Lý do điều chỉnh kho không được để trống');
     }
 
-    return applyStockMutation(
-      id,
-      () =>
-        api.post(`/products/${id}/adjust-stock`, {
-          actualStock: stockVal,
-          reason: cleanReason
-        }),
-      (existing) => {
-        let updatedStatus = existing.status;
-        if (stockVal === 0 && existing.status === 'ACTIVE') {
-          updatedStatus = 'OUT_OF_STOCK';
-        } else if (stockVal > 0 && existing.status === 'OUT_OF_STOCK') {
-          updatedStatus = 'ACTIVE';
-        }
-        return {
-          ...existing,
-          stock: stockVal,
-          stockQuantity: stockVal,
-          status: updatedStatus
-        };
-      }
+    return applyStockMutation(id, () =>
+      api.post(`/products/${id}/adjust-stock`, {
+        actualStock: stockVal,
+        reason: cleanReason
+      })
     );
   }
 };

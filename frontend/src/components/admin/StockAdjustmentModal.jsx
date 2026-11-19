@@ -2,6 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import useToast from '../../hooks/useToast';
 import inventoryService, { getInventoryStatus, setStoredThreshold } from '../../services/inventoryService';
 import Button from '../common/Button';
+import Icon from '../common/Icons';
+
+const stockStatusIconName = (status) => {
+  if (status === 'OUT_OF_STOCK') return 'out-of-stock';
+  if (status === 'LOW_STOCK') return 'low-stock';
+  return 'in-stock';
+};
 
 /**
  * [ECOM-283] Modal điều chỉnh tồn kho và cảnh báo hết hàng cho Admin
@@ -254,11 +261,15 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
 
   return (
     <div
+      className="shopmart-dialog-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Điều chỉnh tồn kho và cảnh báo"
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
-        backdropFilter: 'blur(3px)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -270,38 +281,37 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
       }}
     >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Điều chỉnh tồn kho và cảnh báo"
+        className="shopmart-dialog-box"
         style={{
           backgroundColor: '#ffffff',
-          borderRadius: '16px',
+          borderRadius: '18px',
           maxWidth: '620px',
           width: '100%',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: '90vh'
+          maxHeight: '90dvh'
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
         <div
           style={{
-            padding: '1.25rem 1.5rem',
+            padding: '1.15rem 1.5rem',
             borderBottom: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: '#f8fafc'
+            backgroundColor: '#f8fafc',
+            gap: '0.75rem'
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
-              📦 Điều chỉnh tồn kho &amp; Cảnh báo
+            <h2 style={{ margin: 0, fontSize: '1.18rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Icon name="package" size={20} color="#2563eb" />
+              <span>Điều chỉnh tồn kho &amp; Cảnh báo</span>
             </h2>
-            <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+            <p style={{ margin: '0.2rem 0 0', fontSize: '0.84rem', color: '#64748b' }}>
               Cập nhật số lượng thực tế, quản lý xuất nhập và ngưỡng cảnh báo
             </p>
           </div>
@@ -309,17 +319,22 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
+            aria-label="Đóng"
             style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.5rem',
-              color: '#94a3b8',
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              color: '#64748b',
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              lineHeight: 1,
-              padding: '0.25rem'
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
             }}
           >
-            ×
+            <Icon name="x" size={16} />
           </button>
         </div>
 
@@ -370,7 +385,9 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
                     fontWeight: 700
                   }}
                 >
-                  <span>{currentStatusInfo.icon}</span>
+                  <span>
+                    <Icon name={stockStatusIconName(currentStatusInfo.status)} size={14} />
+                  </span>
                   <span>{currentStatusInfo.label}</span>
                 </span>
                 <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.3rem' }}>
@@ -385,7 +402,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
               Loại thao tác điều chỉnh kho <span style={{ color: '#dc2626' }}>*</span>
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.6rem' }}>
               <button
                 type="button"
                 onClick={() => {
@@ -405,11 +422,11 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '0.25rem',
-                  transition: 'all 0.15s ease'
+                  gap: '0.3rem',
+                  transition: 'border-color 150ms ease, background-color 150ms ease, color 150ms ease'
                 }}
               >
-                <span style={{ fontSize: '1.25rem' }}>📥</span>
+                <Icon name="download" size={20} />
                 <span>Nhập thêm</span>
                 <small style={{ fontSize: '0.72rem', color: '#64748b' }}>Cộng dồn (+)</small>
               </button>
@@ -433,11 +450,11 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '0.25rem',
-                  transition: 'all 0.15s ease'
+                  gap: '0.3rem',
+                  transition: 'border-color 150ms ease, background-color 150ms ease, color 150ms ease'
                 }}
               >
-                <span style={{ fontSize: '1.25rem' }}>📤</span>
+                <Icon name="upload" size={20} />
                 <span>Xuất kho / Giảm</span>
                 <small style={{ fontSize: '0.72rem', color: '#64748b' }}>Khấu trừ (-)</small>
               </button>
@@ -461,11 +478,11 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '0.25rem',
-                  transition: 'all 0.15s ease'
+                  gap: '0.3rem',
+                  transition: 'border-color 150ms ease, background-color 150ms ease, color 150ms ease'
                 }}
               >
-                <span style={{ fontSize: '1.25rem' }}>📋</span>
+                <Icon name="clipboard" size={20} />
                 <span>Kiểm kê thực tế</span>
                 <small style={{ fontSize: '0.72rem', color: '#64748b' }}>Đặt số chuẩn (=)</small>
               </button>
@@ -473,7 +490,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
           </div>
 
           {/* SỐ LƯỢNG ĐIỀU CHỈNH & NGƯỠNG CẢNH BÁO */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
             <div>
               <label
                 htmlFor="stock-qty-input"
@@ -512,8 +529,9 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
                 }}
               />
               {errors.quantity && (
-                <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.3rem', fontWeight: 500 }}>
-                  ⚠️ {errors.quantity}
+                <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.3rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Icon name="warning" size={13} />
+                  <span>{errors.quantity}</span>
                 </div>
               )}
             </div>
@@ -550,8 +568,9 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
                 }}
               />
               {errors.threshold && (
-                <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.3rem', fontWeight: 500 }}>
-                  ⚠️ {errors.threshold}
+                <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.3rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Icon name="warning" size={13} />
+                  <span>{errors.threshold}</span>
                 </div>
               )}
               <small style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', marginTop: '0.25rem' }}>
@@ -599,8 +618,9 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
               }}
             />
             {errors.reason && (
-              <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.3rem', fontWeight: 500 }}>
-                ⚠️ {errors.reason}
+              <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.3rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Icon name="warning" size={13} />
+                <span>{errors.reason}</span>
               </div>
             )}
           </div>
@@ -615,23 +635,28 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
               marginBottom: '1rem'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                👁️ Xem trước biến động tồn kho
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Icon name="eye" size={15} color="#2563eb" />
+                <span>Xem trước biến động tồn kho</span>
               </span>
               {previewCalculation.isValid && (
                 <span
                   style={{
                     fontSize: '0.75rem',
                     fontWeight: 700,
-                    padding: '0.2rem 0.5rem',
+                    padding: '0.2rem 0.55rem',
                     borderRadius: '9999px',
                     color: previewCalculation.statusInfo.color,
                     backgroundColor: previewCalculation.statusInfo.bgLight,
-                    border: `1px solid ${previewCalculation.statusInfo.border}`
+                    border: `1px solid ${previewCalculation.statusInfo.border}`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
                   }}
                 >
-                  {previewCalculation.statusInfo.icon} {previewCalculation.statusInfo.label}
+                  <Icon name={stockStatusIconName(previewCalculation.statusInfo.status)} size={13} />
+                  <span>{previewCalculation.statusInfo.label}</span>
                 </span>
               )}
             </div>
@@ -650,8 +675,8 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
                 <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{currentStock}</div>
               </div>
 
-              <div style={{ fontSize: '1.25rem', color: '#94a3b8', fontWeight: 700 }}>
-                {mode === 'INBOUND' ? '+' : mode === 'DECREASE' ? '-' : '➜'}
+              <div style={{ color: '#94a3b8', display: 'flex', justifyContent: 'center' }}>
+                <Icon name={mode === 'INBOUND' ? 'plus' : mode === 'DECREASE' ? 'minus' : 'arrow-right'} size={18} />
               </div>
 
               <div>
@@ -707,13 +732,11 @@ const StockAdjustmentModal = ({ isOpen, onClose, product, onSuccess }) => {
             <Button
               type="submit"
               variant="primary"
-              disabled={isSubmitting || !previewCalculation.isValid}
+              loading={isSubmitting}
+              disabled={!previewCalculation.isValid}
+              icon={!isSubmitting ? <Icon name="save" size={15} /> : null}
             >
-              {isSubmitting ? (
-                <span>⏳ Đang xử lý...</span>
-              ) : (
-                <span>💾 Lưu điều chỉnh</span>
-              )}
+              {isSubmitting ? 'Đang xử lý...' : 'Lưu điều chỉnh'}
             </Button>
           </div>
         </form>

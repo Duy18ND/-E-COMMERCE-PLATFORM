@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import useNotification from '../../hooks/useNotification';
 import authService from '../../services/authService';
+import useNotification from '../../hooks/useNotification';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import Icon from '../../components/common/Icons';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^[0-9]{10,11}$/;
@@ -13,7 +14,7 @@ export const validateRegisterForm = ({ fullName, email, phone, password, confirm
   const errors = {};
   const cleanName = (fullName || '').trim();
   const cleanEmail = (email || '').trim();
-  const cleanPhone = (phone || '').trim();
+  const cleanPhone = (phone || '').replace(/\s+/g, '');
 
   if (!cleanName) {
     errors.fullName = 'Họ và tên không được để trống.';
@@ -146,7 +147,7 @@ const Register = () => {
         email: formData.email.trim(),
         password: formData.password,
         fullName: formData.fullName.trim(),
-        phone: formData.phone.trim(),
+        phone: formData.phone.replace(/\s+/g, ''),
         address: formData.address.trim()
       });
 
@@ -168,23 +169,17 @@ const Register = () => {
   };
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen ui-page-enter">
       {/* 1. AUTH TOP HEADER */}
       <header className="auth-topbar">
         <div className="container auth-topbar-inner">
           <div className="auth-topbar-left">
             <Link to="/" className="header-logo">
               <div className="header-logo-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M6 7V6C6 4.34315 7.34315 3 9 3H15C16.6569 3 18 4.34315 18 6V7M4 7H20L19 21H5L4 7Z"
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="header-logo-star">⭐</span>
+                <Icon name="store" size={20} color="#ffffff" />
+                <span className="header-logo-star">
+                  <Icon name="sparkles" size={11} color="#fde047" />
+                </span>
               </div>
               <span className="header-logo-text">ShopMart</span>
             </Link>
@@ -198,16 +193,14 @@ const Register = () => {
               onClick={handleHelpClick}
               className="auth-help-link"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
+              <Icon name="info" size={16} />
               <span>Bạn cần giúp đỡ?</span>
             </button>
             <span className="auth-topbar-divider hide-on-mobile" aria-hidden="true" />
             <div className="auth-hotline-box hide-on-mobile">
-              <span className="auth-hotline-icon">🎧</span>
+              <span className="auth-hotline-icon">
+                <Icon name="headset" size={18} color="#2563eb" />
+              </span>
               <div className="auth-hotline-meta">
                 <span className="auth-hotline-sub">HOTLINE HỖ TRỢ</span>
                 <a href="tel:19008888" className="auth-hotline-number">1900 8888</a>
@@ -224,7 +217,7 @@ const Register = () => {
             {/* LEFT BRANDING / REGISTER BENEFITS SHOWCASE */}
             <div className="auth-showcase-col">
               <div className="auth-brand-badge">
-                <span aria-hidden="true">🎉</span>
+                <Icon name="gift" size={14} color="#2563eb" />
                 <span>QUÀ TẶNG THÀNH VIÊN MỚI</span>
               </div>
 
@@ -316,14 +309,14 @@ const Register = () => {
 
                 {infoNotice && (
                   <div className="auth-info-banner" role="status">
-                    <span>ℹ️</span>
+                    <Icon name="info" size={16} />
                     <span>{infoNotice}</span>
                   </div>
                 )}
 
                 {success && (
                   <div className="auth-success-banner" role="status">
-                    <span>✓</span>
+                    <Icon name="success" size={16} />
                     <span>{success}</span>
                   </div>
                 )}
@@ -533,11 +526,14 @@ const Register = () => {
                     style={{ width: '100%' }}
                     disabled={loading || Boolean(success)}
                   >
-                    {loading
-                      ? 'ĐANG TẠO TÀI KHOẢN...'
-                      : success
-                        ? 'ĐANG CHUYỂN HƯỚNG...'
-                        : 'ĐĂNG KÝ  →'}
+                    <span>
+                      {loading
+                        ? 'ĐANG TẠO TÀI KHOẢN...'
+                        : success
+                          ? 'ĐANG CHUYỂN HƯỚNG...'
+                          : 'ĐĂNG KÝ'}
+                    </span>
+                    {!loading && !success && <Icon name="arrow-right" size={16} />}
                   </Button>
                 </form>
 
@@ -589,8 +585,9 @@ const Register = () => {
                 {/* Switch to Login */}
                 <p className="auth-switch-text">
                   Đã có tài khoản ShopMart?{' '}
-                  <Link to="/login" className="auth-switch-link">
-                    Đăng nhập ➔
+                  <Link to="/login" className="auth-switch-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <span>Đăng nhập</span>
+                    <Icon name="arrow-right" size={14} />
                   </Link>
                 </p>
               </div>
@@ -603,7 +600,9 @@ const Register = () => {
       <footer className="auth-footer">
         <div className="container auth-footer-bar">
           <div className="auth-footer-brand">
-            <span className="auth-footer-mini-logo">🛍️</span>
+            <span className="auth-footer-mini-logo">
+              <Icon name="store" size={16} color="#2563eb" />
+            </span>
             <strong>ShopMart</strong>
             <span className="auth-footer-tagline">
               — Nền tảng thương mại điện tử công nghệ cao

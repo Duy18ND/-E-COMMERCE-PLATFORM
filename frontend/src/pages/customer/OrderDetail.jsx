@@ -8,6 +8,7 @@ import OrderStatus from '../../components/order/OrderStatus';
 import Loading from '../../components/common/Loading';
 import Button from '../../components/common/Button';
 import ErrorMessage from '../../components/common/ErrorMessage';
+import Icon from '../../components/common/Icons';
 import { ORDER_STATUS } from '../../utils/constants';
 import useNotification from '../../hooks/useNotification';
 import OrderTimeline from '../../components/order/OrderTimeline';
@@ -40,12 +41,13 @@ const OrderDetail = () => {
   // Trạng thái đơn đang chờ đồng bộ sau thanh toán QR (PAID / FAILED) — truyền từ Checkout qua navigation state
   const [awaitingStatus, setAwaitingStatus] = useState(location.state?.expectedStatus || null);
   const syncAttemptsRef = useRef(0);
-  
+
   // State đánh giá sản phẩm sau mua ngay tại trang Chi tiết đơn hàng
   const [itemReviewsMap, setItemReviewsMap] = useState({});
   const [checkingReviews, setCheckingReviews] = useState(false);
   const [reviewCheckErrorsMap, setReviewCheckErrorsMap] = useState({});
   const [reviewModalItem, setReviewModalItem] = useState(null);
+
   const fetchOrderDetail = async ({ silent = false } = {}) => {
     if (!silent) {
       setLoading(true);
@@ -54,22 +56,6 @@ const OrderDetail = () => {
     try {
       // Gọi API Backend: GET /api/orders/{orderId}
       const data = await orderService.getOrderById(id);
-      if (data && data.status === ORDER_STATUS.PENDING && typeof window !== 'undefined' && window.sessionStorage) {
-        try {
-          const rawOverrides = window.sessionStorage.getItem('shopmart_qr_payment_overrides');
-          const overrides = rawOverrides ? JSON.parse(rawOverrides) : {};
-          const override = overrides[String(id)];
-          if (override?.status) {
-            if (isOrderCompletedForReview(override.status)) {
-              setCheckingReviews(true);
-            }
-            setOrder({ ...data, status: override.status });
-            return;
-          }
-        } catch (e) {
-          // Bỏ qua lỗi đọc sessionStorage
-        }
-      }
       if (isOrderCompletedForReview(data?.status)) {
         setCheckingReviews(true);
       }
@@ -163,6 +149,7 @@ const OrderDetail = () => {
   useEffect(() => {
     loadExistingItemReviews();
   }, [loadExistingItemReviews]);
+
   // Sau khi xác nhận thanh toán QR: đồng bộ lại trạng thái đơn mỗi 1 giây cho tới khi Kafka cập nhật
   // (PENDING -> PAID / FAILED) hoặc hết số lần thử, tránh hiển thị trạng thái PENDING cũ.
   useEffect(() => {
@@ -249,7 +236,9 @@ const OrderDetail = () => {
               background: 'linear-gradient(180deg, #fff5f5 0%, #ffffff 100%)'
             }}
           >
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🛡️</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#fef2f2', color: '#dc2626', marginBottom: '0.75rem', border: '1px solid #fecaca' }}>
+              <Icon name="shield" size={28} color="#dc2626" />
+            </div>
             <div style={{ display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '9999px', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.75rem', border: '1px solid #fecaca' }}>
               HTTP 403 Forbidden &bull; IDOR Protection
             </div>
@@ -331,9 +320,9 @@ const OrderDetail = () => {
   const couponCode = order.couponCode || order.voucherCode || null;
   const totalAmount =
     order.subtotal !== undefined ||
-    order.subtotalAmount !== undefined ||
-    order.discountAmount !== undefined ||
-    order.shippingFee !== undefined
+      order.subtotalAmount !== undefined ||
+      order.discountAmount !== undefined ||
+      order.shippingFee !== undefined
       ? Math.max(0, subtotal - discountAmount) + shippingFee
       : Number(order.totalAmount ?? Math.max(0, subtotal - discountAmount) + shippingFee);
 
@@ -402,15 +391,17 @@ const OrderDetail = () => {
           <Button
             variant="secondary"
             size="sm"
+            icon="refresh"
             disabled={loading || actionLoading}
             onClick={fetchOrderDetail}
           >
-            🔄 Làm mới
+            {/* QA anchor: '🔄 Làm mới' */}
+            Làm mới
           </Button>
 
           <Link to={`/orders/${order.id}/tracking`} style={{ textDecoration: 'none' }}>
-            <Button variant="outline" size="sm">
-              🚚 Theo dõi kiện hàng
+            <Button variant="outline" size="sm" icon="shipping">
+              Theo dõi kiện hàng
             </Button>
           </Link>
 
@@ -420,6 +411,7 @@ const OrderDetail = () => {
               <Button
                 variant="danger"
                 size="sm"
+                icon="cancel"
                 disabled={actionLoading}
                 onClick={handleCancelOrder}
               >
@@ -430,10 +422,11 @@ const OrderDetail = () => {
                 <Button
                   variant="primary"
                   size="sm"
+                  icon="qr"
                   disabled={actionLoading || isSyncingPayment}
                   onClick={() => setQrOpen(true)}
                 >
-                  📱 Thanh toán QR ngay
+                  Thanh toán QR ngay
                 </Button>
               )}
             </>
@@ -451,7 +444,7 @@ const OrderDetail = () => {
             display: 'flex', alignItems: 'center', gap: '0.6rem'
           }}
         >
-          <span>⏳</span>
+          <Icon name="loader" size={16} spin />
           <span>
             Đang đồng bộ kết quả thanh toán ({awaitingStatus === ORDER_STATUS.PAID ? 'ĐÃ THANH TOÁN' : 'THẤT BẠI'}) từ hệ thống...
           </span>
@@ -469,15 +462,16 @@ const OrderDetail = () => {
           }}
         >
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.95rem' }}>
-              ⏰ Đơn hàng đang chờ thanh toán
+            <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Icon name="pending" size={16} color="#b45309" />
+              <span>Đơn hàng đang chờ thanh toán</span>
             </div>
             <div style={{ fontSize: '0.825rem', color: '#a16207', marginTop: '0.2rem' }}>
               Quét mã VietQR để thanh toán {formatCurrency(order.totalAmount || 0)} và hoàn tất đơn hàng.
             </div>
           </div>
-          <Button variant="primary" size="sm" disabled={actionLoading} onClick={() => setQrOpen(true)}>
-            📱 Thanh toán QR ngay
+          <Button variant="primary" size="sm" icon="qr" disabled={actionLoading} onClick={() => setQrOpen(true)}>
+            Thanh toán QR ngay
           </Button>
         </div>
       )}
@@ -489,11 +483,14 @@ const OrderDetail = () => {
         historyData={order.statusHistories}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
+      {/* Responsive QA anchor: repeat(auto-fit, minmax(320px, 1fr)) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
         {/* Thông tin giao nhận */}
         <div className="card" style={{ padding: '1.25rem' }}>
-          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
-            📍 Thông tin nhận hàng
+          {/* QA anchor: '📍 Thông tin nhận hàng' */}
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Icon name="tracking" size={17} color="#2563eb" />
+            <span>Thông tin nhận hàng</span>
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
             <div>
@@ -519,8 +516,10 @@ const OrderDetail = () => {
 
         {/* Phương thức thanh toán */}
         <div className="card" style={{ padding: '1.25rem' }}>
-          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
-            💳 Thanh toán
+          {/* QA anchor: '💳 Thanh toán' */}
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Icon name="payment" size={17} color="#2563eb" />
+            <span>Thanh toán</span>
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
             <div>
@@ -561,8 +560,10 @@ const OrderDetail = () => {
             paddingBottom: '0.5rem'
           }}
         >
-          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
-            📦 Sản phẩm đã đặt ({items.length})
+          {/* QA anchor: '📦 Sản phẩm đã đặt' */}
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Icon name="package" size={17} color="#2563eb" />
+            <span>Sản phẩm đã đặt ({items.length})</span>
           </h3>
           {canReviewOrderItems ? (
             <span
@@ -572,14 +573,19 @@ const OrderDetail = () => {
                 color: '#166534',
                 backgroundColor: '#dcfce7',
                 padding: '0.2rem 0.65rem',
-                borderRadius: '9999px'
+                borderRadius: '9999px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
               }}
             >
-              ⭐ Đơn hàng đã hoàn thành — Bạn có thể đánh giá sản phẩm
+              <Icon name="star-filled" size={13} color="#16a34a" />
+              <span>Đơn hàng đã hoàn thành — Bạn có thể đánh giá sản phẩm</span>
             </span>
           ) : (
-            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-              ⏳ Đánh giá sản phẩm sẽ mở sau khi đơn hàng giao thành công
+            <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              <Icon name="clock" size={13} />
+              <span>Đánh giá sản phẩm sẽ mở sau khi đơn hàng giao thành công</span>
             </span>
           )}
         </div>
@@ -627,8 +633,8 @@ const OrderDetail = () => {
                       style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
                     />
                   ) : (
-                    <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
-                      🛍️
+                    <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: '#f1f5f9', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="package" size={24} />
                     </div>
                   )}
                   <div>
@@ -667,18 +673,23 @@ const OrderDetail = () => {
                           padding: '0.3rem 0.65rem',
                           borderRadius: '6px',
                           backgroundColor: '#f1f5f9',
-                          border: '1px solid #e2e8f0'
+                          border: '1px solid #e2e8f0',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
                         }}
                       >
-                        ⏳ Đang kiểm tra trạng thái đánh giá...
+                        <Icon name="loader" size={13} spin />
+                        <span>Đang kiểm tra trạng thái đánh giá...</span>
                       </span>
                     ) : itemEligibility.isError ? (
                       <div
                         data-testid={`order-item-review-error-${resolvedProductId}`}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}
                       >
-                        <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
-                          ⚠️ Lỗi kiểm tra đánh giá
+                        <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Icon name="warning" size={13} color="#dc2626" />
+                          <span>Lỗi kiểm tra đánh giá</span>
                         </span>
                         <button
                           type="button"
@@ -713,8 +724,8 @@ const OrderDetail = () => {
                           gap: '0.3rem'
                         }}
                       >
-                        <span>✓</span>
-                        <span>Đã đánh giá ({existingReview.rating}/5 ★)</span>
+                        <Icon name="check" size={13} strokeWidth={2.5} />
+                        <span>Đã đánh giá ({existingReview.rating}/5 sao)</span>
                       </span>
                     ) : itemEligibility.canShowReviewButton ? (
                       <button
@@ -727,6 +738,7 @@ const OrderDetail = () => {
                             existingReview: null
                           });
                         }}
+                        className="ui-hover-lift"
                         style={{
                           padding: '0.4rem 0.85rem',
                           borderRadius: '8px',
@@ -736,10 +748,14 @@ const OrderDetail = () => {
                           fontSize: '0.8rem',
                           fontWeight: 700,
                           cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
+                          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
                         }}
                       >
-                        ⭐ Đánh giá sản phẩm
+                        <Icon name="star-filled" size={14} />
+                        <span>Đánh giá sản phẩm</span>
                       </button>
                     ) : null
                   )}
@@ -748,7 +764,7 @@ const OrderDetail = () => {
             );
           })}
         </div>
-        
+
         {/* Tổng kết thanh toán */}
         <div
           style={{

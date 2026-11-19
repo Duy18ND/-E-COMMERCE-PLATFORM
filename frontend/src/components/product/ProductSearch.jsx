@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Button from '../common/Button';
+import Icon from '../common/Icons';
 
 /**
  * Chuẩn hóa từ khóa tìm kiếm: cắt khoảng trắng đầu/cuối và gộp khoảng trắng thừa ở giữa
@@ -98,6 +99,9 @@ const ProductSearch = ({
       }}
     >
       <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+        <span style={{ position: 'absolute', left: '0.8rem', color: '#94a3b8', display: 'inline-flex', pointerEvents: 'none' }}>
+          <Icon name="search" size={16} />
+        </span>
         <input
           type="text"
           value={searchTerm}
@@ -106,8 +110,8 @@ const ProductSearch = ({
           aria-label="Tìm kiếm sản phẩm"
           style={{
             width: '100%',
-            padding: '0.6rem 2.2rem 0.6rem 0.85rem',
-            borderRadius: '0.5rem',
+            padding: '0.6rem 2.2rem 0.6rem 2.35rem',
+            borderRadius: '10px',
             border: '1px solid #cbd5e1',
             outline: 'none',
             fontSize: '0.95rem',
@@ -128,16 +132,17 @@ const ProductSearch = ({
               border: 'none',
               color: '#94a3b8',
               cursor: 'pointer',
-              fontSize: '1.15rem',
-              lineHeight: 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               padding: '0.2rem'
             }}
           >
-            &times;
+            <Icon name="x" size={15} />
           </button>
         )}
       </div>
-      <Button type="submit" variant="primary">
+      <Button type="submit" variant="primary" pill={false} icon={<Icon name="search" size={15} />}>
         Tìm kiếm
       </Button>
     </form>

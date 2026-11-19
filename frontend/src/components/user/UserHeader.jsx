@@ -5,6 +5,7 @@ import useCart from '../../hooks/useCart';
 import Modal from '../common/Modal';
 import Input from '../common/Input';
 import Button from '../common/Button';
+import Icon from '../common/Icons';
 import { INITIAL_CATEGORIES } from '../../services/mockData';
 import categoryService from '../../services/categoryService';
 import voucherService from '../../services/voucherService';
@@ -54,7 +55,7 @@ const UserHeader = () => {
           setCategories(list);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       mounted = false;
     };
@@ -178,28 +179,30 @@ const UserHeader = () => {
 
   return (
     <header className="site-header user-header">
+      {/* Top Flagship Iridescent Accent Strip */}
+      <div className="user-header-accent-bar" aria-hidden="true" />
+
       <div className="container header-inner">
         <div className="header-main-row">
           {/* 1. LOGO */}
           <Link to="/" className="header-logo">
             <div className="header-logo-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M6 7V6C6 4.34315 7.34315 3 9 3H15C16.6569 3 18 4.34315 18 6V7M4 7H20L19 21H5L4 7Z"
-                  stroke="#ffffff"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span className="header-logo-star">⭐</span>
+              <Icon name="store" size={19} color="#ffffff" />
+              <span className="header-logo-star" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="sparkles" size={10} color="#facc15" />
+              </span>
             </div>
-            <span className="header-logo-text">ShopMart</span>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+              <span className="header-logo-text">ShopMart</span>
+            </div>
           </Link>
 
           {/* 2. SEARCH BAR (Tự co giãn theo không gian còn lại) */}
           <div className="header-search-wrapper">
             <form onSubmit={handleSearch} className="header-search-form" role="search">
+              <span className="header-search-lead-icon" aria-hidden="true">
+                <Icon name="search" size={15} />
+              </span>
               <input
                 type="text"
                 value={searchTerm}
@@ -209,10 +212,7 @@ const UserHeader = () => {
                 className="header-search-input"
               />
               <button type="submit" className="header-search-btn" aria-label="Tìm kiếm">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
+                <Icon name="search" size={14} strokeWidth={2.4} />
                 <span className="header-search-btn-text">Tìm kiếm</span>
               </button>
             </form>
@@ -239,7 +239,7 @@ const UserHeader = () => {
               to="/vouchers"
               className={({ isActive }) => `header-nav-item header-nav-voucher ${isActive ? 'active' : ''}`}
             >
-              <span className="nav-item-icon">🎟️</span>
+              <span className="nav-item-icon"><Icon name="ticket" size={15} /></span>
               <span>Mã giảm giá</span>
             </NavLink>
 
@@ -247,7 +247,7 @@ const UserHeader = () => {
               to="/flash-sale"
               className={({ isActive }) => `header-nav-item header-flash-pill ${isActive ? 'active' : ''}`}
             >
-              <span>⚡</span>
+              <Icon name="flash" size={14} />
               <span>Flash Sale</span>
             </NavLink>
 
@@ -265,7 +265,7 @@ const UserHeader = () => {
                 aria-expanded={isCategoryMenuOpen}
               >
                 <span>Danh mục</span>
-                <span style={{ fontSize: '0.7rem' }}>▾</span>
+                <Icon name={isCategoryMenuOpen ? 'chevron-up' : 'chevron-down'} size={13} />
               </button>
 
               {isCategoryMenuOpen && (
@@ -275,7 +275,8 @@ const UserHeader = () => {
                     onClick={() => setIsCategoryMenuOpen(false)}
                     className="header-category-menu-item all"
                   >
-                    Tất cả sản phẩm
+                    <Icon name="layers" size={14} />
+                    <span>Tất cả sản phẩm</span>
                   </Link>
                   {categories.map((cat) => (
                     <Link
@@ -284,7 +285,8 @@ const UserHeader = () => {
                       onClick={() => setIsCategoryMenuOpen(false)}
                       className="header-category-menu-item"
                     >
-                      {cat.name}
+                      <Icon name="chevron-right" size={13} />
+                      <span>{cat.name}</span>
                     </Link>
                   ))}
                 </div>
@@ -308,11 +310,7 @@ const UserHeader = () => {
               title={isAuthenticated ? 'Giỏ hàng của bạn' : 'Giỏ hàng'}
               aria-label="Giỏ hàng"
             >
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <path d="M16 10a4 4 0 0 1-8 0" />
-              </svg>
+              <Icon name="cart" size={19} />
               {totalItems > 0 && (
                 <span className="header-cart-badge">{totalItems}</span>
               )}
@@ -327,7 +325,10 @@ const UserHeader = () => {
                   className="header-account-trigger"
                   title="Tài khoản của bạn"
                 >
-                  <img src={currentAvatar} alt="Avatar" className="header-account-avatar" />
+                  <div className="header-avatar-wrap">
+                    <img src={currentAvatar} alt="Avatar" className="header-account-avatar" />
+                    <span className="header-avatar-online" aria-hidden="true" />
+                  </div>
                   <div className="header-account-info">
                     <span className="header-account-role">
                       {isAdmin ? 'Quản trị viên' : 'Tài khoản'}
@@ -336,7 +337,9 @@ const UserHeader = () => {
                       {user?.fullName || user?.username || 'Tài khoản'}
                     </span>
                   </div>
-                  <span className="header-account-caret">{isDropdownOpen ? '▲' : '▼'}</span>
+                  <span className="header-account-caret">
+                    <Icon name={isDropdownOpen ? 'chevron-up' : 'chevron-down'} size={14} />
+                  </span>
                 </button>
 
                 {isDropdownOpen && (
@@ -363,7 +366,7 @@ const UserHeader = () => {
                           onClick={() => setIsDropdownOpen(false)}
                           className="header-dropdown-link highlight"
                         >
-                          <span>⚡</span>
+                          <Icon name="shield-check" size={15} />
                           <span>Vào trang Quản trị (Admin)</span>
                         </Link>
                       )}
@@ -373,7 +376,7 @@ const UserHeader = () => {
                         onClick={handleOpenEdit}
                         className="header-dropdown-btn edit"
                       >
-                        <span>✏️</span>
+                        <Icon name="edit" size={15} />
                         <span>Sửa thông tin cá nhân</span>
                       </button>
 
@@ -383,7 +386,7 @@ const UserHeader = () => {
                         className="header-dropdown-link"
                       >
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <span>🎟️</span>
+                          <Icon name="ticket" size={15} />
                           <span>Mã giảm giá của tôi</span>
                         </span>
                         {savedVoucherCount > 0 && (
@@ -396,7 +399,7 @@ const UserHeader = () => {
                         onClick={() => setIsDropdownOpen(false)}
                         className="header-dropdown-link"
                       >
-                        <span>📦</span>
+                        <Icon name="package" size={15} />
                         <span>Lịch sử đơn hàng</span>
                       </Link>
 
@@ -407,7 +410,7 @@ const UserHeader = () => {
                         onClick={handleLogout}
                         className="header-dropdown-btn logout"
                       >
-                        <span>🚪</span>
+                        <Icon name="logout" size={15} />
                         <span>Đăng xuất</span>
                       </button>
                     </div>
@@ -433,7 +436,7 @@ const UserHeader = () => {
               aria-label="Mở menu điều hướng"
               aria-expanded={isMobileMenuOpen}
             >
-              {isMobileMenuOpen ? '✕' : '☰'}
+              <Icon name={isMobileMenuOpen ? 'x' : 'menu'} size={19} />
             </button>
           </div>
         </div>
@@ -448,35 +451,40 @@ const UserHeader = () => {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) => `user-mobile-nav-link ${isActive ? 'active' : ''}`}
               >
-                🏠 Trang chủ
+                <Icon name="home" size={16} />
+                <span>Trang chủ</span>
               </NavLink>
               <NavLink
                 to="/products"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) => `user-mobile-nav-link ${isActive ? 'active' : ''}`}
               >
-                🛍️ Sản phẩm
+                <Icon name="package" size={16} />
+                <span>Sản phẩm</span>
               </NavLink>
               <NavLink
                 to="/vouchers"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) => `user-mobile-nav-link ${isActive ? 'active' : ''}`}
               >
-                🎟️ Mã giảm giá
+                <Icon name="ticket" size={16} />
+                <span>Mã giảm giá</span>
               </NavLink>
               <NavLink
                 to="/flash-sale"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) => `user-mobile-nav-link flash ${isActive ? 'active' : ''}`}
               >
-                ⚡ Flash Sale
+                <Icon name="flash" size={16} />
+                <span>Flash Sale</span>
               </NavLink>
               <NavLink
                 to="/orders"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) => `user-mobile-nav-link ${isActive ? 'active' : ''}`}
               >
-                📦 Đơn hàng của tôi
+                <Icon name="clipboard" size={16} />
+                <span>Đơn hàng của tôi</span>
               </NavLink>
               {isAdmin && (
                 <NavLink
@@ -484,7 +492,8 @@ const UserHeader = () => {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="user-mobile-nav-link"
                 >
-                  🛡️ Quản trị hệ thống (Admin)
+                  <Icon name="shield-check" size={16} />
+                  <span>Quản trị hệ thống (Admin)</span>
                 </NavLink>
               )}
             </nav>
@@ -531,10 +540,14 @@ const UserHeader = () => {
               fontSize: '0.875rem',
               fontWeight: 600,
               marginBottom: '1rem',
-              textAlign: 'center'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem'
             }}
           >
-            ✓ {successToast}
+            <Icon name="success" size={16} />
+            <span>{successToast}</span>
           </div>
         )}
 
@@ -554,7 +567,7 @@ const UserHeader = () => {
                 gap: '0.5rem'
               }}
             >
-              <span>⚠️</span>
+              <Icon name="warning" size={16} color="#dc2626" />
               <span>{formError}</span>
             </div>
           )}
@@ -638,17 +651,21 @@ const UserHeader = () => {
                 borderRadius: '9999px',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              🚪 Đăng xuất
+              <Icon name="logout" size={15} />
+              <span>Đăng xuất</span>
             </button>
 
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit" variant="primary" disabled={saving}>
+              <Button type="submit" variant="primary" disabled={saving} loading={saving} icon={<Icon name="save" size={15} />}>
                 {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Button>
             </div>
