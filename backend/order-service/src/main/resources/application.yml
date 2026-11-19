@@ -37,6 +37,8 @@ spring:
         acks: all
         retries: 3
         retry.backoff.ms: 1000
+        max.block.ms: 1000
+        request.timeout.ms: 1500
     consumer:
       group-id: order-service-group
       auto-offset-reset: earliest

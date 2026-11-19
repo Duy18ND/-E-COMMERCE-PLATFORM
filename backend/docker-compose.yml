@@ -205,6 +205,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/auth_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
@@ -246,6 +247,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-product_db}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
@@ -286,6 +288,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:
@@ -320,6 +323,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:
@@ -356,8 +360,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/chatbot_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ecommerce_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecommerce_pass}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-${AI_API_KEY:-}}
-      GEMINI_MODEL: ${GEMINI_MODEL:-${AI_MODEL:-gemini-2.0-flash}}
+      GEMINI_MODEL: ${GEMINI_MODEL:-${AI_MODEL:-gemini-3.1-flash-lite}}
       AI_BASE_URL: ${AI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eurekapassword}@discovery-server:8761/eureka/
     networks:
@@ -430,7 +435,6 @@ services:
       api-gateway:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-5173}:80"
       - "3000:80"
     networks:
       - ecommerce-network

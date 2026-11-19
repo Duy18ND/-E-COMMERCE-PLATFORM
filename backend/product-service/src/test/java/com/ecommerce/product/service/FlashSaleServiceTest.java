@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -465,6 +466,102 @@ class FlashSaleServiceTest {
 
             verify(flashSaleItemRepository).incrementSoldQuantityAtomically(91L, QUANTITY);
             verify(flashSaleItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Redis không kết nối được → fallback trừ tồn kho Flash Sale nguyên tử trực tiếp trên DB")
+        void reserveFlashSaleStock_whenRedisUnavailable_shouldFallbackToAtomicDbIncrement() {
+            FlashSaleItem item = FlashSaleItem.builder()
+                    .id(92L)
+                    .productId(PRODUCT_ID)
+                    .flashSalePrice(new BigDecimal("699.00"))
+                    .quantity(10)
+                    .soldQuantity(1)
+                    .userLimit(2)
+                    .build();
+
+            when(redisTemplate.execute(
+                    eq(flashSaleScript),
+                    eq(List.of(EXPECTED_KEY)),
+                    eq(String.valueOf(QUANTITY))
+            )).thenThrow(new RedisConnectionFailureException("Unable to connect to localhost:6379"));
+            when(flashSaleItemRepository.findActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of(item));
+            when(flashSaleItemRepository.incrementSoldQuantityAtomically(92L, QUANTITY)).thenReturn(1);
+
+            assertThatCode(() -> flashSaleService.reserveFlashSaleStock(PRODUCT_ID, QUANTITY))
+                    .doesNotThrowAnyException();
+
+            verify(flashSaleItemRepository).incrementSoldQuantityAtomically(92L, QUANTITY);
+        }
+
+        @Test
+        @DisplayName("Redis lỗi kết nối và DB hết suất Flash Sale → ném NotEnoughStockException")
+        void reserveFlashSaleStock_whenRedisUnavailableAndSoldOutInDb_shouldThrowNotEnoughStockException() {
+            FlashSaleItem soldOutItem = FlashSaleItem.builder()
+                    .id(93L)
+                    .productId(PRODUCT_ID)
+                    .flashSalePrice(new BigDecimal("699.00"))
+                    .quantity(5)
+                    .soldQuantity(5)
+                    .userLimit(2)
+                    .build();
+
+            when(redisTemplate.execute(
+                    eq(flashSaleScript),
+                    eq(List.of(EXPECTED_KEY)),
+                    eq(String.valueOf(QUANTITY))
+            )).thenThrow(new RedisConnectionFailureException("Unable to connect to localhost:6379"));
+            when(flashSaleItemRepository.findActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of());
+            when(flashSaleItemRepository.findRestorableActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of(soldOutItem));
+
+            assertThatThrownBy(() -> flashSaleService.reserveFlashSaleStock(PRODUCT_ID, QUANTITY))
+                    .isInstanceOf(NotEnoughStockException.class)
+                    .hasMessageContaining("Đã cháy hàng Flash Sale!");
+        }
+
+        @Test
+        @DisplayName("Redis lỗi kết nối và sản phẩm không thuộc Flash Sale → ném ResourceNotFoundException")
+        void reserveFlashSaleStock_whenRedisUnavailableAndNotInFlashSale_shouldThrowResourceNotFoundException() {
+            when(redisTemplate.execute(
+                    eq(flashSaleScript),
+                    eq(List.of(EXPECTED_KEY)),
+                    eq(String.valueOf(QUANTITY))
+            )).thenThrow(new RedisConnectionFailureException("Unable to connect to localhost:6379"));
+            when(flashSaleItemRepository.findActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of());
+            when(flashSaleItemRepository.findRestorableActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of());
+
+            assertThatThrownBy(() -> flashSaleService.reserveFlashSaleStock(PRODUCT_ID, QUANTITY))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("không nằm trong chương trình Flash Sale");
+        }
+
+        @Test
+        @DisplayName("restoreFlashSaleStock() khi Redis lỗi kết nối vẫn hoàn tồn kho DB mà không ném lỗi")
+        void restoreFlashSaleStock_whenRedisUnavailable_shouldStillDecrementDbWithoutThrowing() {
+            FlashSaleItem item = FlashSaleItem.builder()
+                    .id(94L)
+                    .productId(PRODUCT_ID)
+                    .flashSalePrice(new BigDecimal("699.00"))
+                    .quantity(20)
+                    .soldQuantity(6)
+                    .userLimit(2)
+                    .build();
+
+            when(flashSaleItemRepository.findRestorableActiveItemsByProductId(eq(PRODUCT_ID), any(LocalDateTime.class)))
+                    .thenReturn(List.of(item));
+            when(flashSaleItemRepository.decrementSoldQuantityAtomically(94L, 2)).thenReturn(1);
+            when(redisTemplate.execute(anyRedisScript(), eq(List.of(EXPECTED_KEY)), eq("2"), eq("20")))
+                    .thenThrow(new RedisConnectionFailureException("Unable to connect to localhost:6379"));
+
+            assertThatCode(() -> flashSaleService.restoreFlashSaleStock(PRODUCT_ID, 2))
+                    .doesNotThrowAnyException();
+
+            verify(flashSaleItemRepository).decrementSoldQuantityAtomically(94L, 2);
         }
     }
 }

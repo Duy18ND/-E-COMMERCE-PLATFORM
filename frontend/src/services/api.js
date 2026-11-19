@@ -1,22 +1,28 @@
 import axios from 'axios';
 import { getToken, setToken, getRefreshToken, setRefreshToken, clearAuth } from '../utils/auth.js';
 
-const resolveBaseApiUrl = () => {
+export const resolveBaseApiUrl = () => {
   const configuredUrl =
     (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
     'http://localhost:8080/api/v1';
 
-  // Nếu trình duyệt truy cập từ domain/IP VPS (không phải localhost) nhưng cấu hình vẫn trỏ về localhost,
-  // tự động chuyển sang đường dẫn tương đối '/api/v1' qua Nginx Reverse Proxy để không bao giờ gọi nhầm localhost của user
-  if (
-    typeof window !== 'undefined' &&
-    window.location &&
-    window.location.hostname &&
-    window.location.hostname !== 'localhost' &&
-    window.location.hostname !== '127.0.0.1' &&
-    configuredUrl.includes('localhost')
-  ) {
-    return '/api/v1';
+  // Khi chạy trên trình duyệt thực tế (Vite Dev Server localhost:5173, Docker Frontend localhost:3000,
+  // Nginx Reverse Proxy localhost:80 hoặc domain/IP VPS), luôn chuẩn hóa về relative path '/api/v1'
+  // để mọi request đi qua Vite Proxy (Local) hoặc Nginx Reverse Proxy (Docker) tới API Gateway (:8080).
+  // Khi chạy bộ kiểm thử Node.js (typeof document === 'undefined'), giữ nguyên URL trực tiếp http://localhost:8080/api/v1.
+  if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.location) {
+    if (
+      configuredUrl === '/api/v1' ||
+      configuredUrl.startsWith('/') ||
+      configuredUrl.includes('localhost:8080') ||
+      configuredUrl.includes('127.0.0.1:8080') ||
+      (window.location.hostname &&
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1' &&
+        configuredUrl.includes('localhost'))
+    ) {
+      return '/api/v1';
+    }
   }
   return configuredUrl;
 };
