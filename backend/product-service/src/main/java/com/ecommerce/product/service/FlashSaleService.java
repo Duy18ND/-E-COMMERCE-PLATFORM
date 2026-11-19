@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -73,53 +74,72 @@ public class FlashSaleService {
     @CacheEvict(value = "products", allEntries = true)
     public void initFlashSaleStock(Long productId, int stock) {
         String key = buildKey(productId);
-        ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-        if (ops != null) {
-            ops.set(key, stock);
+        try {
+            ValueOperations<String, Object> ops = redisTemplate != null ? redisTemplate.opsForValue() : null;
+            if (ops != null) {
+                ops.set(key, stock);
+            }
+            log.info("[FlashSale] Stock initialised — key={}, stock={}", key, stock);
+        } catch (DataAccessException ex) {
+            log.warn("[FlashSale] Redis unavailable while initialising stock — key={}, stock={}: {}",
+                    key, stock, ex.getMessage());
         }
-        log.info("[FlashSale] Stock initialised — key={}, stock={}", key, stock);
     }
 
     /**
      * Atomically reserves Flash Sale stock using the registered Lua script,
      * and synchronises soldQuantity in the database when an active campaign item exists.
+     * Falls back to atomic database reservation when Redis is unavailable locally.
      */
     @Transactional
     @CacheEvict(value = "products", allEntries = true)
     public void reserveFlashSaleStock(Long productId, int quantity) {
         String key = buildKey(productId);
 
-        Long result = redisTemplate.execute(
-                flashSaleScript,
-                List.of(key),
-                String.valueOf(quantity)
-        );
+        Long result;
+        try {
+            if (redisTemplate == null) {
+                reserveFlashSaleStockFromDatabase(productId, quantity);
+                return;
+            }
 
-        log.debug("[FlashSale] Lua result={} — productId={}, qty={}", result, productId, quantity);
+            result = redisTemplate.execute(
+                    flashSaleScript,
+                    List.of(key),
+                    String.valueOf(quantity)
+            );
 
-        if (result == null) {
-            throw new ResourceNotFoundException(
-                    "Không thể xác định trạng thái Flash Sale cho sản phẩm: " + productId);
-        }
+            log.debug("[FlashSale] Lua result={} — productId={}, qty={}", result, productId, quantity);
 
-        // Self-heal Redis if key was evicted/restarted while an active DB campaign exists
-        if (result.intValue() == -1 && flashSaleItemRepository != null) {
-            FlashSaleItem activeDbItem = flashSaleItemRepository
-                    .findActiveByProductId(productId, LocalDateTime.now())
-                    .orElse(null);
-            if (activeDbItem != null) {
-                int remaining = Math.max(0, safeInt(activeDbItem.getQuantity()) - safeInt(activeDbItem.getSoldQuantity()));
-                initFlashSaleStock(productId, remaining);
-                result = redisTemplate.execute(
-                        flashSaleScript,
-                        List.of(key),
-                        String.valueOf(quantity)
-                );
-                if (result == null) {
-                    throw new ResourceNotFoundException(
-                            "Không thể xác định trạng thái Flash Sale cho sản phẩm: " + productId);
+            if (result == null) {
+                throw new ResourceNotFoundException(
+                        "Không thể xác định trạng thái Flash Sale cho sản phẩm: " + productId);
+            }
+
+            // Self-heal Redis if key was evicted/restarted while an active DB campaign exists
+            if (result.intValue() == -1 && flashSaleItemRepository != null) {
+                FlashSaleItem activeDbItem = flashSaleItemRepository
+                        .findActiveByProductId(productId, LocalDateTime.now())
+                        .orElse(null);
+                if (activeDbItem != null) {
+                    int remaining = Math.max(0, safeInt(activeDbItem.getQuantity()) - safeInt(activeDbItem.getSoldQuantity()));
+                    initFlashSaleStock(productId, remaining);
+                    result = redisTemplate.execute(
+                            flashSaleScript,
+                            List.of(key),
+                            String.valueOf(quantity)
+                    );
+                    if (result == null) {
+                        throw new ResourceNotFoundException(
+                                "Không thể xác định trạng thái Flash Sale cho sản phẩm: " + productId);
+                    }
                 }
             }
+        } catch (DataAccessException ex) {
+            log.warn("[FlashSale] Redis unavailable during reserveFlashSaleStock (productId={}, qty={}): {}. Falling back to atomic DB reservation.",
+                    productId, quantity, ex.getMessage());
+            reserveFlashSaleStockFromDatabase(productId, quantity);
+            return;
         }
 
         switch (result.intValue()) {
@@ -133,6 +153,40 @@ public class FlashSaleService {
             default -> throw new IllegalStateException(
                     "[FlashSale] Unexpected Lua script result: " + result);
         }
+    }
+
+    private void reserveFlashSaleStockFromDatabase(Long productId, int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Số lượng đặt trước Flash Sale phải lớn hơn 0");
+        }
+        if (flashSaleItemRepository == null) {
+            throw new ResourceNotFoundException(
+                    "Không thể xác định trạng thái Flash Sale cho sản phẩm: " + productId);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<FlashSaleItem> activeItems = flashSaleItemRepository.findActiveItemsByProductId(productId, now);
+        if (activeItems != null && !activeItems.isEmpty()) {
+            FlashSaleItem activeItem = activeItems.get(0);
+            if (activeItem.getId() != null) {
+                int updatedRows = flashSaleItemRepository.incrementSoldQuantityAtomically(activeItem.getId(), quantity);
+                if (updatedRows > 0) {
+                    log.info("[FlashSale] Reserved OK via DB fallback — itemId={}, productId={}, qty={}",
+                            activeItem.getId(), productId, quantity);
+                    return;
+                }
+            }
+            throw new NotEnoughStockException("Đã cháy hàng Flash Sale!");
+        }
+
+        List<FlashSaleItem> activeCampaignItems = flashSaleItemRepository
+                .findRestorableActiveItemsByProductId(productId, now);
+        if (activeCampaignItems != null && !activeCampaignItems.isEmpty()) {
+            throw new NotEnoughStockException("Đã cháy hàng Flash Sale!");
+        }
+
+        throw new ResourceNotFoundException(
+                "Sản phẩm không nằm trong chương trình Flash Sale");
     }
 
     /**
@@ -161,19 +215,24 @@ public class FlashSaleService {
         }
 
         if (redisTemplate != null) {
-            String key = buildKey(productId);
-            String maxStockArg = activeItem != null && activeItem.getQuantity() != null
-                    ? String.valueOf(activeItem.getQuantity())
-                    : "-1";
-            Long restored = redisTemplate.execute(
-                    RESTORE_LUA_SCRIPT,
-                    List.of(key),
-                    String.valueOf(quantity),
-                    maxStockArg
-            );
-            if ((restored == null || restored == -1L) && activeItem != null) {
-                int remaining = Math.max(0, safeInt(activeItem.getQuantity()) - effectiveSoldAfterRestore);
-                safeInitRedisStock(productId, remaining);
+            try {
+                String key = buildKey(productId);
+                String maxStockArg = activeItem != null && activeItem.getQuantity() != null
+                        ? String.valueOf(activeItem.getQuantity())
+                        : "-1";
+                Long restored = redisTemplate.execute(
+                        RESTORE_LUA_SCRIPT,
+                        List.of(key),
+                        String.valueOf(quantity),
+                        maxStockArg
+                );
+                if ((restored == null || restored == -1L) && activeItem != null) {
+                    int remaining = Math.max(0, safeInt(activeItem.getQuantity()) - effectiveSoldAfterRestore);
+                    safeInitRedisStock(productId, remaining);
+                }
+            } catch (DataAccessException ex) {
+                log.warn("[FlashSale] Redis unavailable during restoreFlashSaleStock (productId={}, qty={}): {}. DB stock already restored.",
+                        productId, quantity, ex.getMessage());
             }
         }
 

@@ -65,6 +65,20 @@ spring:
           filters:
             - BlockExternalAccess
 
+        - id: order-service-internal-blocked
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/internal/**
+          filters:
+            - BlockExternalAccess
+
+        - id: payment-service-internal-blocked
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/payments/internal/**
+          filters:
+            - BlockExternalAccess
+
         # ── 2a. Product Service — Admin Read API (requires JWT) ────────
         - id: product-service-admin
           uri: lb://product-service

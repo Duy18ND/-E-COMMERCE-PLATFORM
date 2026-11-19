@@ -168,7 +168,7 @@ test('CHATBOT & VIETQR BUGFIX QA SUITE', async (t) => {
     assert.ok(!chatWindowSrc.includes("q.replace(/^[^\\s]+\\s/, '')"), 'Không cắt nhầm từ tiếng Việt đầu tiên trong QUICK_PROMPTS');
     assert.match(chatWindowSrc, /onSend\(q\)/);
 
-    // Backend Gemini model config phải dùng model hợp lệ gemini-2.0-flash thay vì gemini-3.5-flash (404)
+    // Backend Gemini model config phải dùng model hợp lệ (gemini-3.1-flash-lite) thay vì model lỗi 404
     const botYml = readRepo('backend/chatbot-service/src/main/resources/application.yml');
     const composeYml = readRepo('backend/docker-compose.yml');
     const envExample = readRepo('backend/.env.example');
@@ -177,7 +177,7 @@ test('CHATBOT & VIETQR BUGFIX QA SUITE', async (t) => {
     assert.ok(!botYml.includes('gemini-3.5-flash'), 'application.yml không được dùng gemini-3.5-flash');
     assert.ok(!composeYml.includes('gemini-3.5-flash'), 'docker-compose.yml không được dùng gemini-3.5-flash');
     assert.ok(!envExample.includes('gemini-3.5-flash'), '.env.example không được dùng gemini-3.5-flash');
-    assert.ok(botYml.includes('gemini-2.0-flash'));
+    assert.ok(botYml.includes('gemini-3.1-flash-lite'));
     assert.match(
       chatServiceJava,
       /if \(products\.isEmpty\(\) && StringUtils\.hasText\(keyword\)\) \{\s*products = productTools\.searchProducts\(keyword, null, minPrice, maxPrice, null, sort, 6\);/
