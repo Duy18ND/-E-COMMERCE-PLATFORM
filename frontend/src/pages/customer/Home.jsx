@@ -33,18 +33,176 @@ const CATEGORY_ICONS = {
   )
 };
 
-const enrichCategoryWithIcon = (cat) => ({
-  ...cat,
-  desc: cat.desc || cat.description || '',
-  icon: cat.icon || CATEGORY_ICONS[cat.id] || CATEGORY_ICONS.phones
-});
+const BENTO_THEMES = {
+  phones: {
+    accent: '#2563eb',
+    glow: 'radial-gradient(circle, rgba(37, 99, 235, 0.18) 0%, rgba(37, 99, 235, 0) 70%)',
+    iconBg: '#eff6ff',
+    badgeBg: '#eff6ff'
+  },
+  laptops: {
+    accent: '#4f46e5',
+    glow: 'radial-gradient(circle, rgba(79, 70, 229, 0.18) 0%, rgba(79, 70, 229, 0) 70%)',
+    iconBg: '#eef2ff',
+    badgeBg: '#eef2ff'
+  },
+  accessories: {
+    accent: '#d97706',
+    glow: 'radial-gradient(circle, rgba(217, 119, 6, 0.18) 0%, rgba(217, 119, 6, 0) 70%)',
+    iconBg: '#fef3c7',
+    badgeBg: '#fef3c7'
+  },
+  smarthome: {
+    accent: '#e11d48',
+    glow: 'radial-gradient(circle, rgba(225, 29, 72, 0.18) 0%, rgba(225, 29, 72, 0) 70%)',
+    iconBg: '#ffe4e6',
+    badgeBg: '#ffe4e6'
+  }
+};
+
+const HERO_STATS = [
+  {
+    id: 'authentic',
+    value: '100%',
+    label: 'Sản phẩm chính hãng',
+    valueColor: '#0f172a',
+    iconBg: '#eff6ff',
+    iconColor: '#2563eb',
+    icon: 'shield'
+  },
+  {
+    id: 'support',
+    value: '24/7',
+    label: 'Hỗ trợ kỹ thuật chuyên sâu',
+    valueColor: '#2563eb',
+    iconBg: '#eef2ff',
+    iconColor: '#4f46e5',
+    icon: 'sparkles'
+  },
+  {
+    id: 'shipping',
+    value: 'Toàn Quốc',
+    label: 'Giao hàng & bảo hành tận nơi',
+    valueColor: '#ea580c',
+    iconBg: '#fff7ed',
+    iconColor: '#ea580c',
+    icon: 'truck'
+  }
+];
+
+const SPOTLIGHT_VOUCHERS = [
+  {
+    code: 'GIAM50K',
+    tag: 'HOT',
+    tagColor: '#16a34a',
+    accent: '#dc2626',
+    codeBg: '#fee2e2',
+    headline: 'GIẢM 50K',
+    condition: 'Đơn từ 500.000đ'
+  },
+  {
+    code: 'TECHVIP',
+    tag: 'VIP',
+    tagColor: '#d97706',
+    accent: '#2563eb',
+    codeBg: '#eff6ff',
+    headline: 'GIẢM 15%',
+    condition: 'Tối đa 300.000đ'
+  },
+  {
+    code: 'FREESHIP',
+    tag: 'SHIP',
+    tagColor: '#16a34a',
+    accent: '#16a34a',
+    codeBg: '#dcfce7',
+    headline: 'GIẢM 30K',
+    condition: 'Đơn từ 150.000đ'
+  }
+];
+
+const TRUST_COMMITMENTS = [
+  {
+    id: 'warranty',
+    title: 'Bảo Hành Chính Hãng 24 Tháng',
+    desc: 'Ủy quyền trực tiếp từ Apple, Samsung, Sony, ASUS & Dell Việt Nam',
+    accent: '#2563eb',
+    bg: '#eff6ff',
+    icon: 'shield'
+  },
+  {
+    id: 'express',
+    title: 'Giao Nhanh Siêu Tốc 2 Giờ',
+    desc: 'Miễn phí vận chuyển toàn quốc & đồng kiểm trước khi thanh toán',
+    accent: '#4f46e5',
+    bg: '#eef2ff',
+    icon: 'truck'
+  },
+  {
+    id: 'return',
+    title: '1 Đổi 1 Trong 30 Ngày Đầu',
+    desc: 'Đổi mới ngay lập tức nếu phát sinh lỗi phần cứng từ nhà sản xuất',
+    accent: '#059669',
+    bg: '#ecfdf5',
+    icon: 'refresh'
+  },
+  {
+    id: 'installment',
+    title: 'Trả Góp 0% Lãi Suất',
+    desc: 'Hỗ trợ VietQR, thẻ tín dụng và ví điện tử bảo mật đa tầng',
+    accent: '#ea580c',
+    bg: '#fff7ed',
+    icon: 'voucher'
+  }
+];
+
+const FEATURED_HIGHLIGHT_PILLS = [
+  { id: 'all', label: 'Tất cả Flagship', active: true },
+  { id: 'new', label: 'Mới ra mắt 2026', active: false },
+  { id: 'top', label: 'Đánh giá 5★', active: false },
+  { id: 'deal', label: 'Ưu đãi độc quyền', active: false }
+];
+
+const enrichCategoryWithIcon = (cat, idx = 0) => {
+  const keys = Object.keys(BENTO_THEMES);
+  const themeKey = BENTO_THEMES[cat.id] ? cat.id : keys[idx % keys.length];
+  const theme = BENTO_THEMES[themeKey];
+  return {
+    ...cat,
+    desc: cat.desc || cat.description || '',
+    icon: cat.icon || CATEGORY_ICONS[cat.id] || CATEGORY_ICONS.phones,
+    themeAccent: cat.iconColor || theme.accent,
+    themeGlow: theme.glow,
+    themeIconBg: cat.iconBg || theme.iconBg,
+    themeBadgeBg: cat.badgeBg || theme.badgeBg
+  };
+};
+
+const computeRemainingTime = () => {
+  const now = new Date();
+  const endOfSlot = new Date(now);
+  const nextSlotHour = Math.min(23, Math.floor(now.getHours() / 4) * 4 + 4);
+  endOfSlot.setHours(nextSlotHour, 59, 59, 0);
+  const diffSec = Math.max(0, Math.floor((endOfSlot.getTime() - now.getTime()) / 1000));
+  const hours = String(Math.floor(diffSec / 3600)).padStart(2, '0');
+  const minutes = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
+  const seconds = String(diffSec % 60).padStart(2, '0');
+  return { hours, minutes, seconds };
+};
 
 const Home = () => {
   const [categories, setCategories] = useState(() =>
-    INITIAL_CATEGORIES.map(enrichCategoryWithIcon)
+    INITIAL_CATEGORIES.map((cat, idx) => enrichCategoryWithIcon(cat, idx))
   );
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loadingFeatured, setLoadingFeatured] = useState(true);
+  const [countdown, setCountdown] = useState(computeRemainingTime);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(computeRemainingTime());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -57,7 +215,9 @@ const Home = () => {
       .then(([catResult, prodResult]) => {
         if (!isMounted) return;
         if (catResult.status === 'fulfilled' && Array.isArray(catResult.value)) {
-          setCategories(catResult.value.slice(0, 4).map(enrichCategoryWithIcon));
+          setCategories(
+            catResult.value.slice(0, 4).map((cat, idx) => enrichCategoryWithIcon(cat, idx))
+          );
         }
         if (prodResult.status === 'fulfilled' && Array.isArray(prodResult.value)) {
           setFeaturedProducts(prodResult.value.slice(0, 8));
@@ -77,22 +237,50 @@ const Home = () => {
     };
   }, []);
 
+  const countdownUnits = [
+    { label: 'GIỜ', value: countdown.hours },
+    { label: 'PHÚT', value: countdown.minutes },
+    { label: 'GIÂY', value: countdown.seconds }
+  ];
+
   return (
     <div className="ui-page-enter">
-      {/* 1. HERO SECTION WITH EXACT STYLE */}
+      {/* 1. HERO SECTION — AURORA MESH & FLAGSHIP 3D SHOWCASE */}
       <section
-        className="hero-section"
+        className="hero-section home-hero-aurora"
         style={{
-          background: 'linear-gradient(180deg, #f0f6ff 0%, #ffffff 100%)',
-          padding: 'clamp(1.75rem, 4vw, 3rem) 0 clamp(2.5rem, 5vw, 4rem)',
-          borderBottom: '1px solid #f1f5f9'
+          padding: 'clamp(2rem, 4.5vw, 3.75rem) 0 clamp(2.75rem, 5.5vw, 4.5rem)'
         }}
       >
-        <div className="container">
-          <div className="hero-grid">
-            {/* Left Content */}
+        {/* Subtle digital dot grid & floating aurora orbs */}
+        <div className="home-hero-grid-pattern" />
+        <div
+          className="home-aurora-orb"
+          style={{
+            top: '-90px',
+            left: '6%',
+            width: '340px',
+            height: '340px',
+            background: 'rgba(59, 130, 246, 0.22)'
+          }}
+        />
+        <div
+          className="home-aurora-orb"
+          style={{
+            bottom: '-110px',
+            right: '8%',
+            width: '380px',
+            height: '380px',
+            background: 'rgba(99, 102, 241, 0.2)',
+            animationDelay: '-4s'
+          }}
+        />
+
+        <div className="container" style={{ position: 'relative', zIndex: 1 }}>
+          <div className="hero-grid" style={{ alignItems: 'center' }}>
+            {/* Left Content: Flagship Typography, CTA & Glassmorphism Dock */}
             <div className="hero-content" style={{ minWidth: 0 }}>
-              {/* Pill Badge */}
+              {/* Glassmorphism Pill Badge with Live Ping Dot */}
               <div
                 className="hero-pill"
                 style={{
@@ -100,168 +288,282 @@ const Home = () => {
                   alignItems: 'center',
                   flexWrap: 'wrap',
                   maxWidth: '100%',
-                  gap: '0.4rem',
-                  padding: '0.45rem 1rem',
-                  backgroundColor: '#eff6ff',
-                  border: '1px solid #dbeafe',
+                  gap: '0.5rem',
+                  padding: '0.48rem 1.05rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(147, 197, 253, 0.65)',
                   borderRadius: '9999px',
                   color: '#1d4ed8',
                   fontSize: '0.75rem',
                   fontWeight: 700,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  marginBottom: '1.25rem',
-                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.08)'
+                  marginBottom: '1.35rem',
+                  boxShadow: '0 4px 16px -2px rgba(37, 99, 235, 0.12)'
                 }}
               >
+                <span className="home-ping-wrap" aria-hidden="true">
+                  <span className="home-ping-ring" />
+                  <span className="home-ping-dot" />
+                </span>
                 <Icon name="sparkles" size={14} color="#2563eb" />
                 <span>HỆ SINH THÁI CÔNG NGHỆ CHUẨN MỰC</span>
                 <span style={{ color: '#93c5fd' }}>•</span>
-                <span style={{ color: '#2563eb' }}>Chính Hãng 100%</span>
+                <span style={{ color: '#2563eb', fontWeight: 800 }}>Chính Hãng 100%</span>
               </div>
 
-              {/* Main Heading */}
+              {/* Main Flagship Heading */}
               <h1
                 className="hero-title"
                 style={{
-                  fontSize: 'clamp(1.75rem, 1.1rem + 2.5vw, 3.25rem)',
+                  fontSize: 'clamp(2rem, 1.25rem + 2.6vw, 3.55rem)',
                   fontWeight: 800,
                   color: '#0f172a',
-                  lineHeight: 1.15,
-                  letterSpacing: '-0.025em',
-                  marginBottom: '1.15rem'
+                  lineHeight: 1.12,
+                  letterSpacing: '-0.03em',
+                  marginBottom: '1.2rem'
                 }}
               >
                 Khám Phá Thế Giới{' '}
-                <span style={{ color: '#2563eb' }}>Công Nghệ Đỉnh Cao</span>
+                <span className="home-gradient-text">Công Nghệ Đỉnh Cao</span>
               </h1>
 
-              {/* Description */}
+              {/* Subtitle Description */}
               <p
                 style={{
-                  fontSize: 'clamp(0.95rem, 1.2vw, 1.05rem)',
+                  fontSize: 'clamp(0.96rem, 1.15vw, 1.08rem)',
                   color: '#475569',
-                  lineHeight: 1.65,
-                  marginBottom: '1.75rem',
-                  maxWidth: '540px'
+                  lineHeight: 1.7,
+                  marginBottom: '1.9rem',
+                  maxWidth: '550px'
                 }}
               >
                 Trải nghiệm mua sắm hiện đại cùng các thiết bị điện tử, laptop và tiện ích gia dụng thông minh thế hệ mới từ các thương hiệu dẫn đầu toàn cầu.
               </p>
 
               {/* Action Buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '2.25rem', flexWrap: 'wrap' }}>
-                <Link
-                  to="/products"
-                  className="ui-hover-lift"
-                  style={{
-                    backgroundColor: '#1d4ed8',
-                    color: '#ffffff',
-                    padding: '0.8rem 1.5rem',
-                    borderRadius: '9999px',
-                    fontWeight: 700,
-                    fontSize: '0.925rem',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 8px 20px -4px rgba(29, 78, 216, 0.45)',
-                    textDecoration: 'none'
-                  }}
-                >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.9rem',
+                  marginBottom: '2.35rem',
+                  flexWrap: 'wrap'
+                }}
+              >
+                <Link to="/products" className="home-cta-primary">
                   <span>Khám phá bộ sưu tập</span>
-                  <Icon name="arrow-right" size={16} />
+                  <span className="home-cta-arrow">
+                    <Icon name="arrow-right" size={16} />
+                  </span>
                 </Link>
 
-                <Link
-                  to="/products"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    border: '1.5px solid #cbd5e1',
-                    padding: '0.8rem 1.35rem',
-                    borderRadius: '9999px',
-                    fontWeight: 600,
-                    fontSize: '0.925rem',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                    transition: 'all 0.2s',
-                    textDecoration: 'none'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#2563eb';
-                    e.currentTarget.style.color = '#2563eb';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#cbd5e1';
-                    e.currentTarget.style.color = '#0f172a';
-                  }}
-                >
+                <Link to="/products" className="home-cta-secondary">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
-                    <rect x="3" y="3" width="7" height="7" />
-                    <rect x="14" y="3" width="7" height="7" />
-                    <rect x="14" y="14" width="7" height="7" />
-                    <rect x="3" y="14" width="7" height="7" />
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" />
                   </svg>
-                  Xem tất cả danh mục
+                  <span>Xem tất cả danh mục</span>
                 </Link>
               </div>
 
-              {/* Three Stat Counters */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(1rem, 2.5vw, 2.25rem)', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: 'clamp(1.4rem, 2vw, 1.75rem)', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                    100%
+              {/* Three Stat Counters inside Glassmorphism Dock */}
+              <div className="home-stats-dock">
+                {HERO_STATS.map((stat, idx) => (
+                  <div
+                    key={stat.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      paddingRight: idx < HERO_STATS.length - 1 ? 'clamp(0.65rem, 1.5vw, 1.25rem)' : 0,
+                      borderRight:
+                        idx < HERO_STATS.length - 1 ? '1px solid rgba(226, 232, 240, 0.9)' : 'none'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '11px',
+                        backgroundColor: stat.iconBg,
+                        color: stat.iconColor,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}
+                    >
+                      <Icon name={stat.icon} size={18} color={stat.iconColor} />
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 'clamp(1.2rem, 1.7vw, 1.45rem)',
+                          fontWeight: 800,
+                          color: stat.valueColor,
+                          lineHeight: 1.15
+                        }}
+                      >
+                        {stat.value}
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 500, marginTop: '0.15rem' }}>
+                        {stat.label}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
-                    Sản phẩm chính hãng
-                  </div>
-                </div>
-
-                <div style={{ width: '1px', height: '36px', backgroundColor: '#e2e8f0' }} />
-
-                <div>
-                  <div style={{ fontSize: 'clamp(1.4rem, 2vw, 1.75rem)', fontWeight: 800, color: '#2563eb', lineHeight: 1.2 }}>
-                    24/7
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
-                    Hỗ trợ kỹ thuật chuyên sâu
-                  </div>
-                </div>
-
-                <div style={{ width: '1px', height: '36px', backgroundColor: '#e2e8f0' }} />
-
-                <div>
-                  <div style={{ fontSize: 'clamp(1.4rem, 2vw, 1.75rem)', fontWeight: 800, color: '#ea580c', lineHeight: 1.2 }}>
-                    Toàn Quốc
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
-                    Giao hàng & bảo hành tận nơi
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* Right Showcase Card with Floating Glassmorphic Badges */}
-            <div className="hero-showcase" style={{ position: 'relative', minWidth: 0, padding: '14px 0' }}>
-              {/* Top-Left Floating Badge (inset horizontally so it never overflows viewport) */}
+            {/* Right Showcase Card with Multi-layer Glow Frame & 3 Floating Glassmorphic Badges */}
+            <div className="hero-showcase" style={{ position: 'relative', minWidth: 0, padding: '18px 0' }}>
+              {/* 1. Top-Left Floating Badge */}
               <div
-                className="hero-badge hero-badge-top"
+                className="hero-badge hero-badge-top home-floating-badge"
                 style={{
                   position: 'absolute',
-                  top: 0,
+                  top: '2px',
                   left: '12px',
                   maxWidth: 'calc(100% - 24px)',
-                  zIndex: 2,
-                  backgroundColor: '#ffffff',
-                  borderRadius: '16px',
-                  padding: '8px 14px',
-                  boxShadow: '0 12px 30px rgba(0, 0, 0, 0.08)',
-                  border: '1px solid #f1f5f9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.65rem'
+                  zIndex: 3
+                }}
+              >
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '11px',
+                    background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    flexShrink: 0,
+                    boxShadow: '0 6px 14px rgba(37, 99, 235, 0.3)'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a' }}>
+                    Cam Kết Chất Lượng
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
+                    Tiêu chuẩn phân phối toàn cầu
+                  </div>
+                </div>
+              </div>
+
+              {/* Outer Glassmorphism Glow Frame */}
+              <div className="home-showcase-outer">
+                <div
+                  style={{
+                    backgroundColor: '#0f172a',
+                    borderRadius: '20px',
+                    overflow: 'hidden',
+                    position: 'relative'
+                  }}
+                >
+                  <img
+                    src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=80"
+                    alt="Tech Master Ecosystem"
+                    style={{
+                      width: '100%',
+                      maxWidth: '100%',
+                      height: 'auto',
+                      aspectRatio: '16 / 10',
+                      objectFit: 'cover',
+                      display: 'block',
+                      opacity: 0.96
+                    }}
+                  />
+
+                  {/* Dark gradient overlay at bottom */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background:
+                        'linear-gradient(to top, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 0.35) 45%, rgba(15, 23, 42, 0) 75%)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'flex-end',
+                      padding: 'clamp(1.1rem, 2.5vw, 1.6rem) clamp(1.1rem, 2.5vw, 1.6rem) 2.35rem'
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '0.65rem'
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            fontSize: '0.7rem',
+                            fontWeight: 800,
+                            letterSpacing: '0.08em',
+                            color: '#fdba74',
+                            textTransform: 'uppercase',
+                            marginBottom: '0.25rem'
+                          }}
+                        >
+                          <Icon name="sparkles" size={12} color="#fdba74" />
+                          <span>FLAGSHIP SERIES • AI GENERATION</span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 'clamp(1.1rem, 1.9vw, 1.35rem)',
+                            fontWeight: 800,
+                            color: '#ffffff',
+                            letterSpacing: '-0.015em'
+                          }}
+                        >
+                          Tech Master Ecosystem
+                        </div>
+                      </div>
+
+                      <span
+                        style={{
+                          background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
+                          color: '#ffffff',
+                          fontSize: '0.73rem',
+                          fontWeight: 700,
+                          padding: '0.35rem 0.85rem',
+                          borderRadius: '9999px',
+                          border: '1px solid rgba(255, 255, 255, 0.25)',
+                          boxShadow: '0 4px 12px rgba(37, 99, 235, 0.5)'
+                        }}
+                      >
+                        Chính Hãng
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Bottom-Left Floating Rating Badge (3rd floating card) */}
+              <div
+                className="hero-badge home-floating-badge"
+                style={{
+                  position: 'absolute',
+                  bottom: '4px',
+                  left: '14px',
+                  zIndex: 3,
+                  animationDelay: '-1.6s'
                 }}
               >
                 <div
@@ -269,118 +571,38 @@ const Home = () => {
                     width: '36px',
                     height: '36px',
                     borderRadius: '10px',
-                    backgroundColor: '#eff6ff',
+                    backgroundColor: '#fef3c7',
+                    color: '#d97706',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#2563eb',
+                    fontWeight: 900,
+                    fontSize: '0.95rem',
                     flexShrink: 0
                   }}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
+                  ★
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
-                    Cam Kết Chất Lượng
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>
+                    4.9/5 ★ Đánh Giá
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                    Tiêu chuẩn phân phối toàn cầu
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
+                    Từ 12.5k+ khách hàng
                   </div>
                 </div>
               </div>
 
-              {/* Main Showcase Image Frame */}
+              {/* 3. Bottom-Right Floating Warranty Badge */}
               <div
-                style={{
-                  backgroundColor: '#0f172a',
-                  borderRadius: '24px',
-                  overflow: 'hidden',
-                  boxShadow: '0 20px 40px -10px rgba(15, 23, 42, 0.25)',
-                  position: 'relative',
-                  border: '4px solid #ffffff'
-                }}
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=80"
-                  alt="Tech Master Ecosystem"
-                  style={{
-                    width: '100%',
-                    maxWidth: '100%',
-                    height: 'auto',
-                    aspectRatio: '16 / 10',
-                    objectFit: 'cover',
-                    display: 'block',
-                    opacity: 0.95
-                  }}
-                />
-
-                {/* Dark gradient overlay at bottom */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0) 55%)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'flex-end',
-                    padding: 'clamp(1rem, 2.5vw, 1.5rem) clamp(1rem, 2.5vw, 1.5rem) 2.25rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          letterSpacing: '0.06em',
-                          color: '#fdba74',
-                          textTransform: 'uppercase',
-                          marginBottom: '0.15rem'
-                        }}
-                      >
-                        FLAGSHIP SERIES
-                      </div>
-                      <div style={{ fontSize: 'clamp(1.05rem, 1.8vw, 1.25rem)', fontWeight: 800, color: '#ffffff' }}>
-                        Tech Master Ecosystem
-                      </div>
-                    </div>
-
-                    <span
-                      style={{
-                        backgroundColor: '#2563eb',
-                        color: '#ffffff',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        padding: '0.3rem 0.75rem',
-                        borderRadius: '9999px',
-                        boxShadow: '0 2px 8px rgba(37, 99, 235, 0.5)'
-                      }}
-                    >
-                      Chính Hãng
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom-Right Floating Badge (inset horizontally so it never overflows viewport) */}
-              <div
-                className="hero-badge hero-badge-bottom"
+                className="hero-badge hero-badge-bottom home-floating-badge"
                 style={{
                   position: 'absolute',
-                  bottom: 0,
+                  bottom: '4px',
                   right: '12px',
                   maxWidth: 'calc(100% - 24px)',
-                  zIndex: 2,
-                  backgroundColor: '#ffffff',
-                  borderRadius: '16px',
-                  padding: '8px 14px',
-                  boxShadow: '0 12px 30px rgba(0, 0, 0, 0.08)',
-                  border: '1px solid #f1f5f9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.65rem'
+                  zIndex: 3,
+                  animationDelay: '-2.8s'
                 }}
               >
                 <div
@@ -388,11 +610,11 @@ const Home = () => {
                     width: '36px',
                     height: '36px',
                     borderRadius: '50%',
-                    backgroundColor: '#fee2e2',
+                    backgroundColor: '#dcfce7',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#dc2626',
+                    color: '#16a34a',
                     flexShrink: 0
                   }}
                 >
@@ -402,10 +624,10 @@ const Home = () => {
                   </svg>
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a' }}>
                     Bảo Hành Toàn Diện
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
                     Hỗ trợ kỹ thuật chính hãng
                   </div>
                 </div>
@@ -415,20 +637,33 @@ const Home = () => {
         </div>
       </section>
 
-      {/* FLASH SALE SPOTLIGHT BANNER */}
+      {/* 2. FLASH SALE SPOTLIGHT BANNER WITH LIVE COUNTDOWN */}
       <section
         style={{
-          background: 'linear-gradient(90deg, #991b1b 0%, #dc2626 50%, #ea580c 100%)',
+          background: 'linear-gradient(92deg, #9f1239 0%, #dc2626 48%, #ea580c 100%)',
           color: '#ffffff',
-          padding: '1.1rem 0',
-          boxShadow: '0 4px 20px rgba(220, 38, 38, 0.25)',
+          padding: '1.15rem 0',
+          boxShadow: '0 10px 28px -8px rgba(220, 38, 38, 0.38)',
           position: 'relative',
           overflow: 'hidden'
         }}
       >
+        {/* Subtle cyber diagonal shine */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage:
+              'radial-gradient(circle at 20% 50%, rgba(254, 240, 138, 0.16) 0%, transparent 45%), radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.12) 0%, transparent 40%)',
+            pointerEvents: 'none'
+          }}
+        />
+
         <div
           className="container"
           style={{
+            position: 'relative',
+            zIndex: 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -436,31 +671,81 @@ const Home = () => {
             gap: '1rem'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', flexWrap: 'wrap', minWidth: 0 }}>
             <div
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.4rem',
-                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                padding: '0.35rem 0.85rem',
+                backgroundColor: 'rgba(15, 23, 42, 0.28)',
+                border: '1px solid rgba(253, 224, 71, 0.45)',
+                padding: '0.38rem 0.9rem',
                 borderRadius: '9999px',
                 fontWeight: 800,
-                fontSize: '0.78rem',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase'
+                fontSize: '0.76rem',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.15)'
               }}
             >
               <Icon name="flash" size={14} color="#fde047" />
               <span>FLASH SALE ĐỘC QUYỀN</span>
             </div>
+
             <div style={{ minWidth: 0 }}>
-              <span style={{ fontSize: 'clamp(0.95rem, 1.5vw, 1.05rem)', fontWeight: 800 }}>
+              <span style={{ fontSize: 'clamp(0.95rem, 1.5vw, 1.08rem)', fontWeight: 800 }}>
                 Giảm Sốc Đến 50% Toàn Bộ Thiết Bị Hot
               </span>
-              <span style={{ fontSize: '0.825rem', opacity: 0.9, marginLeft: '0.5rem', display: 'inline-block' }}>
+              <span style={{ fontSize: '0.825rem', opacity: 0.92, marginLeft: '0.5rem', display: 'inline-block' }}>
                 • Số lượng có hạn theo từng khung giờ
               </span>
+            </div>
+
+            {/* Live Digital Countdown Timer */}
+            <div
+              aria-label="Đồng hồ đếm ngược Flash Sale"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                marginLeft: '0.25rem'
+              }}
+            >
+              {countdownUnits.map((unit, idx) => (
+                <div key={unit.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.38)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      borderRadius: '8px',
+                      padding: '0.24rem 0.52rem',
+                      minWidth: '42px',
+                      textAlign: 'center',
+                      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                        fontWeight: 800,
+                        fontSize: '0.88rem',
+                        color: '#fde047',
+                        lineHeight: 1.1
+                      }}
+                    >
+                      {unit.value}
+                    </div>
+                    <div style={{ fontSize: '0.55rem', fontWeight: 700, opacity: 0.85, letterSpacing: '0.04em' }}>
+                      {unit.label}
+                    </div>
+                  </div>
+                  {idx < countdownUnits.length - 1 && (
+                    <span style={{ fontWeight: 900, color: '#fde047', fontSize: '0.95rem' }}>:</span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -470,15 +755,15 @@ const Home = () => {
             style={{
               backgroundColor: '#ffffff',
               color: '#dc2626',
-              padding: '0.6rem 1.25rem',
+              padding: '0.65rem 1.35rem',
               borderRadius: '9999px',
               fontWeight: 800,
-              fontSize: '0.85rem',
+              fontSize: '0.86rem',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.4rem',
+              gap: '0.45rem',
               textDecoration: 'none',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(253, 224, 71, 0.32)',
               whiteSpace: 'nowrap'
             }}
           >
@@ -489,15 +774,20 @@ const Home = () => {
         </div>
       </section>
 
-      {/* 2. CATEGORIES SECTION */}
-      <section style={{ padding: 'clamp(2.25rem, 4vw, 3.5rem) 0 clamp(2.5rem, 5vw, 4rem)', backgroundColor: '#ffffff' }}>
+      {/* 3. CATEGORIES SECTION — INTERACTIVE BENTO GRID */}
+      <section
+        style={{
+          padding: 'clamp(2.5rem, 4.5vw, 4rem) 0 clamp(2.5rem, 5vw, 4rem)',
+          backgroundColor: '#ffffff'
+        }}
+      >
         <div className="container">
           <div
             style={{
               display: 'flex',
               alignItems: 'flex-end',
               justifyContent: 'space-between',
-              marginBottom: '1.75rem',
+              marginBottom: '2rem',
               flexWrap: 'wrap',
               gap: '1rem'
             }}
@@ -505,22 +795,34 @@ const Home = () => {
             <div>
               <div
                 style={{
-                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.78rem',
                   fontWeight: 800,
                   color: '#2563eb',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  marginBottom: '0.35rem'
+                  letterSpacing: '0.07em',
+                  marginBottom: '0.4rem'
                 }}
               >
-                KHÁM PHÁ THEO DANH MỤC
+                <span
+                  style={{
+                    width: '18px',
+                    height: '3px',
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(90deg, #2563eb, #7c3aed)',
+                    display: 'inline-block'
+                  }}
+                />
+                <span>KHÁM PHÁ THEO DANH MỤC</span>
               </div>
               <h2
                 style={{
-                  fontSize: 'clamp(1.45rem, 2.5vw, 1.85rem)',
+                  fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
                   fontWeight: 800,
                   color: '#0f172a',
-                  letterSpacing: '-0.02em',
+                  letterSpacing: '-0.025em',
                   margin: 0
                 }}
               >
@@ -533,85 +835,90 @@ const Home = () => {
               style={{
                 color: '#2563eb',
                 fontSize: '0.925rem',
-                fontWeight: 600,
+                fontWeight: 700,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.25rem',
+                gap: '0.3rem',
+                padding: '0.45rem 0.95rem',
+                borderRadius: '9999px',
+                backgroundColor: '#eff6ff',
                 textDecoration: 'none'
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
             >
               <span>Xem tất cả danh mục</span>
               <Icon name="chevron-right" size={16} />
             </Link>
           </div>
 
-          {/* 4 Cards Grid */}
+          {/* 4 Interactive Bento Cards Grid */}
           <div className="grid-cols-4 ui-stagger">
             {categories.map((cat) => (
               <Link
                 key={cat.id}
                 to={`/products?category=${encodeURIComponent(cat.id)}`}
-                className="ui-hover-lift"
+                className="home-bento-card"
                 style={{
-                  backgroundColor: '#ffffff',
-                  borderRadius: '16px',
-                  border: '1px solid #f1f5f9',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)',
-                  padding: '1.25rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
-                  minWidth: 0
+                  '--bento-accent': cat.themeAccent,
+                  '--bento-icon-bg': cat.themeIconBg
                 }}
               >
-                <div>
+                {/* Decorative top-right radial glow */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-45px',
+                    right: '-45px',
+                    width: '150px',
+                    height: '150px',
+                    borderRadius: '50%',
+                    background: cat.themeGlow,
+                    pointerEvents: 'none'
+                  }}
+                />
+
+                <div style={{ position: 'relative', zIndex: 1 }}>
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      marginBottom: '1rem'
+                      marginBottom: '1.1rem'
                     }}
                   >
-                    <div
-                      style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '10px',
-                        backgroundColor: cat.iconBg,
-                        color: cat.iconColor,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      {cat.icon}
-                    </div>
+                    <div className="home-bento-icon">{cat.icon}</div>
 
                     <span
                       style={{
-                        backgroundColor: cat.badgeBg,
-                        color: cat.badgeColor,
-                        fontSize: '0.725rem',
+                        backgroundColor: cat.themeBadgeBg,
+                        color: cat.themeAccent,
+                        fontSize: '0.73rem',
                         fontWeight: 700,
-                        padding: '0.25rem 0.65rem',
-                        borderRadius: '9999px'
+                        padding: '0.28rem 0.7rem',
+                        borderRadius: '9999px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
                       }}
                     >
-                      {cat.count}
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: cat.themeAccent
+                        }}
+                      />
+                      <span>{cat.count}</span>
                     </span>
                   </div>
 
                   <h3
                     style={{
-                      fontSize: '1.05rem',
-                      fontWeight: 700,
+                      fontSize: '1.1rem',
+                      fontWeight: 800,
                       color: '#0f172a',
-                      marginBottom: '0.25rem'
+                      marginBottom: '0.35rem',
+                      letterSpacing: '-0.015em'
                     }}
                   >
                     {cat.name}
@@ -619,36 +926,44 @@ const Home = () => {
 
                   <p
                     style={{
-                      fontSize: '0.8rem',
+                      fontSize: '0.82rem',
                       color: '#64748b',
-                      lineHeight: 1.4,
-                      marginBottom: '1.25rem'
+                      lineHeight: 1.5,
+                      marginBottom: '1.15rem'
                     }}
                   >
                     {cat.desc}
                   </p>
                 </div>
 
-                {/* Bottom: Thumbnail Image */}
-                <div
-                  style={{
-                    height: '110px',
-                    borderRadius: '10px',
-                    overflow: 'hidden',
-                    backgroundColor: '#f8fafc'
-                  }}
-                >
-                  <img
-                    src={cat.image || cat.imageUrl}
-                    alt={cat.name}
+                {/* Bottom: Thumbnail Image + Interactive "Khám phá ngay →" */}
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  <div
+                    className="home-bento-thumb"
                     style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      display: 'block',
-                      transition: 'transform 0.3s'
+                      height: '118px',
+                      borderRadius: '13px',
+                      overflow: 'hidden',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid rgba(226, 232, 240, 0.7)'
                     }}
-                  />
+                  >
+                    <img
+                      src={cat.image || cat.imageUrl}
+                      alt={cat.name}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block'
+                      }}
+                    />
+                  </div>
+
+                  <div className="home-bento-cta">
+                    <span>Khám phá ngay</span>
+                    <Icon name="arrow-right" size={14} color={cat.themeAccent} />
+                  </div>
                 </div>
               </Link>
             ))}
@@ -656,36 +971,37 @@ const Home = () => {
         </div>
       </section>
 
-      {/* VOUCHER SPOTLIGHT BANNER WIDGET */}
-      <section style={{ padding: '0 0 clamp(2.25rem, 4vw, 3.5rem)', backgroundColor: '#ffffff' }}>
+      {/* 4. VOUCHER SPOTLIGHT BANNER WIDGET */}
+      <section style={{ padding: '0 0 clamp(2.5rem, 4.5vw, 3.75rem)', backgroundColor: '#ffffff' }}>
         <div className="container">
           <div
             className="voucher-spotlight-card"
             style={{
-              background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #1e3a8a 100%)',
-              borderRadius: '20px',
-              padding: 'clamp(1.25rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.25rem)',
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 45%, #1d4ed8 100%)',
+              borderRadius: '24px',
+              padding: 'clamp(1.5rem, 3.2vw, 2.75rem) clamp(1.25rem, 3.2vw, 2.5rem)',
               color: '#ffffff',
-              boxShadow: '0 16px 36px -10px rgba(30, 27, 75, 0.35)',
+              boxShadow: '0 24px 48px -12px rgba(30, 27, 75, 0.35)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              border: '1px solid rgba(255, 255, 255, 0.12)'
             }}
           >
-            {/* Background decorative glow */}
+            {/* Background decorative glows */}
             <div
               style={{
                 position: 'absolute',
-                top: '-50px',
-                right: '-50px',
-                width: '260px',
-                height: '260px',
+                top: '-60px',
+                right: '-40px',
+                width: '280px',
+                height: '280px',
                 borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(239, 68, 68, 0.35) 0%, rgba(239, 68, 68, 0) 70%)',
+                background: 'radial-gradient(circle, rgba(244, 63, 94, 0.32) 0%, rgba(244, 63, 94, 0) 70%)',
                 pointerEvents: 'none'
               }}
             />
 
-            <div className="voucher-spotlight-grid">
+            <div className="voucher-spotlight-grid" style={{ position: 'relative', zIndex: 1 }}>
               {/* Left headline */}
               <div style={{ minWidth: 0 }}>
                 <div
@@ -694,12 +1010,12 @@ const Home = () => {
                     alignItems: 'center',
                     gap: '0.4rem',
                     backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    padding: '0.35rem 0.85rem',
+                    border: '1px solid rgba(253, 224, 71, 0.35)',
+                    padding: '0.38rem 0.9rem',
                     borderRadius: '9999px',
                     fontSize: '0.75rem',
                     fontWeight: 800,
-                    letterSpacing: '0.04em',
+                    letterSpacing: '0.05em',
                     textTransform: 'uppercase',
                     color: '#fde047',
                     marginBottom: '1rem'
@@ -711,38 +1027,38 @@ const Home = () => {
 
                 <h2
                   style={{
-                    fontSize: 'clamp(1.45rem, 1rem + 1.5vw, 2rem)',
+                    fontSize: 'clamp(1.5rem, 1.05rem + 1.5vw, 2.15rem)',
                     fontWeight: 900,
-                    lineHeight: 1.2,
-                    letterSpacing: '-0.02em',
-                    marginBottom: '0.75rem',
+                    lineHeight: 1.18,
+                    letterSpacing: '-0.025em',
+                    marginBottom: '0.8rem',
                     color: '#ffffff'
                   }}
                 >
                   Săn Voucher Ngay, <br />
-                  <span style={{ color: '#f87171' }}>Tiết Kiệm Lên Đến 500K</span>
+                  <span style={{ color: '#fda4af' }}>Tiết Kiệm Lên Đến 500K</span>
                 </h2>
 
-                <p style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+                <p style={{ fontSize: '0.92rem', color: '#cbd5e1', lineHeight: 1.65, marginBottom: '1.6rem' }}>
                   Lưu ngay các mã giảm giá % và freeship có giá trị tốt nhất trong tháng. Sử dụng tiện lợi khi đặt hàng!
                 </p>
 
-                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
                   <Link
                     to="/vouchers"
                     className="ui-hover-lift"
                     style={{
-                      backgroundColor: '#dc2626',
+                      background: 'linear-gradient(135deg, #e11d48 0%, #dc2626 100%)',
                       color: '#ffffff',
-                      padding: '0.75rem 1.5rem',
+                      padding: '0.78rem 1.55rem',
                       borderRadius: '9999px',
                       fontWeight: 700,
                       fontSize: '0.9rem',
                       textDecoration: 'none',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.4rem',
-                      boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)'
+                      gap: '0.45rem',
+                      boxShadow: '0 8px 20px -4px rgba(225, 29, 72, 0.5)'
                     }}
                   >
                     <span>Vào kho voucher</span>
@@ -752,21 +1068,18 @@ const Home = () => {
                   <Link
                     to="/my-vouchers"
                     style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      border: '1.5px solid rgba(255, 255, 255, 0.25)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.28)',
                       color: '#ffffff',
-                      padding: '0.75rem 1.35rem',
+                      padding: '0.78rem 1.4rem',
                       borderRadius: '9999px',
                       fontWeight: 600,
                       fontSize: '0.9rem',
                       textDecoration: 'none',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.4rem',
-                      transition: 'background-color 0.2s ease'
+                      gap: '0.45rem'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
                   >
                     <Icon name="voucher" size={15} />
                     <span>Mã đã lưu</span>
@@ -784,164 +1097,112 @@ const Home = () => {
                   minWidth: 0
                 }}
               >
-                {/* Voucher 1 */}
-                <div
-                  className="ui-hover-lift"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    borderRadius: '14px',
-                    padding: '1.1rem',
-                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    borderLeft: '5px solid #dc2626',
-                    minWidth: 0
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#dc2626', backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>
-                        GIAM50K
-                      </span>
-                      <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700 }}>HOT</span>
-                    </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#dc2626', lineHeight: 1.1, marginBottom: '0.35rem' }}>
-                      GIẢM 50K
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                      Đơn từ 500.000đ
-                    </div>
-                  </div>
-                  <Link
-                    to="/vouchers"
+                {SPOTLIGHT_VOUCHERS.map((voucher) => (
+                  <div
+                    key={voucher.code}
+                    className="ui-hover-lift"
                     style={{
-                      marginTop: '0.75rem',
-                      fontSize: '0.78rem',
-                      color: '#2563eb',
-                      fontWeight: 700,
-                      textDecoration: 'none',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.25rem'
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      borderRadius: '16px',
+                      padding: '1.15rem',
+                      boxShadow: '0 12px 28px rgba(0, 0, 0, 0.18)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      borderLeft: `5px solid ${voucher.accent}`,
+                      minWidth: 0
                     }}
                   >
-                    <span>Lưu mã ngay</span>
-                    <Icon name="arrow-right" size={13} />
-                  </Link>
-                </div>
-
-                {/* Voucher 2 */}
-                <div
-                  className="ui-hover-lift"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    borderRadius: '14px',
-                    padding: '1.1rem',
-                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    borderLeft: '5px solid #2563eb',
-                    minWidth: 0
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#2563eb', backgroundColor: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>
-                        TECHVIP
-                      </span>
-                      <span style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 700 }}>VIP</span>
+                    <div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '0.45rem'
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 800,
+                            fontSize: '0.84rem',
+                            color: voucher.accent,
+                            backgroundColor: voucher.codeBg,
+                            padding: '3px 8px',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          {voucher.code}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            color: voucher.tagColor,
+                            fontWeight: 800,
+                            letterSpacing: '0.04em'
+                          }}
+                        >
+                          {voucher.tag}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '1.25rem',
+                          fontWeight: 900,
+                          color: voucher.accent,
+                          lineHeight: 1.15,
+                          marginBottom: '0.35rem'
+                        }}
+                      >
+                        {voucher.headline}
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 500 }}>
+                        {voucher.condition}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#2563eb', lineHeight: 1.1, marginBottom: '0.35rem' }}>
-                      GIẢM 15%
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                      Tối đa 300.000đ
-                    </div>
+                    <Link
+                      to="/vouchers"
+                      style={{
+                        marginTop: '0.85rem',
+                        paddingTop: '0.6rem',
+                        borderTop: '1px dashed #e2e8f0',
+                        fontSize: '0.78rem',
+                        color: '#2563eb',
+                        fontWeight: 700,
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <span>Lưu mã ngay</span>
+                      <Icon name="arrow-right" size={13} />
+                    </Link>
                   </div>
-                  <Link
-                    to="/vouchers"
-                    style={{
-                      marginTop: '0.75rem',
-                      fontSize: '0.78rem',
-                      color: '#2563eb',
-                      fontWeight: 700,
-                      textDecoration: 'none',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.25rem'
-                    }}
-                  >
-                    <span>Lưu mã ngay</span>
-                    <Icon name="arrow-right" size={13} />
-                  </Link>
-                </div>
-
-                {/* Voucher 3 */}
-                <div
-                  className="ui-hover-lift"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    borderRadius: '14px',
-                    padding: '1.1rem',
-                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    borderLeft: '5px solid #16a34a',
-                    minWidth: 0
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#16a34a', backgroundColor: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>
-                        FREESHIP
-                      </span>
-                      <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700 }}>SHIP</span>
-                    </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#16a34a', lineHeight: 1.1, marginBottom: '0.35rem' }}>
-                      GIẢM 30K
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                      Đơn từ 150.000đ
-                    </div>
-                  </div>
-                  <Link
-                    to="/vouchers"
-                    style={{
-                      marginTop: '0.75rem',
-                      fontSize: '0.78rem',
-                      color: '#2563eb',
-                      fontWeight: 700,
-                      textDecoration: 'none',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.25rem'
-                    }}
-                  >
-                    <span>Lưu mã ngay</span>
-                    <Icon name="arrow-right" size={13} />
-                  </Link>
-                </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. FEATURED PRODUCTS SECTION */}
-      <section style={{ padding: 'clamp(2.25rem, 4vw, 3.5rem) 0 clamp(3rem, 5vw, 5rem)', backgroundColor: '#f8fafc' }}>
+      {/* 5. FEATURED PRODUCTS SECTION & SERVICE COMMITMENTS */}
+      <section
+        style={{
+          padding: 'clamp(2.5rem, 4.5vw, 4rem) 0 clamp(3rem, 5vw, 5rem)',
+          background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+          borderTop: '1px solid #e2e8f0'
+        }}
+      >
         <div className="container">
           <div
             style={{
               display: 'flex',
               alignItems: 'flex-end',
               justifyContent: 'space-between',
-              marginBottom: '1.75rem',
+              marginBottom: '1.5rem',
               flexWrap: 'wrap',
               gap: '1rem'
             }}
@@ -949,22 +1210,34 @@ const Home = () => {
             <div>
               <div
                 style={{
-                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.78rem',
                   fontWeight: 800,
                   color: '#2563eb',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  marginBottom: '0.35rem'
+                  letterSpacing: '0.07em',
+                  marginBottom: '0.4rem'
                 }}
               >
-                SẢN PHẨM BÁN CHẠY
+                <span
+                  style={{
+                    width: '18px',
+                    height: '3px',
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(90deg, #2563eb, #7c3aed)',
+                    display: 'inline-block'
+                  }}
+                />
+                <span>SẢN PHẨM BÁN CHẠY</span>
               </div>
               <h2
                 style={{
-                  fontSize: 'clamp(1.45rem, 2.5vw, 1.85rem)',
+                  fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
                   fontWeight: 800,
                   color: '#0f172a',
-                  letterSpacing: '-0.02em',
+                  letterSpacing: '-0.025em',
                   margin: 0
                 }}
               >
@@ -972,23 +1245,44 @@ const Home = () => {
               </h2>
             </div>
 
-            <Link
-              to="/products"
-              style={{
-                color: '#2563eb',
-                fontSize: '0.925rem',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                textDecoration: 'none'
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
-            >
-              <span>Xem tất cả sản phẩm</span>
-              <Icon name="chevron-right" size={16} />
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              {FEATURED_HIGHLIGHT_PILLS.map((pill) => (
+                <Link
+                  key={pill.id}
+                  to="/products"
+                  style={{
+                    padding: '0.42rem 0.9rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    backgroundColor: pill.active ? '#0f172a' : '#ffffff',
+                    color: pill.active ? '#ffffff' : '#475569',
+                    border: pill.active ? '1px solid #0f172a' : '1px solid #e2e8f0',
+                    boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)'
+                  }}
+                >
+                  {pill.label}
+                </Link>
+              ))}
+
+              <Link
+                to="/products"
+                style={{
+                  color: '#2563eb',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  marginLeft: '0.35rem',
+                  textDecoration: 'none'
+                }}
+              >
+                <span>Xem tất cả sản phẩm</span>
+                <Icon name="chevron-right" size={16} />
+              </Link>
+            </div>
           </div>
 
           {loadingFeatured && featuredProducts.length === 0 ? (
@@ -996,6 +1290,64 @@ const Home = () => {
           ) : (
             <ProductGrid products={featuredProducts} />
           )}
+
+          {/* Flagship Service Trust Bar */}
+          <div
+            className="grid-cols-4"
+            style={{
+              marginTop: 'clamp(2.5rem, 4vw, 3.75rem)',
+              paddingTop: 'clamp(2rem, 3.5vw, 2.75rem)',
+              borderTop: '1px solid #e2e8f0'
+            }}
+          >
+            {TRUST_COMMITMENTS.map((item) => (
+              <div
+                key={item.id}
+                className="ui-hover-lift"
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: '18px',
+                  padding: '1.25rem',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 4px 16px -4px rgba(15, 23, 42, 0.05)',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.9rem'
+                }}
+              >
+                <div
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '12px',
+                    backgroundColor: item.bg,
+                    color: item.accent,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}
+                >
+                  <Icon name={item.icon} size={20} color={item.accent} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: '0.92rem',
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      marginBottom: '0.25rem'
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.45 }}>
+                    {item.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>

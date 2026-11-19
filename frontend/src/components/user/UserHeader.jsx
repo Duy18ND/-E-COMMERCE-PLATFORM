@@ -55,7 +55,7 @@ const UserHeader = () => {
           setCategories(list);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       mounted = false;
     };
@@ -179,6 +179,9 @@ const UserHeader = () => {
 
   return (
     <header className="site-header user-header">
+      {/* Top Flagship Iridescent Accent Strip */}
+      <div className="user-header-accent-bar" aria-hidden="true" />
+
       <div className="container header-inner">
         <div className="header-main-row">
           {/* 1. LOGO */}
@@ -189,12 +192,17 @@ const UserHeader = () => {
                 <Icon name="sparkles" size={10} color="#facc15" />
               </span>
             </div>
-            <span className="header-logo-text">ShopMart</span>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+              <span className="header-logo-text">ShopMart</span>
+            </div>
           </Link>
 
           {/* 2. SEARCH BAR (Tự co giãn theo không gian còn lại) */}
           <div className="header-search-wrapper">
             <form onSubmit={handleSearch} className="header-search-form" role="search">
+              <span className="header-search-lead-icon" aria-hidden="true">
+                <Icon name="search" size={15} />
+              </span>
               <input
                 type="text"
                 value={searchTerm}
@@ -267,7 +275,8 @@ const UserHeader = () => {
                     onClick={() => setIsCategoryMenuOpen(false)}
                     className="header-category-menu-item all"
                   >
-                    Tất cả sản phẩm
+                    <Icon name="layers" size={14} />
+                    <span>Tất cả sản phẩm</span>
                   </Link>
                   {categories.map((cat) => (
                     <Link
@@ -276,7 +285,8 @@ const UserHeader = () => {
                       onClick={() => setIsCategoryMenuOpen(false)}
                       className="header-category-menu-item"
                     >
-                      {cat.name}
+                      <Icon name="chevron-right" size={13} />
+                      <span>{cat.name}</span>
                     </Link>
                   ))}
                 </div>
@@ -315,7 +325,10 @@ const UserHeader = () => {
                   className="header-account-trigger"
                   title="Tài khoản của bạn"
                 >
-                  <img src={currentAvatar} alt="Avatar" className="header-account-avatar" />
+                  <div className="header-avatar-wrap">
+                    <img src={currentAvatar} alt="Avatar" className="header-account-avatar" />
+                    <span className="header-avatar-online" aria-hidden="true" />
+                  </div>
                   <div className="header-account-info">
                     <span className="header-account-role">
                       {isAdmin ? 'Quản trị viên' : 'Tài khoản'}
