@@ -119,9 +119,7 @@ jobs:
             echo "::error ::Commit '${EXPECTED_SHA}' does not belong to 'main' branch history. Refusing to release non-main or untrusted code."
             exit 1
           fi
-          if [ "$MAIN_HEAD" != "$EXPECTED_SHA" ]; then
-            git checkout --detach "$EXPECTED_SHA"
-          fi
+          git checkout --detach "$EXPECTED_SHA"
 
           FULL_SHA=$(git rev-parse HEAD)
           if [ "$FULL_SHA" != "$EXPECTED_SHA" ]; then
