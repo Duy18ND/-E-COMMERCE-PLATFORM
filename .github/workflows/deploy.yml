@@ -144,7 +144,6 @@ jobs:
     if: needs.preflight-check.outputs.configured == 'true'
     environment:
       name: production
-      url: ${{ secrets.PRODUCTION_URL || 'http://localhost' }}
     steps:
       - name: Checkout Trusted Repository History
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
