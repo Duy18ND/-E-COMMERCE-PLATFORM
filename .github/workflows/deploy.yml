@@ -1020,16 +1020,10 @@ jobs:
             echo "services:" >> "${ROLLBACK_OVERRIDE}"
             for s in $APP_SERVICES; do
               if [ "${PREV_IMAGE_ID[$s]}" != "ABSENT" ]; then
-                cat << EOF >> "${ROLLBACK_OVERRIDE}"
-  ${s}:
-    image: shopmart-rollback/${s}:pre-deploy
-EOF
+                printf '  %s:\n    image: shopmart-rollback/%s:pre-deploy\n' "$s" "$s" >> "${ROLLBACK_OVERRIDE}"
               fi
             done
-            cat << EOF >> "${ROLLBACK_OVERRIDE}"
-  nginx:
-    image: shopmart-rollback/nginx:pre-deploy
-EOF
+            printf '  nginx:\n    image: shopmart-rollback/nginx:pre-deploy\n' >> "${ROLLBACK_OVERRIDE}"
 
             dc_rollback() {
               docker compose --env-file .env -p backend \
