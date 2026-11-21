@@ -238,6 +238,7 @@ jobs:
                 rm -rf "${DOCKER_TMP_CONFIG}"
               fi
               rm -rf "${STAGE_DIR}"
+              rm -f "${COMPOSE_DIR}/docker-compose.rollback.yml"
 
               if [ "${PRESERVE_BACKUPS}" = "true" ]; then
                 echo "BACKUP RETENTION: Preserving recovery files for manual intervention:"
@@ -317,8 +318,10 @@ jobs:
             }
 
             verify_all_health_and_http() {
-              echo "Verifying all application containers and Nginx..."
-              for svc in $APP_SERVICES nginx; do
+              local target_svcs="${1:-$APP_SERVICES}"
+              local in_rollback="${2:-false}"
+              echo "Verifying application containers (${target_svcs}) and Nginx..."
+              for svc in $target_svcs nginx; do
                 if ! assert_service_healthy "$svc"; then
                   return 1
                 fi
@@ -326,7 +329,15 @@ jobs:
               done
 
               echo "Verifying HTTP endpoints via Nginx..."
-              for endpoint in "/healthz" "/" "/api/v1/products" "/api/v1/products/categories" "/api/v1/flash-sales/active"; do
+              local endpoints="/healthz / /api/v1/products /api/v1/products/categories"
+              if [[ " $target_svcs " == *" product-service "* ]]; then
+                # Flash Sale is owned by product-service (FlashSaleController).
+                # In forward deployment, it MUST be verified. In rollback to legacy Sprint 1, verify if previous version was not unversioned.
+                if [ "$in_rollback" != "true" ] || [ -n "${PREV_ENV_IMAGE_TAG:-}" ]; then
+                  endpoints="${endpoints} /api/v1/flash-sales/active"
+                fi
+              fi
+              for endpoint in $endpoints; do
                 local code
                 code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1${endpoint}" || echo "000")
                 if [ "$code" != "200" ]; then
@@ -395,7 +406,7 @@ jobs:
               if [ "$ok" != "true" ]; then
                 return 1
               fi
-              echo "  [OK] All configuration files (existing & absent), migrations, and scripts restored and verified."
+              echo "  [OK] All configuration files (existing & absent), migration SQL files, and scripts restored and verified on host filesystem."
               return 0
             }
 
@@ -442,6 +453,25 @@ jobs:
               printf '%s' "$tag_val"
             }
 
+            read_env_var() {
+              local env_file="$1"
+              local key="$2"
+              local count val
+              count=$(grep -c "^${key}=" "$env_file" || true)
+              if [ "$count" -lt 1 ]; then
+                return 1
+              fi
+              val=$(grep -E "^${key}=" "$env_file" | head -n1 | cut -d'=' -f2- | tr -d '\r')
+              val="${val%\"}"
+              val="${val#\"}"
+              val="${val%\'}"
+              val="${val#\'}"
+              if [ -z "$val" ]; then
+                return 1
+              fi
+              printf '%s' "$val"
+            }
+
             extract_service_block_hash() {
               local rendered_yaml="$1"
               local svc="$2"
@@ -474,6 +504,23 @@ jobs:
               fi
             done
 
+            for req_key in "MYSQL_ROOT_PASSWORD" "MYSQL_USER" "MYSQL_PASSWORD" "REDIS_PASSWORD" "JWT_SECRET" "EUREKA_USER" "EUREKA_PASSWORD" "INTERNAL_SERVICE_KEY"; do
+              if ! read_env_var "${COMPOSE_DIR}/.env" "$req_key" >/dev/null 2>&1; then
+                echo "ERROR: Required production variable '${req_key}' is missing or empty in ${COMPOSE_DIR}/.env! Production untouched."
+                exit 1
+              fi
+            done
+            VPS_MYSQL_USER=$(read_env_var "${COMPOSE_DIR}/.env" "MYSQL_USER")
+            if ! [[ "$VPS_MYSQL_USER" =~ ^[a-zA-Z0-9_]+$ ]]; then
+              echo "ERROR: Invalid MYSQL_USER format in ${COMPOSE_DIR}/.env! Production untouched."
+              exit 1
+            fi
+            if read_env_var "${COMPOSE_DIR}/.env" "GEMINI_API_KEY" >/dev/null 2>&1 || read_env_var "${COMPOSE_DIR}/.env" "AI_API_KEY" >/dev/null 2>&1; then
+              echo "  [ENV OK] All required production secrets and GEMINI_API_KEY/AI_API_KEY are present in .env."
+            else
+              echo "  [ENV WARN] GEMINI_API_KEY is not set in .env; chatbot-service will run with fallback responses until configured."
+            fi
+
             for rel in $MANAGED_CONFIG_FILES; do
               if [ ! -f "${STAGE_DIR}/backend/${rel}" ]; then
                 echo "ERROR: Expected staged file '${STAGE_DIR}/backend/${rel}' is missing! Production untouched."
@@ -503,7 +550,7 @@ jobs:
               echo "  [OK] $(container_name_for "$infra") is running and healthy."
             done
 
-            echo "=== [3/8] Authenticating with Temporary Docker Config & Verifying 7 GHCR Packages ==="
+            echo "=== [3/8] Authenticating with Temporary Docker Config & Verifying 8 GHCR Packages ==="
             DOCKER_TMP_CONFIG=$(mktemp -d)
             chmod 700 "${DOCKER_TMP_CONFIG}"
             export DOCKER_CONFIG="${DOCKER_TMP_CONFIG}"
@@ -521,7 +568,7 @@ jobs:
             if [ -n "${GITHUB_TOKEN:-}" ]; then
               if printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin >/dev/null 2>&1; then
                 if verify_ghcr_packages; then
-                  echo "GHCR access verified via temporary Docker config (GITHUB_TOKEN) for all 7 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
+                  echo "GHCR access verified via temporary Docker config (GITHUB_TOKEN) for all 8 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
                   GHCR_AUTH_OK=true
                 fi
               fi
@@ -531,7 +578,7 @@ jobs:
               if [ -n "${GHCR_PAT:-}" ]; then
                 if printf '%s' "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_PAT_USER}" --password-stdin >/dev/null 2>&1; then
                   if verify_ghcr_packages; then
-                    echo "GHCR access verified via temporary Docker config (GHCR_TOKEN PAT) for all 7 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
+                    echo "GHCR access verified via temporary Docker config (GHCR_TOKEN PAT) for all 8 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
                     GHCR_AUTH_OK=true
                   fi
                 fi
@@ -581,40 +628,67 @@ jobs:
             echo "=== [5/8] Capturing, Validating & Pinning Exact Previous Image Identities ==="
             PREV_ENV_IMAGE_TAG=$(read_env_image_tag "${COMPOSE_DIR}/.env" || true)
             if [ -z "${PREV_ENV_IMAGE_TAG}" ]; then
-              echo "ERROR: Could not read a single non-empty IMAGE_TAG from ${COMPOSE_DIR}/.env. Production untouched."
-              exit 1
+              echo "Current .env does not declare IMAGE_TAG yet (Sprint 1 -> immutable SHA transition mode)."
+              ROLLBACK_TAG="pre-deploy-rollback"
+            else
+              echo "Current .env IMAGE_TAG: ${PREV_ENV_IMAGE_TAG}"
+              ROLLBACK_TAG="${PREV_ENV_IMAGE_TAG}"
             fi
-            echo "Current .env IMAGE_TAG: ${PREV_ENV_IMAGE_TAG}"
 
             declare -A PREV_IMAGE_REF
             declare -A PREV_IMAGE_ID
+            EXISTING_APP_SERVICES=""
             for svc in $APP_SERVICES; do
               cname=$(container_name_for "$svc")
+              if ! docker container inspect "$cname" >/dev/null 2>&1; then
+                if [ -z "${PREV_ENV_IMAGE_TAG}" ] && [ "$svc" = "chatbot-service" ]; then
+                  PREV_IMAGE_REF["$svc"]="ABSENT"
+                  PREV_IMAGE_ID["$svc"]="ABSENT"
+                  echo "  [TRANSITION NEW SERVICE] ${svc}: container '${cname}' does not exist yet on VPS (allowed only during Sprint 1 transition; will be created on deploy; removed on rollback)."
+                  continue
+                else
+                  if [ -z "${PREV_ENV_IMAGE_TAG}" ]; then
+                    echo "ERROR: Required Sprint 1 container '${cname}' for service '${svc}' is missing on VPS! Only chatbot-service may be absent during transition. Aborting deploy before touching production."
+                  else
+                    echo "ERROR: Required container '${cname}' for service '${svc}' is missing on VPS in steady-state mode (IMAGE_TAG=${PREV_ENV_IMAGE_TAG})! All 8 application containers must exist. Aborting."
+                  fi
+                  exit 1
+                fi
+              fi
+
               prev_ref=$(docker inspect -f '{{.Config.Image}}' "$cname" 2>/dev/null || echo "")
               prev_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
               if [ -z "$prev_ref" ] || [ -z "$prev_id" ]; then
-                echo "ERROR: Could not capture running image identity for ${cname}. Production untouched."
-                exit 1
-              fi
-              prev_tag="${prev_ref##*:}"
-              expected_ref="ghcr.io/${REPO_OWNER}/${svc}:${prev_tag}"
-              if [ "$prev_tag" = "$prev_ref" ] || [ "$prev_ref" != "$expected_ref" ]; then
-                echo "ERROR: Running image '${prev_ref}' for ${svc} does not match Compose template '${expected_ref}'. Exact Compose rollback cannot be guaranteed; aborting."
-                exit 1
-              fi
-              if [ "$prev_tag" != "$PREV_ENV_IMAGE_TAG" ]; then
-                echo "ERROR: Running image tag '${prev_tag}' for ${svc} does not match .env IMAGE_TAG '${PREV_ENV_IMAGE_TAG}'. Production state is inconsistent; aborting before any changes."
+                echo "ERROR: Could not capture running image identity for existing container ${cname}. Production untouched."
                 exit 1
               fi
               if ! docker image inspect "$prev_id" >/dev/null 2>&1; then
                 echo "ERROR: Local image ID ${prev_id} for ${svc} is not present locally. Production untouched."
                 exit 1
               fi
+
+              if [ -n "${PREV_ENV_IMAGE_TAG}" ]; then
+                prev_tag="${prev_ref##*:}"
+                expected_ref="ghcr.io/${REPO_OWNER}/${svc}:${prev_tag}"
+                if [ "$prev_tag" = "$prev_ref" ] || [ "$prev_ref" != "$expected_ref" ]; then
+                  echo "ERROR: Running image '${prev_ref}' for ${svc} does not match Compose template '${expected_ref}'. Aborting."
+                  exit 1
+                fi
+                if [ "$prev_tag" != "$PREV_ENV_IMAGE_TAG" ]; then
+                  echo "ERROR: Running image tag '${prev_tag}' for ${svc} does not match .env IMAGE_TAG '${PREV_ENV_IMAGE_TAG}'. Aborting."
+                  exit 1
+                fi
+              else
+                echo "  [TRANSITION] ${svc}: captured heterogeneous Sprint 1 image ref='${prev_ref}' id='${prev_id}'."
+              fi
+
               PREV_IMAGE_REF["$svc"]="$prev_ref"
               PREV_IMAGE_ID["$svc"]="$prev_id"
+              EXISTING_APP_SERVICES="${EXISTING_APP_SERVICES} ${svc}"
               docker tag "$prev_id" "shopmart-rollback/${svc}:pre-deploy"
-              echo "  [PINNED] ${svc}: ref=${prev_ref} id=${prev_id}"
+              echo "  [PINNED] ${svc}: ref=${prev_ref} id=${prev_id} -> shopmart-rollback/${svc}:pre-deploy"
             done
+            EXISTING_APP_SERVICES=$(echo "$EXISTING_APP_SERVICES" | xargs)
 
             PREV_NGINX_IMAGE_REF=$(docker inspect -f '{{.Config.Image}}' ecommerce-nginx 2>/dev/null || echo "")
             PREV_NGINX_IMAGE_ID=$(docker inspect -f '{{.Image}}' ecommerce-nginx 2>/dev/null || echo "")
@@ -735,7 +809,91 @@ jobs:
               fi
             fi
 
-            echo "=== [8/8] Staged Update / Config Sync, Verification & Unified Rollback ==="
+            echo "=== [8/8] Idempotent Database Migration, Staged Update, Verification & Unified Rollback ==="
+            run_and_verify_mysql_migrations() {
+              local mig_file="${COMPOSE_DIR}/docker/mysql/migrations/apply_all_migrations.sql"
+              if [ ! -f "$mig_file" ]; then
+                echo "ERROR: Migration file '${mig_file}' is missing!"
+                return 1
+              fi
+              echo "Executing idempotent database migration (${mig_file}) for configured user '${VPS_MYSQL_USER}'..."
+              if ! (printf 'SET @app_user = '\''%s\'\';\n' "${VPS_MYSQL_USER}"; cat "${mig_file}") | \
+                docker exec -i ecommerce-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root'; then
+                echo "ERROR: Database migration script execution failed!"
+                return 1
+              fi
+              if ! docker exec -e TARGET_DB_USER="${VPS_MYSQL_USER}" ecommerce-mysql sh -c '
+                set -e
+                USER_HOSTS=$(MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -N -s -u root -e "SELECT DISTINCT Host FROM mysql.user WHERE User = '\''${TARGET_DB_USER}'\'';")
+                if [ -z "$USER_HOSTS" ]; then
+                  echo "ERROR: User '\''${TARGET_DB_USER}'\'' does not exist in mysql.user! Cannot verify privileges."
+                  exit 1
+                fi
+                SCOPED_PRIVS="SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE"
+                for h in $USER_HOSTS; do
+                  echo "  Verifying and ensuring scoped privileges on all 5 databases for '\''${TARGET_DB_USER}'\''@'\''${h}'\'..."
+                  MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root -e "
+                    GRANT ${SCOPED_PRIVS} ON auth_db.* TO '\''${TARGET_DB_USER}'\''@'\''${h}'\'';
+                    GRANT ${SCOPED_PRIVS} ON product_db.* TO '\''${TARGET_DB_USER}'\''@'\''${h}'\'';
+                    GRANT ${SCOPED_PRIVS} ON order_db.* TO '\''${TARGET_DB_USER}'\''@'\''${h}'\'';
+                    GRANT ${SCOPED_PRIVS} ON payment_db.* TO '\''${TARGET_DB_USER}'\''@'\''${h}'\'';
+                    GRANT ${SCOPED_PRIVS} ON chatbot_db.* TO '\''${TARGET_DB_USER}'\''@'\''${h}'\'';
+                    FLUSH PRIVILEGES;
+                  "
+                done
+              '; then
+                echo "ERROR: Could not verify/grant privileges on all 5 databases to user '${VPS_MYSQL_USER}'!"
+                return 1
+              fi
+
+              echo "Verifying post-migration database schemas, columns, and tables..."
+              if ! docker exec ecommerce-mysql sh -c '
+                set -e
+                check_col() {
+                  local c
+                  c=$(MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -N -s -u root -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='\''$1'\'' AND TABLE_NAME='\''$2'\'' AND COLUMN_NAME='\''$3'\'';")
+                  if [ "$c" != "1" ]; then
+                    echo "  [SCHEMA FAIL] Missing column $1.$2.$3"
+                    return 1
+                  fi
+                }
+                check_tbl() {
+                  local c
+                  c=$(MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -N -s -u root -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='\''$1'\'' AND TABLE_NAME='\''$2'\'';")
+                  if [ "$c" != "1" ]; then
+                    echo "  [SCHEMA FAIL] Missing table $1.$2"
+                    return 1
+                  fi
+                }
+                check_col order_db orders subtotal_amount
+                check_col order_db orders voucher_code
+                check_col order_db orders discount_amount
+                check_col order_db order_items is_flash_sale
+                check_col payment_db payments user_id
+                check_col payment_db payments version
+                check_col product_db products version
+                check_col product_db product_reviews status
+                check_col product_db product_reviews hidden_reason
+                check_tbl order_db vouchers
+                check_tbl order_db voucher_usages
+                check_tbl product_db flash_sale_campaigns
+                check_tbl product_db flash_sale_items
+                check_tbl chatbot_db chat_conversations
+                check_tbl chatbot_db chat_messages
+              '; then
+                echo "ERROR: Post-migration schema verification failed! Aborting rollout before recreating application containers."
+                return 1
+              fi
+              echo "  [OK] Database migration and post-migration schema verification PASSED."
+              return 0
+            }
+
+            if [ "$DEPLOY_OK" = "true" ]; then
+              if ! run_and_verify_mysql_migrations; then
+                DEPLOY_OK=false
+              fi
+            fi
+
             update_stage() {
               local stage_svcs="$1"
               local required_deps="$2"
@@ -814,7 +972,7 @@ jobs:
             fi
 
             FINALIZE_OK=false
-            if [ "$DEPLOY_OK" = "true" ] && verify_all_health_and_http; then
+            if [ "$DEPLOY_OK" = "true" ] && verify_all_health_and_http "$APP_SERVICES" "false"; then
               if update_env_image_tag "${COMPOSE_DIR}/.env" "${IMAGE_TAG}"; then
                 TAG_COUNT=$(grep -c "^IMAGE_TAG=" "${COMPOSE_DIR}/.env" || true)
                 ACTIVE_ENV_TAG=$(grep -E '^IMAGE_TAG=' "${COMPOSE_DIR}/.env" | head -n1 | cut -d'=' -f2- || true)
@@ -842,6 +1000,7 @@ jobs:
             fi
 
             echo "CRITICAL: Deployment or finalization FAILED! Initiating verified rollback..."
+            echo "NOTE: Database migration is additive/backward-compatible; MySQL data is NOT automatically overwritten during container rollback. Pre-deploy SQL dump is preserved at: ${DUMP_GZ}"
             ROLLBACK_OK=true
 
             if ! cp -p "${ENV_BACKUP_FILE}" "${COMPOSE_DIR}/.env" || ! cmp -s "${ENV_BACKUP_FILE}" "${COMPOSE_DIR}/.env"; then
@@ -850,9 +1009,32 @@ jobs:
             else
               echo "  [OK] .env restored and verified against backup."
             fi
-            export IMAGE_TAG="${PREV_ENV_IMAGE_TAG}"
+            export IMAGE_TAG="${ROLLBACK_TAG}"
 
             if ! restore_configs_from_backup; then
+              ROLLBACK_OK=false
+            fi
+
+            ROLLBACK_OVERRIDE="${COMPOSE_DIR}/docker-compose.rollback.yml"
+            : > "${ROLLBACK_OVERRIDE}"
+            echo "services:" >> "${ROLLBACK_OVERRIDE}"
+            for s in $APP_SERVICES; do
+              if [ "${PREV_IMAGE_ID[$s]}" != "ABSENT" ]; then
+                printf '  %s:\n    image: shopmart-rollback/%s:pre-deploy\n' "$s" "$s" >> "${ROLLBACK_OVERRIDE}"
+              fi
+            done
+            printf '  nginx:\n    image: shopmart-rollback/nginx:pre-deploy\n' >> "${ROLLBACK_OVERRIDE}"
+
+            dc_rollback() {
+              docker compose --env-file .env -p backend \
+                -f docker-compose.yml \
+                -f docker-compose.prod.yml \
+                -f docker-compose.vps.yml \
+                -f docker-compose.rollback.yml "$@"
+            }
+
+            if ! dc_rollback config --quiet; then
+              echo "ERROR: Rollback Compose configuration validation failed with override! Aborting safe automated rollback."
               ROLLBACK_OK=false
             fi
 
@@ -860,19 +1042,30 @@ jobs:
               cname=$(container_name_for "$svc")
               prev_ref="${PREV_IMAGE_REF[$svc]}"
               prev_id="${PREV_IMAGE_ID[$svc]}"
-              prev_tag="${prev_ref##*:}"
-              actual_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
 
+              if [ "$prev_id" = "ABSENT" ]; then
+                if docker container inspect "$cname" >/dev/null 2>&1; then
+                  echo "  Removing newly created service '${svc}' (${cname}) that did not exist prior to deployment..."
+                  if ! docker rm -f "$cname" >/dev/null 2>&1; then
+                    echo "  [FAIL] Could not remove newly created container ${cname}!"
+                    ROLLBACK_OK=false
+                  else
+                    echo "  [OK] Removed newly created container ${cname}."
+                  fi
+                fi
+                continue
+              fi
+
+              actual_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
               if [[ " $ATTEMPTED_SERVICES " != *" $svc "* ]] && [ "$actual_id" = "$prev_id" ]; then
                 continue
               fi
 
-              echo "  Restoring ${svc} to exact image ID ${prev_id} (ref=${prev_ref})..."
-              if ! docker tag "shopmart-rollback/${svc}:pre-deploy" "${prev_ref}"; then
-                ROLLBACK_OK=false
-                continue
+              echo "  Restoring ${svc} to exact pre-deploy image ID ${prev_id} via dedicated rollback compose override..."
+              if [[ "$prev_ref" != sha256:* ]] && [[ "$prev_ref" =~ : ]]; then
+                docker tag "shopmart-rollback/${svc}:pre-deploy" "${prev_ref}" >/dev/null 2>&1 || true
               fi
-              if ! IMAGE_TAG="$prev_tag" dc up -d --no-deps --pull never "$svc"; then
+              if ! dc_rollback up -d --no-deps --no-build --pull never "$svc"; then
                 ROLLBACK_OK=false
                 continue
               fi
@@ -887,7 +1080,10 @@ jobs:
 
             if [ "$NGINX_RECREATED" = "true" ] || [ "$BEFORE_NGINX_COMPOSE_HASH" != "$AFTER_NGINX_COMPOSE_HASH" ]; then
               echo "Restoring ecommerce-nginx to previous Compose configuration and image (${PREV_NGINX_IMAGE_ID})..."
-              if ! docker tag "shopmart-rollback/nginx:pre-deploy" "${PREV_NGINX_IMAGE_REF}" || ! dc up -d --no-deps --pull never nginx; then
+              if [[ "$PREV_NGINX_IMAGE_REF" != sha256:* ]] && [[ "$PREV_NGINX_IMAGE_REF" =~ : ]]; then
+                docker tag "shopmart-rollback/nginx:pre-deploy" "${PREV_NGINX_IMAGE_REF}" >/dev/null 2>&1 || true
+              fi
+              if ! dc_rollback up -d --no-deps --pull never nginx; then
                 echo "  [FAIL] Could not recreate ecommerce-nginx during rollback!"
                 ROLLBACK_OK=false
               else
@@ -907,12 +1103,13 @@ jobs:
               fi
             fi
 
-            if [ "$ROLLBACK_OK" = "true" ] && verify_all_health_and_http; then
+            rm -f "${ROLLBACK_OVERRIDE}"
+            if [ "$ROLLBACK_OK" = "true" ] && verify_all_health_and_http "$EXISTING_APP_SERVICES" "true"; then
               for svc in $APP_SERVICES nginx; do
                 docker rmi "shopmart-rollback/${svc}:pre-deploy" >/dev/null 2>&1 || true
               done
               PRESERVE_BACKUPS=false
-              echo "ROLLBACK SUCCEEDED: Exact previous image IDs, .env, configs, migrations, and scripts restored and verified healthy."
+              echo "ROLLBACK SUCCEEDED: Containers (${EXISTING_APP_SERVICES}), .env, and configuration files restored and verified healthy. Additive database migrations were preserved to protect live data; pre-deploy SQL backup is stored at: ${DUMP_GZ}"
             else
               PRESERVE_BACKUPS=true
               echo "ROLLBACK FAILED: Manual intervention required in ${COMPOSE_DIR}! Pinned rollback tags shopmart-rollback/*:pre-deploy and backups preserved."
