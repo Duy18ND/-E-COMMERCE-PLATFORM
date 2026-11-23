@@ -11,10 +11,27 @@ COPY settings.gradle .
 COPY build.gradle .
 COPY product-service/build.gradle product-service/
 
-RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew :product-service:dependencies --no-daemon 2>/dev/null || true
+RUN chmod +x gradlew && ./gradlew :product-service:dependencies \
+    --no-daemon \
+    --max-workers=2 \
+    -Dorg.gradle.internal.http.connectionTimeout=60000 \
+    -Dorg.gradle.internal.http.socketTimeout=60000 \
+    -Dorg.gradle.internal.repository.max.tentatives=5 \
+    -Dorg.gradle.internal.repository.initial.backoff=2000 \
+    -Dorg.gradle.internal.network.retry.max.attempts=5 \
+    -Dorg.gradle.internal.network.retry.initial.backOff=2000
 
 COPY product-service/src product-service/src
-RUN --mount=type=cache,target=/root/.gradle ./gradlew :product-service:bootJar --no-daemon -x test
+RUN ./gradlew :product-service:bootJar \
+    --no-daemon \
+    -x test \
+    --max-workers=2 \
+    -Dorg.gradle.internal.http.connectionTimeout=60000 \
+    -Dorg.gradle.internal.http.socketTimeout=60000 \
+    -Dorg.gradle.internal.repository.max.tentatives=5 \
+    -Dorg.gradle.internal.repository.initial.backoff=2000 \
+    -Dorg.gradle.internal.network.retry.max.attempts=5 \
+    -Dorg.gradle.internal.network.retry.initial.backOff=2000
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
