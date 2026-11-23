@@ -135,6 +135,7 @@ jobs:
 
           echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
           echo "sha_tag=sha-${PREFIX_7}" >> "$GITHUB_OUTPUT"
+          echo "full_sha=${FULL_SHA}" >> "$GITHUB_OUTPUT"
           echo "Verified unique 7-char SHA tag on main: sha-${PREFIX_7} -> ${FULL_SHA}"
 
       - name: Set up Docker Buildx
@@ -154,6 +155,8 @@ jobs:
           images: ghcr.io/${{ steps.resolve-ref.outputs.owner_lc }}/${{ matrix.service.name }}
           tags: |
             type=raw,value=${{ steps.resolve-ref.outputs.sha_tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.resolve-ref.outputs.full_sha }}
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
