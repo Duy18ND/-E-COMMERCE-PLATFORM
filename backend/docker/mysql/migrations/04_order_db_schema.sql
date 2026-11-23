@@ -1,5 +1,5 @@
 -- Migration 04: order_db tables (vouchers, orders, order_items, order_status_history, carts, cart_items)
--- Safe for existing data (CREATE TABLE IF NOT EXISTS)
+-- Safe for existing data (CREATE TABLE IF NOT EXISTS & idempotent ALTER TABLE)
 
 USE order_db;
 
@@ -65,6 +65,46 @@ CREATE TABLE IF NOT EXISTS orders (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng quản lý đơn hàng';
 
+-- Idempotent upgrade for existing Sprint 1 orders table
+SET @col_o_subtotal := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = 'order_db' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'subtotal_amount'
+);
+SET @add_o_subtotal_sql := IF(
+    @col_o_subtotal = 0,
+    'ALTER TABLE order_db.orders ADD COLUMN subtotal_amount DECIMAL(12, 2) NULL AFTER shipping_address',
+    'SELECT 1'
+);
+PREPARE stmt_o_subtotal FROM @add_o_subtotal_sql;
+EXECUTE stmt_o_subtotal;
+DEALLOCATE PREPARE stmt_o_subtotal;
+
+SET @col_o_voucher := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = 'order_db' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'voucher_code'
+);
+SET @add_o_voucher_sql := IF(
+    @col_o_voucher = 0,
+    'ALTER TABLE order_db.orders ADD COLUMN voucher_code VARCHAR(50) NULL AFTER shipping_address',
+    'SELECT 1'
+);
+PREPARE stmt_o_voucher FROM @add_o_voucher_sql;
+EXECUTE stmt_o_voucher;
+DEALLOCATE PREPARE stmt_o_voucher;
+
+SET @col_o_discount := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = 'order_db' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'discount_amount'
+);
+SET @add_o_discount_sql := IF(
+    @col_o_discount = 0,
+    'ALTER TABLE order_db.orders ADD COLUMN discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00 AFTER shipping_address',
+    'SELECT 1'
+);
+PREPARE stmt_o_discount FROM @add_o_discount_sql;
+EXECUTE stmt_o_discount;
+DEALLOCATE PREPARE stmt_o_discount;
+
 CREATE TABLE IF NOT EXISTS order_items (
     id                BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id          BIGINT         NOT NULL COMMENT 'ID đơn hàng liên kết',
@@ -72,12 +112,26 @@ CREATE TABLE IF NOT EXISTS order_items (
     product_name      VARCHAR(255)   NOT NULL COMMENT 'Tên sản phẩm tại thời điểm mua',
     quantity          INT            NOT NULL COMMENT 'Số lượng mua',
     price_at_purchase DECIMAL(12, 2) NOT NULL COMMENT 'Giá bán tại thời điểm đặt hàng',
-    is_flash_sale     TINYINT(1)     NOT NULL DEFAULT 0 COMMENT 'Cờ đánh dấu sản phẩm mua trong chương trình Flash Sale',
+    is_flash_sale     BOOLEAN        NOT NULL DEFAULT FALSE COMMENT 'Cờ đánh dấu sản phẩm mua trong chương trình Flash Sale',
     CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     INDEX idx_order_item_order_id (order_id),
     INDEX idx_order_item_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Bảng chi tiết các mặt hàng trong đơn hàng';
+
+-- Idempotent upgrade for existing Sprint 1 order_items table
+SET @col_oi_flash := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = 'order_db' AND TABLE_NAME = 'order_items' AND COLUMN_NAME = 'is_flash_sale'
+);
+SET @add_oi_flash_sql := IF(
+    @col_oi_flash = 0,
+    'ALTER TABLE order_db.order_items ADD COLUMN is_flash_sale BOOLEAN NOT NULL DEFAULT FALSE AFTER price_at_purchase',
+    'SELECT 1'
+);
+PREPARE stmt_oi_flash FROM @add_oi_flash_sql;
+EXECUTE stmt_oi_flash;
+DEALLOCATE PREPARE stmt_oi_flash;
 
 CREATE TABLE IF NOT EXISTS order_status_history (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
