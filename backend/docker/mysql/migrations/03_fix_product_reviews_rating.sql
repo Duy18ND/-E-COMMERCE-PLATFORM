@@ -6,18 +6,19 @@ USE product_db;
 
 -- 1. Ensure products table exists and products.version exists for Sprint 1 tables
 CREATE TABLE IF NOT EXISTS products (
-    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id             BIGINT         NOT NULL AUTO_INCREMENT,
     name           VARCHAR(200)   NOT NULL,
-    description    TEXT,
+    description    TEXT                    DEFAULT NULL,
     price          DECIMAL(12, 2) NOT NULL,
     stock_quantity INT            NOT NULL,
-    category       VARCHAR(100),
-    image_url      VARCHAR(500),
+    category       VARCHAR(100)            DEFAULT NULL,
+    image_url      VARCHAR(500)            DEFAULT NULL,
     status         VARCHAR(20)    NOT NULL DEFAULT 'ACTIVE',
     version        BIGINT         NOT NULL DEFAULT 0,
     created_at     DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at     DATETIME(6)             DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    updated_at     DATETIME(6)    NULL     DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id)
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 SET @col_p_ver := (
     SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -34,22 +35,23 @@ DEALLOCATE PREPARE stmt_p_ver;
 
 -- 2. Ensure product_reviews table exists and validate rating data
 CREATE TABLE IF NOT EXISTS product_reviews (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id            BIGINT       NOT NULL AUTO_INCREMENT,
     product_id    BIGINT       NOT NULL,
     user_id       BIGINT       NOT NULL,
     order_id      BIGINT       NOT NULL,
     rating        INT          NOT NULL,
-    comment       TEXT,
+    comment       TEXT                  DEFAULT NULL,
     status        VARCHAR(20)  NOT NULL DEFAULT 'APPROVED',
-    hidden_reason VARCHAR(255),
+    hidden_reason VARCHAR(255)          DEFAULT NULL,
     created_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at    DATETIME(6)           DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    CONSTRAINT chk_rating CHECK (rating BETWEEN 1 AND 5),
+    updated_at    DATETIME(6)  NULL     DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    KEY idx_reviews_product_id (product_id),
+    KEY idx_reviews_user_id (user_id),
+    KEY idx_reviews_product_status (product_id, status),
     CONSTRAINT uq_review_product_user UNIQUE (product_id, user_id),
-    INDEX idx_reviews_product_id (product_id),
-    INDEX idx_reviews_user_id (user_id),
-    INDEX idx_reviews_product_status (product_id, status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    CONSTRAINT chk_rating CHECK (rating BETWEEN 1 AND 5)
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Read-only data validation & safe type conversion for product_reviews.rating
 -- NEVER silently mutate historical customer reviews. If invalid records exist, abort safely.
@@ -57,21 +59,20 @@ DROP PROCEDURE IF EXISTS sp_shopmart_validate_and_modify_rating;
 DELIMITER $$
 CREATE PROCEDURE sp_shopmart_validate_and_modify_rating()
 BEGIN
-    DECLARE v_invalid_count INT DEFAULT 0;
-
-    IF (SELECT COUNT(*) FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = 'product_db' AND TABLE_NAME = 'product_reviews') > 0 THEN
-
-        SELECT COUNT(*) INTO v_invalid_count
-        FROM product_db.product_reviews
-        WHERE rating IS NULL OR rating < 1 OR rating > 5;
-
-        IF v_invalid_count > 0 THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_reviews'
+    ) THEN
+        IF EXISTS (
+            SELECT 1 FROM product_db.product_reviews
+            WHERE rating IS NULL OR rating NOT BETWEEN 1 AND 5
+        ) THEN
             SIGNAL SQLSTATE '45000'
                 SET MESSAGE_TEXT = 'Migration aborted: invalid rating records detected in product_reviews (NULL or out of range [1-5]). Historical data preserved; manual audit required.';
         END IF;
 
-        ALTER TABLE product_db.product_reviews MODIFY COLUMN rating INT NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5 (Khớp Hibernate Integer)';
+        ALTER TABLE product_db.product_reviews
+            MODIFY COLUMN rating INT NOT NULL COMMENT 'Điểm đánh giá từ 1 đến 5 (Khớp Hibernate Integer)';
     END IF;
 END$$
 DELIMITER ;
