@@ -169,3 +169,78 @@ jobs:
           build-args: ${{ matrix.service.build-args }}
           cache-from: type=gha,scope=${{ matrix.service.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
+
+  # ─────────────────────────────────────────────────────────────
+  #  Publish Release Manifest Artifact for Continuous Deployment
+  # ─────────────────────────────────────────────────────────────
+  publish-manifest:
+    name: Publish Release Manifest
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Trusted Repository History
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Manifest Artifact
+        id: manifest
+        env:
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPO: ${{ github.repository }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          OWNER_LC=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          if ! [[ "$OWNER_LC" =~ ^[a-z0-9._-]+$ ]]; then
+            echo "::error ::Invalid repository owner format."
+            exit 1
+          fi
+
+          MAIN_HEAD=$(git rev-parse --verify "refs/remotes/origin/main^{commit}" 2>/dev/null || git rev-parse --verify "refs/heads/main^{commit}" 2>/dev/null || true)
+          RESOLVED_COMMIT=$(git rev-parse --verify "${WORKFLOW_RUN_SHA}^{commit}" 2>/dev/null || true)
+          if [ -z "$MAIN_HEAD" ] || [ -z "$RESOLVED_COMMIT" ] || [ "$RESOLVED_COMMIT" != "$WORKFLOW_RUN_SHA" ]; then
+            echo "::error ::Target commit '${WORKFLOW_RUN_SHA}' could not be resolved in trusted repository history."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$WORKFLOW_RUN_SHA" "$MAIN_HEAD"; then
+            echo "::error ::Commit '${WORKFLOW_RUN_SHA}' does not belong to 'main' branch history. Refusing to generate release manifest."
+            exit 1
+          fi
+
+          PREFIX_7="${WORKFLOW_RUN_SHA:0:7}"
+          RELEASE_TAG="sha-${PREFIX_7}"
+
+          mkdir -p release-manifest
+          cat <<EOF > release-manifest/manifest.env
+          RELEASE_TAG=${RELEASE_TAG}
+          RELEASE_FULL_SHA=${WORKFLOW_RUN_SHA}
+          RELEASE_SHORT_SHA=${PREFIX_7}
+          RELEASE_OWNER_LC=${OWNER_LC}
+          RELEASE_RUN_ID=${RELEASE_RUN_ID}
+          EOF
+
+          cat <<EOF > release-manifest/manifest.json
+          {
+            "tag": "${RELEASE_TAG}",
+            "full_sha": "${WORKFLOW_RUN_SHA}",
+            "short_sha": "${PREFIX_7}",
+            "owner": "${OWNER_LC}",
+            "run_id": "${RELEASE_RUN_ID}",
+            "repository": "${GITHUB_REPO}",
+            "published_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+
+          echo "Generated release manifest:"
+          cat release-manifest/manifest.env
+
+      - name: Upload Release Manifest Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-manifest
+          path: release-manifest/
+          retention-days: 7
+          if-no-files-found: error
