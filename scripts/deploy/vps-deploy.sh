@@ -120,7 +120,7 @@ verify_all_health_and_http() {
     echo "  [OK] $(container_name_for "$svc") is running and healthy."
   done
 
-  echo "Verifying HTTP endpoints via Nginx..."
+  echo "Verifying endpoints via Nginx loopback..."
   local endpoints="/healthz / /api/v1/products /api/v1/products/categories"
   if [[ " $target_svcs " == *" product-service "* ]]; then
     # Flash Sale is owned by product-service (FlashSaleController).
@@ -130,14 +130,22 @@ verify_all_health_and_http() {
     fi
   fi
   for endpoint in $endpoints; do
-    local code
-    local loopback_proto="http"
-    code=$(curl -s -o /dev/null -w "%{http_code}" "${loopback_proto}://127.0.0.1${endpoint}" || echo "000")
+    local code="000"
+    local status_line=""
+    if exec 3<>/dev/tcp/127.0.0.1/80 2>/dev/null; then
+      printf 'GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' "${endpoint}" >&3
+      IFS= read -t 15 -r status_line <&3 || true
+      exec 3<&- 3>&-
+      status_line="${status_line%$'\r'}"
+      if [[ "$status_line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+        code="${BASH_REMATCH[1]}"
+      fi
+    fi
     if [[ "$code" != "200" ]]; then
-      echo "  [FAIL] GET 127.0.0.1${endpoint} returned HTTP ${code}"
+      echo "  [FAIL] GET ${endpoint} returned status ${code}"
       return 1
     fi
-    echo "  [OK] GET 127.0.0.1${endpoint} -> HTTP 200"
+    echo "  [OK] GET ${endpoint} -> status 200"
   done
   return 0
 }
