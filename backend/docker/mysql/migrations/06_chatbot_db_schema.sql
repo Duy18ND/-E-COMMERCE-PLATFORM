@@ -5,10 +5,6 @@ CREATE DATABASE IF NOT EXISTS chatbot_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
-GRANT ALL PRIVILEGES ON chatbot_db.* TO 'ecommerce_user'@'%';
-GRANT ALL PRIVILEGES ON chatbot_db.* TO 'ecommerce_prod_user'@'%';
-FLUSH PRIVILEGES;
-
 USE chatbot_db;
 
 CREATE TABLE IF NOT EXISTS chat_conversations (
