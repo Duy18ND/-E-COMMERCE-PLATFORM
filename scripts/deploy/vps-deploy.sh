@@ -436,6 +436,37 @@ else
   ROLLBACK_TAG="${PREV_ENV_IMAGE_TAG}"
 fi
 
+pin_running_container_image() {
+  local svc="$1"
+  local cname="$2"
+  local prev_ref prev_id
+  prev_ref=$(docker inspect -f '{{.Config.Image}}' "$cname" 2>/dev/null || echo "")
+  prev_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
+  if [[ -z "$prev_ref" ]] || [[ -z "$prev_id" ]]; then
+    echo "ERROR: Could not capture running image identity for existing container ${cname}. Production untouched."
+    return 1
+  fi
+  if ! docker image inspect "$prev_id" >/dev/null 2>&1; then
+    if [[ -z "${PREV_ENV_IMAGE_TAG:-}" ]]; then
+      echo "  [TRANSITION] ${svc}: local image ID ${prev_id} missing; snapshotting running container '${cname}' for rollback..."
+      if docker commit "$cname" "shopmart-rollback/${svc}:pre-deploy" >/dev/null 2>&1; then
+        prev_id=$(docker image inspect -f '{{.Id}}' "shopmart-rollback/${svc}:pre-deploy" 2>/dev/null || echo "")
+        prev_ref="shopmart-rollback/${svc}:pre-deploy"
+      fi
+    fi
+  fi
+  if [[ -z "$prev_id" ]] || ! docker image inspect "$prev_id" >/dev/null 2>&1; then
+    echo "ERROR: Local image ID ${prev_id:-unknown} for ${svc} is not present locally. Production untouched."
+    return 1
+  fi
+  if [[ "$prev_ref" != "shopmart-rollback/${svc}:pre-deploy" ]]; then
+    docker tag "$prev_id" "shopmart-rollback/${svc}:pre-deploy"
+  fi
+  PINNED_IMAGE_REF="$prev_ref"
+  PINNED_IMAGE_ID="$prev_id"
+  return 0
+}
+
 declare -A PREV_IMAGE_REF
 declare -A PREV_IMAGE_ID
 EXISTING_APP_SERVICES=""
@@ -457,16 +488,13 @@ for svc in $APP_SERVICES; do
     fi
   fi
 
-  prev_ref=$(docker inspect -f '{{.Config.Image}}' "$cname" 2>/dev/null || echo "")
-  prev_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
-  if [[ -z "$prev_ref" ]] || [[ -z "$prev_id" ]]; then
-    echo "ERROR: Could not capture running image identity for existing container ${cname}. Production untouched."
+  PINNED_IMAGE_REF=""
+  PINNED_IMAGE_ID=""
+  if ! pin_running_container_image "$svc" "$cname"; then
     exit 1
   fi
-  if ! docker image inspect "$prev_id" >/dev/null 2>&1; then
-    echo "ERROR: Local image ID ${prev_id} for ${svc} is not present locally. Production untouched."
-    exit 1
-  fi
+  prev_ref="$PINNED_IMAGE_REF"
+  prev_id="$PINNED_IMAGE_ID"
 
   if [[ -n "${PREV_ENV_IMAGE_TAG}" ]]; then
     prev_tag="${prev_ref##*:}"
@@ -486,18 +514,18 @@ for svc in $APP_SERVICES; do
   PREV_IMAGE_REF["$svc"]="$prev_ref"
   PREV_IMAGE_ID["$svc"]="$prev_id"
   EXISTING_APP_SERVICES="${EXISTING_APP_SERVICES} ${svc}"
-  docker tag "$prev_id" "shopmart-rollback/${svc}:pre-deploy"
   echo "  [PINNED] ${svc}: ref=${prev_ref} id=${prev_id} -> shopmart-rollback/${svc}:pre-deploy"
 done
 EXISTING_APP_SERVICES=$(echo "$EXISTING_APP_SERVICES" | xargs)
 
-PREV_NGINX_IMAGE_REF=$(docker inspect -f '{{.Config.Image}}' ecommerce-nginx 2>/dev/null || echo "")
-PREV_NGINX_IMAGE_ID=$(docker inspect -f '{{.Image}}' ecommerce-nginx 2>/dev/null || echo "")
-if [[ -z "$PREV_NGINX_IMAGE_REF" ]] || [[ -z "$PREV_NGINX_IMAGE_ID" ]] || ! docker image inspect "$PREV_NGINX_IMAGE_ID" >/dev/null 2>&1; then
+PINNED_IMAGE_REF=""
+PINNED_IMAGE_ID=""
+if ! pin_running_container_image "nginx" "ecommerce-nginx"; then
   echo "ERROR: Could not capture/verify running image identity for ecommerce-nginx. Production untouched."
   exit 1
 fi
-docker tag "$PREV_NGINX_IMAGE_ID" "shopmart-rollback/nginx:pre-deploy"
+PREV_NGINX_IMAGE_REF="$PINNED_IMAGE_REF"
+PREV_NGINX_IMAGE_ID="$PINNED_IMAGE_ID"
 echo "  [PINNED] nginx: ref=${PREV_NGINX_IMAGE_REF} id=${PREV_NGINX_IMAGE_ID}"
 
 echo "=== [6/8] Pulling Target Immutable Images (${IMAGE_TAG}) & Detecting Changes ==="
