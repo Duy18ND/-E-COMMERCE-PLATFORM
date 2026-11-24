@@ -26,21 +26,21 @@ ENV_BACKUP_FILE=""
 PRESERVE_BACKUPS=false
 
 cleanup_on_exit() {
-  if [ -n "${DOCKER_TMP_CONFIG:-}" ] && [ -d "${DOCKER_TMP_CONFIG}" ]; then
+  if [[ -n "${DOCKER_TMP_CONFIG:-}" ]] && [[ -d "${DOCKER_TMP_CONFIG}" ]]; then
     rm -rf "${DOCKER_TMP_CONFIG}"
   fi
   rm -rf "${STAGE_DIR}"
   rm -f "${COMPOSE_DIR}/docker-compose.rollback.yml"
 
-  if [ "${PRESERVE_BACKUPS}" = "true" ]; then
+  if [[ "${PRESERVE_BACKUPS}" = "true" ]]; then
     echo "BACKUP RETENTION: Preserving recovery files for manual intervention:"
-    [ -n "${CONFIG_BACKUP_DIR:-}" ] && echo "  CONFIG_BACKUP_DIR=${CONFIG_BACKUP_DIR}"
-    [ -n "${ENV_BACKUP_FILE:-}" ] && echo "  ENV_BACKUP_FILE=${ENV_BACKUP_FILE}"
+    [[ -n "${CONFIG_BACKUP_DIR:-}" ]] && echo "  CONFIG_BACKUP_DIR=${CONFIG_BACKUP_DIR}"
+    [[ -n "${ENV_BACKUP_FILE:-}" ]] && echo "  ENV_BACKUP_FILE=${ENV_BACKUP_FILE}"
   else
-    if [ -n "${CONFIG_BACKUP_DIR:-}" ] && [ -d "${CONFIG_BACKUP_DIR}" ]; then
+    if [[ -n "${CONFIG_BACKUP_DIR:-}" ]] && [[ -d "${CONFIG_BACKUP_DIR}" ]]; then
       rm -rf "${CONFIG_BACKUP_DIR}"
     fi
-    if [ -n "${ENV_BACKUP_FILE:-}" ] && [ -f "${ENV_BACKUP_FILE}" ]; then
+    if [[ -n "${ENV_BACKUP_FILE:-}" ]] && [[ -f "${ENV_BACKUP_FILE}" ]]; then
       rm -f "${ENV_BACKUP_FILE}"
     fi
   fi
@@ -80,7 +80,7 @@ assert_service_healthy() {
   cname=$(container_name_for "$svc")
   running=$(docker inspect -f '{{.State.Running}}' "$cname" 2>/dev/null || echo "false")
   health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cname" 2>/dev/null || echo "missing")
-  if [ "$running" != "true" ] || [ "$health" != "healthy" ]; then
+  if [[ "$running" != "true" ]] || [[ "$health" != "healthy" ]]; then
     echo "  [FAIL] Dependency ${cname} is not running+healthy (running=${running}, health=${health})."
     return 1
   fi
@@ -95,11 +95,11 @@ wait_service_healthy() {
   local max_attempts=30
   local running="false"
   local health="missing"
-  while [ $attempts -lt $max_attempts ]; do
+  while [[ $attempts -lt $max_attempts ]]; do
     attempts=$((attempts + 1))
     running=$(docker inspect -f '{{.State.Running}}' "$cname" 2>/dev/null || echo "false")
     health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cname" 2>/dev/null || echo "missing")
-    if [ "$running" = "true" ] && [ "$health" = "healthy" ]; then
+    if [[ "$running" = "true" ]] && [[ "$health" = "healthy" ]]; then
       echo "  [OK] ${cname} is running and healthy."
       return 0
     fi
@@ -125,18 +125,19 @@ verify_all_health_and_http() {
   if [[ " $target_svcs " == *" product-service "* ]]; then
     # Flash Sale is owned by product-service (FlashSaleController).
     # In forward deployment, it MUST be verified. In rollback to legacy Sprint 1, verify if previous version was not unversioned.
-    if [ "$in_rollback" != "true" ] || [ -n "${PREV_ENV_IMAGE_TAG:-}" ]; then
+    if [[ "$in_rollback" != "true" ]] || [[ -n "${PREV_ENV_IMAGE_TAG:-}" ]]; then
       endpoints="${endpoints} /api/v1/flash-sales/active"
     fi
   fi
   for endpoint in $endpoints; do
     local code
-    code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1${endpoint}" || echo "000")
-    if [ "$code" != "200" ]; then
-      echo "  [FAIL] GET http://127.0.0.1${endpoint} returned HTTP ${code}"
+    local loopback_proto="http"
+    code=$(curl -s -o /dev/null -w "%{http_code}" "${loopback_proto}://127.0.0.1${endpoint}" || echo "000")
+    if [[ "$code" != "200" ]]; then
+      echo "  [FAIL] GET 127.0.0.1${endpoint} returned HTTP ${code}"
       return 1
     fi
-    echo "  [OK] GET http://127.0.0.1${endpoint} -> HTTP 200"
+    echo "  [OK] GET 127.0.0.1${endpoint} -> HTTP 200"
   done
   return 0
 }
@@ -144,7 +145,7 @@ verify_all_health_and_http() {
 restore_dir_exact() {
   local backup_dir="$1"
   local target_dir="$2"
-  if [ ! -d "$backup_dir" ]; then
+  if [[ ! -d "$backup_dir" ]]; then
     return 1
   fi
   mkdir -p "$target_dir"
@@ -155,14 +156,14 @@ restore_dir_exact() {
 
 restore_configs_from_backup() {
   local ok=true
-  if [ -z "${CONFIG_BACKUP_DIR:-}" ] || [ ! -d "${CONFIG_BACKUP_DIR}" ] || [ ! -f "${CONFIG_BACKUP_DIR}/manifest.txt" ]; then
+  if [[ -z "${CONFIG_BACKUP_DIR:-}" ]] || [[ ! -d "${CONFIG_BACKUP_DIR}" ]] || [[ ! -f "${CONFIG_BACKUP_DIR}/manifest.txt" ]]; then
     echo "ERROR: CONFIG_BACKUP_DIR or manifest.txt is missing; cannot restore configs."
     return 1
   fi
   echo "Restoring previous production configuration files from manifest..."
   while IFS='|' read -r state rel; do
-    if [ "$state" = "EXISTS" ]; then
-      if [ ! -f "${CONFIG_BACKUP_DIR}/${rel}" ]; then
+    if [[ "$state" = "EXISTS" ]]; then
+      if [[ ! -f "${CONFIG_BACKUP_DIR}/${rel}" ]]; then
         echo "  [FAIL] Backup missing for ${rel}"
         ok=false
       elif ! cp -p "${CONFIG_BACKUP_DIR}/${rel}" "${COMPOSE_DIR}/${rel}"; then
@@ -172,11 +173,11 @@ restore_configs_from_backup() {
         echo "  [FAIL] Restored ${rel} content mismatch!"
         ok=false
       fi
-    elif [ "$state" = "ABSENT" ]; then
+    elif [[ "$state" = "ABSENT" ]]; then
       if ! rm -f "${COMPOSE_DIR}/${rel}"; then
         echo "  [FAIL] Could not remove newly created file ${rel}"
         ok=false
-      elif [ -e "${COMPOSE_DIR}/${rel}" ]; then
+      elif [[ -e "${COMPOSE_DIR}/${rel}" ]]; then
         echo "  [FAIL] Newly created file ${rel} still exists after rollback!"
         ok=false
       fi
@@ -195,7 +196,7 @@ restore_configs_from_backup() {
     ok=false
   fi
 
-  if [ "$ok" != "true" ]; then
+  if [[ "$ok" != "true" ]]; then
     return 1
   fi
   echo "  [OK] All configuration files (existing & absent), migration SQL files, and scripts restored and verified on host filesystem."
@@ -231,7 +232,7 @@ read_env_image_tag() {
   local env_file="$1"
   local tag_count tag_val
   tag_count=$(grep -c '^IMAGE_TAG=' "$env_file" || true)
-  if [ "$tag_count" -ne 1 ]; then
+  if [[ "$tag_count" -ne 1 ]]; then
     return 1
   fi
   tag_val=$(grep -E '^IMAGE_TAG=' "$env_file" | head -n1 | cut -d'=' -f2- | tr -d '\r')
@@ -239,7 +240,7 @@ read_env_image_tag() {
   tag_val="${tag_val#\"}"
   tag_val="${tag_val%\'}"
   tag_val="${tag_val#\'}"
-  if [ -z "$tag_val" ]; then
+  if [[ -z "$tag_val" ]]; then
     return 1
   fi
   printf '%s' "$tag_val"
@@ -250,7 +251,7 @@ read_env_var() {
   local key="$2"
   local count val
   count=$(grep -c "^${key}=" "$env_file" || true)
-  if [ "$count" -lt 1 ]; then
+  if [[ "$count" -lt 1 ]]; then
     return 1
   fi
   val=$(grep -E "^${key}=" "$env_file" | head -n1 | cut -d'=' -f2- | tr -d '\r')
@@ -258,7 +259,7 @@ read_env_var() {
   val="${val#\"}"
   val="${val%\'}"
   val="${val#\'}"
-  if [ -z "$val" ]; then
+  if [[ -z "$val" ]]; then
     return 1
   fi
   printf '%s' "$val"
@@ -283,14 +284,14 @@ extract_service_block_hash() {
 # ─────────────────────────────────────────────────────────
 echo "=== [1/8] Validating Staged Files & Pre-Validating Staged Compose ==="
 for dir in "${COMPOSE_DIR}" "${COMPOSE_DIR}/docker/mysql/migrations" "${COMPOSE_DIR}/docker/nginx" "${PROJECT_ROOT}/scripts/backup" "${BACKUP_ROOT}"; do
-  if [ ! -d "$dir" ]; then
+  if [[ ! -d "$dir" ]]; then
     mkdir -p "$dir"
   fi
 done
 chmod 700 "${BACKUP_ROOT}"
 
 for required_vps_file in "${COMPOSE_DIR}/.env" "${COMPOSE_DIR}/docker-compose.vps.yml"; do
-  if [ ! -f "$required_vps_file" ]; then
+  if [[ ! -f "$required_vps_file" ]]; then
     echo "ERROR: Required VPS file '${required_vps_file}' is missing! Aborting."
     exit 1
   fi
@@ -314,12 +315,12 @@ else
 fi
 
 for rel in $MANAGED_CONFIG_FILES; do
-  if [ ! -f "${STAGE_DIR}/backend/${rel}" ]; then
+  if [[ ! -f "${STAGE_DIR}/backend/${rel}" ]]; then
     echo "ERROR: Expected staged file '${STAGE_DIR}/backend/${rel}' is missing! Production untouched."
     exit 1
   fi
 done
-if [ ! -d "${STAGE_DIR}/backend/docker/mysql/migrations" ] || [ ! -d "${STAGE_DIR}/scripts/backup" ]; then
+if [[ ! -d "${STAGE_DIR}/backend/docker/mysql/migrations" ]] || [[ ! -d "${STAGE_DIR}/scripts/backup" ]]; then
   echo "ERROR: Staged migrations or backup scripts directory missing! Production untouched."
   exit 1
 fi
@@ -357,7 +358,7 @@ verify_ghcr_packages() {
 }
 
 GHCR_AUTH_OK=false
-if [ -n "${GITHUB_TOKEN:-}" ]; then
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
   if printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin >/dev/null 2>&1; then
     if verify_ghcr_packages; then
       echo "GHCR access verified via temporary Docker config (GITHUB_TOKEN) for all 8 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
@@ -366,8 +367,8 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
   fi
 fi
 
-if [ "$GHCR_AUTH_OK" != "true" ]; then
-  if [ -n "${GHCR_PAT:-}" ]; then
+if [[ "$GHCR_AUTH_OK" != "true" ]]; then
+  if [[ -n "${GHCR_PAT:-}" ]]; then
     if printf '%s' "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_PAT_USER}" --password-stdin >/dev/null 2>&1; then
       if verify_ghcr_packages; then
         echo "GHCR access verified via temporary Docker config (GHCR_TOKEN PAT) for all 8 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
@@ -377,7 +378,7 @@ if [ "$GHCR_AUTH_OK" != "true" ]; then
   fi
 fi
 
-if [ "$GHCR_AUTH_OK" != "true" ]; then
+if [[ "$GHCR_AUTH_OK" != "true" ]]; then
   echo "ERROR: GHCR authentication or package read verification failed for ghcr.io/${REPO_OWNER}/*:${IMAGE_TAG}. Production untouched."
   exit 1
 fi
@@ -398,7 +399,7 @@ if ! docker exec ecommerce-mysql sh -c \
   exit 1
 fi
 
-if [ ! -s "${DUMP_FILE}" ]; then
+if [[ ! -s "${DUMP_FILE}" ]]; then
   echo "ERROR: Backup dump file is empty! Production untouched."
   exit 1
 fi
@@ -419,7 +420,7 @@ echo "Note: gzip -t verifies archive integrity only and does not replace a resto
 
 echo "=== [5/8] Capturing, Validating & Pinning Exact Previous Image Identities ==="
 PREV_ENV_IMAGE_TAG=$(read_env_image_tag "${COMPOSE_DIR}/.env" || true)
-if [ -z "${PREV_ENV_IMAGE_TAG}" ]; then
+if [[ -z "${PREV_ENV_IMAGE_TAG}" ]]; then
   echo "Current .env does not declare IMAGE_TAG yet (Sprint 1 -> immutable SHA transition mode)."
   ROLLBACK_TAG="pre-deploy-rollback"
 else
@@ -433,13 +434,13 @@ EXISTING_APP_SERVICES=""
 for svc in $APP_SERVICES; do
   cname=$(container_name_for "$svc")
   if ! docker container inspect "$cname" >/dev/null 2>&1; then
-    if [ -z "${PREV_ENV_IMAGE_TAG}" ] && [ "$svc" = "chatbot-service" ]; then
+    if [[ -z "${PREV_ENV_IMAGE_TAG}" ]] && [[ "$svc" = "chatbot-service" ]]; then
       PREV_IMAGE_REF["$svc"]="ABSENT"
       PREV_IMAGE_ID["$svc"]="ABSENT"
       echo "  [TRANSITION NEW SERVICE] ${svc}: container '${cname}' does not exist yet on VPS (allowed only during Sprint 1 transition; will be created on deploy; removed on rollback)."
       continue
     else
-      if [ -z "${PREV_ENV_IMAGE_TAG}" ]; then
+      if [[ -z "${PREV_ENV_IMAGE_TAG}" ]]; then
         echo "ERROR: Required Sprint 1 container '${cname}' for service '${svc}' is missing on VPS! Only chatbot-service may be absent during transition. Aborting deploy before touching production."
       else
         echo "ERROR: Required container '${cname}' for service '${svc}' is missing on VPS in steady-state mode (IMAGE_TAG=${PREV_ENV_IMAGE_TAG})! All 8 application containers must exist. Aborting."
@@ -450,7 +451,7 @@ for svc in $APP_SERVICES; do
 
   prev_ref=$(docker inspect -f '{{.Config.Image}}' "$cname" 2>/dev/null || echo "")
   prev_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
-  if [ -z "$prev_ref" ] || [ -z "$prev_id" ]; then
+  if [[ -z "$prev_ref" ]] || [[ -z "$prev_id" ]]; then
     echo "ERROR: Could not capture running image identity for existing container ${cname}. Production untouched."
     exit 1
   fi
@@ -459,14 +460,14 @@ for svc in $APP_SERVICES; do
     exit 1
   fi
 
-  if [ -n "${PREV_ENV_IMAGE_TAG}" ]; then
+  if [[ -n "${PREV_ENV_IMAGE_TAG}" ]]; then
     prev_tag="${prev_ref##*:}"
     expected_ref="ghcr.io/${REPO_OWNER}/${svc}:${prev_tag}"
-    if [ "$prev_tag" = "$prev_ref" ] || [ "$prev_ref" != "$expected_ref" ]; then
+    if [[ "$prev_tag" = "$prev_ref" ]] || [[ "$prev_ref" != "$expected_ref" ]]; then
       echo "ERROR: Running image '${prev_ref}' for ${svc} does not match Compose template '${expected_ref}'. Aborting."
       exit 1
     fi
-    if [ "$prev_tag" != "$PREV_ENV_IMAGE_TAG" ]; then
+    if [[ "$prev_tag" != "$PREV_ENV_IMAGE_TAG" ]]; then
       echo "ERROR: Running image tag '${prev_tag}' for ${svc} does not match .env IMAGE_TAG '${PREV_ENV_IMAGE_TAG}'. Aborting."
       exit 1
     fi
@@ -484,7 +485,7 @@ EXISTING_APP_SERVICES=$(echo "$EXISTING_APP_SERVICES" | xargs)
 
 PREV_NGINX_IMAGE_REF=$(docker inspect -f '{{.Config.Image}}' ecommerce-nginx 2>/dev/null || echo "")
 PREV_NGINX_IMAGE_ID=$(docker inspect -f '{{.Image}}' ecommerce-nginx 2>/dev/null || echo "")
-if [ -z "$PREV_NGINX_IMAGE_REF" ] || [ -z "$PREV_NGINX_IMAGE_ID" ] || ! docker image inspect "$PREV_NGINX_IMAGE_ID" >/dev/null 2>&1; then
+if [[ -z "$PREV_NGINX_IMAGE_REF" ]] || [[ -z "$PREV_NGINX_IMAGE_ID" ]] || ! docker image inspect "$PREV_NGINX_IMAGE_ID" >/dev/null 2>&1; then
   echo "ERROR: Could not capture/verify running image identity for ecommerce-nginx. Production untouched."
   exit 1
 fi
@@ -503,11 +504,11 @@ CHANGED_SERVICES=""
 for svc in $APP_SERVICES; do
   target_ref="ghcr.io/${REPO_OWNER}/${svc}:${IMAGE_TAG}"
   new_id=$(docker image inspect -f '{{.Id}}' "$target_ref" 2>/dev/null || echo "")
-  if [ -z "$new_id" ]; then
+  if [[ -z "$new_id" ]]; then
     echo "ERROR: Target image '${target_ref}' not found locally after pull! Production untouched."
     exit 1
   fi
-  if [ "${PREV_IMAGE_ID[$svc]}" != "$new_id" ]; then
+  if [[ "${PREV_IMAGE_ID[$svc]}" != "$new_id" ]]; then
     echo "  [CHANGED] ${svc}: ${PREV_IMAGE_ID[$svc]} -> ${new_id}"
     CHANGED_SERVICES="${CHANGED_SERVICES} ${svc}"
   else
@@ -528,7 +529,7 @@ mkdir -p "${CONFIG_BACKUP_DIR}/docker/mysql" "${CONFIG_BACKUP_DIR}/docker/nginx"
 
 BEFORE_NGINX_SHA=$(sha256sum "${COMPOSE_DIR}/docker/nginx/nginx.prod.conf" 2>/dev/null | awk '{print $1}' || echo "absent")
 BEFORE_COMPOSE_RENDER=$(IMAGE_REGISTRY="ghcr.io" IMAGE_REPO_OWNER="${REPO_OWNER}" IMAGE_TAG="${IMAGE_TAG}" dc config 2>/dev/null || true)
-if [ -z "$BEFORE_COMPOSE_RENDER" ]; then
+if [[ -z "$BEFORE_COMPOSE_RENDER" ]]; then
   echo "ERROR: Could not render current production Compose configuration. Production untouched."
   exit 1
 fi
@@ -539,7 +540,7 @@ done
 BEFORE_NGINX_COMPOSE_HASH="${BEFORE_SVC_COMPOSE_HASH[nginx]}"
 
 for rel in $MANAGED_CONFIG_FILES; do
-  if [ -f "${COMPOSE_DIR}/${rel}" ]; then
+  if [[ -f "${COMPOSE_DIR}/${rel}" ]]; then
     cp -p "${COMPOSE_DIR}/${rel}" "${CONFIG_BACKUP_DIR}/${rel}"
     echo "EXISTS|${rel}" >> "${CONFIG_BACKUP_DIR}/manifest.txt"
   else
@@ -577,15 +578,15 @@ if ! (
 fi
 
 AFTER_NGINX_SHA=$(sha256sum "${COMPOSE_DIR}/docker/nginx/nginx.prod.conf" 2>/dev/null | awk '{print $1}' || echo "absent")
-if [ "$DEPLOY_OK" = "true" ]; then
+if [[ "$DEPLOY_OK" = "true" ]]; then
   AFTER_COMPOSE_RENDER=$(IMAGE_REGISTRY="ghcr.io" IMAGE_REPO_OWNER="${REPO_OWNER}" IMAGE_TAG="${IMAGE_TAG}" dc config 2>/dev/null || true)
-  if [ -z "$AFTER_COMPOSE_RENDER" ]; then
+  if [[ -z "$AFTER_COMPOSE_RENDER" ]]; then
     echo "ERROR: Could not render updated production Compose configuration."
     DEPLOY_OK=false
   else
     for svc in $APP_SERVICES; do
       after_svc_hash=$(extract_service_block_hash "$AFTER_COMPOSE_RENDER" "$svc")
-      if [ "${BEFORE_SVC_COMPOSE_HASH[$svc]}" != "$after_svc_hash" ]; then
+      if [[ "${BEFORE_SVC_COMPOSE_HASH[$svc]}" != "$after_svc_hash" ]]; then
         echo "  [COMPOSE CHANGED] ${svc}: Compose configuration updated."
         COMPOSE_CHANGED_SERVICES="${COMPOSE_CHANGED_SERVICES} ${svc}"
       fi
@@ -604,7 +605,7 @@ fi
 echo "=== [8/8] Idempotent Database Migration, Staged Update, Verification & Unified Rollback ==="
 run_and_verify_mysql_migrations() {
   local mig_file="${COMPOSE_DIR}/docker/mysql/migrations/apply_all_migrations.sql"
-  if [ ! -f "$mig_file" ]; then
+  if [[ ! -f "$mig_file" ]]; then
     echo "ERROR: Migration file '${mig_file}' is missing!"
     return 1
   fi
@@ -680,7 +681,7 @@ run_and_verify_mysql_migrations() {
   return 0
 }
 
-if [ "$DEPLOY_OK" = "true" ]; then
+if [[ "$DEPLOY_OK" = "true" ]]; then
   if ! run_and_verify_mysql_migrations; then
     DEPLOY_OK=false
   fi
@@ -696,7 +697,7 @@ update_stage() {
     fi
   done
   to_start=$(echo "$to_start" | xargs)
-  if [ -z "$to_start" ]; then
+  if [[ -z "$to_start" ]]; then
     return 0
   fi
   for dep in $required_deps; do
@@ -718,22 +719,22 @@ update_stage() {
   return 0
 }
 
-if [ "$DEPLOY_OK" = "true" ]; then
-  if [ -z "$SERVICES_TO_RECREATE" ]; then
+if [[ "$DEPLOY_OK" = "true" ]]; then
+  if [[ -z "$SERVICES_TO_RECREATE" ]]; then
     echo "No application images or application Compose configurations changed."
   else
     echo "Application services scheduled for staged recreate: ${SERVICES_TO_RECREATE}"
     if ! update_stage "discovery-server" "mysql redis kafka"; then DEPLOY_OK=false; fi
-    if [ "$DEPLOY_OK" = "true" ] && ! update_stage "auth-service product-service" "mysql redis discovery-server"; then DEPLOY_OK=false; fi
-    if [ "$DEPLOY_OK" = "true" ] && ! update_stage "order-service payment-service" "mysql kafka discovery-server"; then DEPLOY_OK=false; fi
-    if [ "$DEPLOY_OK" = "true" ] && ! update_stage "chatbot-service" "mysql discovery-server product-service order-service"; then DEPLOY_OK=false; fi
-    if [ "$DEPLOY_OK" = "true" ] && ! update_stage "api-gateway" "discovery-server redis auth-service product-service order-service payment-service chatbot-service"; then DEPLOY_OK=false; fi
-    if [ "$DEPLOY_OK" = "true" ] && ! update_stage "frontend" "api-gateway"; then DEPLOY_OK=false; fi
+    if [[ "$DEPLOY_OK" = "true" ]] && ! update_stage "auth-service product-service" "mysql redis discovery-server"; then DEPLOY_OK=false; fi
+    if [[ "$DEPLOY_OK" = "true" ]] && ! update_stage "order-service payment-service" "mysql kafka discovery-server"; then DEPLOY_OK=false; fi
+    if [[ "$DEPLOY_OK" = "true" ]] && ! update_stage "chatbot-service" "mysql discovery-server product-service order-service"; then DEPLOY_OK=false; fi
+    if [[ "$DEPLOY_OK" = "true" ]] && ! update_stage "api-gateway" "discovery-server redis auth-service product-service order-service payment-service chatbot-service"; then DEPLOY_OK=false; fi
+    if [[ "$DEPLOY_OK" = "true" ]] && ! update_stage "frontend" "api-gateway"; then DEPLOY_OK=false; fi
   fi
 fi
 
-if [ "$DEPLOY_OK" = "true" ]; then
-  if [ "$BEFORE_NGINX_COMPOSE_HASH" != "$AFTER_NGINX_COMPOSE_HASH" ]; then
+if [[ "$DEPLOY_OK" = "true" ]]; then
+  if [[ "$BEFORE_NGINX_COMPOSE_HASH" != "$AFTER_NGINX_COMPOSE_HASH" ]]; then
     echo "Nginx Compose configuration changed; verifying health before recreating ecommerce-nginx..."
     if ! assert_service_healthy "nginx"; then
       DEPLOY_OK=false
@@ -747,7 +748,7 @@ if [ "$DEPLOY_OK" = "true" ]; then
         echo "  [OK] ecommerce-nginx recreated and healthy with updated Compose configuration."
       fi
     fi
-  elif [ "$BEFORE_NGINX_SHA" != "$AFTER_NGINX_SHA" ]; then
+  elif [[ "$BEFORE_NGINX_SHA" != "$AFTER_NGINX_SHA" ]]; then
     echo "Nginx configuration file changed; verifying health, testing and reloading ecommerce-nginx in-place..."
     if ! assert_service_healthy "nginx"; then
       DEPLOY_OK=false
@@ -764,11 +765,11 @@ if [ "$DEPLOY_OK" = "true" ]; then
 fi
 
 FINALIZE_OK=false
-if [ "$DEPLOY_OK" = "true" ] && verify_all_health_and_http "$APP_SERVICES" "false"; then
+if [[ "$DEPLOY_OK" = "true" ]] && verify_all_health_and_http "$APP_SERVICES" "false"; then
   if update_env_image_tag "${COMPOSE_DIR}/.env" "${IMAGE_TAG}"; then
     TAG_COUNT=$(grep -c "^IMAGE_TAG=" "${COMPOSE_DIR}/.env" || true)
     ACTIVE_ENV_TAG=$(grep -E '^IMAGE_TAG=' "${COMPOSE_DIR}/.env" | head -n1 | cut -d'=' -f2- || true)
-    if [ "$TAG_COUNT" -eq 1 ] && [ "$ACTIVE_ENV_TAG" = "${IMAGE_TAG}" ]; then
+    if [[ "$TAG_COUNT" -eq 1 ]] && [[ "$ACTIVE_ENV_TAG" = "${IMAGE_TAG}" ]]; then
       if IMAGE_REGISTRY="ghcr.io" IMAGE_REPO_OWNER="${REPO_OWNER}" dc config --quiet; then
         FINALIZE_OK=true
       else
@@ -782,7 +783,7 @@ if [ "$DEPLOY_OK" = "true" ] && verify_all_health_and_http "$APP_SERVICES" "fals
   fi
 fi
 
-if [ "$FINALIZE_OK" = "true" ]; then
+if [[ "$FINALIZE_OK" = "true" ]]; then
   for svc in $APP_SERVICES nginx; do
     docker rmi "shopmart-rollback/${svc}:pre-deploy" >/dev/null 2>&1 || true
   done
@@ -811,7 +812,7 @@ ROLLBACK_OVERRIDE="${COMPOSE_DIR}/docker-compose.rollback.yml"
 : > "${ROLLBACK_OVERRIDE}"
 echo "services:" >> "${ROLLBACK_OVERRIDE}"
 for s in $APP_SERVICES; do
-  if [ "${PREV_IMAGE_ID[$s]}" != "ABSENT" ]; then
+  if [[ "${PREV_IMAGE_ID[$s]}" != "ABSENT" ]]; then
     printf '  %s:\n    image: shopmart-rollback/%s:pre-deploy\n' "$s" "$s" >> "${ROLLBACK_OVERRIDE}"
   fi
 done
@@ -835,7 +836,7 @@ for svc in discovery-server auth-service product-service order-service payment-s
   prev_ref="${PREV_IMAGE_REF[$svc]}"
   prev_id="${PREV_IMAGE_ID[$svc]}"
 
-  if [ "$prev_id" = "ABSENT" ]; then
+  if [[ "$prev_id" = "ABSENT" ]]; then
     if docker container inspect "$cname" >/dev/null 2>&1; then
       echo "  Removing newly created service '${svc}' (${cname}) that did not exist prior to deployment..."
       if ! docker rm -f "$cname" >/dev/null 2>&1; then
@@ -849,7 +850,7 @@ for svc in discovery-server auth-service product-service order-service payment-s
   fi
 
   actual_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
-  if [[ " $ATTEMPTED_SERVICES " != *" $svc "* ]] && [ "$actual_id" = "$prev_id" ]; then
+  if [[ " $ATTEMPTED_SERVICES " != *" $svc "* ]] && [[ "$actual_id" = "$prev_id" ]]; then
     continue
   fi
 
@@ -862,7 +863,7 @@ for svc in discovery-server auth-service product-service order-service payment-s
     continue
   fi
   actual_id=$(docker inspect -f '{{.Image}}' "$cname" 2>/dev/null || echo "")
-  if [ "$actual_id" != "$prev_id" ]; then
+  if [[ "$actual_id" != "$prev_id" ]]; then
     echo "  [FAIL] ${svc} rolled back to ${actual_id}, expected ${prev_id}!"
     ROLLBACK_OK=false
   elif ! wait_service_healthy "$svc"; then
@@ -870,7 +871,7 @@ for svc in discovery-server auth-service product-service order-service payment-s
   fi
 done
 
-if [ "$NGINX_RECREATED" = "true" ] || [ "$BEFORE_NGINX_COMPOSE_HASH" != "$AFTER_NGINX_COMPOSE_HASH" ]; then
+if [[ "$NGINX_RECREATED" = "true" ]] || [[ "$BEFORE_NGINX_COMPOSE_HASH" != "$AFTER_NGINX_COMPOSE_HASH" ]]; then
   echo "Restoring ecommerce-nginx to previous Compose configuration and image (${PREV_NGINX_IMAGE_ID})..."
   if [[ "$PREV_NGINX_IMAGE_REF" != sha256:* ]] && [[ "$PREV_NGINX_IMAGE_REF" =~ : ]]; then
     docker tag "shopmart-rollback/nginx:pre-deploy" "${PREV_NGINX_IMAGE_REF}" >/dev/null 2>&1 || true
@@ -880,14 +881,14 @@ if [ "$NGINX_RECREATED" = "true" ] || [ "$BEFORE_NGINX_COMPOSE_HASH" != "$AFTER_
     ROLLBACK_OK=false
   else
     actual_nginx_id=$(docker inspect -f '{{.Image}}' ecommerce-nginx 2>/dev/null || echo "")
-    if [ "$actual_nginx_id" != "$PREV_NGINX_IMAGE_ID" ]; then
+    if [[ "$actual_nginx_id" != "$PREV_NGINX_IMAGE_ID" ]]; then
       echo "  [FAIL] ecommerce-nginx rolled back to ${actual_nginx_id}, expected ${PREV_NGINX_IMAGE_ID}!"
       ROLLBACK_OK=false
     elif ! wait_service_healthy "nginx"; then
       ROLLBACK_OK=false
     fi
   fi
-elif [ "$NGINX_RELOADED" = "true" ] || [ "$BEFORE_NGINX_SHA" != "$AFTER_NGINX_SHA" ]; then
+elif [[ "$NGINX_RELOADED" = "true" ]] || [[ "$BEFORE_NGINX_SHA" != "$AFTER_NGINX_SHA" ]]; then
   echo "Reloading ecommerce-nginx with restored configuration..."
   if ! docker exec ecommerce-nginx nginx -t || ! docker exec ecommerce-nginx nginx -s reload || ! wait_service_healthy "nginx"; then
     echo "  [FAIL] Could not reload ecommerce-nginx after restoring config!"
@@ -896,7 +897,7 @@ elif [ "$NGINX_RELOADED" = "true" ] || [ "$BEFORE_NGINX_SHA" != "$AFTER_NGINX_SH
 fi
 
 rm -f "${ROLLBACK_OVERRIDE}"
-if [ "$ROLLBACK_OK" = "true" ] && verify_all_health_and_http "$EXISTING_APP_SERVICES" "true"; then
+if [[ "$ROLLBACK_OK" = "true" ]] && verify_all_health_and_http "$EXISTING_APP_SERVICES" "true"; then
   for svc in $APP_SERVICES nginx; do
     docker rmi "shopmart-rollback/${svc}:pre-deploy" >/dev/null 2>&1 || true
   done
