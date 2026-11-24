@@ -20,7 +20,6 @@ public class VoucherDto {
     private BigDecimal minOrderValue;
     @JsonAlias({"maxDiscount", "maxDiscountAmount"})
     private BigDecimal maxDiscountAmount;
-    private BigDecimal maxDiscount;
     private String startDate;
     private String endDate;
     @JsonAlias({"quantity", "usageLimit"})
@@ -29,9 +28,5 @@ public class VoucherDto {
     private Integer usedCount;
     private Integer remainingUsage;
     private String status;
-
-    public BigDecimal getMaxDiscountAmount() {
-        return maxDiscountAmount != null ? maxDiscountAmount : maxDiscount;
-    }
 }
 

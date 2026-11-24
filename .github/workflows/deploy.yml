@@ -500,7 +500,7 @@ jobs:
               echo "  [OK] $(container_name_for "$infra") is running and healthy."
             done
 
-            echo "=== [3/8] Authenticating with Temporary Docker Config & Verifying 7 GHCR Packages ==="
+            echo "=== [3/8] Authenticating with Temporary Docker Config & Verifying 8 GHCR Packages ==="
             DOCKER_TMP_CONFIG=$(mktemp -d)
             chmod 700 "${DOCKER_TMP_CONFIG}"
             export DOCKER_CONFIG="${DOCKER_TMP_CONFIG}"
@@ -518,7 +518,7 @@ jobs:
             if [ -n "${GITHUB_TOKEN:-}" ]; then
               if printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin >/dev/null 2>&1; then
                 if verify_ghcr_packages; then
-                  echo "GHCR access verified via temporary Docker config (GITHUB_TOKEN) for all 7 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
+                  echo "GHCR access verified via temporary Docker config (GITHUB_TOKEN) for all 8 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
                   GHCR_AUTH_OK=true
                 fi
               fi
@@ -528,7 +528,7 @@ jobs:
               if [ -n "${GHCR_PAT:-}" ]; then
                 if printf '%s' "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_PAT_USER}" --password-stdin >/dev/null 2>&1; then
                   if verify_ghcr_packages; then
-                    echo "GHCR access verified via temporary Docker config (GHCR_TOKEN PAT) for all 7 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
+                    echo "GHCR access verified via temporary Docker config (GHCR_TOKEN PAT) for all 8 packages (${REPO_OWNER}/*:${IMAGE_TAG})."
                     GHCR_AUTH_OK=true
                   fi
                 fi

@@ -322,5 +322,68 @@ class ChatbotServiceApplicationTests {
                 any()
         );
     }
+
+    @Test
+    void parsesThousandUnitAndPriceRangesAndTranslatesFailedOrderAndBlocksSpoofedAdminRole() {
+        // 1. Price in "k" unit (500k -> 500,000 VND)
+        chatService.sendMessage(
+                ChatMessageRequest.builder().question("Tìm tai nghe dưới 500k").build(),
+                null, null, "guest-price-k"
+        );
+        org.mockito.Mockito.verify(productClient).getProducts(
+                eq("tai nghe"),
+                isNull(),
+                isNull(),
+                eq(new BigDecimal("500000")),
+                eq(true),
+                anyInt(),
+                anyInt(),
+                any()
+        );
+
+        // 2. Price range ("từ 15 triệu đến 30 triệu")
+        chatService.sendMessage(
+                ChatMessageRequest.builder().question("Tìm laptop từ 15 triệu đến 30 triệu").build(),
+                null, null, "guest-price-range"
+        );
+        org.mockito.Mockito.verify(productClient).getProducts(
+                eq("laptop"),
+                isNull(),
+                eq(new BigDecimal("15000000")),
+                eq(new BigDecimal("30000000")),
+                eq(true),
+                anyInt(),
+                anyInt(),
+                any()
+        );
+
+        // 3. Translates OrderStatus.FAILED and enforces exact ROLE_ADMIN token match (blocks ROLE_ADMIN_FAKE)
+        OrderDto failedOrder = OrderDto.builder()
+                .id(303L)
+                .userId(10L)
+                .receiverName("Nguyễn Văn C")
+                .receiverPhone("0901234567")
+                .shippingAddress("789 Lê Lợi, TP.HCM")
+                .totalAmount(new BigDecimal("55000000"))
+                .status("FAILED")
+                .build();
+        when(orderClient.getOrderById(303L, 10L, "ROLE_USER"))
+                .thenReturn(ApiResponse.success("OK", failedOrder));
+        when(orderClient.getOrderById(303L, 99L, "ROLE_ADMIN_FAKE"))
+                .thenReturn(ApiResponse.success("OK", failedOrder));
+
+        ChatMessageResponse failedRes = chatService.sendMessage(
+                ChatMessageRequest.builder().question("Kiểm tra đơn hàng #303").build(),
+                10L, "ROLE_USER", null
+        );
+        assertTrue(failedRes.getAnswer().contains("Thanh toán thất bại (FAILED)"));
+
+        ChatMessageResponse spoofedRoleRes = chatService.sendMessage(
+                ChatMessageRequest.builder().question("Kiểm tra đơn hàng #303").build(),
+                99L, "ROLE_ADMIN_FAKE", null
+        );
+        assertNull(spoofedRoleRes.getReferencedOrder());
+        assertTrue(spoofedRoleRes.getAnswer().contains("không có quyền"));
+    }
 }
 

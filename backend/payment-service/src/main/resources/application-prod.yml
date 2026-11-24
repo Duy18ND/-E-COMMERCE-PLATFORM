@@ -23,6 +23,9 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
 
+internal:
+  service-key: ${INTERNAL_SERVICE_KEY}
+
 springdoc:
   api-docs:
     enabled: false
