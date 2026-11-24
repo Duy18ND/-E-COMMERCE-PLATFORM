@@ -534,7 +534,10 @@ export IMAGE_REPO_OWNER="${REPO_OWNER}"
 export IMAGE_TAG="${IMAGE_TAG}"
 
 cd "${COMPOSE_DIR}"
-dc pull $APP_SERVICES
+docker compose --env-file "${COMPOSE_DIR}/.env" -p backend \
+  -f "${STAGE_DIR}/backend/docker-compose.yml" \
+  -f "${STAGE_DIR}/backend/docker-compose.prod.yml" \
+  -f "${COMPOSE_DIR}/docker-compose.vps.yml" pull $APP_SERVICES
 
 CHANGED_SERVICES=""
 for svc in $APP_SERVICES; do
