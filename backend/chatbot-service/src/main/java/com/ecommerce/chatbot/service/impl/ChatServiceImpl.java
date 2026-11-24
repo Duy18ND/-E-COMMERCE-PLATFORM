@@ -53,7 +53,7 @@ public class ChatServiceImpl implements ChatService {
     private final CustomerSupportTools supportTools;
     private final ObjectMapper objectMapper;
 
-    @Value("${ai.provider.base-url:https://generativelanguage.googleapis.com/v1beta/openai}")
+    @Value("${ai.provider.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String aiBaseUrl;
 
     @Value("${ai.provider.api-key:}")
@@ -82,9 +82,17 @@ public class ChatServiceImpl implements ChatService {
 
     private static final Pattern ORDER_ID_PATTERN = Pattern.compile("(?i)(?:đơn\\s{1,3}(?:hàng\\s{0,3})?(?:số\\s{0,3}|mã\\s{0,3}|#\\s{0,3})?|#)(\\d{1,10})");
     private static final Pattern PRODUCT_ID_PATTERN = Pattern.compile("(?i)(?:sản\\s{1,3}phẩm\\s{0,3}(?:số\\s{0,3}|mã\\s{0,3}|id\\s{0,3}|#\\s{0,3})?|sp\\s{0,3}#?)(\\d{1,10})");
-    private static final Pattern MILLION_PRICE_PATTERN = Pattern.compile("(?i)(\\d{1,4}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b)");
-    private static final Pattern SEARCH_PRICE_UNIT_PATTERN = Pattern.compile("(?iuU)(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b|nghìn|k\\b|đồng|vnđ|vnd)");
-    private static final Pattern SEARCH_STOPWORDS_PATTERN = Pattern.compile("(?iuU)\\b(?:tôi|mình|muốn|cần|tìm|kiếm|mua|gợi ý|tư vấn|cho|hỏi|xem|kiểm tra|tồn kho|còn hàng|không|shop|ơi|sản phẩm|so sánh|giúp|với|dưới|trên|từ|khoảng|tầm|tối đa|giá|rẻ nhất|tốt nhất|chính hãng|có|nào)\\b");
+    private static final Pattern MAX_PRICE_BOUND_PATTERN = Pattern.compile(
+            "(?iuU)(?:dưới|tối\\s+đa|không\\s+quá|đến|tới|khoảng|tầm)\\s{0,3}(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(triệu|tr|trieu|m\\b|nghìn|ngàn|k\\b)"
+    );
+    private static final Pattern MIN_PRICE_BOUND_PATTERN = Pattern.compile(
+            "(?iuU)(?:trên|từ|tối\\s+thiểu)\\s{0,3}(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(triệu|tr|trieu|m\\b|nghìn|ngàn|k\\b)"
+    );
+    private static final Pattern PRICE_WITH_UNIT_PATTERN = Pattern.compile(
+            "(?iuU)(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(triệu|tr|trieu|m\\b|nghìn|ngàn|k\\b)"
+    );
+    private static final Pattern SEARCH_PRICE_UNIT_PATTERN = Pattern.compile("(?iuU)(\\d{1,5}(?:[.,]\\d{1,2})?)\\s{0,3}(?:triệu|tr|trieu|m\\b|nghìn|ngàn|k\\b|đồng|vnđ|vnd)");
+    private static final Pattern SEARCH_STOPWORDS_PATTERN = Pattern.compile("(?iuU)\\b(?:tôi|mình|muốn|cần|tìm|kiếm|mua|gợi ý|tư vấn|cho|hỏi|xem|kiểm tra|tồn kho|còn hàng|không|shop|ơi|sản phẩm|so sánh|giúp|với|dưới|trên|từ|đến|tới|khoảng|tầm|tối đa|tối thiểu|giá|rẻ nhất|tốt nhất|chính hãng|có|nào)\\b");
 
     @Override
     @Transactional
@@ -576,6 +584,11 @@ public class ChatServiceImpl implements ChatService {
         toolsUsed.add("searchProducts");
         BigDecimal maxPrice = extractMaxPrice(message);
         BigDecimal minPrice = extractMinPrice(message);
+        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+            BigDecimal temp = minPrice;
+            minPrice = maxPrice;
+            maxPrice = temp;
+        }
         String keyword = cleanSearchKeyword(message);
         String sort = message.toLowerCase(Locale.ROOT).contains("rẻ nhất") ? "price,asc"
                 : (message.toLowerCase(Locale.ROOT).contains("đắt nhất") || message.toLowerCase(Locale.ROOT).contains("cao cấp")) ? "price,desc"
@@ -842,11 +855,15 @@ public class ChatServiceImpl implements ChatService {
 
     private BigDecimal extractMaxPrice(String text) {
         String lower = text.toLowerCase(Locale.ROOT);
-        if (lower.contains("dưới") || lower.contains("tối đa") || lower.contains("khoảng") || lower.contains("tầm")) {
-            Matcher m = MILLION_PRICE_PATTERN.matcher(lower);
+        Matcher boundMatcher = MAX_PRICE_BOUND_PATTERN.matcher(lower);
+        if (boundMatcher.find()) {
+            return parsePriceToVnd(boundMatcher.group(1), boundMatcher.group(2));
+        }
+        if ((lower.contains("dưới") || lower.contains("tối đa") || lower.contains("khoảng") || lower.contains("tầm"))
+                && !lower.contains("trên") && !lower.contains("từ")) {
+            Matcher m = PRICE_WITH_UNIT_PATTERN.matcher(lower);
             if (m.find()) {
-                double millions = Double.parseDouble(m.group(1).replace(',', '.'));
-                return BigDecimal.valueOf((long) (millions * 1_000_000L));
+                return parsePriceToVnd(m.group(1), m.group(2));
             }
         }
         return null;
@@ -854,14 +871,34 @@ public class ChatServiceImpl implements ChatService {
 
     private BigDecimal extractMinPrice(String text) {
         String lower = text.toLowerCase(Locale.ROOT);
-        if (lower.contains("trên") || lower.contains("từ")) {
-            Matcher m = MILLION_PRICE_PATTERN.matcher(lower);
+        Matcher boundMatcher = MIN_PRICE_BOUND_PATTERN.matcher(lower);
+        if (boundMatcher.find()) {
+            return parsePriceToVnd(boundMatcher.group(1), boundMatcher.group(2));
+        }
+        if ((lower.contains("trên") || lower.contains("từ"))
+                && !lower.contains("dưới") && !lower.contains("tối đa") && !lower.contains("đến")) {
+            Matcher m = PRICE_WITH_UNIT_PATTERN.matcher(lower);
             if (m.find()) {
-                double millions = Double.parseDouble(m.group(1).replace(',', '.'));
-                return BigDecimal.valueOf((long) (millions * 1_000_000L));
+                return parsePriceToVnd(m.group(1), m.group(2));
             }
         }
         return null;
+    }
+
+    private BigDecimal parsePriceToVnd(String rawValue, String rawUnit) {
+        try {
+            double value = Double.parseDouble(rawValue.replace(',', '.'));
+            if (value <= 0) {
+                return null;
+            }
+            String unit = rawUnit != null ? rawUnit.toLowerCase(Locale.ROOT) : "";
+            long multiplier = (unit.startsWith("nghìn") || unit.startsWith("ngàn") || unit.equals("k"))
+                    ? 1_000L
+                    : 1_000_000L;
+            return BigDecimal.valueOf(Math.round(value * multiplier));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private String cleanSearchKeyword(String raw) {
@@ -945,7 +982,8 @@ public class ChatServiceImpl implements ChatService {
             case "DELIVERED", "COMPLETED" -> "Đã giao thành công (DELIVERED)";
             case "PAID" -> "Đã thanh toán (PAID)";
             case "CANCELLED" -> "Đã hủy (CANCELLED)";
-            case "PAYMENT_FAILED" -> "Thanh toán thất bại (PAYMENT_FAILED)";
+            case "FAILED", "PAYMENT_FAILED" -> "Thanh toán thất bại (" + status.toUpperCase(Locale.ROOT) + ")";
+            case "REFUNDED" -> "Đã hoàn tiền (REFUNDED)";
             default -> status;
         };
     }

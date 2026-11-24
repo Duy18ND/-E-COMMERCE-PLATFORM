@@ -3,6 +3,7 @@
 # ═══════════════════════════════════════════════════════════════
 spring:
   datasource:
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
       maximum-pool-size: 15
       minimum-idle: 3
@@ -13,6 +14,20 @@ spring:
     show-sql: false
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 logging:
   level:

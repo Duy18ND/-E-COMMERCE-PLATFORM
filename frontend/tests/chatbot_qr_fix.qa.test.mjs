@@ -171,13 +171,18 @@ test('CHATBOT & VIETQR BUGFIX QA SUITE', async (t) => {
     // Backend Gemini model config phải dùng model hợp lệ (gemini-3.1-flash-lite) thay vì model lỗi 404
     const botYml = readRepo('backend/chatbot-service/src/main/resources/application.yml');
     const composeYml = readRepo('backend/docker-compose.yml');
+    const composeProdYml = readRepo('backend/docker-compose.prod.yml');
     const envExample = readRepo('backend/.env.example');
+    const envProdExample = readRepo('backend/.env.prod.example');
     const chatServiceJava = readRepo('backend/chatbot-service/src/main/java/com/ecommerce/chatbot/service/impl/ChatServiceImpl.java');
 
     assert.ok(!botYml.includes('gemini-3.5-flash'), 'application.yml không được dùng gemini-3.5-flash');
     assert.ok(!composeYml.includes('gemini-3.5-flash'), 'docker-compose.yml không được dùng gemini-3.5-flash');
+    assert.ok(!composeProdYml.includes('gemini-3.5-flash'), 'docker-compose.prod.yml không được dùng gemini-3.5-flash');
     assert.ok(!envExample.includes('gemini-3.5-flash'), '.env.example không được dùng gemini-3.5-flash');
+    assert.ok(!envProdExample.includes('gemini-3.5-flash'), '.env.prod.example không được dùng gemini-3.5-flash');
     assert.ok(botYml.includes('gemini-3.1-flash-lite'));
+    assert.match(composeProdYml, /payment-service:[\s\S]*?INTERNAL_SERVICE_KEY:/, 'payment-service prod phải nhận INTERNAL_SERVICE_KEY');
     assert.match(
       chatServiceJava,
       /if \(products\.isEmpty\(\) && StringUtils\.hasText\(keyword\)\) \{\s*products = productTools\.searchProducts\(keyword, null, minPrice, maxPrice, null, sort, 6\);/
