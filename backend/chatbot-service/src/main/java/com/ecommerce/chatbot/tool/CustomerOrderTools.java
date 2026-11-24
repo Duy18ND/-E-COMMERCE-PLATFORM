@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -61,8 +62,10 @@ public class CustomerOrderTools {
             ApiResponse<OrderDto> orderRes = orderClient.getOrderById(orderId, authenticatedUserId, roles);
             OrderDto order = orderRes != null ? orderRes.getData() : null;
             if (order != null) {
-                // Defense in depth against IDOR at tool boundary
-                boolean isAdmin = roles != null && roles.contains("ROLE_ADMIN");
+                // Defense in depth against IDOR at tool boundary (exact role token match)
+                boolean isAdmin = roles != null && Arrays.stream(roles.split(","))
+                        .map(String::trim)
+                        .anyMatch("ROLE_ADMIN"::equals);
                 if (!isAdmin && order.getUserId() != null && !authenticatedUserId.equals(order.getUserId())) {
                     throw new AccessDeniedException("Bạn không có quyền tra cứu đơn hàng #" + orderId + " của khách hàng khác.");
                 }
@@ -82,6 +85,11 @@ public class CustomerOrderTools {
         } catch (FeignException.Forbidden | FeignException.Unauthorized ex) {
             throw new AccessDeniedException("Bạn không có quyền xem đơn hàng #" + orderId + " (chỉ chủ sở hữu đơn hàng mới được phép tra cứu).");
         } catch (FeignException.NotFound ex) {
+            return null;
+        } catch (AccessDeniedException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("[CustomerOrderTools] trackCustomerOrder(orderId={}, userId={}) failed: {}", orderId, authenticatedUserId, ex.getMessage());
             return null;
         }
     }
