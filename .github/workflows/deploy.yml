@@ -58,7 +58,7 @@ jobs:
 
       - name: Download Release Manifest Artifact
         id: download-manifest
-        uses: actions/download-artifact@cc9ce1ee465a89900ab01a7995a805988e404b9e # v4
+        uses: actions/download-artifact@v4
         with:
           name: release-manifest
           path: release-manifest
